@@ -36,58 +36,58 @@ func _execute(inFt: Fighter, inHurtbox: HurtboxDefinition, inHitbox: HitboxDefin
 	#print("Hitlag: " + str(ourHitlag))
 	if invincible:
 		return
-	var desiredAnim = "DamageN1"
+	inFt.desiredAnim = "DamageN1"
 	if knockBack < 80:
 		if DownStates.has(inFt.charState.stateName) and knockBack <= 25:
 			inFt.facing = oldFacing
 			inFt._change_fighter_state(inFt.find_state_by_name("DownDamage"), 0, 0)
-			desiredAnim = "DownDamage" + inFt.downDesire
+			inFt.desiredAnim = "DownDamage" + inFt.downDesire
 		else:
 			inFt._change_fighter_state(inFt.find_state_by_name("Damage"), 0, 0)
 			if inFt.grounded:
 				if knockBack < 27:
 					if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.High:
-						desiredAnim = "DamageHi1"
+						inFt.desiredAnim = "DamageHi1"
 					else: if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.Middle:
-						desiredAnim = "DamageN1"
+						inFt.desiredAnim = "DamageN1"
 					else:
-						desiredAnim = "DamageLw1"
+						inFt.desiredAnim = "DamageLw1"
 				else: if knockBack < 54:
 					if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.High:
-						desiredAnim = "DamageHi2"
+						inFt.desiredAnim = "DamageHi2"
 					else: if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.Middle:
-						desiredAnim = "DamageN2"
+						inFt.desiredAnim = "DamageN2"
 					else:
-						desiredAnim = "DamageLw2"
+						inFt.desiredAnim = "DamageLw2"
 				else:
 					if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.High:
-						desiredAnim = "DamageHi3"
+						inFt.desiredAnim = "DamageHi3"
 					else: if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.Middle:
-						desiredAnim = "DamageN3"
+						inFt.desiredAnim = "DamageN3"
 					else:
-						desiredAnim = "DamageLw3"
+						inFt.desiredAnim = "DamageLw3"
 			else:
 				if knockBack < 27:
-					desiredAnim = "DamageAir1"
+					inFt.desiredAnim = "DamageAir1"
 				else: if knockBack < 54:
-					desiredAnim = "DamageAir2"
+					inFt.desiredAnim = "DamageAir2"
 				else:
-					desiredAnim = "DamageAir3"
+					inFt.desiredAnim = "DamageAir3"
 	else:
 		inFt._change_fighter_state(inFt.find_state_by_name("DamageFly"), 0, 0)
 		if inFt.grounded and inFt.kbVel.y < 0:
 			#print("Started grounded, and spiked - let's invert the y.")
 			inFt.kbVel.y *= -0.8
 		if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.High:
-			desiredAnim = "DamageFlyHi"
+			inFt.desiredAnim = "DamageFlyHi"
 		else: if inHurtbox.bodyType == HurtboxDefinition.hurtboxBodyType.Middle:
-			desiredAnim = "DamageFlyN"
+			inFt.desiredAnim = "DamageFlyN"
 		else:
-			desiredAnim = "DamageFlyLw"
+			inFt.desiredAnim = "DamageFlyLw"
 		if inHitbox.kbAngle > PI * 0.333 and inHitbox.kbAngle < PI * 0.666:
-			desiredAnim = "DamageFlyTop"
-	inFt.Animator.current_animation = desiredAnim
-	inFt.Animator.assigned_animation = desiredAnim
+			inFt.desiredAnim = "DamageFlyTop"
+	inFt.Animator.current_animation = inFt.desiredAnim
+	inFt.Animator.assigned_animation = inFt.desiredAnim
 	inFt.Animator.seek(1.0 / 60.0, true)
 	inFt.update_pose()
 	inFt.check_on_airborne()

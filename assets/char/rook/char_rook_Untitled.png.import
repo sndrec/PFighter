@@ -2,13 +2,12 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cvl3xsci6fdbe"
+uid="uid://b5iq4pqx6biy1"
 path.s3tc="res://.godot/imported/char_rook_Untitled.png-4073e50b5f0ef8ee595b8e513d88f1e8.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={}
 
 [deps]
 

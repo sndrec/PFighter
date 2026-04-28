@@ -36,7 +36,7 @@ glow_enabled = true
 
 [node name="battlefield" type="Node3D" groups=["network_sync"]]
 script = ExtResource("1_mp2ee")
-StageCollisionSegments = Array[ExtResource("2_g0nmq")]([SubResource("Resource_psj1f"), SubResource("Resource_7n821")])
+StageCollisionSegments = [SubResource("Resource_psj1f"), SubResource("Resource_7n821")]
 StageBounds = Array[Vector2]([Vector2(-180, -110), Vector2(180, 150)])
 CameraBounds = Array[Vector2]([Vector2(-150, -80), Vector2(150, 120)])
 

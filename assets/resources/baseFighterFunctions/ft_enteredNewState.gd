@@ -14,7 +14,8 @@ func _execute(inFt: Fighter):
 		inFt.rotation = Vector3.ZERO
 	
 	if hasAnim:
-		inFt.Animator.current_animation = inFt.charState.stateAnim
-		inFt.Animator.assigned_animation = inFt.charState.stateAnim
+		inFt.desiredAnim = inFt.charState.stateAnim
+		inFt.Animator.current_animation = inFt.desiredAnim
+		inFt.Animator.assigned_animation = inFt.desiredAnim
 		inFt.Animator.seek(0, true)
 		inFt.update_pose()

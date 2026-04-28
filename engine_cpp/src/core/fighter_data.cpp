@@ -208,6 +208,23 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"LandingAirB", 75},
         {"LandingAirHi", 76},
         {"LandingAirLw", 77},
+        {"DamageHi1", 166},
+        {"DamageHi2", 167},
+        {"DamageHi3", 168},
+        {"DamageN1", 169},
+        {"DamageN2", 170},
+        {"DamageN3", 171},
+        {"DamageLw1", 172},
+        {"DamageLw2", 173},
+        {"DamageLw3", 174},
+        {"DamageAir1", 175},
+        {"DamageAir2", 176},
+        {"DamageAir3", 177},
+        {"DamageFlyHi", 178},
+        {"DamageFlyN", 179},
+        {"DamageFlyLw", 180},
+        {"DamageFlyTop", 181},
+        {"DamageFlyRoll", 182},
         {"Squat", 30},
         {"SquatWait", 31},
         {"SquatRv", 34},
@@ -656,6 +673,33 @@ FighterDefinition makeDebugRook() {
     landingFallSpecial.onAirborne = {call("teeter_or_airborne")};
     landingFallSpecial.onAnimationFinishedState = "Wait";
 
+    FighterState damageN2;
+    damageN2.name = "DamageN2";
+    damageN2.animation = "DamageN2";
+    damageN2.animationLengthFrames = 24;
+    damageN2.allowLedgeGrab = false;
+    damageN2.onEnter = {call("common_enter")};
+    damageN2.onFrame = {call("process_damage")};
+    damageN2.onLanding = {call("regular_landing")};
+
+    FighterState damageFlyN = damageN2;
+    damageFlyN.name = "DamageFlyN";
+    damageFlyN.animation = "DamageFlyN";
+    damageFlyN.animationLengthFrames = 30;
+    damageFlyN.onFrame = {call("process_damage")};
+    damageFlyN.onLanding = {call("regular_landing")};
+
+    FighterState damageFall = fallState;
+    damageFall.name = "DamageFall";
+    damageFall.animation = "DamageFall";
+    damageFall.animationLengthFrames = 60;
+    damageFall.loopAnimation = true;
+    damageFall.allowLedgeGrab = true;
+    damageFall.onEnter = {call("common_enter")};
+    damageFall.onFrame = {call("process_damage_fall")};
+    damageFall.onLanding = {call("regular_landing")};
+    damageFall.interrupts = fallState.interrupts;
+
     FighterState pass;
     pass.name = "Pass";
     pass.animation = "Pass";
@@ -945,7 +989,7 @@ FighterDefinition makeDebugRook() {
 
     fighter.states = {
         waitState, walkSlow, walkMiddle, walkFast, dashState, runState, runDirect, runBrake, turnState, turnRun,
-        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, escapeF, escapeB, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
+        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, damageN2, damageFlyN, damageFall, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, escapeF, escapeB, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
         cliffClimb, cliffEscape, cliffAttack, cliffDrop, cliffJump, cliffJumpAir,
         attack11, attack12, attack13, attackDash,
         attackS3Hi, attackS3HiS, attackS3, attackS3LwS, attackS3Lw, attackHi3, attackLw3,

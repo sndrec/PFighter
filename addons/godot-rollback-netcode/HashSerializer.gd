@@ -1,10 +1,8 @@
 extends RefCounted
 
-const Utils = preload("res://addons/godot-rollback-netcode/Utils.gd")
-
 static func is_type(obj: Object):
-	return Utils.has_interop_method(obj, "serialize") \
-		and Utils.has_interop_method(obj, "unserialize")
+	return obj.has_method("serialize") \
+		and obj.has_method("unserialize")
 
 func serialize(value):
 	if value is Dictionary:
@@ -15,7 +13,7 @@ func serialize(value):
 		return serialize_resource(value)
 	elif value is Object:
 		return serialize_object(value)
-	
+
 	return serialize_other(value)
 
 func serialize_dictionary(value: Dictionary) -> Dictionary:
@@ -32,58 +30,58 @@ func serialize_array(value: Array):
 
 func serialize_resource(value: Resource):
 	return {
-		"_" = "resource",
+		'_' = 'resource',
 		path = value.resource_path,
 	}
 
 func serialize_object(value: Object):
 	return {
-		"_" = 'object',
+		'_' = 'object',
 		string = value.to_string(),
 	}
 
 func serialize_other(value):
 	if value is Vector2:
 		return {
-			"_" = 'Vector2',
+			'_' = 'Vector2',
 			x = value.x,
 			y = value.y,
 		}
 	elif value is Vector3:
 		return {
-			"_" = 'Vector3',
+			'_' = 'Vector3',
 			x = value.x,
 			y = value.y,
 			z = value.z,
 		}
 	elif value is Transform2D:
 		return {
-			"_" = 'Transform2D',
+			'_' = 'Transform2D',
 			x = {x = value.x.x, y = value.x.y},
 			y = {x = value.y.x, y = value.y.y},
 			origin = {x = value.origin.x, y = value.origin.y},
 		}
 	elif value is Transform3D:
 		return {
-			"_" = 'Transform3D',
+			'_' = 'Transform3D',
 			x = {x = value.basis.x.x, y = value.basis.x.y, z = value.basis.x.z},
 			y = {x = value.basis.y.x, y = value.basis.y.y, z = value.basis.y.z},
 			z = {x = value.basis.z.x, y = value.basis.z.y, z = value.basis.z.z},
 			origin = {x = value.origin.x, y = value.origin.y, z = value.origin.z},
 		}
-	
+
 	return value
 
 func unserialize(value):
 	if value is Dictionary:
 		if not value.has('_'):
 			return unserialize_dictionary(value)
-		
+
 		if value['_'] == 'resource':
 			return unserialize_resource(value)
 		elif value['_'] in ['Vector2', 'Vector3', 'Transform2D', 'Transform3D']:
 			return unserialize_other(value)
-		
+
 		return unserialize_object(value)
 	elif value is Array:
 		return unserialize_array(value)
@@ -128,5 +126,5 @@ func unserialize_other(value: Dictionary):
 				Vector3(value.z.x, value.z.y, value.z.z),
 				Vector3(value.origin.x, value.origin.y, value.origin.z)
 			)
-	
+
 	return null

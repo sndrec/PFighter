@@ -11,6 +11,10 @@ extends Node2D
 const BattlefieldStage = preload("res://scenes/stage/battlefield.tscn")
 const RookFighter = preload("res://scenes/char/rook/ft_rook.tscn")
 
+const LOG_FILE_DIRECTORY = "user://detailed_logs"
+
+var logging_enabled := false
+
 var curStage
 
 func _ready() -> void:
@@ -71,6 +75,24 @@ func _on_ResetButton_pressed():
 
 func _on_SyncManager_sync_started() -> void:
 	message_label.text = "Started!"
+	
+	if logging_enabled:
+		if not DirAccess.dir_exists_absolute(LOG_FILE_DIRECTORY):
+			DirAccess.make_dir_absolute(LOG_FILE_DIRECTORY)
+		
+		var datetime = Time.get_datetime_dict_from_system(true)
+		var log_file_name = "%04d%02d%02d-%02d%02d%02d-peer-%d.log" % [
+			datetime['year'],
+			datetime['month'],
+			datetime['day'],
+			datetime['hour'],
+			datetime['minute'],
+			datetime['second'],
+			get_tree().get_multiplayer().get_unique_id()
+		]
+		
+		SyncManager.start_logging(LOG_FILE_DIRECTORY + '/' + log_file_name)
+
 	var Stage = SyncManager.spawn("Stage", $StageContainer, BattlefieldStage, {})
 	var Fighter1 = SyncManager.spawn("Fighter1", $StageContainer, RookFighter, {"position" = Vector3(0, 0, 0), "controller" = $ServerPlayer})
 	var Fighter2 = SyncManager.spawn("Fighter2", $StageContainer, RookFighter, {"position" = Vector3(0, 0, 0), "controller" = $ClientPlayer})
@@ -92,10 +114,11 @@ func _on_SyncManager_sync_started() -> void:
 func _process(delta: float) -> void:
 	if curStage and curStage != null and curStage.has_node("CameraController"):
 		var cameraController = curStage.get_node("CameraController")
-		stage_camera.transform = cameraController.transform
+		stage_camera.transform = curStage.cameraTransform
 
 func _on_SyncManager_sync_stopped() -> void:
-	pass
+	if logging_enabled:
+		SyncManager.stop_logging()
 
 func _on_SyncManager_sync_lost() -> void:
 	sync_lost_label.visible = true

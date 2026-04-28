@@ -888,6 +888,7 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.hsdTransN = {};
     fighter.previousHsdTransN = {};
     fighter.hsdTransNOffset = {};
+    fighter.floorSkipSegment = -1;
     fighter.animationFrame = 0;
     fighter.animationRate = fx(1);
     fighter.lastActionFrameExecuted = -1;
@@ -1352,6 +1353,23 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "LandingAirB") return 75;
     if (animation == "LandingAirHi") return 76;
     if (animation == "LandingAirLw") return 77;
+    if (animation == "DamageHi1") return 166;
+    if (animation == "DamageHi2") return 167;
+    if (animation == "DamageHi3") return 168;
+    if (animation == "DamageN1") return 169;
+    if (animation == "DamageN2") return 170;
+    if (animation == "DamageN3") return 171;
+    if (animation == "DamageLw1") return 172;
+    if (animation == "DamageLw2") return 173;
+    if (animation == "DamageLw3") return 174;
+    if (animation == "DamageAir1") return 175;
+    if (animation == "DamageAir2") return 176;
+    if (animation == "DamageAir3") return 177;
+    if (animation == "DamageFlyHi") return 178;
+    if (animation == "DamageFlyN") return 179;
+    if (animation == "DamageFlyLw") return 180;
+    if (animation == "DamageFlyTop") return 181;
+    if (animation == "DamageFlyRoll") return 182;
     if (animation == "Squat") return 30;
     if (animation == "SquatWait") return 31;
     if (animation == "SquatRv") return 34;
@@ -1906,7 +1924,7 @@ static void updateFloorSkip(const World& world, FighterRuntime& fighter) {
 
     const Vec2 bottom = fighter.position + fighter.ecb.points[3];
     Fix y = 0;
-    if (!segmentYAtX(segment, bottom.x, y) || bottom.y < y - fxFromFloat(0.2f)) {
+    if (!segmentYAtX(segment, bottom.x, y)) {
         fighter.floorSkipSegment = -1;
     }
 }
@@ -3757,8 +3775,10 @@ static Fix launchAngleDegrees(const FighterRuntime& victim, const HitboxDefiniti
 static void applyHit(World& world, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox) {
     const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
     const Fix kb = calculateKnockback(hitbox, victimDef, victim);
+    const bool wasGrounded = victim.grounded;
     const int side = victim.position.x >= attacker.position.x ? 1 : -1;
-    const float angle = fxToFloat(launchAngleDegrees(victim, hitbox, kb, side)) * 3.14159265f / 180.0f;
+    const Fix launchAngle = launchAngleDegrees(victim, hitbox, kb, side);
+    const float angle = fxToFloat(launchAngle) * 3.14159265f / 180.0f;
     victim.percent += hitbox.damage;
     victim.knockbackVelocity.x = fxFromFloat(std::cos(angle) * fxToFloat(kb) * 0.03f);
     victim.knockbackVelocity.y = fxFromFloat(std::sin(angle) * fxToFloat(kb) * 0.03f);
@@ -3770,8 +3790,14 @@ static void applyHit(World& world, FighterRuntime& attacker, FighterRuntime& vic
     victim.hitlag = std::max(3, static_cast<int>(fxToFloat(hitbox.damage) / 3.0f) + 3);
     attacker.hitlag = victim.hitlag;
     victim.hitstun = std::max(1, static_cast<int>(fxToFloat(kb) * 0.4f));
-    victim.grounded = false;
-    changeFighterState(world, victim, "Fall");
+    if (kb >= fx(80) || !wasGrounded) {
+        victim.grounded = false;
+        victim.groundSegment = -1;
+        changeFighterState(world, victim, "DamageFlyN");
+    } else {
+        victim.grounded = wasGrounded;
+        changeFighterState(world, victim, "DamageN2");
+    }
 }
 
 static void applyInvincibleHit(FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox) {

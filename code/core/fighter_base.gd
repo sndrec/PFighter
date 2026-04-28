@@ -79,7 +79,7 @@ var grounded : bool = false
 var hitLag : int = 0
 var hitStun : int = 0
 var percentage : float = 0.0
-var charState: FighterState
+var charState : FighterState
 var oldPose : Array[Transform3D] = []
 var blendTime : int = 0
 var lastStateChange : int = 0
@@ -95,6 +95,7 @@ var downDesire : String = "U"
 var effectiveVel : Vector2 = Vector2.ZERO
 var shieldStun : int = 0
 var lastTimeOnLedge : int = 0
+var desiredAnim : String = ""
 
 
 
@@ -473,7 +474,7 @@ func construct_hurtboxes():
 		newHitboxInstance.angle = hitboxDef.kbAngle
 		FighterSkeleton.add_child(newHitboxInstance)
 		newHitboxInstance.position_debug_helpers()
-		var desiredColor = Color(0.25, 0.0, 0.0)
+		var desiredColor = Color(0.5, 0.0, 0.0)
 		if hitboxDef.IsTrigger:
 			desiredColor = Color(0.35, 0.0, 0.35)
 		for child in newHitboxInstance.get_children():
@@ -551,7 +552,15 @@ func unfold_action(inAction: Array[Subaction]) -> void:
 	#print(Unfolded.size())
 	curSubaction = Unfolded
 
+func set_animation(inAnim: String):
+	Animator.current_animation = inAnim
+	Animator.assigned_animation = inAnim
+	Animator.seek(0, true)
+	update_pose()
+	
+
 func blend_pose(anim1: String, anim2: String, frame1: int, frame2: int, blend: float) -> void:
+	desiredAnim = anim1
 	var pose1 = []
 	var pose2 = []
 	pose1.resize(FighterSkeleton.get_bone_count())
@@ -834,7 +843,8 @@ func fighter_tick() -> void:
 		if !ourShield.active:
 			ourShield.health = min(ourShield.health + 0.1, ourShield.maxHealth)
 		
-		
+		Animator.current_animation = desiredAnim
+		Animator.assigned_animation = desiredAnim
 		Animator.seek(float(get_frame_in_state() / 60.0), true)
 		
 		if get_frame_in_state() > Animator.current_animation_length * 60 and charState.onAnimFinishedState != "":
@@ -917,14 +927,6 @@ func fighter_tick() -> void:
 
 func _save_state() -> Dictionary:
 	var state = {
-		_Hurtboxes = Hurtboxes.duplicate(true),
-		_shield = shield.duplicate(true),
-		_FightTable = FightTable.duplicate(true),
-		_ECB_Bones = ECB_Bones.duplicate(true),
-		_OnStateEnterFuncs = OnStateEnterFuncs.duplicate(true),
-		_OnFrameFuncs = OnFrameFuncs.duplicate(true),
-		_OnDamageFuncs = OnDamageFuncs.duplicate(true),
-		_States = States.duplicate(true),
 		_ourShield = ourShield.duplicate(true),
 		_ourFightTable = ourFightTable.duplicate(true),
 		_ECB = ECB.duplicate(true),
@@ -952,6 +954,7 @@ func _save_state() -> Dictionary:
 		_effectiveVel = effectiveVel,
 		_shieldStun = shieldStun,
 		_lastTimeOnLedge = lastTimeOnLedge,
+		_desiredAnim = desiredAnim,
 		
 		animVel = animVel,
 		kbVel = kbVel,
@@ -974,14 +977,6 @@ func _save_state() -> Dictionary:
 	return state
 
 func _load_state(state: Dictionary) -> void:
-	Hurtboxes = state["_Hurtboxes"].duplicate(true)
-	shield = state["_shield"].duplicate(true)
-	FightTable = state["_FightTable"].duplicate(true)
-	ECB_Bones = state["_ECB_Bones"].duplicate(true)
-	OnStateEnterFuncs = state["_OnStateEnterFuncs"].duplicate(true)
-	OnFrameFuncs = state["_OnFrameFuncs"].duplicate(true)
-	OnDamageFuncs = state["_OnDamageFuncs"].duplicate(true)
-	States = state["_States"].duplicate(true)
 	ourShield = state["_ourShield"].duplicate(true)
 	ourFightTable = state["_ourFightTable"].duplicate(true)
 	ECB = state["_ECB"].duplicate(true)
@@ -1009,6 +1004,7 @@ func _load_state(state: Dictionary) -> void:
 	effectiveVel = state["_effectiveVel"]
 	shieldStun = state["_shieldStun"]
 	lastTimeOnLedge = state["_lastTimeOnLedge"]
+	desiredAnim = state["_desiredAnim"]
 	
 	animVel = state["animVel"]
 	kbVel = state["kbVel"]

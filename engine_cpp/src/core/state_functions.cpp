@@ -87,6 +87,7 @@ static void updateRunAnimationRate(World& world, FighterRuntime& fighter) {
 static void processAirborne(World& world, FighterRuntime& fighter);
 static void fastfallCheck(World& world, FighterRuntime& fighter);
 static void maintainLedge(World& world, FighterRuntime& fighter);
+static bool canDropThroughCurrentFloor(const World& world, const FighterRuntime& fighter);
 
 static void commonEnter(World& world, FighterRuntime& fighter) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
@@ -182,6 +183,15 @@ static void processGuard(World& world, FighterRuntime& fighter, bool opening) {
     fighter.jumpsUsed = 0;
     applyGroundFriction(fighter, attr.grFriction);
     updateGuardPose(world, fighter);
+
+    if (fighter.input.down(ButtonShield) &&
+        canDropThroughCurrentFloor(world, fighter) &&
+        fighter.input.frames[0].move.y <= -attr.common.platformDropStickThresholdX464 &&
+        fighter.stickYTiltTimer < attr.common.platformDropStickWindowX468)
+    {
+        changeFighterState(world, fighter, "Pass");
+        return;
+    }
 
     if (!fighter.input.down(ButtonShield)) {
         fighter.guardReleaseQueued = true;
@@ -804,8 +814,12 @@ static bool lCancelInputActive(const FighterRuntime& fighter, int window) {
     }
     const int maxAge = std::min(window - 1, InputBuffer::kSize - 2);
     for (int age = 0; age <= maxAge; ++age) {
-        const bool current = (fighter.input.frames[static_cast<size_t>(age)].buttons & ButtonShield) != 0;
-        const bool previous = (fighter.input.frames[static_cast<size_t>(age + 1)].buttons & ButtonShield) != 0;
+        const InputFrame& currentFrame = fighter.input.frames[static_cast<size_t>(age)];
+        const InputFrame& previousFrame = fighter.input.frames[static_cast<size_t>(age + 1)];
+        const bool current = (currentFrame.buttons & (ButtonShield | ButtonGrab)) != 0 ||
+                             currentFrame.shieldAnalog > 0;
+        const bool previous = (previousFrame.buttons & (ButtonShield | ButtonGrab)) != 0 ||
+                              previousFrame.shieldAnalog > 0;
         if (current && !previous) {
             return true;
         }
@@ -861,6 +875,28 @@ static void escapeAirLanding(World& world, FighterRuntime& fighter) {
     setFighterFlag(fighter, 12, false);
     fighter.fighterVelocity.y = 0;
     changeFighterState(world, fighter, "LandingFallSpecial", attr.common.landingFallSpecialLagX344);
+}
+
+static void processDamage(World& world, FighterRuntime& fighter) {
+    if (fighter.hitstun > 0) {
+        if (fighter.grounded) {
+            applyGroundFriction(fighter, props(world, fighter).grFriction);
+        } else {
+            processAirborne(world, fighter);
+        }
+        return;
+    }
+
+    if (fighter.grounded) {
+        changeFighterState(world, fighter, "Wait");
+        return;
+    }
+    changeFighterState(world, fighter, "DamageFall");
+}
+
+static void processDamageFall(World& world, FighterRuntime& fighter) {
+    processAirborne(world, fighter);
+    fastfallCheck(world, fighter);
 }
 
 static Fix animationFrameForState(const FighterRuntime& fighter, const FighterState& state, const AnimationClip& clip) {
@@ -1124,6 +1160,8 @@ void runStateFunction(World& world, size_t fighterIndex, const FunctionCall& cal
     if (call.name == "regular_landing") return regularLanding(world, fighter);
     if (call.name == "aerial_landing_attack") return aerialLandingAttack(world, fighter);
     if (call.name == "escape_air_landing") return escapeAirLanding(world, fighter);
+    if (call.name == "process_damage") return processDamage(world, fighter);
+    if (call.name == "process_damage_fall") return processDamageFall(world, fighter);
     if (call.name == "maintain_ledge") return maintainLedge(world, fighter);
     if (call.name == "process_cliff_climb") return processCliffClimb(world, fighter);
     if (call.name == "process_cliff_escape") return processCliffEscape(world, fighter);

@@ -1,3 +1,8 @@
+# Keep this checkout focused on the C++ fighter runtime.
+/*
+!/engine_cpp/
+!/.gitignore
+
 # Godot 4+ specific ignores
 .godot/
 
@@ -13,3 +18,12 @@ export_presets.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Local .NET tool/build artifacts used by optional DAT exporters
+.dotnet/
+.nuget/
+HSDLib-master/HSDRaw/bin/
+HSDLib-master/HSDRaw/obj/
+engine_cpp/tools/hsd_exporter/bin/
+engine_cpp/tools/hsd_exporter/obj/
+vanillaroot/
