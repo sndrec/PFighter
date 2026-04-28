@@ -1,0 +1,755 @@
+using System.Text;
+using HSDRaw;
+using HSDRaw.Common;
+using HSDRaw.Common.Animation;
+using HSDRaw.Melee;
+using HSDRaw.Melee.Cmd;
+using HSDRaw.Melee.Gr;
+using HSDRaw.Melee.Pl;
+using HSDRaw.Tools;
+using HSDRaw.Tools.Melee;
+
+static byte TrackId(JointTrackType track) => track switch
+{
+    JointTrackType.HSD_A_J_TRAX => 0,
+    JointTrackType.HSD_A_J_TRAY => 1,
+    JointTrackType.HSD_A_J_TRAZ => 2,
+    JointTrackType.HSD_A_J_ROTX => 3,
+    JointTrackType.HSD_A_J_ROTY => 4,
+    JointTrackType.HSD_A_J_ROTZ => 5,
+    JointTrackType.HSD_A_J_SCAX => 6,
+    JointTrackType.HSD_A_J_SCAY => 7,
+    JointTrackType.HSD_A_J_SCAZ => 8,
+    _ => 255,
+};
+
+static byte InterpolationId(object interpolation) => interpolation.ToString() switch
+{
+    "HSD_A_OP_CON" => 0,
+    "HSD_A_OP_LIN" => 1,
+    "HSD_A_OP_SPL" => 2,
+    "HSD_A_OP_SPL0" => 2,
+    "HSD_A_OP_SLP" => 2,
+    _ => 1,
+};
+
+static bool IsRotationTrack(JointTrackType track) =>
+    track is JointTrackType.HSD_A_J_ROTX or JointTrackType.HSD_A_J_ROTY or JointTrackType.HSD_A_J_ROTZ;
+
+static void WriteString(BinaryWriter writer, string value)
+{
+    byte[] bytes = Encoding.UTF8.GetBytes(value);
+    writer.Write(bytes.Length);
+    writer.Write(bytes);
+}
+
+static void WriteVec3(BinaryWriter writer, float x, float y, float z)
+{
+    writer.Write(x);
+    writer.Write(y);
+    writer.Write(z);
+}
+
+static void WriteFighterAttributesBinary(BinaryWriter writer, SBM_CommonFighterAttributes? attr)
+{
+    writer.Write(attr is not null);
+    if (attr is null)
+    {
+        return;
+    }
+    writer.Write(attr.InitialWalkSpeed);
+    writer.Write(attr.WalkAcceleration);
+    writer.Write(attr.MaxWalkSpeed);
+    writer.Write(attr.MidWalkPoint);
+    writer.Write(attr.FastWalkSpeed);
+    writer.Write(attr.Friction);
+    writer.Write(attr.InitialDashSpeed);
+    writer.Write(attr.InitialRunSpeed);
+    writer.Write(attr.RunAnimationScale);
+    writer.Write(attr.DashDurationBeforeRunning);
+    writer.Write(attr.JumpStartupLag);
+    writer.Write(attr.InitialHorizontalJumpVelocity);
+    writer.Write(attr.InitialVerticalJumpVelocity);
+    writer.Write(attr.GroundToAirJumpMomentumMultiplier);
+    writer.Write(attr.MaximumShorthopHorizontalVelocity);
+    writer.Write(attr.MaximumShorthopVerticalVelocity);
+    writer.Write(attr.VerticalAirJumpMultiplier);
+    writer.Write(attr.HorizontalAirJumpMultiplier);
+    writer.Write(attr.NumberOfJumps);
+    writer.Write(attr.Gravity);
+    writer.Write(attr.TerminalVelocity);
+    writer.Write(attr.AerialSpeed);
+    writer.Write(attr.AerialFriction);
+    writer.Write(attr.MaxAerialHorizontalSpeed);
+    writer.Write(attr.AirFriction);
+    writer.Write(attr.FastFallTerminalVelocity);
+    writer.Write(attr.FramesToChangeDirectionOnStandingTurn);
+    writer.Write(attr.Weight);
+    writer.Write(attr.ModelScale);
+    writer.Write(attr.ShieldSize);
+    writer.Write(attr.ShieldBreakInitialVelocity);
+    writer.Write(attr.NormalLandingLag);
+    writer.Write(attr.NairLandingLag);
+    writer.Write(attr.FairLandingLag);
+    writer.Write(attr.BairLandingLag);
+    writer.Write(attr.UairLandingLag);
+    writer.Write(attr.DairLandingLag);
+    writer.Write(attr.WallJumpHorizontalVelocity);
+    writer.Write(attr.WallJumpVerticalVelocity);
+    writer.Write(attr.LedgeJumpHorizontalVelocity);
+    writer.Write(attr.LedgeJumpVerticalVelocity);
+}
+
+const int CommonBoneLookupCount = 0x36;
+
+static int[] EmptyCommonBoneLookup()
+{
+    int[] lookup = new int[CommonBoneLookupCount];
+    Array.Fill(lookup, -1);
+    return lookup;
+}
+
+static SBM_ftLoadCommonData? TryLoadCommonDataForFighter(string fighterDatPath)
+{
+    string? directory = Path.GetDirectoryName(fighterDatPath);
+    string commonPath = Path.Combine(directory ?? "", "PlCo.dat");
+    if (!File.Exists(commonPath))
+    {
+        return null;
+    }
+
+    HSDRawFile commonFile = new(commonPath);
+    return commonFile.Roots.Select(root => root.Data).OfType<SBM_ftLoadCommonData>().FirstOrDefault();
+}
+
+static int[] ReadCommonBoneLookup(SBM_ftLoadCommonData? commonData, int boneTableIndex)
+{
+    int[] lookup = EmptyCommonBoneLookup();
+    HSDFixedLengthPointerArrayAccessor<SBM_BoneLookupTable>? boneTables = commonData?.BoneTables;
+    if (boneTables is null || boneTableIndex < 0 || boneTableIndex >= boneTables.Length)
+    {
+        return lookup;
+    }
+
+    SBM_BoneLookupTable? table = boneTables[boneTableIndex];
+    HSDAccessor? commonAttribute = table?._s.GetReference<HSDAccessor>(0x04);
+    if (commonAttribute is null)
+    {
+        return lookup;
+    }
+
+    for (int i = 0; i < CommonBoneLookupCount && i < commonAttribute._s.Length; ++i)
+    {
+        byte bone = commonAttribute._s.GetByte(i);
+        lookup[i] = bone == 0xFF ? -1 : bone;
+    }
+    return lookup;
+}
+
+static void WriteCommonDataBinary(string outputPath, string commonDatPath)
+{
+    HSDRawFile commonFile = new(commonDatPath);
+    SBM_ftLoadCommonData commonData = commonFile.Roots.Select(root => root.Data).OfType<SBM_ftLoadCommonData>().First();
+    ftLoadCommandDataCommonAttributes attr = commonData.CommonAttributes
+        ?? throw new InvalidDataException("PlCo.dat is missing ftLoadCommonData common attributes");
+
+    float F(int offset) => attr._s.GetFloat(offset);
+    int I(int offset) => attr._s.GetInt32(offset);
+    int R(int offset) => (int)MathF.Round(F(offset));
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    using FileStream stream = File.Create(outputPath);
+    using BinaryWriter writer = new(stream, Encoding.UTF8);
+    writer.Write(Encoding.ASCII.GetBytes("PFCM"));
+    writer.Write(3);
+
+    writer.Write(F(0x08));
+    writer.Write(F(0x0C));
+    writer.Write(F(0x24));
+    writer.Write(F(0x28));
+    writer.Write(F(0x2C));
+    writer.Write(F(0x30));
+    writer.Write(F(0x34));
+    writer.Write(F(0x38));
+    writer.Write(F(0x3C));
+    writer.Write(I(0x40));
+    writer.Write(R(0x44));
+    writer.Write(R(0x48));
+    writer.Write(R(0x4C));
+    writer.Write(F(0x54));
+    writer.Write(F(0x58));
+    writer.Write(F(0x5C));
+    writer.Write(F(0x60));
+    writer.Write(F(0x6C));
+    writer.Write(F(0x70));
+    writer.Write(I(0x74));
+    writer.Write(F(0x78));
+    writer.Write(F(0x7C));
+    writer.Write(F(0x80));
+    writer.Write(F(0x88));
+    writer.Write(I(0x8C));
+    writer.Write(F(0x90));
+    writer.Write(F(0x94));
+    writer.Write(F(0x260));
+    writer.Write(F(0x264));
+    writer.Write(R(0x268));
+    writer.Write(F(0x278));
+    writer.Write(F(0x27C));
+    writer.Write(F(0x284));
+    writer.Write(F(0x288));
+    writer.Write(F(0x28C));
+    writer.Write(F(0x290));
+    writer.Write(F(0x294));
+    writer.Write(F(0x298));
+    writer.Write(I(0x2A0));
+    writer.Write(I(0x2B8));
+    writer.Write(F(0x2D4));
+    writer.Write(F(0x2D8));
+    writer.Write(F(0x2DC));
+    writer.Write(F(0x2E0));
+    writer.Write(F(0x2E4));
+    writer.Write(F(0x2E8));
+    writer.Write(F(0x2EC));
+    writer.Write(F(0x2F0));
+    writer.Write(F(0x2F4));
+    writer.Write(F(0x3E0));
+    writer.Write(F(0x3E4));
+    writer.Write(F(0x3E8));
+    writer.Write(F(0x3EC));
+    writer.Write(F(0x314));
+    writer.Write(I(0x318));
+    writer.Write(F(0x31C));
+    writer.Write(I(0x320));
+    writer.Write(I(0x324));
+    writer.Write(F(0x32C));
+    writer.Write(F(0x330));
+    writer.Write(I(0x334));
+    writer.Write(F(0x338));
+    writer.Write(F(0x33C));
+    writer.Write(F(0x340));
+    writer.Write(R(0x344));
+    writer.Write(I(0x410));
+    writer.Write(F(0x42C));
+    writer.Write(R(0x430));
+    writer.Write(F(0x438));
+    writer.Write(F(0x440));
+    writer.Write(F(0x4B0));
+    writer.Write(I(0x4B4));
+    writer.Write(F(0x4B8));
+    writer.Write(F(0x4BC));
+    writer.Write(F(0x4C0));
+    writer.Write(F(0x464));
+    writer.Write(R(0x468));
+    writer.Write(F(0x46C));
+    writer.Write(R(0x470));
+    writer.Write(F(0x478));
+    writer.Write(F(0x47C));
+    writer.Write(F(0x480));
+    writer.Write(F(0x494));
+    writer.Write(I(0x498));
+    writer.Write(I(0x760));
+    writer.Write(I(0x764));
+    writer.Write(R(0x768));
+    writer.Write(F(0x76C));
+    writer.Write(R(0x770));
+    writer.Write(I(0x774));
+    writer.Write(F(0x778));
+    writer.Write(MathF.Tan(F(0x20)));
+    writer.Write(F(0xDC));
+    writer.Write(F(0xE0));
+    writer.Write(F(0x44C));
+}
+
+static void WriteSkeletonBinary(BinaryWriter writer, HSD_JOBJ joint, int parent, List<HSD_JOBJ> joints)
+{
+    int index = joints.Count;
+    joints.Add(joint);
+    writer.Write(parent);
+    WriteString(writer, string.IsNullOrWhiteSpace(joint.ClassName) ? $"JOBJ_{index}" : joint.ClassName);
+    writer.Write((uint)joint.Flags);
+    WriteVec3(writer, joint.TX, joint.TY, joint.TZ);
+    WriteVec3(writer, joint.RX, joint.RY, joint.RZ);
+    WriteVec3(writer, joint.SX, joint.SY, joint.SZ);
+
+    HSD_JOBJ? child = joint.Child;
+    while (child is not null)
+    {
+        WriteSkeletonBinary(writer, child, index, joints);
+        child = child.Next;
+    }
+}
+
+static void AddPoseJoints(HSD_JOBJ joint, List<HSD_JOBJ> joints)
+{
+    joints.Add(joint);
+    HSD_JOBJ? child = joint.Child;
+    while (child is not null)
+    {
+        AddPoseJoints(child, joints);
+        child = child.Next;
+    }
+}
+
+static void WritePoseBinary(BinaryWriter writer, HSD_JOBJ poseRoot)
+{
+    List<HSD_JOBJ> joints = new();
+    AddPoseJoints(poseRoot, joints);
+    writer.Write(joints.Count);
+    foreach (HSD_JOBJ joint in joints)
+    {
+        WriteVec3(writer, joint.TX, joint.TY, joint.TZ);
+        WriteVec3(writer, joint.RX, joint.RY, joint.RZ);
+        WriteVec3(writer, joint.SX, joint.SY, joint.SZ);
+    }
+}
+
+static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, uint flags, HSD_FigaTree clip)
+{
+    WriteString(writer, name);
+    writer.Write(actionIndex);
+    writer.Write(flags);
+    writer.Write(clip.FrameCount);
+
+    List<(int Joint, HSD_Track Track, List<FOBJKey> Keys)> tracks = new();
+    List<FigaTreeNode> nodes = clip.Nodes;
+    for (int nodeIndex = 0; nodeIndex < nodes.Count; ++nodeIndex)
+    {
+        foreach (HSD_Track track in nodes[nodeIndex].Tracks)
+        {
+            byte trackId = TrackId(track.JointTrackType);
+            if (trackId == 255)
+            {
+                continue;
+            }
+            FOBJ_Player player = new(track.ToFOBJ());
+            if (player.Keys.Count == 0)
+            {
+                continue;
+            }
+            int lastFrame = Math.Max(1, (int)MathF.Ceiling(clip.FrameCount));
+            List<FOBJKey> sampledKeys = new();
+            float previous = 0.0f;
+            for (int frame = 0; frame <= lastFrame; ++frame)
+            {
+                float value = player.GetValue(frame);
+                if (sampledKeys.Count > 0 && IsRotationTrack(track.JointTrackType))
+                {
+                    float delta = value - previous;
+                    while (delta > MathF.PI)
+                    {
+                        value -= MathF.PI * 2.0f;
+                        delta -= MathF.PI * 2.0f;
+                    }
+                    while (delta < -MathF.PI)
+                    {
+                        value += MathF.PI * 2.0f;
+                        delta += MathF.PI * 2.0f;
+                    }
+                }
+                sampledKeys.Add(new FOBJKey
+                {
+                    Frame = frame,
+                    Value = value,
+                    Tan = 0.0f,
+                    InterpolationType = GXInterpolationType.HSD_A_OP_LIN,
+                });
+                previous = value;
+            }
+            tracks.Add((nodeIndex, track, sampledKeys));
+        }
+    }
+
+    writer.Write(tracks.Count);
+    foreach ((int joint, HSD_Track track, List<FOBJKey> keys) in tracks)
+    {
+        writer.Write(joint);
+        writer.Write(TrackId(track.JointTrackType));
+        writer.Write(keys.Count);
+        foreach (FOBJKey key in keys)
+        {
+            writer.Write(key.Frame);
+            writer.Write(key.Value);
+            writer.Write(key.Tan);
+            writer.Write(InterpolationId(key.InterpolationType));
+        }
+    }
+}
+
+static int MeleeCommandByteSize(byte code)
+{
+    // Melee's fighter hitbox command is five 32-bit command words. HSDLib's generic
+    // ActionCommon map predates the decomp layout and truncates this command.
+    if (code == 0x0B)
+    {
+        return 20;
+    }
+    MeleeCMDAction? action = ActionCommon.GetMeleeCMDAction(code);
+    return action?.ByteSize ?? 4;
+}
+
+static List<(byte Code, byte[] Bytes)> ReadActionCommands(SBM_FighterSubactionData? subaction)
+{
+    List<(byte Code, byte[] Bytes)> commands = new();
+    if (subaction is null)
+    {
+        return commands;
+    }
+
+    byte[] data = subaction._s.GetData();
+    int offset = 0;
+    while (offset < data.Length)
+    {
+        byte code = (byte)(data[offset] >> 2);
+        int byteSize = MeleeCommandByteSize(code);
+        if (byteSize <= 0 || offset + byteSize > data.Length)
+        {
+            break;
+        }
+        byte[] bytes = data.Skip(offset).Take(byteSize).ToArray();
+        commands.Add((code, bytes));
+        offset += byteSize;
+        if (code == 0)
+        {
+            break;
+        }
+    }
+    return commands;
+}
+
+static void WriteActionScriptBinary(BinaryWriter writer, SBM_FighterAction action, int actionIndex, int[] commonBoneLookup)
+{
+    WriteString(writer, action.Name ?? "");
+    writer.Write(actionIndex);
+    writer.Write(commonBoneLookup.Length);
+    foreach (int bone in commonBoneLookup)
+    {
+        writer.Write(bone);
+    }
+    List<(byte Code, byte[] Bytes)> commands = ReadActionCommands(action.SubAction);
+    writer.Write(commands.Count);
+    foreach ((byte code, byte[] bytes) in commands)
+    {
+        writer.Write(code);
+        writer.Write(bytes.Length);
+        writer.Write(bytes);
+    }
+}
+
+static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, string costumeDatPath)
+{
+    HSDRawFile fighterFile = new(fighterDatPath);
+    HSDRawFile costumeFile = new(costumeDatPath);
+    SBM_FighterData fighterData = fighterFile.Roots.Select(root => root.Data).OfType<SBM_FighterData>().First();
+    HSD_JOBJ skeletonRoot = costumeFile.Roots.Select(root => root.Data).OfType<HSD_JOBJ>().First();
+    AnimationDatSet? animationSet = TryLoadAnimationDatSet(fighterDatPath);
+    SBM_ftLoadCommonData? commonData = TryLoadCommonDataForFighter(fighterDatPath);
+    SBM_DynamicBehavior[] dynamicBehaviors = fighterData.FighterActionDynamicBehaviors?.Array ?? Array.Empty<SBM_DynamicBehavior>();
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    using FileStream stream = File.Create(outputPath);
+    using BinaryWriter writer = new(stream, Encoding.UTF8);
+
+    writer.Write(Encoding.ASCII.GetBytes("PFHA"));
+    writer.Write(7);
+    WriteString(writer, Path.GetFileNameWithoutExtension(fighterDatPath));
+
+    using MemoryStream skeletonStream = new();
+    using (BinaryWriter skeletonWriter = new(skeletonStream, Encoding.UTF8, leaveOpen: true))
+    {
+        List<HSD_JOBJ> joints = new();
+        WriteSkeletonBinary(skeletonWriter, skeletonRoot, -1, joints);
+        writer.Write(joints.Count);
+    }
+    writer.Write(skeletonStream.ToArray());
+
+    SBM_FighterBoneIDs? bones = fighterData.FighterBoneTable;
+    writer.Write(bones?.HeadBone ?? -1);
+    writer.Write(bones?.RightArm ?? -1);
+    writer.Write(bones?.LeftLeg ?? -1);
+    writer.Write(bones?.RightLeg ?? -1);
+    writer.Write(bones?.LeftArm ?? -1);
+    SBM_PlayerModelLookupTables? modelLookup = fighterData.ModelLookupTables;
+    writer.Write(modelLookup?.ItemHoldBone ?? -1);
+    writer.Write(modelLookup?.ShieldBone ?? -1);
+    writer.Write(modelLookup?.TopOfHeadBone ?? -1);
+    writer.Write(modelLookup?.LeftFootBone ?? -1);
+    writer.Write(modelLookup?.RightFootBone ?? -1);
+    WriteFighterAttributesBinary(writer, fighterData.Attributes);
+
+    SBM_EnvironmentCollision? env = fighterData.EnvironmentCollision;
+    writer.Write(env is not null);
+    writer.Write((int)(env?.ECBBone1 ?? -1));
+    writer.Write((int)(env?.ECBBone2 ?? -1));
+    writer.Write((int)(env?.ECBBone3 ?? -1));
+    writer.Write((int)(env?.ECBBone4 ?? -1));
+    writer.Write((int)(env?.ECBBone5 ?? -1));
+    writer.Write((int)(env?.ECBBone6 ?? -1));
+    writer.Write(env?.Multiplier ?? 0.0f);
+    writer.Write(env?.LedgeGrabWidth ?? 0.0f);
+    writer.Write(env?.LedgeGrabYOffset ?? 0.0f);
+    writer.Write(env?.LedgeGrabHeight ?? 0.0f);
+
+    SBM_Hurtbox[] hurtboxes = fighterData.Hurtboxes?.Hurtboxes ?? Array.Empty<SBM_Hurtbox>();
+    writer.Write(hurtboxes.Length);
+    for (int i = 0; i < hurtboxes.Length; ++i)
+    {
+        SBM_Hurtbox hurtbox = hurtboxes[i];
+        writer.Write(i);
+        writer.Write(hurtbox.BoneIndex);
+        WriteString(writer, hurtbox.Type.ToString());
+        writer.Write(hurtbox.Grabbable != 0);
+        WriteVec3(writer, hurtbox.X1, hurtbox.Y1, hurtbox.Z1);
+        WriteVec3(writer, hurtbox.X2, hurtbox.Y2, hurtbox.Z2);
+        writer.Write(hurtbox.Size);
+    }
+
+    List<(string Name, int Index, uint Flags, HSD_FigaTree Clip)> clips = new();
+    if (fighterData.FighterActionTable is not null)
+    {
+        SBM_FighterAction[] actions = fighterData.FighterActionTable.Commands;
+        for (int i = 0; i < actions.Length; ++i)
+        {
+            SBM_FighterAction action = actions[i];
+            if (action.AnimationSize <= 0 || string.IsNullOrWhiteSpace(action.Name))
+            {
+                continue;
+            }
+            HSD_FigaTree? clip = FigaForAction(animationSet, action);
+            if (clip is not null)
+            {
+                clips.Add((action.Name, i, action.Flags, clip));
+            }
+        }
+    }
+    writer.Write(clips.Count);
+    foreach ((string name, int index, uint flags, HSD_FigaTree clip) in clips)
+    {
+        WriteClipBinary(writer, name, index, flags, clip);
+    }
+
+    List<(SBM_FighterAction Action, int Index, int[] CommonBoneLookup)> scripts = new();
+    if (fighterData.FighterActionTable is not null)
+    {
+        SBM_FighterAction[] actions = fighterData.FighterActionTable.Commands;
+        for (int i = 0; i < actions.Length; ++i)
+        {
+            if (actions[i].SubAction is not null)
+            {
+                int boneTableIndex = i < dynamicBehaviors.Length ? dynamicBehaviors[i].BoneTableIndex : -1;
+                scripts.Add((actions[i], i, ReadCommonBoneLookup(commonData, boneTableIndex)));
+            }
+        }
+    }
+    writer.Write(scripts.Count);
+    foreach ((SBM_FighterAction action, int index, int[] commonBoneLookup) in scripts)
+    {
+        WriteActionScriptBinary(writer, action, index, commonBoneLookup);
+    }
+
+    HSD_JOBJ? shieldPose = fighterData.ShieldPoseContainer?.ShieldPose;
+    writer.Write(shieldPose is not null);
+    if (shieldPose is not null)
+    {
+        WritePoseBinary(writer, shieldPose);
+    }
+}
+
+static byte StageLineKindId(CollPhysics physics)
+{
+    if (physics.HasFlag(CollPhysics.Top)) return 0;
+    if (physics.HasFlag(CollPhysics.Bottom)) return 1;
+    if (physics.HasFlag(CollPhysics.Right)) return 2;
+    if (physics.HasFlag(CollPhysics.Left)) return 3;
+    return 0;
+}
+
+static void ExportStageCollisionBinary(string outputPath, string stageDatPath)
+{
+    HSDRawFile stageFile = new(stageDatPath);
+    SBM_Coll_Data collision = stageFile.Roots.Select(root => root.Data).OfType<SBM_Coll_Data>().First();
+    SBM_CollVertex[] vertices = collision.Vertices ?? Array.Empty<SBM_CollVertex>();
+    SBM_CollLine[] lines = collision.Links ?? Array.Empty<SBM_CollLine>();
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath)) ?? ".");
+    using FileStream stream = File.Create(outputPath);
+    using BinaryWriter writer = new(stream, Encoding.UTF8);
+
+    writer.Write(Encoding.ASCII.GetBytes("PFST"));
+    writer.Write(2);
+    WriteString(writer, Path.GetFileNameWithoutExtension(stageDatPath));
+
+    List<(SBM_CollLine Line, int OriginalIndex)> exported = lines
+        .Select((line, index) => (Line: line, OriginalIndex: index))
+        .Where(item => !item.Line.CollisionFlag.HasFlag(CollPhysics.Disabled))
+        .Where(item => item.Line.VertexIndex1 >= 0 && item.Line.VertexIndex1 < vertices.Length && item.Line.VertexIndex2 >= 0 && item.Line.VertexIndex2 < vertices.Length)
+        .ToList();
+    Dictionary<int, int> exportedIndexByOriginal = exported
+        .Select((item, exportedIndex) => (item.OriginalIndex, exportedIndex))
+        .ToDictionary(item => item.OriginalIndex, item => item.exportedIndex);
+
+    int RemapLineIndex(short originalIndex)
+    {
+        return exportedIndexByOriginal.TryGetValue(originalIndex, out int exportedIndex) ? exportedIndex : -1;
+    }
+
+    writer.Write(exported.Count);
+    foreach ((SBM_CollLine line, int _) in exported)
+    {
+        SBM_CollVertex a = vertices[line.VertexIndex1];
+        SBM_CollVertex b = vertices[line.VertexIndex2];
+        writer.Write(a.X);
+        writer.Write(a.Y);
+        writer.Write(b.X);
+        writer.Write(b.Y);
+        writer.Write(line.Flag.HasFlag(CollProperty.DropThrough) ? (byte)1 : (byte)0);
+        writer.Write(StageLineKindId(line.CollisionFlag));
+        bool ledgeGrab = line.Flag.HasFlag(CollProperty.LedgeGrab);
+        writer.Write(ledgeGrab);
+        writer.Write(ledgeGrab);
+        writer.Write(false);
+        writer.Write(RemapLineIndex(line.NextLine));
+        writer.Write(RemapLineIndex(line.PreviousLine));
+        writer.Write(1.0f);
+    }
+}
+
+static AnimationDatSet? TryLoadAnimationDatSet(string datPath)
+{
+    string? directory = Path.GetDirectoryName(datPath);
+    string baseName = Path.GetFileNameWithoutExtension(datPath);
+    string ajPath = Path.Combine(directory ?? "", $"{baseName}AJ.dat");
+    return File.Exists(ajPath) ? new AnimationDatSet(ajPath) : null;
+}
+
+static HSD_FigaTree? FigaForAction(AnimationDatSet? animationSet, SBM_FighterAction action)
+{
+    return animationSet?.GetClip(action.Name, action.AnimationOffset);
+}
+
+if (args.Length == 0)
+{
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  dotnet run --project engine_cpp/tools/hsd_exporter -- --asset-bin-out <output.bin> <fighter.dat> <costume.dat>");
+    Console.Error.WriteLine("  dotnet run --project engine_cpp/tools/hsd_exporter -- --stage-bin-out <output.bin> <stage.dat>");
+    Console.Error.WriteLine("  dotnet run --project engine_cpp/tools/hsd_exporter -- --common-bin-out <output.bin> <PlCo.dat>");
+    return 2;
+}
+
+if (args[0] == "--asset-bin-out")
+{
+    if (args.Length != 4)
+    {
+        Console.Error.WriteLine("--asset-bin-out expects <output.bin> <fighter.dat> <costume.dat>");
+        return 2;
+    }
+    ExportFighterAssetBinary(args[1], args[2], args[3]);
+    Console.WriteLine(Path.GetFullPath(args[1]));
+    return 0;
+}
+
+if (args[0] == "--stage-bin-out")
+{
+    if (args.Length != 3)
+    {
+        Console.Error.WriteLine("--stage-bin-out expects <output.bin> <stage.dat>");
+        return 2;
+    }
+    ExportStageCollisionBinary(args[1], args[2]);
+    Console.WriteLine(Path.GetFullPath(args[1]));
+    return 0;
+}
+
+if (args[0] == "--common-bin-out")
+{
+    if (args.Length != 3)
+    {
+        Console.Error.WriteLine("--common-bin-out expects <output.bin> <PlCo.dat>");
+        return 2;
+    }
+    WriteCommonDataBinary(args[1], args[2]);
+    Console.WriteLine(Path.GetFullPath(args[1]));
+    return 0;
+}
+
+Console.Error.WriteLine($"unknown exporter command: {args[0]}");
+return 2;
+
+sealed class AnimationDatSet
+{
+    private readonly byte[] bytes;
+    private readonly FighterAJManager manager;
+    private readonly Dictionary<string, HSD_FigaTree?> clipsBySymbol = new();
+    private readonly Dictionary<int, HSD_FigaTree?> clipsByOffset = new();
+
+    public AnimationDatSet(string path)
+    {
+        bytes = File.ReadAllBytes(path);
+        manager = new FighterAJManager(bytes);
+    }
+
+    public HSD_FigaTree? GetClip(string symbol, int offset)
+    {
+        if (!string.IsNullOrWhiteSpace(symbol))
+        {
+            if (clipsBySymbol.TryGetValue(symbol, out HSD_FigaTree? cachedBySymbol))
+            {
+                return cachedBySymbol;
+            }
+
+            byte[] data = manager.GetAnimationData(symbol);
+            if (data is not null)
+            {
+                try
+                {
+                    HSDRawFile file = new(data);
+                    HSD_FigaTree? clip = file.Roots.Select(root => root.Data).OfType<HSD_FigaTree>().FirstOrDefault();
+                    clipsBySymbol[symbol] = clip;
+                    return clip;
+                }
+                catch
+                {
+                    clipsBySymbol[symbol] = null;
+                }
+            }
+        }
+
+        if (clipsByOffset.TryGetValue(offset, out HSD_FigaTree? cached))
+        {
+            return cached;
+        }
+
+        if (offset < 0 || offset + 4 > bytes.Length)
+        {
+            clipsByOffset[offset] = null;
+            return null;
+        }
+
+        try
+        {
+            int fileSize =
+                (bytes[offset] << 24) |
+                (bytes[offset + 1] << 16) |
+                (bytes[offset + 2] << 8) |
+                bytes[offset + 3];
+            if (fileSize <= 0 || offset + fileSize > bytes.Length)
+            {
+                clipsByOffset[offset] = null;
+                return null;
+            }
+            byte[] chunk = bytes[offset..(offset + fileSize)];
+            HSDRawFile file = new(chunk);
+            HSD_FigaTree? clip = file.Roots.Select(root => root.Data).OfType<HSD_FigaTree>().FirstOrDefault();
+            if (clip is null && file.Roots.Count > 0)
+            {
+                clip = new HSD_FigaTree { _s = file.Roots[0].Data._s };
+            }
+            clipsByOffset[offset] = clip;
+            return clip;
+        }
+        catch
+        {
+            clipsByOffset[offset] = null;
+            return null;
+        }
+    }
+}

@@ -1,0 +1,818 @@
+#include "core/fighter_data.hpp"
+
+#include <array>
+#include <unordered_map>
+
+namespace pf {
+
+int FighterDefinition::stateIndex(const std::string& name) const {
+    for (size_t i = 0; i < states.size(); ++i) {
+        if (states[i].name == name) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+BoneId boneFromName(const std::string& name) {
+    if (name == "HeadN" || name == "Head") return BoneId::Head;
+    if (name == "HandL") return BoneId::HandL;
+    if (name == "HandR") return BoneId::HandR;
+    if (name == "FootL") return BoneId::FootL;
+    if (name == "FootR") return BoneId::FootR;
+    if (name == "Extra") return BoneId::Extra;
+    return BoneId::Hip;
+}
+
+const char* boneName(BoneId bone) {
+    switch (bone) {
+        case BoneId::Hip: return "HipN";
+        case BoneId::Head: return "HeadN";
+        case BoneId::HandL: return "HandL";
+        case BoneId::HandR: return "HandR";
+        case BoneId::FootL: return "FootL";
+        case BoneId::FootR: return "FootR";
+        case BoneId::Extra: return "Extra";
+        case BoneId::Count: break;
+    }
+    return "HipN";
+}
+
+static InterruptRule interrupt(std::string target, InterruptCondition condition, GroundRequirement ground = GroundRequirement::Any) {
+    InterruptRule rule;
+    rule.targetState = std::move(target);
+    rule.condition = condition;
+    rule.ground = ground;
+    return rule;
+}
+
+static Subaction wait(int frames) {
+    Subaction sub;
+    sub.type = SubactionType::SyncTimer;
+    sub.frames = frames;
+    return sub;
+}
+
+static Subaction clearHitboxes() {
+    Subaction sub;
+    sub.type = SubactionType::ClearHitboxes;
+    return sub;
+}
+
+static Subaction setFlag(int flag, bool on) {
+    Subaction sub;
+    sub.type = SubactionType::SetFlag;
+    sub.flag = flag;
+    sub.flagValue = on;
+    return sub;
+}
+
+static Subaction setHurtboxState(int index, HurtboxState state) {
+    Subaction sub;
+    sub.type = SubactionType::SetHurtboxState;
+    sub.hurtboxIndex = index;
+    sub.hurtboxState = state;
+    return sub;
+}
+
+static FunctionCall call(std::string name, bool boolParam = false) {
+    FunctionCall fn;
+    fn.name = std::move(name);
+    fn.boolParam = boolParam;
+    return fn;
+}
+
+static Subaction createHitbox(int id, BoneId bone, Vec3 offset, Fix radius, Fix damage, Fix angle, Fix base, Fix growth) {
+    Subaction sub;
+    sub.type = SubactionType::CreateHitbox;
+    sub.hitbox.hitboxId = id;
+    sub.hitbox.bone = bone;
+    sub.hitbox.offset = offset;
+    sub.hitbox.radius = radius;
+    sub.hitbox.damage = damage;
+    sub.hitbox.damageShield = 0;
+    sub.hitbox.knockbackAngleDegrees = angle;
+    sub.hitbox.knockbackBase = base;
+    sub.hitbox.knockbackGrowth = growth;
+    return sub;
+}
+
+static void assignMeleeActionIndices(FighterDefinition& fighter) {
+    const std::unordered_map<std::string, int> actionByAnimation = {
+        {"Wait", 6},
+        {"WalkSlow", 7},
+        {"WalkMiddle", 8},
+        {"WalkFast", 9},
+        {"Turn", 10},
+        {"TurnRun", 11},
+        {"Dash", 12},
+        {"Run", 13},
+        {"RunBrake", 14},
+        {"JumpSquat", 15},
+        {"KneeBend", 15},
+        {"JumpF", 16},
+        {"JumpB", 17},
+        {"JumpAerialF", 18},
+        {"JumpAerialB", 19},
+        {"Fall", 20},
+        {"FallSpecial", 26},
+        {"Landing", 35},
+        {"LandingFallSpecial", 36},
+        {"GuardOn", 37},
+        {"GuardReflect", 37},
+        {"Guard", 38},
+        {"GuardOff", 39},
+        {"GuardSetOff", 40},
+        {"EscapeN", 41},
+        {"EscapeF", 42},
+        {"EscapeB", 43},
+        {"EscapeAir", 44},
+        {"Jab", 46},
+        {"AirAttackN", 68},
+        {"AirAttackF", 69},
+        {"AirAttackB", 70},
+        {"AirAttackHi", 71},
+        {"AirAttackLw", 72},
+        {"LandingAirN", 73},
+        {"LandingAirF", 74},
+        {"LandingAirB", 75},
+        {"LandingAirHi", 76},
+        {"LandingAirLw", 77},
+        {"Squat", 30},
+        {"SquatWait", 31},
+        {"SquatRv", 34},
+        {"Pass", 209},
+        {"Ottotto", 210},
+        {"OttottoWait", 211},
+        {"PassiveWallJump", 203},
+        {"CliffCatch", 216},
+        {"CliffWait", 217},
+        {"CliffClimbQuick", 220},
+        {"CliffAttackQuick", 222},
+        {"CliffEscapeQuick", 224},
+        {"CliffJumpQuick1", 227},
+        {"CliffJumpQuick2", 228},
+    };
+    const std::unordered_map<std::string, int> actionByState = {
+        {"CliffClimb", 220},
+        {"CliffAttack", 222},
+        {"CliffEscape", 224},
+        {"CliffJump", 227},
+        {"CliffJumpAir", 228},
+    };
+    for (FighterState& state : fighter.states) {
+        if (const auto byState = actionByState.find(state.name); byState != actionByState.end()) {
+            state.animationActionIndex = byState->second;
+            continue;
+        }
+        if (const auto byAnimation = actionByAnimation.find(state.animation); byAnimation != actionByAnimation.end()) {
+            state.animationActionIndex = byAnimation->second;
+        }
+    }
+}
+
+FighterDefinition makeDebugRook() {
+    FighterDefinition fighter;
+    fighter.name = "Rook";
+    fighter.shield.maxHealth = fighter.properties.common.startShieldHealthX260;
+    fighter.shield.startSizeHardShield = fighter.properties.initialShieldSize;
+
+    fighter.hurtboxes = {
+        {BoneId::Hip, {0, 0, 0}, {0, fxFromFloat(1.0f), 0}, fxFromFloat(0.55f)},
+        {BoneId::Head, {0, 0, 0}, {0, fxFromFloat(0.35f), 0}, fxFromFloat(0.42f)},
+        {BoneId::HandL, {0, 0, 0}, {0, 0, 0}, fxFromFloat(0.26f)},
+        {BoneId::HandR, {0, 0, 0}, {0, 0, 0}, fxFromFloat(0.26f)},
+    };
+
+    FighterState waitState;
+    waitState.name = "Wait";
+    waitState.animation = "Wait";
+    waitState.animationLengthFrames = 60;
+    waitState.loopAnimation = true;
+    waitState.onEnter = {call("common_enter")};
+    waitState.onFrame = {call("process_grounded")};
+    waitState.onAirborne = {call("teeter_or_airborne")};
+    waitState.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState walkSlow = waitState;
+    walkSlow.name = "WalkSlow";
+    walkSlow.animation = "WalkSlow";
+    walkSlow.onFrame = {call("process_grounded"), call("process_walk")};
+    walkSlow.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkMiddle", InterruptCondition::HorizontalWalkMiddle, GroundRequirement::OnlyGrounded),
+        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState walkMiddle = walkSlow;
+    walkMiddle.name = "WalkMiddle";
+    walkMiddle.animation = "WalkMiddle";
+    walkMiddle.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkFast", InterruptCondition::HorizontalWalkFast, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState walkFast = walkSlow;
+    walkFast.name = "WalkFast";
+    walkFast.animation = "WalkFast";
+    walkFast.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkMiddle", InterruptCondition::HorizontalWalkMiddle, GroundRequirement::OnlyGrounded),
+        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState dashState;
+    dashState.name = "Dash";
+    dashState.animation = "Dash";
+    dashState.animationLengthFrames = fighter.properties.common.dashLateInterruptWindowX4C;
+    dashState.onEnter = {call("common_enter"), call("enter_dash")};
+    dashState.onFrame = {call("process_grounded"), call("process_dash")};
+    dashState.onAirborne = {call("regular_airborne")};
+    dashState.action = {
+        wait(8),
+        setFlag(0, true),
+    };
+    dashState.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Run", InterruptCondition::RunInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::ReverseDashInput, GroundRequirement::OnlyGrounded),
+        interrupt("TurnRun", InterruptCondition::TurnRunInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState runState;
+    runState.name = "Run";
+    runState.animation = "Run";
+    runState.animationLengthFrames = 60;
+    runState.loopAnimation = true;
+    runState.onEnter = {call("common_enter"), call("enter_run")};
+    runState.onFrame = {call("process_grounded"), call("process_run")};
+    runState.onAirborne = {call("regular_airborne")};
+    runState.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("TurnRun", InterruptCondition::TurnRunInput, GroundRequirement::OnlyGrounded),
+        interrupt("RunBrake", InterruptCondition::RunBrakeInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState runDirect = runState;
+    runDirect.name = "RunDirect";
+    runDirect.animation = "Run";
+    runDirect.onEnter = {call("common_enter"), call("enter_run_direct")};
+    runDirect.onFrame = {call("process_grounded"), call("process_run_direct")};
+    runDirect.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState runBrake;
+    runBrake.name = "RunBrake";
+    runBrake.animation = "RunBrake";
+    runBrake.animationLengthFrames = fighter.properties.maxRunBrakeFrames;
+    runBrake.onEnter = {call("common_enter"), call("enter_run_brake")};
+    runBrake.onFrame = {call("process_run_brake")};
+    runBrake.onAirborne = {call("teeter_or_airborne")};
+    runBrake.onAnimationFinishedState = "Wait";
+    runBrake.interrupts = {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState turnState;
+    turnState.name = "Turn";
+    turnState.animation = "Turn";
+    turnState.animationLengthFrames = 11;
+    turnState.onEnter = {call("common_enter"), call("enter_turn")};
+    turnState.onFrame = {call("process_turn")};
+    turnState.onAirborne = {call("teeter_or_airborne")};
+    turnState.onAnimationFinishedState = "Wait";
+    turnState.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState turnRun;
+    turnRun.name = "TurnRun";
+    turnRun.animation = "TurnRun";
+    turnRun.animationLengthFrames = 16;
+    turnRun.onEnter = {call("common_enter"), call("enter_turn_run")};
+    turnRun.onFrame = {call("process_grounded"), call("process_turn_run")};
+    turnRun.onAnimationFinishedState = "";
+    turnRun.interrupts = {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState jumpSquat;
+    jumpSquat.name = "JumpSquat";
+    jumpSquat.animation = "JumpSquat";
+    jumpSquat.animationLengthFrames = fighter.properties.jumpStartupLag;
+    jumpSquat.onEnter = {call("common_enter")};
+    jumpSquat.onFrame = {call("process_jump_squat")};
+
+    FighterState squat;
+    squat.name = "Squat";
+    squat.animation = "Squat";
+    squat.animationLengthFrames = 4;
+    squat.onEnter = {call("common_enter")};
+    squat.onFrame = {call("process_squat")};
+    squat.onAirborne = {call("teeter_or_airborne")};
+    squat.onAnimationFinishedState = "SquatWait";
+    squat.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState squatWait = squat;
+    squatWait.name = "SquatWait";
+    squatWait.animation = "SquatWait";
+    squatWait.animationLengthFrames = 60;
+    squatWait.loopAnimation = true;
+    squatWait.onAnimationFinishedState = "";
+    squatWait.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("SquatRv", InterruptCondition::SquatReleaseInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState squatRv;
+    squatRv.name = "SquatRv";
+    squatRv.animation = "SquatRv";
+    squatRv.animationLengthFrames = 4;
+    squatRv.onEnter = {call("common_enter")};
+    squatRv.onFrame = {call("process_landing")};
+    squatRv.onAirborne = {call("teeter_or_airborne")};
+    squatRv.onAnimationFinishedState = "Wait";
+    squatRv.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState fallState;
+    fallState.name = "Fall";
+    fallState.animation = "Fall";
+    fallState.animationLengthFrames = 60;
+    fallState.loopAnimation = true;
+    fallState.onEnter = {call("common_enter")};
+    fallState.onFrame = {call("process_airborne"), call("fastfall_check")};
+    fallState.onLanding = {call("regular_landing")};
+    fallState.interrupts = {
+        interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne),
+        interrupt("EscapeAir", InterruptCondition::AirDodgePressed, GroundRequirement::OnlyAirborne),
+        interrupt("JumpAerialB", InterruptCondition::AerialJumpBackwardPressed, GroundRequirement::OnlyAirborne),
+        interrupt("JumpAerialF", InterruptCondition::AerialJumpForwardPressed, GroundRequirement::OnlyAirborne),
+        interrupt("AirAttackHi", InterruptCondition::AerialAttackHiPressed, GroundRequirement::OnlyAirborne),
+        interrupt("AirAttackLw", InterruptCondition::AerialAttackLwPressed, GroundRequirement::OnlyAirborne),
+        interrupt("AirAttackF", InterruptCondition::AerialAttackFPressed, GroundRequirement::OnlyAirborne),
+        interrupt("AirAttackB", InterruptCondition::AerialAttackBPressed, GroundRequirement::OnlyAirborne),
+        interrupt("AirAttackN", InterruptCondition::AerialAttackNPressed, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState jab;
+    jab.name = "Jab";
+    jab.animation = "Jab";
+    jab.animationLengthFrames = 28;
+    jab.onEnter = {call("common_enter")};
+    jab.onFrame = {call("process_grounded")};
+    jab.onAirborne = {call("regular_airborne")};
+    jab.onAnimationFinishedState = "Wait";
+    jab.action = {
+        wait(3),
+        createHitbox(0, BoneId::HandR, {fxFromFloat(0.8f), fxFromFloat(0.2f), 0}, fxFromFloat(0.45f), fx(4), fx(45), fx(22), fx(80)),
+        wait(3),
+        clearHitboxes(),
+    };
+
+    FighterState airAttack;
+    airAttack.name = "AirAttackN";
+    airAttack.animation = "AirAttackN";
+    airAttack.animationLengthFrames = 36;
+    airAttack.onEnter = {call("common_enter")};
+    airAttack.onFrame = {call("process_airborne"), call("fastfall_check")};
+    airAttack.onLanding = {call("aerial_landing_attack")};
+    airAttack.onAnimationFinishedState = "Fall";
+    airAttack.action = {
+        wait(4),
+        createHitbox(0, BoneId::HandR, {fxFromFloat(0.65f), 0, 0}, fxFromFloat(0.5f), fx(7), fx(55), fx(24), fx(90)),
+        createHitbox(1, BoneId::HandL, {fxFromFloat(-0.65f), 0, 0}, fxFromFloat(0.5f), fx(7), fx(125), fx(24), fx(90)),
+        wait(5),
+        clearHitboxes(),
+    };
+
+    FighterState airAttackF = airAttack;
+    airAttackF.name = "AirAttackF";
+    airAttackF.animation = "AirAttackF";
+    airAttackF.action.clear();
+
+    FighterState airAttackB = airAttack;
+    airAttackB.name = "AirAttackB";
+    airAttackB.animation = "AirAttackB";
+    airAttackB.action.clear();
+
+    FighterState airAttackHi = airAttack;
+    airAttackHi.name = "AirAttackHi";
+    airAttackHi.animation = "AirAttackHi";
+    airAttackHi.action.clear();
+
+    FighterState airAttackLw = airAttack;
+    airAttackLw.name = "AirAttackLw";
+    airAttackLw.animation = "AirAttackLw";
+    airAttackLw.action.clear();
+
+    FighterState landing;
+    landing.name = "Landing";
+    landing.animation = "Landing";
+    landing.animationLengthFrames = 14;
+    landing.onEnter = {call("common_enter")};
+    landing.onFrame = {call("process_landing")};
+    landing.onAirborne = {call("teeter_or_airborne")};
+    landing.onAnimationFinishedState = "Wait";
+    landing.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState landingAirN;
+    landingAirN.name = "LandingAirN";
+    landingAirN.animation = "LandingAirN";
+    landingAirN.animationLengthFrames = fighter.properties.nairLandingLag;
+    landingAirN.onEnter = {call("common_enter")};
+    landingAirN.onFrame = {call("process_landing")};
+    landingAirN.onAirborne = {call("teeter_or_airborne")};
+    landingAirN.onAnimationFinishedState = "Wait";
+
+    FighterState landingAirF = landingAirN;
+    landingAirF.name = "LandingAirF";
+    landingAirF.animation = "LandingAirF";
+    landingAirF.animationLengthFrames = fighter.properties.fairLandingLag;
+
+    FighterState landingAirB = landingAirN;
+    landingAirB.name = "LandingAirB";
+    landingAirB.animation = "LandingAirB";
+    landingAirB.animationLengthFrames = fighter.properties.bairLandingLag;
+
+    FighterState landingAirHi = landingAirN;
+    landingAirHi.name = "LandingAirHi";
+    landingAirHi.animation = "LandingAirHi";
+    landingAirHi.animationLengthFrames = fighter.properties.uairLandingLag;
+
+    FighterState landingAirLw = landingAirN;
+    landingAirLw.name = "LandingAirLw";
+    landingAirLw.animation = "LandingAirLw";
+    landingAirLw.animationLengthFrames = fighter.properties.dairLandingLag;
+
+    FighterState landingFallSpecial;
+    landingFallSpecial.name = "LandingFallSpecial";
+    landingFallSpecial.animation = "LandingFallSpecial";
+    landingFallSpecial.animationLengthFrames = fighter.properties.common.landingFallSpecialLagX344;
+    landingFallSpecial.onEnter = {call("common_enter")};
+    landingFallSpecial.onFrame = {call("process_landing")};
+    landingFallSpecial.onAirborne = {call("teeter_or_airborne")};
+    landingFallSpecial.onAnimationFinishedState = "Wait";
+
+    FighterState pass;
+    pass.name = "Pass";
+    pass.animation = "Pass";
+    pass.animationLengthFrames = fighter.properties.common.platformDropAnimationFramesX470;
+    pass.onEnter = {call("common_enter"), call("enter_pass")};
+    pass.onFrame = {call("process_airborne")};
+    pass.onLanding = {call("regular_landing")};
+    pass.onAnimationFinishedState = "Fall";
+
+    FighterState jumpF = fallState;
+    jumpF.name = "JumpF";
+    jumpF.animation = "JumpF";
+    jumpF.animationLengthFrames = 40;
+    jumpF.loopAnimation = false;
+    jumpF.onAnimationFinishedState = "Fall";
+
+    FighterState jumpB = fallState;
+    jumpB.name = "JumpB";
+    jumpB.animation = "JumpB";
+    jumpB.animationLengthFrames = 40;
+    jumpB.loopAnimation = false;
+    jumpB.onAnimationFinishedState = "Fall";
+
+    FighterState jumpAerialF = fallState;
+    jumpAerialF.name = "JumpAerialF";
+    jumpAerialF.animation = "JumpAerialF";
+    jumpAerialF.animationLengthFrames = 40;
+    jumpAerialF.loopAnimation = false;
+    jumpAerialF.onEnter = {call("common_enter"), call("enter_air_jump")};
+    jumpAerialF.onAnimationFinishedState = "Fall";
+
+    FighterState jumpAerialB = jumpAerialF;
+    jumpAerialB.name = "JumpAerialB";
+    jumpAerialB.animation = "JumpAerialB";
+
+    FighterState escapeAir;
+    escapeAir.name = "EscapeAir";
+    escapeAir.animation = "EscapeAir";
+    escapeAir.animationLengthFrames = 49;
+    escapeAir.onEnter = {call("common_enter"), call("enter_escape_air")};
+    escapeAir.onFrame = {call("process_escape_air")};
+    escapeAir.onLanding = {call("escape_air_landing")};
+    escapeAir.onAnimationFinishedState = "FallSpecial";
+
+    FighterState fallSpecial;
+    fallSpecial.name = "FallSpecial";
+    fallSpecial.animation = "FallSpecial";
+    fallSpecial.animationLengthFrames = 60;
+    fallSpecial.loopAnimation = true;
+    fallSpecial.onEnter = {call("common_enter")};
+    fallSpecial.onFrame = {call("process_fall_special")};
+    fallSpecial.onLanding = {call("escape_air_landing")};
+
+    FighterState passiveWallJump;
+    passiveWallJump.name = "PassiveWallJump";
+    passiveWallJump.animation = "PassiveWallJump";
+    passiveWallJump.animationLengthFrames = 34;
+    passiveWallJump.onEnter = {call("common_enter"), call("enter_passive_wall_jump")};
+    passiveWallJump.onFrame = {call("process_passive_wall_jump")};
+    passiveWallJump.onLanding = {call("regular_landing")};
+    passiveWallJump.onAnimationFinishedState = "Fall";
+
+    FighterState ottotto;
+    ottotto.name = "Ottotto";
+    ottotto.animation = "Ottotto";
+    ottotto.animationLengthFrames = 25;
+    ottotto.onEnter = {call("common_enter")};
+    ottotto.onAnimationFinishedState = "OttottoWait";
+    ottotto.interrupts = {
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState ottottoWait = ottotto;
+    ottottoWait.name = "OttottoWait";
+    ottottoWait.animation = "OttottoWait";
+    ottottoWait.animationLengthFrames = 60;
+    ottottoWait.loopAnimation = true;
+    ottottoWait.onAnimationFinishedState = "";
+
+    FighterState guardOn;
+    guardOn.name = "GuardOn";
+    guardOn.animation = "GuardOn";
+    guardOn.animationLengthFrames = fighter.properties.common.guardMinHoldFramesX268;
+    guardOn.onEnter = {call("common_enter"), call("enter_guard_on")};
+    guardOn.onFrame = {call("process_guard_on")};
+    guardOn.onAirborne = {call("regular_airborne")};
+    guardOn.onAnimationFinishedState = "Guard";
+    guardOn.interrupts = {
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+    };
+
+    FighterState guardReflect;
+    guardReflect.name = "GuardReflect";
+    guardReflect.animation = "GuardReflect";
+    guardReflect.animationLengthFrames = fighter.properties.common.guardMinHoldFramesX268;
+    guardReflect.onEnter = {call("common_enter"), call("enter_guard_on")};
+    guardReflect.onFrame = {call("process_guard_reflect")};
+    guardReflect.onAirborne = {call("regular_airborne")};
+    guardReflect.onAnimationFinishedState = "Guard";
+    guardReflect.interrupts = {
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+    };
+
+    FighterState guard;
+    guard.name = "Guard";
+    guard.animation = "Guard";
+    guard.animationLengthFrames = 60;
+    guard.loopAnimation = true;
+    guard.onEnter = {call("common_enter")};
+    guard.onFrame = {call("process_guard")};
+    guard.onAirborne = {call("regular_airborne")};
+    guard.interrupts = {
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+    };
+
+    FighterState guardOff;
+    guardOff.name = "GuardOff";
+    guardOff.animation = "GuardOff";
+    guardOff.animationLengthFrames = 16;
+    guardOff.onEnter = {call("common_enter")};
+    guardOff.onFrame = {call("process_landing")};
+    guardOff.onAirborne = {call("teeter_or_airborne")};
+    guardOff.onAnimationFinishedState = "Wait";
+
+    FighterState guardSetoff;
+    guardSetoff.name = "GuardSetOff";
+    guardSetoff.animation = "GuardSetOff";
+    guardSetoff.animationLengthFrames = 30;
+    guardSetoff.onEnter = {call("common_enter")};
+    guardSetoff.onFrame = {call("process_guard_setoff")};
+    guardSetoff.onAirborne = {call("regular_airborne")};
+    guardSetoff.interrupts = {
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+    };
+
+    FighterState escapeN;
+    escapeN.name = "EscapeN";
+    escapeN.animation = "EscapeN";
+    escapeN.animationLengthFrames = 22;
+    escapeN.onEnter = {call("common_enter")};
+    escapeN.onFrame = {call("process_landing")};
+    escapeN.onAirborne = {call("teeter_or_airborne")};
+    escapeN.onAnimationFinishedState = "Wait";
+    escapeN.action = {
+        wait(1),
+        setHurtboxState(-1, HurtboxState::Intangible),
+        wait(14),
+        setHurtboxState(-1, HurtboxState::Normal),
+    };
+
+    FighterState shieldBreakFly;
+    shieldBreakFly.name = "ShieldBreakFly";
+    shieldBreakFly.animation = "ShieldBreakFly";
+    shieldBreakFly.animationLengthFrames = 25;
+    shieldBreakFly.onEnter = {call("common_enter"), call("enter_shield_break_fly")};
+    shieldBreakFly.onFrame = {call("process_shield_break_air")};
+    shieldBreakFly.onLanding = {call("shield_break_landing")};
+    shieldBreakFly.onAnimationFinishedState = "ShieldBreakFall";
+
+    FighterState shieldBreakFall;
+    shieldBreakFall.name = "ShieldBreakFall";
+    shieldBreakFall.animation = "ShieldBreakFall";
+    shieldBreakFall.animationLengthFrames = 60;
+    shieldBreakFall.loopAnimation = true;
+    shieldBreakFall.onEnter = {call("common_enter")};
+    shieldBreakFall.onFrame = {call("process_shield_break_air")};
+    shieldBreakFall.onLanding = {call("shield_break_landing")};
+
+    FighterState shieldBreakDown;
+    shieldBreakDown.name = "ShieldBreakDown";
+    shieldBreakDown.animation = "ShieldBreakDown";
+    shieldBreakDown.animationLengthFrames = 30;
+    shieldBreakDown.onEnter = {call("common_enter")};
+    shieldBreakDown.onFrame = {call("process_landing")};
+    shieldBreakDown.onAirborne = {call("regular_airborne")};
+    shieldBreakDown.onAnimationFinishedState = "ShieldBreakStand";
+
+    FighterState shieldBreakStand;
+    shieldBreakStand.name = "ShieldBreakStand";
+    shieldBreakStand.animation = "ShieldBreakStand";
+    shieldBreakStand.animationLengthFrames = 60;
+    shieldBreakStand.onEnter = {call("common_enter")};
+    shieldBreakStand.onFrame = {call("process_landing")};
+    shieldBreakStand.onAirborne = {call("regular_airborne")};
+    shieldBreakStand.onAnimationFinishedState = "Wait";
+
+    FighterState cliffCatch;
+    cliffCatch.name = "CliffCatch";
+    cliffCatch.animation = "CliffCatch";
+    cliffCatch.animationLengthFrames = 8;
+    cliffCatch.onEnter = {call("common_enter")};
+    cliffCatch.onFrame = {call("maintain_ledge")};
+    cliffCatch.onAnimationFinishedState = "CliffWait";
+
+    FighterState cliffWait = cliffCatch;
+    cliffWait.name = "CliffWait";
+    cliffWait.animation = "CliffWait";
+    cliffWait.animationLengthFrames = 60;
+    cliffWait.loopAnimation = true;
+    cliffWait.onAnimationFinishedState = "";
+    cliffWait.interrupts = {
+        interrupt("CliffAttack", InterruptCondition::AttackPressed, GroundRequirement::OnlyAirborne),
+        interrupt("CliffEscape", InterruptCondition::ShieldPressed, GroundRequirement::OnlyAirborne),
+        interrupt("CliffClimb", InterruptCondition::LedgeClimbInput, GroundRequirement::OnlyAirborne),
+        interrupt("CliffJump", InterruptCondition::JumpPressed, GroundRequirement::OnlyAirborne),
+        interrupt("CliffDrop", InterruptCondition::LedgeDropInput, GroundRequirement::OnlyAirborne),
+    };
+
+    FighterState cliffClimb;
+    cliffClimb.name = "CliffClimb";
+    cliffClimb.animation = "CliffClimb";
+    cliffClimb.animationLengthFrames = 30;
+    cliffClimb.onEnter = {call("common_enter")};
+    cliffClimb.onFrame = {call("process_cliff_climb")};
+
+    FighterState cliffEscape;
+    cliffEscape.name = "CliffEscape";
+    cliffEscape.animation = "CliffEscape";
+    cliffEscape.animationLengthFrames = 34;
+    cliffEscape.onEnter = {call("common_enter")};
+    cliffEscape.onFrame = {call("process_cliff_escape")};
+
+    FighterState cliffAttack;
+    cliffAttack.name = "CliffAttack";
+    cliffAttack.animation = "CliffAttack";
+    cliffAttack.animationLengthFrames = 38;
+    cliffAttack.onEnter = {call("common_enter")};
+    cliffAttack.onFrame = {call("process_cliff_attack")};
+    cliffAttack.action = {
+        wait(12),
+        createHitbox(0, BoneId::HandR, {fxFromFloat(0.65f), fxFromFloat(0.15f), 0}, fxFromFloat(0.55f), fx(8), fx(45), fx(30), fx(90)),
+        wait(5),
+        clearHitboxes(),
+    };
+
+    FighterState cliffDrop;
+    cliffDrop.name = "CliffDrop";
+    cliffDrop.animation = "CliffDrop";
+    cliffDrop.animationLengthFrames = 1;
+    cliffDrop.onEnter = {call("enter_cliff_drop")};
+
+    FighterState cliffJump;
+    cliffJump.name = "CliffJump";
+    cliffJump.animation = "CliffJump";
+    cliffJump.animationLengthFrames = 7;
+    cliffJump.onEnter = {call("common_enter")};
+    cliffJump.onFrame = {call("process_cliff_jump")};
+
+    FighterState cliffJumpAir = fallState;
+    cliffJumpAir.name = "CliffJumpAir";
+    cliffJumpAir.animation = "CliffJumpAir";
+    cliffJumpAir.animationLengthFrames = 36;
+    cliffJumpAir.loopAnimation = false;
+    cliffJumpAir.onEnter = {call("common_enter"), call("enter_cliff_jump_air")};
+    cliffJumpAir.onAnimationFinishedState = "Fall";
+
+    fighter.states = {
+        waitState, walkSlow, walkMiddle, walkFast, dashState, runState, runDirect, runBrake, turnState, turnRun,
+        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
+        cliffClimb, cliffEscape, cliffAttack, cliffDrop, cliffJump, cliffJumpAir,
+        jab, airAttack, airAttackF, airAttackB, airAttackHi, airAttackLw
+    };
+    assignMeleeActionIndices(fighter);
+    return fighter;
+}
+
+} // namespace pf
