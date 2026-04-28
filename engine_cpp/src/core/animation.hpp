@@ -48,10 +48,18 @@ struct AnimationJoint {
     Vec3 scale{fx(1), fx(1), fx(1)};
 };
 
+struct Quaternion {
+    Fix x = 0;
+    Fix y = 0;
+    Fix z = 0;
+    Fix w = fx(1);
+};
+
 struct AnimationClip {
     std::string name;
     int actionIndex = -1;
     uint32_t actionFlags = 0;
+    int defaultBlendFrames = 0;
     Fix frameCount = 0;
     std::vector<AnimationTrack> tracks;
 };
@@ -60,6 +68,8 @@ struct JointPose {
     Vec3 translation{};
     Vec3 rotation{};
     Vec3 scale{fx(1), fx(1), fx(1)};
+    Quaternion quaternion{};
+    bool useQuaternion = false;
 };
 
 struct AnimationPose {
@@ -78,6 +88,8 @@ struct JointWorldTransform {
 };
 
 Fix sampleTrack(const AnimationTrack& track, Fix frame);
+Quaternion eulerToQuaternion(Vec3 euler);
+Quaternion slerpQuaternion(Quaternion from, Quaternion to, Fix t);
 AnimationPose bindPose(const std::vector<AnimationJoint>& skeleton);
 AnimationPose evaluateClip(const std::vector<AnimationJoint>& skeleton, const AnimationClip& clip, Fix frame);
 std::vector<JointWorldTransform> jointWorldTransforms(const std::vector<AnimationJoint>& skeleton, const AnimationPose& pose);

@@ -46,6 +46,58 @@ static InterruptRule interrupt(std::string target, InterruptCondition condition,
     return rule;
 }
 
+static InterruptRule timedInterrupt(std::string target, InterruptCondition condition, GroundRequirement ground, int enableFrame, int disableFrame = 0) {
+    InterruptRule rule = interrupt(std::move(target), condition, ground);
+    rule.startActive = false;
+    rule.enableFrame = enableFrame;
+    rule.disableFrame = disableFrame;
+    return rule;
+}
+
+static std::vector<InterruptRule> groundedAttackInterrupts(bool includeDashAttack = false) {
+    std::vector<InterruptRule> rules = {
+        interrupt("AttackS4Hi", InterruptCondition::AttackS4HiPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS4HiS", InterruptCondition::AttackS4HiSPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS4", InterruptCondition::AttackS4Pressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS4LwS", InterruptCondition::AttackS4LwSPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS4Lw", InterruptCondition::AttackS4LwPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackHi4", InterruptCondition::AttackHi4Pressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackLw4", InterruptCondition::AttackLw4Pressed, GroundRequirement::OnlyGrounded),
+    };
+    if (includeDashAttack) {
+        rules.push_back(interrupt("AttackDash", InterruptCondition::AttackDashPressed, GroundRequirement::OnlyGrounded));
+    }
+    rules.insert(rules.end(), {
+        interrupt("AttackS3Hi", InterruptCondition::AttackS3HiPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS3HiS", InterruptCondition::AttackS3HiSPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS3", InterruptCondition::AttackS3Pressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS3LwS", InterruptCondition::AttackS3LwSPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackS3Lw", InterruptCondition::AttackS3LwPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackHi3", InterruptCondition::AttackHi3Pressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackLw3", InterruptCondition::AttackLw3Pressed, GroundRequirement::OnlyGrounded),
+        interrupt("Attack11", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+    });
+    return rules;
+}
+
+static void appendRules(std::vector<InterruptRule>& destination, std::vector<InterruptRule> source) {
+    destination.insert(destination.end(), source.begin(), source.end());
+}
+
+static void expandGroundedAttackShortcut(FighterState& state, bool includeDashAttack = false) {
+    for (auto it = state.interrupts.begin(); it != state.interrupts.end(); ++it) {
+        if (it->condition == InterruptCondition::AttackPressed &&
+            (it->targetState == "Jab" || it->targetState == "Attack11") &&
+            it->ground == GroundRequirement::OnlyGrounded)
+        {
+            const auto replacement = groundedAttackInterrupts(includeDashAttack);
+            it = state.interrupts.erase(it);
+            state.interrupts.insert(it, replacement.begin(), replacement.end());
+            return;
+        }
+    }
+}
+
 static Subaction wait(int frames) {
     Subaction sub;
     sub.type = SubactionType::SyncTimer;
@@ -128,6 +180,24 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"EscapeB", 43},
         {"EscapeAir", 44},
         {"Jab", 46},
+        {"Attack11", 46},
+        {"Attack12", 47},
+        {"Attack13", 48},
+        {"AttackDash", 52},
+        {"AttackS3Hi", 53},
+        {"AttackS3HiS", 54},
+        {"AttackS3", 55},
+        {"AttackS3LwS", 56},
+        {"AttackS3Lw", 57},
+        {"AttackHi3", 58},
+        {"AttackLw3", 59},
+        {"AttackS4Hi", 60},
+        {"AttackS4HiS", 61},
+        {"AttackS4", 62},
+        {"AttackS4LwS", 63},
+        {"AttackS4Lw", 64},
+        {"AttackHi4", 66},
+        {"AttackLw4", 67},
         {"AirAttackN", 68},
         {"AirAttackF", 69},
         {"AirAttackB", 70},
@@ -273,9 +343,7 @@ FighterDefinition makeDebugRook() {
         interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
         interrupt("Run", InterruptCondition::RunInput, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("Turn", InterruptCondition::ReverseDashInput, GroundRequirement::OnlyGrounded),
-        interrupt("TurnRun", InterruptCondition::TurnRunInput, GroundRequirement::OnlyGrounded),
+        timedInterrupt("Turn", InterruptCondition::ReverseDashInput, GroundRequirement::OnlyGrounded, fighter.properties.common.dashEarlyInterruptWindowX44 + 1),
         interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
         interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
@@ -432,29 +500,78 @@ FighterDefinition makeDebugRook() {
         interrupt("AirAttackN", InterruptCondition::AerialAttackNPressed, GroundRequirement::OnlyAirborne),
     };
 
-    FighterState jab;
-    jab.name = "Jab";
-    jab.animation = "Jab";
-    jab.animationLengthFrames = 28;
-    jab.onEnter = {call("common_enter")};
-    jab.onFrame = {call("process_grounded")};
-    jab.onAirborne = {call("regular_airborne")};
-    jab.onAnimationFinishedState = "Wait";
-    jab.action = {
+    FighterState attack11;
+    attack11.name = "Attack11";
+    attack11.animation = "Attack11";
+    attack11.animationLengthFrames = 28;
+    attack11.onEnter = {call("common_enter")};
+    attack11.onFrame = {call("process_landing")};
+    attack11.onAirborne = {call("regular_airborne")};
+    attack11.onAnimationFinishedState = "Wait";
+    attack11.useAnimPhysics = true;
+    attack11.action = {
         wait(3),
         createHitbox(0, BoneId::HandR, {fxFromFloat(0.8f), fxFromFloat(0.2f), 0}, fxFromFloat(0.45f), fx(4), fx(45), fx(22), fx(80)),
         wait(3),
         clearHitboxes(),
     };
+    attack11.interrupts = {
+        interrupt("Attack12", InterruptCondition::JabFollowupPressed, GroundRequirement::OnlyGrounded),
+    };
+
+    FighterState attack12 = attack11;
+    attack12.name = "Attack12";
+    attack12.animation = "Attack12";
+    attack12.interrupts = {
+        interrupt("Attack13", InterruptCondition::JabFollowupPressed, GroundRequirement::OnlyGrounded),
+    };
+
+    FighterState attack13 = attack11;
+    attack13.name = "Attack13";
+    attack13.animation = "Attack13";
+    attack13.interrupts.clear();
+
+    auto makeGroundedAttack = [&](std::string name) {
+        FighterState state = attack11;
+        state.name = name;
+        state.animation = name;
+        state.action.clear();
+        state.interrupts = groundedAttackInterrupts(false);
+        state.initialInterruptibleFrame = 1000000;
+        state.onAnimationFinishedState = "Wait";
+        state.useAnimPhysics = true;
+        return state;
+    };
+
+    FighterState attackDash = makeGroundedAttack("AttackDash");
+    FighterState attackS3Hi = makeGroundedAttack("AttackS3Hi");
+    FighterState attackS3HiS = makeGroundedAttack("AttackS3HiS");
+    FighterState attackS3 = makeGroundedAttack("AttackS3");
+    FighterState attackS3LwS = makeGroundedAttack("AttackS3LwS");
+    FighterState attackS3Lw = makeGroundedAttack("AttackS3Lw");
+    FighterState attackHi3 = makeGroundedAttack("AttackHi3");
+    FighterState attackLw3 = makeGroundedAttack("AttackLw3");
+    FighterState attackS4Hi = makeGroundedAttack("AttackS4Hi");
+    FighterState attackS4HiS = makeGroundedAttack("AttackS4HiS");
+    FighterState attackS4 = makeGroundedAttack("AttackS4");
+    FighterState attackS4LwS = makeGroundedAttack("AttackS4LwS");
+    FighterState attackS4Lw = makeGroundedAttack("AttackS4Lw");
+    FighterState attackHi4 = makeGroundedAttack("AttackHi4");
+    FighterState attackLw4 = makeGroundedAttack("AttackLw4");
 
     FighterState airAttack;
     airAttack.name = "AirAttackN";
     airAttack.animation = "AirAttackN";
     airAttack.animationLengthFrames = 36;
+    airAttack.allowLedgeGrab = false;
+    airAttack.allowWallCollision = false;
+    airAttack.allowCeilingCollision = false;
     airAttack.onEnter = {call("common_enter")};
     airAttack.onFrame = {call("process_airborne"), call("fastfall_check")};
     airAttack.onLanding = {call("aerial_landing_attack")};
     airAttack.onAnimationFinishedState = "Fall";
+    airAttack.initialInterruptibleFrame = 1000000;
+    airAttack.interrupts = fallState.interrupts;
     airAttack.action = {
         wait(4),
         createHitbox(0, BoneId::HandR, {fxFromFloat(0.65f), 0, 0}, fxFromFloat(0.5f), fx(7), fx(55), fx(24), fx(90)),
@@ -580,6 +697,9 @@ FighterDefinition makeDebugRook() {
     escapeAir.name = "EscapeAir";
     escapeAir.animation = "EscapeAir";
     escapeAir.animationLengthFrames = 49;
+    escapeAir.allowLedgeGrab = false;
+    escapeAir.allowWallCollision = false;
+    escapeAir.allowCeilingCollision = false;
     escapeAir.onEnter = {call("common_enter"), call("enter_escape_air")};
     escapeAir.onFrame = {call("process_escape_air")};
     escapeAir.onLanding = {call("escape_air_landing")};
@@ -590,6 +710,7 @@ FighterDefinition makeDebugRook() {
     fallSpecial.animation = "FallSpecial";
     fallSpecial.animationLengthFrames = 60;
     fallSpecial.loopAnimation = true;
+    fallSpecial.allowCeilingCollision = false;
     fallSpecial.onEnter = {call("common_enter")};
     fallSpecial.onFrame = {call("process_fall_special")};
     fallSpecial.onLanding = {call("escape_air_landing")};
@@ -703,6 +824,9 @@ FighterDefinition makeDebugRook() {
     shieldBreakFly.name = "ShieldBreakFly";
     shieldBreakFly.animation = "ShieldBreakFly";
     shieldBreakFly.animationLengthFrames = 25;
+    shieldBreakFly.allowLedgeGrab = false;
+    shieldBreakFly.allowWallCollision = false;
+    shieldBreakFly.allowCeilingCollision = false;
     shieldBreakFly.onEnter = {call("common_enter"), call("enter_shield_break_fly")};
     shieldBreakFly.onFrame = {call("process_shield_break_air")};
     shieldBreakFly.onLanding = {call("shield_break_landing")};
@@ -713,6 +837,9 @@ FighterDefinition makeDebugRook() {
     shieldBreakFall.animation = "ShieldBreakFall";
     shieldBreakFall.animationLengthFrames = 60;
     shieldBreakFall.loopAnimation = true;
+    shieldBreakFall.allowLedgeGrab = false;
+    shieldBreakFall.allowWallCollision = false;
+    shieldBreakFall.allowCeilingCollision = false;
     shieldBreakFall.onEnter = {call("common_enter")};
     shieldBreakFall.onFrame = {call("process_shield_break_air")};
     shieldBreakFall.onLanding = {call("shield_break_landing")};
@@ -805,11 +932,21 @@ FighterDefinition makeDebugRook() {
     cliffJumpAir.onEnter = {call("common_enter"), call("enter_cliff_jump_air")};
     cliffJumpAir.onAnimationFinishedState = "Fall";
 
+    for (FighterState* state : {
+        &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
+        &turnState, &turnRun, &squat, &squatWait, &squatRv, &landing, &ottotto, &ottottoWait,
+    }) {
+        expandGroundedAttackShortcut(*state, state == &dashState || state == &runState || state == &runDirect);
+    }
+
     fighter.states = {
         waitState, walkSlow, walkMiddle, walkFast, dashState, runState, runDirect, runBrake, turnState, turnRun,
         jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
         cliffClimb, cliffEscape, cliffAttack, cliffDrop, cliffJump, cliffJumpAir,
-        jab, airAttack, airAttackF, airAttackB, airAttackHi, airAttackLw
+        attack11, attack12, attack13, attackDash,
+        attackS3Hi, attackS3HiS, attackS3, attackS3LwS, attackS3Lw, attackHi3, attackLw3,
+        attackS4Hi, attackS4HiS, attackS4, attackS4LwS, attackS4Lw, attackHi4, attackLw4,
+        airAttack, airAttackF, airAttackB, airAttackHi, airAttackLw
     };
     assignMeleeActionIndices(fighter);
     return fighter;

@@ -32,7 +32,7 @@ struct MeleeCommonData {
     // (PlCo.dat). Defaults are seeded from vanilla PlCo.dat.
     Fix stickXTiltThresholdX8 = fxFromFloat(0.25f);
     Fix stickYTiltThresholdXC = fxFromFloat(0.25f);
-    Fix aerialAttackAngleTanX20 = fx(1);
+    Fix aerialAttackAngleTanX20 = fx(1); // Melee x20_radians; name kept for binary/source compatibility.
     Fix walkInputThresholdX24 = fxFromFloat(0.18f);
     Fix walkMiddleThresholdX28 = fxFromFloat(0.4f);
     Fix walkFastThresholdX2C = fxFromFloat(0.8f);
@@ -58,6 +58,23 @@ struct MeleeCommonData {
     int fastfallStickWindowX8C = 4;
     Fix squatStickThresholdX90 = fxFromFloat(0.6875f);
     Fix squatReleaseThresholdX94 = fxFromFloat(0.625f);
+    Fix attackS3StickThresholdX98 = fxFromFloat(0.35f);
+    Fix attackS3HiAngleX9C = fxFromFloat(0.5f);
+    Fix attackS3HiSAngleXA0 = fxFromFloat(0.25f);
+    Fix attackS3LwSAngleXA4 = -fxFromFloat(0.25f);
+    Fix attackS3LwAngleXA8 = -fxFromFloat(0.5f);
+    Fix attackHi3StickThresholdYxAC = fxFromFloat(0.5f);
+    Fix attackLw3StickThresholdYxB0 = -fxFromFloat(0.5f);
+    Fix attackS4HiAngleXB8 = fxFromFloat(0.5f);
+    Fix attackS4HiSAngleXBC = fxFromFloat(0.25f);
+    Fix attackS4LwSAngleXC0 = -fxFromFloat(0.25f);
+    Fix attackS4LwAngleXC4 = -fxFromFloat(0.5f);
+    Fix attackHi4StickThresholdYxCC = fxFromFloat(0.7f);
+    int attackHi4StickWindowXD0 = 4;
+    Fix attackLw4StickThresholdYxD4 = -fxFromFloat(0.7f);
+    int attackLw4StickWindowXD8 = 4;
+    int lCancelInputWindowXE4 = 7;
+    Fix lCancelLandingLagDivisorXE8 = fx(2);
     Fix startShieldHealthX260 = fx(60);
     Fix minShieldScaleX264 = fxFromFloat(0.15f);
     int guardMinHoldFramesX268 = 8;
@@ -171,6 +188,7 @@ struct FighterProperties {
     Fix wallJumpHorizontalVelocity = fxFromFloat(1.3f);
     Fix wallJumpVerticalVelocity = fxFromFloat(2.3f);
     Fix initialShieldSize = fxFromFloat(1.35f);
+    bool shieldSizeScalesWithHealth = true;
     Fix shieldBreakInitialVelocity = fxFromFloat(2.5f);
     Fix gravity = fxFromFloat(0.095f);
     Fix terminalVelocity = fxFromFloat(1.7f);
@@ -187,6 +205,7 @@ struct FighterProperties {
     int maxJumps = 2;
     bool canWallJump = true;
     int jumpStartupLag = 4;
+    Fix modelScale = fx(1);
     MeleeCommonData common;
     Fix initialWalkSpeed = fxFromFloat(0.1f);
     Fix initialDashSpeed = fxFromFloat(1.5f);
@@ -264,6 +283,8 @@ enum class SubactionType : uint8_t {
     SetInterruptible,
     SetFlag,
     ReverseDirection,
+    StartSmashCharge,
+    SetModelPartAnimation,
 };
 
 struct Subaction {
@@ -276,6 +297,10 @@ struct Subaction {
     int hsdBone = -1;
     HurtboxState hurtboxState = HurtboxState::Normal;
     bool flagValue = false;
+    Fix smashChargeHoldFrames = 0;
+    Fix smashChargeDamageMultiplier = fx(1);
+    int modelPartIndex = -1;
+    int modelPartAnimation = -1;
     HitboxDefinition hitbox;
 };
 
@@ -284,6 +309,9 @@ enum class GroundRequirement : uint8_t {
     OnlyGrounded,
     OnlyAirborne,
 };
+
+constexpr int kUseDefaultAnimationBlendFrames = -1;
+constexpr int kDisableAnimationBlendFrames = -2;
 
 enum class InterruptCondition : uint8_t {
     JumpPressed,
@@ -294,6 +322,22 @@ enum class InterruptCondition : uint8_t {
     SquatInput,
     SquatReleaseInput,
     AttackPressed,
+    JabFollowupPressed,
+    AttackDashPressed,
+    AttackS4HiPressed,
+    AttackS4HiSPressed,
+    AttackS4Pressed,
+    AttackS4LwSPressed,
+    AttackS4LwPressed,
+    AttackHi4Pressed,
+    AttackLw4Pressed,
+    AttackS3HiPressed,
+    AttackS3HiSPressed,
+    AttackS3Pressed,
+    AttackS3LwSPressed,
+    AttackS3LwPressed,
+    AttackHi3Pressed,
+    AttackLw3Pressed,
     AerialAttackNPressed,
     AerialAttackFPressed,
     AerialAttackBPressed,
@@ -322,7 +366,7 @@ struct InterruptRule {
     std::string targetState;
     InterruptCondition condition = InterruptCondition::JumpPressed;
     GroundRequirement ground = GroundRequirement::Any;
-    int blendFrames = 0;
+    int blendFrames = kUseDefaultAnimationBlendFrames;
     int lagFrames = 0;
     bool startActive = true;
     bool alwaysActive = false;
@@ -336,10 +380,15 @@ struct FighterState {
     int animationActionIndex = -1;
     bool useAnimPhysics = false;
     bool allowSlideoff = true;
+    bool allowLedgeGrab = true;
+    bool allowWallCollision = true;
+    bool allowCeilingCollision = true;
     bool loopAnimation = false;
     std::string onAnimationFinishedState;
-    int onAnimationFinishedBlendFrames = 0;
+    int onAnimationFinishedBlendFrames = kUseDefaultAnimationBlendFrames;
+    int defaultAnimationBlendFrames = 0;
     int animationLengthFrames = 60;
+    int initialInterruptibleFrame = 0;
     std::vector<FunctionCall> onEnter;
     std::vector<FunctionCall> onFrame;
     std::vector<FunctionCall> onLanding;

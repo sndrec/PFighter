@@ -264,12 +264,36 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(2)));
             result.push_back(sub);
             break;
+        case 0x1D:
+            sub.type = SubactionType::SetFlag;
+            sub.flag = 2;
+            sub.flagValue = reader.read(26) != 0;
+            result.push_back(sub);
+            break;
+        case 0x29:
+            sub.type = SubactionType::SetModelPartAnimation;
+            sub.modelPartIndex = static_cast<int>(reader.read(10));
+            sub.modelPartAnimation = static_cast<int>(reader.read(4));
+            result.push_back(sub);
+            break;
         case 0x1C:
             sub.type = SubactionType::SetHurtboxState;
             sub.hsdBone = static_cast<int>(reader.read(8));
             sub.hurtboxIndex = -1;
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(18)));
             result.push_back(sub);
+            break;
+        case 0x37:
+        case 0x38:
+            if (command.bytes.size() >= 8) {
+                reader.read(2);
+                const int holdFramesRaw = static_cast<int>(reader.read(8));
+                const int damageMultiplierRaw = static_cast<int>(reader.read(16));
+                sub.type = SubactionType::StartSmashCharge;
+                sub.smashChargeDamageMultiplier = rawFixed256(damageMultiplierRaw);
+                sub.smashChargeHoldFrames = fx(holdFramesRaw);
+                result.push_back(sub);
+            }
             break;
         default:
             break;

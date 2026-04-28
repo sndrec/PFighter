@@ -1,4 +1,5 @@
 #if PFIGHTER_WITH_RAYLIB
+#include "core/replay.hpp"
 #include "core/simulation.hpp"
 #include "editor/fighter_editor.hpp"
 
@@ -6,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -15,6 +17,28 @@ static Vector3 toRay(pf::Vec3 v) {
 
 static Vector3 toRayGround(pf::Vec2 v) {
     return {pf::fxToFloat(v.x), pf::fxToFloat(v.y), 0.0f};
+}
+
+static pf::Fix axisToFix(float value) {
+    return pf::fxFromFloat(std::clamp(value, -1.0f, 1.0f));
+}
+
+static pf::Vec2 readGamepadStick(int gamepad, GamepadAxis xAxis, GamepadAxis yAxis) {
+    constexpr float kDeadzone = 0.18f;
+    float x = GetGamepadAxisMovement(gamepad, xAxis);
+    float y = -GetGamepadAxisMovement(gamepad, yAxis);
+    const float magnitude = std::sqrt(x * x + y * y);
+    if (magnitude <= kDeadzone) {
+        return {};
+    }
+    const float scaled = std::min(1.0f, (magnitude - kDeadzone) / (1.0f - kDeadzone));
+    const float normalX = x / magnitude;
+    const float normalY = y / magnitude;
+    return {axisToFix(normalX * scaled), axisToFix(normalY * scaled)};
+}
+
+static float readGamepadTrigger(int gamepad, GamepadAxis axis) {
+    return std::clamp(GetGamepadAxisMovement(gamepad, axis), 0.0f, 1.0f);
 }
 
 static pf::InputFrame readKeyboardInput(bool arrows) {
@@ -39,6 +63,59 @@ static pf::InputFrame readKeyboardInput(bool arrows) {
     return input;
 }
 
+static pf::InputFrame mergeInput(pf::InputFrame a, pf::InputFrame b) {
+    pf::InputFrame merged;
+    merged.move.x = std::clamp(a.move.x + b.move.x, -pf::fx(1), pf::fx(1));
+    merged.move.y = std::clamp(a.move.y + b.move.y, -pf::fx(1), pf::fx(1));
+    merged.cStick.x = std::clamp(a.cStick.x + b.cStick.x, -pf::fx(1), pf::fx(1));
+    merged.cStick.y = std::clamp(a.cStick.y + b.cStick.y, -pf::fx(1), pf::fx(1));
+    merged.shieldAnalog = std::max(a.shieldAnalog, b.shieldAnalog);
+    merged.buttons = a.buttons | b.buttons;
+    return merged;
+}
+
+static pf::InputFrame readGamepadInput(int gamepad) {
+    pf::InputFrame input;
+    if (!IsGamepadAvailable(gamepad)) {
+        return input;
+    }
+
+    input.move = readGamepadStick(gamepad, GAMEPAD_AXIS_LEFT_X, GAMEPAD_AXIS_LEFT_Y);
+    input.cStick = readGamepadStick(gamepad, GAMEPAD_AXIS_RIGHT_X, GAMEPAD_AXIS_RIGHT_Y);
+
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
+        input.buttons |= pf::ButtonAttack;
+    }
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) {
+        input.buttons |= pf::ButtonSpecial;
+    }
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT) ||
+        IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_UP))
+    {
+        input.buttons |= pf::ButtonJump;
+    }
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_TRIGGER_1) ||
+        IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1))
+    {
+        input.buttons |= pf::ButtonShield;
+        input.shieldAnalog = 0;
+    }
+
+    const float leftTrigger = readGamepadTrigger(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER);
+    const float rightTrigger = readGamepadTrigger(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER);
+    const float trigger = std::max(leftTrigger, rightTrigger);
+    if (trigger > 0.05f) {
+        input.buttons |= pf::ButtonShield;
+        input.shieldAnalog = pf::fxFromFloat(trigger);
+    }
+
+    return input;
+}
+
+static pf::InputFrame readPlayerInput(int player, bool arrows) {
+    return mergeInput(readKeyboardInput(arrows), readGamepadInput(player));
+}
+
 static void drawCapsule(pf::Vec3 a, pf::Vec3 b, pf::Fix radius, Color color) {
     DrawSphereWires(toRay(a), pf::fxToFloat(radius), 8, 8, color);
     DrawSphereWires(toRay(b), pf::fxToFloat(radius), 8, 8, color);
@@ -51,6 +128,90 @@ static void drawEcb(const pf::FighterRuntime& fighter, Color color) {
         const pf::Vec2 b = fighter.position + fighter.ecb.points[(i + 1) % fighter.ecb.points.size()];
         DrawLine3D(toRayGround(a), toRayGround(b), color);
     }
+}
+
+static void drawGroundRect(pf::Fix left, pf::Fix bottom, pf::Fix right, pf::Fix top, Color color) {
+    const pf::Vec2 bl{left, bottom};
+    const pf::Vec2 br{right, bottom};
+    const pf::Vec2 tr{right, top};
+    const pf::Vec2 tl{left, top};
+    DrawLine3D(toRayGround(bl), toRayGround(br), color);
+    DrawLine3D(toRayGround(br), toRayGround(tr), color);
+    DrawLine3D(toRayGround(tr), toRayGround(tl), color);
+    DrawLine3D(toRayGround(tl), toRayGround(bl), color);
+}
+
+static pf::Vec2 hsdEcbProjection(const pf::FighterRuntime& fighter, pf::Vec3 joint) {
+    return {fighter.position.x + fighter.facing * joint.z, joint.y};
+}
+
+static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
+    if (!def.hsdAsset || !def.hsdAsset->hasEnvironmentCollision || fighter.hsdJointWorldPositions.empty()) {
+        return;
+    }
+
+    bool haveExtents = false;
+    pf::Fix minHorizontal = 0;
+    pf::Fix maxHorizontal = 0;
+    if (fighter.hsdJointWorldPositions.size() > 1) {
+        const pf::Vec2 topN = hsdEcbProjection(fighter, fighter.hsdJointWorldPositions[1]);
+        DrawSphere(toRayGround(topN), 0.08f, MAGENTA);
+    }
+
+    for (int bone : def.hsdAsset->environmentCollision.bones) {
+        if (bone < 0 || static_cast<size_t>(bone) >= fighter.hsdJointWorldPositions.size()) {
+            continue;
+        }
+        const pf::Vec3 source = fighter.hsdJointWorldPositions[static_cast<size_t>(bone)];
+        if (!haveExtents) {
+            minHorizontal = source.z;
+            maxHorizontal = source.z;
+            haveExtents = true;
+        } else {
+            minHorizontal = std::min(minHorizontal, source.z);
+            maxHorizontal = std::max(maxHorizontal, source.z);
+        }
+        DrawSphere(toRay(source), 0.055f, Fade(ORANGE, 0.75f));
+        DrawSphere(toRayGround(hsdEcbProjection(fighter, source)), 0.065f, GOLD);
+    }
+
+    if (haveExtents && fighter.hsdJointWorldPositions.size() > 1) {
+        const pf::HsdEnvironmentCollision& source = def.hsdAsset->environmentCollision;
+        const pf::Vec2 topN = hsdEcbProjection(fighter, fighter.hsdJointWorldPositions[1]);
+        const pf::Fix halfWidth = pf::fxMul(pf::fxAbs(maxHorizontal - minHorizontal), pf::fxFromFloat(0.5f));
+        const pf::Fix boxReach = halfWidth + source.ledgeGrabWidth;
+        const pf::Fix boxBottom = topN.y + source.ledgeGrabYOffset - pf::fxMul(source.ledgeGrabHeight, pf::fxFromFloat(0.5f));
+        const pf::Fix boxTop = topN.y + source.ledgeGrabYOffset + pf::fxMul(source.ledgeGrabHeight, pf::fxFromFloat(0.5f));
+        drawGroundRect(topN.x - boxReach, boxBottom, topN.x, boxTop, Fade(RED, 0.45f));
+        drawGroundRect(topN.x, boxBottom, topN.x + boxReach, boxTop, Fade(BLUE, 0.45f));
+    }
+}
+
+static void drawLedgeSnapSweep(const pf::FighterDefinition& def,
+                               const pf::FighterRuntime& fighter,
+                               const pf::StageLedge& ledge,
+                               Color color) {
+    const pf::FighterProperties& attr = def.properties;
+    const pf::Fix halfHeight = pf::fxMul(attr.ledgeSnapHeight, pf::fxFromFloat(0.5f));
+    const pf::Fix prevX = fighter.previousPosition.x;
+    const pf::Fix curX = fighter.position.x;
+    const pf::Fix prevY = fighter.previousPosition.y;
+    const pf::Fix curY = fighter.position.y;
+    const pf::Fix bottom = std::min(prevY, curY) + attr.ledgeSnapY - halfHeight;
+    const pf::Fix top = std::max(prevY, curY) + attr.ledgeSnapY + halfHeight;
+
+    pf::Fix left = 0;
+    pf::Fix right = 0;
+    if (ledge.direction < 0) {
+        left = std::min(prevX, curX);
+        right = attr.ledgeSnapX +
+            (prevX < curX ? curX + fighter.ecb.points[2].x : prevX + fighter.ecb.points[2].x);
+    } else {
+        right = std::max(prevX, curX);
+        left = -attr.ledgeSnapX +
+            (prevX > curX ? curX + fighter.ecb.points[0].x : prevX + fighter.ecb.points[0].x);
+    }
+    drawGroundRect(left, bottom, right, top, color);
 }
 
 static void drawImportedSkeleton(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter, Color color) {
@@ -129,6 +290,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     }
 
     drawEcb(fighter, YELLOW);
+    drawImportedEcbSources(def, fighter);
     if (!def.hasHsdAsset) {
         for (const pf::HurtboxDefinition& hurt : def.hurtboxes) {
             pf::Vec3 base = fighter.bones[static_cast<size_t>(hurt.bone)].position;
@@ -165,6 +327,90 @@ static void drawEditor(const pf::World& world, pf::FighterEditor& editor) {
     DrawText("F1 boxes  F2 side view  [/] state  Space pause  R reset  1-7 fighter", 24, 190, 14, GRAY);
 }
 
+struct ReplayHarness {
+    std::string path = "replay_last.pfreplay";
+    std::string status = "Replay: F5 record  F6 save  F7 load  F8 step  F9 play";
+    pf::ReplayData recording;
+    pf::ReplayData playback;
+    size_t playbackFrame = 0;
+    bool recordingActive = false;
+    bool playbackLoaded = false;
+    bool realtimePlayback = false;
+};
+
+static pf::World makeReplayStartWorld(int p1FighterDef, int p2FighterDef) {
+    return pf::makeTrainingWorld(p1FighterDef, p2FighterDef);
+}
+
+static void beginReplayRecording(ReplayHarness& replay, pf::World& world, int p1FighterDef, int p2FighterDef) {
+    replay.recording = {};
+    replay.recording.p1FighterDef = p1FighterDef;
+    replay.recording.p2FighterDef = p2FighterDef;
+    replay.recordingActive = true;
+    replay.playbackLoaded = false;
+    replay.realtimePlayback = false;
+    replay.playbackFrame = 0;
+    world = makeReplayStartWorld(p1FighterDef, p2FighterDef);
+    replay.status = "Recording replay from starting gamestate";
+}
+
+static void saveReplayRecording(ReplayHarness& replay) {
+    if (!replay.recordingActive && replay.recording.frames.empty()) {
+        replay.status = "No replay frames to save";
+        return;
+    }
+    std::string error;
+    if (pf::saveReplay(replay.path, replay.recording, &error)) {
+        replay.status = "Saved " + replay.path + " (" + std::to_string(replay.recording.frames.size()) + " frames)";
+    } else {
+        replay.status = error;
+    }
+    replay.recordingActive = false;
+}
+
+static void loadReplayPlayback(ReplayHarness& replay, pf::World& world, int& selectedFighterDef) {
+    std::string error;
+    pf::ReplayData loaded;
+    if (!pf::loadReplay(replay.path, loaded, &error)) {
+        replay.status = error;
+        return;
+    }
+    replay.playback = std::move(loaded);
+    replay.playbackFrame = 0;
+    replay.playbackLoaded = true;
+    replay.realtimePlayback = false;
+    replay.recordingActive = false;
+    selectedFighterDef = replay.playback.p1FighterDef;
+    world = makeReplayStartWorld(replay.playback.p1FighterDef, replay.playback.p2FighterDef);
+    replay.status = "Loaded " + replay.path + " (" + std::to_string(replay.playback.frames.size()) + " frames)";
+}
+
+static void stepReplayPlayback(ReplayHarness& replay, pf::World& world) {
+    if (!replay.playbackLoaded) {
+        replay.status = "No replay loaded";
+        return;
+    }
+    if (replay.playbackFrame >= replay.playback.frames.size()) {
+        replay.realtimePlayback = false;
+        replay.status = "Replay finished";
+        return;
+    }
+    const pf::ReplayFrame& frame = replay.playback.frames[replay.playbackFrame++];
+    pf::tickWorld(world, {frame.inputs[0], frame.inputs[1]});
+    replay.status = "Replay frame " + std::to_string(replay.playbackFrame) + "/" +
+        std::to_string(replay.playback.frames.size());
+}
+
+static void drawReplayStatus(const ReplayHarness& replay) {
+    DrawRectangle(12, 232, 390, 72, Fade(RAYWHITE, 0.9f));
+    DrawRectangleLines(12, 232, 390, 72, DARKGRAY);
+    DrawText(replay.status.c_str(), 24, 244, 14, DARKGRAY);
+    const std::string mode = replay.recordingActive ? "Mode: recording" :
+        (replay.playbackLoaded ? (replay.realtimePlayback ? "Mode: replay realtime" : "Mode: replay paused") : "Mode: live");
+    DrawText(mode.c_str(), 24, 266, 14, DARKGRAY);
+    DrawText(("File: " + replay.path).c_str(), 24, 286, 14, GRAY);
+}
+
 int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(1280, 720, "PFighter C++ raylib prototype");
@@ -180,6 +426,7 @@ int main() {
     int testFighterDef = 0;
     pf::World world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
     pf::FighterEditor editor;
+    ReplayHarness replay;
     const std::array<int, 7> fighterKeys{
         KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,
     };
@@ -187,21 +434,62 @@ int main() {
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
         if (IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
-        if (IsKeyPressed(KEY_SPACE)) editor.paused = !editor.paused;
-        if (IsKeyPressed(KEY_R)) world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
+        if (IsKeyPressed(KEY_SPACE)) {
+            editor.paused = !editor.paused;
+            if (editor.paused) {
+                replay.realtimePlayback = false;
+            }
+        }
+        if (IsKeyPressed(KEY_R)) {
+            world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
+            replay.playbackFrame = 0;
+            replay.playbackLoaded = false;
+            replay.realtimePlayback = false;
+            replay.recordingActive = false;
+        }
         if (IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
         if (IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
         for (size_t i = 0; i < fighterKeys.size(); ++i) {
             if (IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
                 testFighterDef = static_cast<int>(i);
                 world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
+                replay.playbackLoaded = false;
+                replay.realtimePlayback = false;
+                replay.recordingActive = false;
                 editor.selectedState = 0;
                 editor.selectedSubaction = 0;
             }
         }
 
-        if (!editor.paused) {
-            pf::tickWorld(world, {readKeyboardInput(false), readKeyboardInput(true)});
+        if (IsKeyPressed(KEY_F5)) {
+            beginReplayRecording(replay, world, testFighterDef, testFighterDef);
+            editor.paused = false;
+        }
+        if (IsKeyPressed(KEY_F6)) {
+            saveReplayRecording(replay);
+        }
+        if (IsKeyPressed(KEY_F7)) {
+            loadReplayPlayback(replay, world, testFighterDef);
+            editor.paused = true;
+        }
+        if (IsKeyPressed(KEY_F8)) {
+            stepReplayPlayback(replay, world);
+        }
+        if (IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
+            replay.realtimePlayback = !replay.realtimePlayback;
+            editor.paused = !replay.realtimePlayback;
+        }
+
+        const pf::InputFrame p1Input = readPlayerInput(0, false);
+        const pf::InputFrame p2Input = readPlayerInput(1, true);
+        if (replay.playbackLoaded && replay.realtimePlayback) {
+            stepReplayPlayback(replay, world);
+        } else if (!editor.paused) {
+            pf::tickWorld(world, {p1Input, p2Input});
+            if (replay.recordingActive) {
+                replay.recording.frames.push_back({{p1Input, p2Input}});
+                replay.status = "Recording frame " + std::to_string(replay.recording.frames.size());
+            }
         }
 
         if (editor.sideView) {
@@ -228,13 +516,16 @@ int main() {
                 const Vector3 ledgePos = toRayGround(ledge.position);
                 DrawSphere(ledgePos, 0.12f, PURPLE);
                 DrawLine3D(ledgePos, {ledgePos.x + 0.45f * static_cast<float>(ledge.direction), ledgePos.y, ledgePos.z}, PURPLE);
+                drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[0].fighterDef)], world.fighters[0], ledge, Fade(ORANGE, 0.45f));
+                drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)], world.fighters[1], ledge, Fade(SKYBLUE, 0.45f));
             }
         }
         drawFighter(world, world.fighters[0], ORANGE, editor.showBoxes);
         drawFighter(world, world.fighters[1], SKYBLUE, editor.showBoxes);
         EndMode3D();
         drawEditor(world, editor);
-        DrawText("P1: A/D move, W jump, F attack, Q shield    P2: arrows move, Right Shift jump, Enter attack, Right Ctrl shield", 24, 680, 16, DARKGRAY);
+        drawReplayStatus(replay);
+        DrawText("Gamepad: left stick move, right stick c-stick, A attack, B special, X/Y jump, triggers shield    Keyboard fallback: P1 WASD/F/Q, P2 arrows/Enter/Ctrl", 24, 680, 16, DARKGRAY);
         EndDrawing();
     }
 

@@ -1,9 +1,11 @@
 #include "core/simulation.hpp"
 #include "core/animation.hpp"
 #include "core/animation_asset.hpp"
+#include "core/replay.hpp"
 
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include <vector>
 
 static pf::FighterRuntime& setOnLeftLedge(pf::World& world) {
@@ -25,7 +27,54 @@ static pf::FighterRuntime& setOnLeftLedge(pf::World& world) {
     return fighter;
 }
 
-int main() {
+static void printReplayFrame(const pf::World& world, int replayFrame) {
+    const pf::FighterRuntime& p1 = world.fighters[0];
+    const pf::FighterRuntime& p2 = world.fighters[1];
+    std::cout << "replay_frame=" << replayFrame
+              << " world_frame=" << world.frame
+              << " p1_state=" << pf::currentState(world, p1).name
+              << " p1_fis=" << pf::frameInState(p1)
+              << " p1_pos=" << pf::toString(p1.position)
+              << " p1_vel=" << pf::toString(p1.fighterVelocity)
+              << " p1_ground_vel=" << pf::fxToFloat(p1.groundVelocity)
+              << " p1_facing=" << p1.facing
+              << " p2_state=" << pf::currentState(world, p2).name
+              << " p2_pos=" << pf::toString(p2.position)
+              << "\n";
+}
+
+static int runReplay(const std::string& path, int maxFrames) {
+    pf::ReplayData replay;
+    std::string error;
+    if (!pf::loadReplay(path, replay, &error)) {
+        std::cerr << error << "\n";
+        return 1;
+    }
+
+    pf::World world = pf::makeTrainingWorld(replay.p1FighterDef, replay.p2FighterDef);
+    const int frameCount = maxFrames >= 0
+        ? std::min(maxFrames, static_cast<int>(replay.frames.size()))
+        : static_cast<int>(replay.frames.size());
+    std::cout << "loaded_replay=" << path
+              << " p1=" << replay.p1FighterDef
+              << " p2=" << replay.p2FighterDef
+              << " frames=" << replay.frames.size()
+              << "\n";
+    printReplayFrame(world, 0);
+    for (int frame = 0; frame < frameCount; ++frame) {
+        const pf::ReplayFrame& replayFrame = replay.frames[static_cast<size_t>(frame)];
+        pf::tickWorld(world, {replayFrame.inputs[0], replayFrame.inputs[1]});
+        printReplayFrame(world, frame + 1);
+    }
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    if (argc >= 3 && std::string(argv[1]) == "--replay") {
+        const int maxFrames = argc >= 4 ? std::stoi(argv[3]) : -1;
+        return runReplay(argv[2], maxFrames);
+    }
+
     pf::World world = pf::makeTrainingWorld();
     world.fighters[0].position = {-pf::fx(1), 0};
     world.fighters[1].position = {pf::fx(1), 0};
@@ -160,6 +209,45 @@ int main() {
               << " ground_vel=" << pf::fxToFloat(dashTester.groundVelocity)
               << "\n";
 
+    pf::World falconDashWorld = pf::makeTrainingWorld(3, 3);
+    for (int frame = 0; frame < 32; ++frame) {
+        pf::InputFrame input;
+        input.move.x = pf::fx(1);
+        pf::tickWorld(falconDashWorld, {input, pf::InputFrame{}});
+    }
+    const pf::FighterRuntime& falconDashTester = falconDashWorld.fighters[0];
+    std::cout << "falcon_dash_state=" << pf::currentState(falconDashWorld, falconDashTester).name
+              << " ground_vel=" << pf::fxToFloat(falconDashTester.groundVelocity)
+              << " pos=" << pf::toString(falconDashTester.position)
+              << "\n";
+
+    pf::World falconDashDanceWorld = pf::makeTrainingWorld(3, 3);
+    falconDashDanceWorld.stage.segments = {
+        {{-pf::fx(100), 0}, {pf::fx(100), 0}, pf::fx(1), pf::SegmentType::Solid, false, false},
+    };
+    falconDashDanceWorld.stage.ledges.clear();
+    falconDashDanceWorld.fighters[0].position = {0, 0};
+    falconDashDanceWorld.fighters[0].previousPosition = falconDashDanceWorld.fighters[0].position;
+    falconDashDanceWorld.fighters[0].facing = 1;
+    falconDashDanceWorld.fighters[0].grounded = true;
+    falconDashDanceWorld.fighters[0].groundSegment = 0;
+    for (int frame = 0; frame < 4; ++frame) {
+        pf::InputFrame input;
+        input.move.x = pf::fx(1);
+        pf::tickWorld(falconDashDanceWorld, {input, pf::InputFrame{}});
+    }
+    for (int frame = 0; frame < 6; ++frame) {
+        pf::InputFrame input;
+        input.move.x = -pf::fx(1);
+        pf::tickWorld(falconDashDanceWorld, {input, pf::InputFrame{}});
+    }
+    const pf::FighterRuntime& falconDashDanceTester = falconDashDanceWorld.fighters[0];
+    std::cout << "falcon_dash_dance_state=" << pf::currentState(falconDashDanceWorld, falconDashDanceTester).name
+              << " facing=" << falconDashDanceTester.facing
+              << " ground_vel=" << pf::fxToFloat(falconDashDanceTester.groundVelocity)
+              << " pos=" << pf::toString(falconDashDanceTester.position)
+              << "\n";
+
     pf::World lowFrictionDashWorld = pf::makeTrainingWorld();
     lowFrictionDashWorld.stage.segments = {
         {{-pf::fx(100), 0}, {pf::fx(100), 0}, pf::fxFromFloat(0.5f), pf::SegmentType::Solid, false, false},
@@ -178,6 +266,11 @@ int main() {
         {{-pf::fx(100), 0}, {pf::fx(100), 0}, pf::fx(1), pf::SegmentType::Solid, false, false},
     };
     reverseDashWorld.stage.ledges.clear();
+    reverseDashWorld.fighters[0].position = {0, 0};
+    reverseDashWorld.fighters[0].previousPosition = reverseDashWorld.fighters[0].position;
+    reverseDashWorld.fighters[0].facing = 1;
+    reverseDashWorld.fighters[0].grounded = true;
+    reverseDashWorld.fighters[0].groundSegment = 0;
     pf::InputFrame rightDash;
     rightDash.move.x = pf::fx(1);
     pf::tickWorld(reverseDashWorld, {rightDash, pf::InputFrame{}});
@@ -804,6 +897,21 @@ int main() {
     std::cout << "invincible_hit_percent=" << pf::fxToFloat(invincibleWorld.fighters[1].percent)
               << " max_attacker_hitlag=" << maxInvincibleHitlag
               << " state=" << pf::currentState(invincibleWorld, invincibleWorld.fighters[1]).name
+              << "\n";
+
+    pf::World smashChargeWorld = pf::makeTrainingWorld();
+    smashChargeWorld.fighters[1].position = {pf::fx(20), 0};
+    for (int frame = 0; frame < 30; ++frame) {
+        pf::InputFrame p1Input;
+        p1Input.buttons |= pf::ButtonAttack;
+        p1Input.move.x = pf::fx(1);
+        pf::tickWorld(smashChargeWorld, {p1Input, pf::InputFrame{}});
+    }
+    pf::tickWorld(smashChargeWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "smash_charge_state=" << pf::currentState(smashChargeWorld, smashChargeWorld.fighters[0]).name
+              << " charge_state=" << smashChargeWorld.fighters[0].smashChargeState
+              << " charge_frames=" << pf::fxToFloat(smashChargeWorld.fighters[0].smashChargeFrames)
+              << " anim_rate=" << pf::fxToFloat(smashChargeWorld.fighters[0].animationRate)
               << "\n";
 
     pf::AnimationClip rootMotionClip;

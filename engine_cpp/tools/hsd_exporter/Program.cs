@@ -64,8 +64,11 @@ static void WriteFighterAttributesBinary(BinaryWriter writer, SBM_CommonFighterA
     writer.Write(attr.FastWalkSpeed);
     writer.Write(attr.Friction);
     writer.Write(attr.InitialDashSpeed);
+    writer.Write(attr.StopTurnInitialSpeedA);
+    writer.Write(attr.StopTurnInitialSpeedB);
     writer.Write(attr.InitialRunSpeed);
     writer.Write(attr.RunAnimationScale);
+    writer.Write(attr.DashLockoutDirection);
     writer.Write(attr.DashDurationBeforeRunning);
     writer.Write(attr.JumpStartupLag);
     writer.Write(attr.InitialHorizontalJumpVelocity);
@@ -83,6 +86,7 @@ static void WriteFighterAttributesBinary(BinaryWriter writer, SBM_CommonFighterA
     writer.Write(attr.MaxAerialHorizontalSpeed);
     writer.Write(attr.AirFriction);
     writer.Write(attr.FastFallTerminalVelocity);
+    writer.Write(attr.TiltTurnForcedVelocity);
     writer.Write(attr.FramesToChangeDirectionOnStandingTurn);
     writer.Write(attr.Weight);
     writer.Write(attr.ModelScale);
@@ -161,7 +165,7 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     using FileStream stream = File.Create(outputPath);
     using BinaryWriter writer = new(stream, Encoding.UTF8);
     writer.Write(Encoding.ASCII.GetBytes("PFCM"));
-    writer.Write(3);
+    writer.Write(5);
 
     writer.Write(F(0x08));
     writer.Write(F(0x0C));
@@ -258,6 +262,23 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     writer.Write(F(0xDC));
     writer.Write(F(0xE0));
     writer.Write(F(0x44C));
+    writer.Write(F(0x98));
+    writer.Write(F(0x9C));
+    writer.Write(F(0xA0));
+    writer.Write(F(0xA4));
+    writer.Write(F(0xA8));
+    writer.Write(F(0xAC));
+    writer.Write(F(0xB0));
+    writer.Write(F(0xB8));
+    writer.Write(F(0xBC));
+    writer.Write(F(0xC0));
+    writer.Write(F(0xC4));
+    writer.Write(F(0xCC));
+    writer.Write(R(0xD0));
+    writer.Write(F(0xD4));
+    writer.Write(R(0xD8));
+    writer.Write(R(0xE4));
+    writer.Write(F(0xE8));
 }
 
 static void WriteSkeletonBinary(BinaryWriter writer, HSD_JOBJ joint, int parent, List<HSD_JOBJ> joints)
@@ -303,14 +324,67 @@ static void WritePoseBinary(BinaryWriter writer, HSD_JOBJ poseRoot)
     }
 }
 
-static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, uint flags, HSD_FigaTree clip)
+static List<FOBJKey> SampleKeys(FOBJ_Player player, float frameCount, JointTrackType trackType)
+{
+    int lastFrame = Math.Max(1, (int)MathF.Ceiling(frameCount));
+    List<FOBJKey> sampledKeys = new();
+    float previous = 0.0f;
+    for (int frame = 0; frame <= lastFrame; ++frame)
+    {
+        float value = player.GetValue(frame);
+        if (sampledKeys.Count > 0 && IsRotationTrack(trackType))
+        {
+            float delta = value - previous;
+            while (delta > MathF.PI)
+            {
+                value -= MathF.PI * 2.0f;
+                delta -= MathF.PI * 2.0f;
+            }
+            while (delta < -MathF.PI)
+            {
+                value += MathF.PI * 2.0f;
+                delta += MathF.PI * 2.0f;
+            }
+        }
+        sampledKeys.Add(new FOBJKey
+        {
+            Frame = frame,
+            Value = value,
+            Tan = 0.0f,
+            InterpolationType = GXInterpolationType.HSD_A_OP_LIN,
+        });
+        previous = value;
+    }
+    return sampledKeys;
+}
+
+static void WriteAnimationClipBinary(BinaryWriter writer, string name, int actionIndex, uint flags, byte defaultBlendFrames, float frameCount, List<(int Joint, JointTrackType TrackType, List<FOBJKey> Keys)> tracks)
 {
     WriteString(writer, name);
     writer.Write(actionIndex);
     writer.Write(flags);
-    writer.Write(clip.FrameCount);
+    writer.Write(defaultBlendFrames);
+    writer.Write(frameCount);
 
-    List<(int Joint, HSD_Track Track, List<FOBJKey> Keys)> tracks = new();
+    writer.Write(tracks.Count);
+    foreach ((int joint, JointTrackType trackType, List<FOBJKey> keys) in tracks)
+    {
+        writer.Write(joint);
+        writer.Write(TrackId(trackType));
+        writer.Write(keys.Count);
+        foreach (FOBJKey key in keys)
+        {
+            writer.Write(key.Frame);
+            writer.Write(key.Value);
+            writer.Write(key.Tan);
+            writer.Write(InterpolationId(key.InterpolationType));
+        }
+    }
+}
+
+static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, uint flags, byte defaultBlendFrames, HSD_FigaTree clip)
+{
+    List<(int Joint, JointTrackType TrackType, List<FOBJKey> Keys)> tracks = new();
     List<FigaTreeNode> nodes = clip.Nodes;
     for (int nodeIndex = 0; nodeIndex < nodes.Count; ++nodeIndex)
     {
@@ -326,53 +400,10 @@ static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, u
             {
                 continue;
             }
-            int lastFrame = Math.Max(1, (int)MathF.Ceiling(clip.FrameCount));
-            List<FOBJKey> sampledKeys = new();
-            float previous = 0.0f;
-            for (int frame = 0; frame <= lastFrame; ++frame)
-            {
-                float value = player.GetValue(frame);
-                if (sampledKeys.Count > 0 && IsRotationTrack(track.JointTrackType))
-                {
-                    float delta = value - previous;
-                    while (delta > MathF.PI)
-                    {
-                        value -= MathF.PI * 2.0f;
-                        delta -= MathF.PI * 2.0f;
-                    }
-                    while (delta < -MathF.PI)
-                    {
-                        value += MathF.PI * 2.0f;
-                        delta += MathF.PI * 2.0f;
-                    }
-                }
-                sampledKeys.Add(new FOBJKey
-                {
-                    Frame = frame,
-                    Value = value,
-                    Tan = 0.0f,
-                    InterpolationType = GXInterpolationType.HSD_A_OP_LIN,
-                });
-                previous = value;
-            }
-            tracks.Add((nodeIndex, track, sampledKeys));
+            tracks.Add((nodeIndex, track.JointTrackType, SampleKeys(player, clip.FrameCount, track.JointTrackType)));
         }
     }
-
-    writer.Write(tracks.Count);
-    foreach ((int joint, HSD_Track track, List<FOBJKey> keys) in tracks)
-    {
-        writer.Write(joint);
-        writer.Write(TrackId(track.JointTrackType));
-        writer.Write(keys.Count);
-        foreach (FOBJKey key in keys)
-        {
-            writer.Write(key.Frame);
-            writer.Write(key.Value);
-            writer.Write(key.Tan);
-            writer.Write(InterpolationId(key.InterpolationType));
-        }
-    }
+    WriteAnimationClipBinary(writer, name, actionIndex, flags, defaultBlendFrames, clip.FrameCount, tracks);
 }
 
 static int MeleeCommandByteSize(byte code)
@@ -382,6 +413,10 @@ static int MeleeCommandByteSize(byte code)
     if (code == 0x0B)
     {
         return 20;
+    }
+    if (code == 0x38)
+    {
+        return 8;
     }
     MeleeCMDAction? action = ActionCommon.GetMeleeCMDAction(code);
     return action?.ByteSize ?? 4;
@@ -450,7 +485,7 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
     using BinaryWriter writer = new(stream, Encoding.UTF8);
 
     writer.Write(Encoding.ASCII.GetBytes("PFHA"));
-    writer.Write(7);
+    writer.Write(9);
     WriteString(writer, Path.GetFileNameWithoutExtension(fighterDatPath));
 
     using MemoryStream skeletonStream = new();
@@ -503,7 +538,61 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
         writer.Write(hurtbox.Size);
     }
 
-    List<(string Name, int Index, uint Flags, HSD_FigaTree Clip)> clips = new();
+    SBM_ModelPart[] modelParts = fighterData.ModelPartAnimations?.Array ?? Array.Empty<SBM_ModelPart>();
+    writer.Write(modelParts.Length);
+    for (int partIndex = 0; partIndex < modelParts.Length; ++partIndex)
+    {
+        SBM_ModelPart part = modelParts[partIndex];
+        byte[] entries = part.Entries ?? Array.Empty<byte>();
+        writer.Write((int)part.StartingBone);
+        writer.Write(entries.Length);
+        foreach (byte entry in entries)
+        {
+            writer.Write((int)entry);
+        }
+
+        HSD_AnimJoint[] animations = part.Anims?.Array ?? Array.Empty<HSD_AnimJoint>();
+        writer.Write(animations.Length);
+        for (int animIndex = 0; animIndex < animations.Length; ++animIndex)
+        {
+            HSD_AnimJoint animation = animations[animIndex];
+            HSD_AnimJoint[] nodes = animation?.TreeList?.ToArray() ?? Array.Empty<HSD_AnimJoint>();
+            List<(int Joint, JointTrackType TrackType, List<FOBJKey> Keys)> tracks = new();
+            float frameCount = 1.0f;
+            foreach (byte entry in entries)
+            {
+                int localIndex = entry - part.StartingBone;
+                if (localIndex < 0 || localIndex >= nodes.Length)
+                {
+                    continue;
+                }
+                HSD_AnimJoint joint = nodes[localIndex];
+                if (joint.AOBJ is null || joint.AOBJ.FObjDesc is null)
+                {
+                    continue;
+                }
+                frameCount = MathF.Max(frameCount, joint.AOBJ.EndFrame + 1.0f);
+                foreach (HSD_FOBJDesc fdesc in joint.AOBJ.FObjDesc.List)
+                {
+                    FOBJ_Player player = new(fdesc);
+                    if (player.Keys is null || player.Keys.Count == 0)
+                    {
+                        continue;
+                    }
+                    JointTrackType trackType = player.JointTrackType;
+                    if (TrackId(trackType) == 255)
+                    {
+                        continue;
+                    }
+                    frameCount = MathF.Max(frameCount, player.Keys.Max(key => key.Frame + 1.0f));
+                    tracks.Add((entry, trackType, SampleKeys(player, frameCount, trackType)));
+                }
+            }
+            WriteAnimationClipBinary(writer, $"model_part_{partIndex}_{animIndex}", -1, 0, 0, frameCount, tracks);
+        }
+    }
+
+    List<(string Name, int Index, uint Flags, byte DefaultBlendFrames, HSD_FigaTree Clip)> clips = new();
     if (fighterData.FighterActionTable is not null)
     {
         SBM_FighterAction[] actions = fighterData.FighterActionTable.Commands;
@@ -517,14 +606,15 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
             HSD_FigaTree? clip = FigaForAction(animationSet, action);
             if (clip is not null)
             {
-                clips.Add((action.Name, i, action.Flags, clip));
+                byte defaultBlendFrames = i < dynamicBehaviors.Length ? dynamicBehaviors[i].Flags : (byte)0;
+                clips.Add((action.Name, i, action.Flags, defaultBlendFrames, clip));
             }
         }
     }
     writer.Write(clips.Count);
-    foreach ((string name, int index, uint flags, HSD_FigaTree clip) in clips)
+    foreach ((string name, int index, uint flags, byte defaultBlendFrames, HSD_FigaTree clip) in clips)
     {
-        WriteClipBinary(writer, name, index, flags, clip);
+        WriteClipBinary(writer, name, index, flags, defaultBlendFrames, clip);
     }
 
     List<(SBM_FighterAction Action, int Index, int[] CommonBoneLookup)> scripts = new();

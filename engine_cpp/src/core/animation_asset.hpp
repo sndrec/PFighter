@@ -48,9 +48,12 @@ struct HsdFighterAttributes {
     Fix fastWalkSpeed = 0;
     Fix friction = 0;
     Fix initialDashSpeed = 0;
+    Fix dashRunAccelerationA = 0;
+    Fix dashRunAccelerationB = 0;
     Fix initialRunSpeed = 0;
     Fix runAnimationScale = 0;
-    Fix dashDurationBeforeRunning = 0;
+    Fix maxRunBrakeFrames = 0;
+    Fix groundMaxHorizontalVelocity = 0;
     Fix jumpStartupLag = 0;
     Fix initialHorizontalJumpVelocity = 0;
     Fix initialVerticalJumpVelocity = 0;
@@ -67,6 +70,7 @@ struct HsdFighterAttributes {
     Fix maxAerialHorizontalSpeed = 0;
     Fix airFriction = 0;
     Fix fastFallTerminalVelocity = 0;
+    Fix airMaxHorizontalVelocity = 0;
     Fix framesToChangeDirectionOnStandingTurn = 0;
     Fix weight = 0;
     Fix modelScale = 0;
@@ -96,10 +100,17 @@ struct HsdActionScript {
     std::vector<HsdActionCommand> commands;
 };
 
+struct HsdModelPartAnimationSet {
+    int startingBone = 0;
+    std::vector<int> entries;
+    std::vector<AnimationClip> animations;
+};
+
 struct HsdFighterAnimationAsset {
     std::string name;
     std::vector<AnimationJoint> skeleton;
     std::vector<AnimationClip> clips;
+    std::vector<HsdModelPartAnimationSet> modelPartAnimations;
     bool hasShieldPose = false;
     AnimationPose shieldPose;
     HsdFighterBoneTable fighterBones;

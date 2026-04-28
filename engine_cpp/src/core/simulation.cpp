@@ -22,6 +22,7 @@ static int fallbackActionIndex(const std::string& animation);
 struct HsdFighterAssetSpec {
     const char* displayName;
     const char* fileName;
+    bool shieldSizeScalesWithHealth = true;
 };
 
 static const std::array<HsdFighterAssetSpec, 7>& meleeTrainingRoster() {
@@ -31,7 +32,7 @@ static const std::array<HsdFighterAssetSpec, 7>& meleeTrainingRoster() {
         {"Bowser", "bowser_hsd.pfighter.bin"},
         {"Captain Falcon", "captain_falcon_hsd.pfighter.bin"},
         {"Peach", "peach_hsd.pfighter.bin"},
-        {"Yoshi", "yoshi_hsd.pfighter.bin"},
+        {"Yoshi", "yoshi_hsd.pfighter.bin", false},
         {"Game & Watch", "game_and_watch_hsd.pfighter.bin"},
     }};
     return roster;
@@ -180,7 +181,7 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     }
     reader.skip(4);
     const int version = reader.readI32();
-    if (version != 1 && version != 2 && version != 3) {
+    if (version != 1 && version != 2 && version != 3 && version != 4 && version != 5) {
         throw std::runtime_error("unsupported Melee common data version");
     }
 
@@ -284,6 +285,27 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     if (version >= 3) {
         common.shieldStickSmoothingX44C = readCommonFix(reader);
     }
+    if (version >= 4) {
+        common.attackS3StickThresholdX98 = readCommonFix(reader);
+        common.attackS3HiAngleX9C = readCommonFix(reader);
+        common.attackS3HiSAngleXA0 = readCommonFix(reader);
+        common.attackS3LwSAngleXA4 = readCommonFix(reader);
+        common.attackS3LwAngleXA8 = readCommonFix(reader);
+        common.attackHi3StickThresholdYxAC = readCommonFix(reader);
+        common.attackLw3StickThresholdYxB0 = readCommonFix(reader);
+        common.attackS4HiAngleXB8 = readCommonFix(reader);
+        common.attackS4HiSAngleXBC = readCommonFix(reader);
+        common.attackS4LwSAngleXC0 = readCommonFix(reader);
+        common.attackS4LwAngleXC4 = readCommonFix(reader);
+        common.attackHi4StickThresholdYxCC = readCommonFix(reader);
+        common.attackHi4StickWindowXD0 = reader.readI32();
+        common.attackLw4StickThresholdYxD4 = readCommonFix(reader);
+        common.attackLw4StickWindowXD8 = reader.readI32();
+    }
+    if (version >= 5) {
+        common.lCancelInputWindowXE4 = reader.readI32();
+        common.lCancelLandingLagDivisorXE8 = readCommonFix(reader);
+    }
     return common;
 }
 
@@ -373,6 +395,13 @@ static int roundedFrames(Fix value) {
     return std::max(0, static_cast<int>(fxToFloat(value) + 0.5f));
 }
 
+static Vec3 scaledVec3(Vec3 value, Fix scale) {
+    value.x = fxMul(value.x, scale);
+    value.y = fxMul(value.y, scale);
+    value.z = fxMul(value.z, scale);
+    return value;
+}
+
 static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAttributes& source) {
     FighterProperties& attr = def.properties;
     attr.walkInitVel = source.initialWalkSpeed;
@@ -383,8 +412,16 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     attr.fastWalkMin = source.fastWalkSpeed;
     attr.grFriction = source.friction;
     attr.dashInitialVelocity = source.initialDashSpeed;
+    if (source.dashRunAccelerationA != 0 || source.dashRunAccelerationB != 0) {
+        attr.dashRunAccelerationA = source.dashRunAccelerationA;
+        attr.dashRunAccelerationB = source.dashRunAccelerationB;
+    }
     attr.dashRunTerminalVelocity = source.initialRunSpeed;
     attr.runAnimationScaling = source.runAnimationScale;
+    if (source.maxRunBrakeFrames != 0) {
+        attr.maxRunBrakeFrames = roundedFrames(source.maxRunBrakeFrames);
+    }
+    attr.groundMaxHorizontalVelocity = source.groundMaxHorizontalVelocity;
     attr.jumpHInitialVelocity = source.initialHorizontalJumpVelocity;
     attr.jumpVInitialVelocity = source.initialVerticalJumpVelocity;
     attr.hopVInitialVelocity = source.maximumShorthopVerticalVelocity;
@@ -393,14 +430,18 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     attr.airJumpVMultiplier = source.verticalAirJumpMultiplier;
     attr.airJumpHMultiplier = source.horizontalAirJumpMultiplier;
     attr.maxJumps = source.numberOfJumps;
+    attr.modelScale = source.modelScale != 0 ? source.modelScale : fx(1);
     attr.grav = source.gravity;
     attr.terminalVel = source.terminalVelocity;
     attr.airDriftStickMul = source.aerialSpeed;
-    attr.aerialDriftBase = source.aerialSpeed;
+    attr.aerialDriftBase = source.aerialFriction;
     attr.aerialFriction = source.aerialFriction;
     attr.maxAerialHorizontalSpeed = source.maxAerialHorizontalSpeed;
     attr.airFriction = source.airFriction;
     attr.airDriftMax = source.maxAerialHorizontalSpeed;
+    if (source.airMaxHorizontalVelocity != 0) {
+        attr.airMaxHorizontalVelocity = source.airMaxHorizontalVelocity;
+    }
     attr.initialShieldSize = source.shieldSize;
     attr.shieldBreakInitialVelocity = source.shieldBreakInitialVelocity;
     attr.gravity = source.gravity;
@@ -419,7 +460,7 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     attr.initialDashSpeed = source.initialDashSpeed;
     attr.initialRunSpeed = source.initialRunSpeed;
     attr.walkAcceleration = source.walkAcceleration;
-    attr.runAcceleration = source.initialRunSpeed;
+    attr.runAcceleration = source.dashRunAccelerationA != 0 ? source.dashRunAccelerationA : attr.dashRunAccelerationA;
     attr.maxWalkSpeed = source.maxWalkSpeed;
     attr.friction = source.friction;
     attr.aerialAcceleration = source.aerialSpeed;
@@ -440,6 +481,19 @@ static void applyHsdAnimationLengths(FighterDefinition& def) {
     }
     constexpr uint32_t kMeleeActionFlagAnimPhysics = 0x80000000u;
     constexpr uint32_t kMeleeActionFlagLoopAnimation = 0x40000000u;
+    const auto usesGenericTransNPhysics = [](const FighterState& state, const AnimationClip& clip) {
+        if ((clip.actionFlags & kMeleeActionFlagAnimPhysics) == 0) {
+            return false;
+        }
+        // These common movement states have explicit Melee physics callbacks
+        // driven by gr_vel/self_vel, not the generic TransN ground-physics path.
+        if (state.name == "Dash" || state.name == "Run" || state.name == "RunDirect" ||
+            state.name == "RunBrake" || state.name == "TurnRun")
+        {
+            return false;
+        }
+        return state.useAnimPhysics;
+    };
     for (FighterState& state : def.states) {
         const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
         if (actionIndex < 0) {
@@ -449,7 +503,8 @@ static void applyHsdAnimationLengths(FighterDefinition& def) {
             if (state.name != "JumpSquat") {
                 state.animationLengthFrames = std::max(1, static_cast<int>(fxToFloat(clip->frameCount) + 0.5f));
             }
-            state.useAnimPhysics = (clip->actionFlags & kMeleeActionFlagAnimPhysics) != 0;
+            state.defaultAnimationBlendFrames = std::max(0, clip->defaultBlendFrames);
+            state.useAnimPhysics = usesGenericTransNPhysics(state, *clip);
             state.loopAnimation = state.loopAnimation || (clip->actionFlags & kMeleeActionFlagLoopAnimation) != 0;
         }
     }
@@ -465,6 +520,7 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     if (def.hsdAsset->hasAttributes) {
         applyHsdFighterAttributes(def, def.hsdAsset->attributes);
     }
+    def.properties.shieldSizeScalesWithHealth = spec.shieldSizeScalesWithHealth;
     if (def.hsdAsset->hasEnvironmentCollision) {
         def.properties.ledgeSnapX = def.hsdAsset->environmentCollision.ledgeGrabWidth;
         def.properties.ledgeSnapY = def.hsdAsset->environmentCollision.ledgeGrabYOffset;
@@ -496,18 +552,26 @@ static std::array<Fix, 9> rotationPart(const std::array<Fix, 16>& matrix) {
     };
 }
 
-static std::array<Fix, 16> fighterModelMatrix(const FighterRuntime& fighter) {
+static std::array<Fix, 16> fighterModelMatrix(const FighterDefinition& def, const FighterRuntime& fighter) {
+    Fix cosZ = fx(1);
+    Fix sinZ = 0;
+    if (fighter.grounded) {
+        const float angle = -std::atan2(fxToFloat(fighter.groundNormal.x), fxToFloat(fighter.groundNormal.y));
+        cosZ = fxFromFloat(std::cos(angle));
+        sinZ = fxFromFloat(std::sin(angle));
+    }
+    const Fix modelScale = def.properties.modelScale;
     return {
-        fx(1), 0, 0, fighter.position.x,
-        0, fx(1), 0, fighter.position.y,
-        0, 0, fx(1), 0,
+        fxMul(cosZ, modelScale), -fxMul(sinZ, modelScale), 0, fighter.position.x,
+        fxMul(sinZ, modelScale), fxMul(cosZ, modelScale), 0, fighter.position.y,
+        0, 0, modelScale, 0,
         0, 0, 0, fx(1),
     };
 }
 
 static std::vector<JointWorldTransform> fighterHsdWorldTransforms(const FighterDefinition& def, const FighterRuntime& fighter) {
     std::vector<JointWorldTransform> localTransforms = jointWorldTransforms(def.hsdAsset->skeleton, fighter.hsdPose);
-    const std::array<Fix, 16> modelMatrix = fighterModelMatrix(fighter);
+    const std::array<Fix, 16> modelMatrix = fighterModelMatrix(def, fighter);
     for (JointWorldTransform& transform : localTransforms) {
         transform.matrix = multiplyMatrix4(modelMatrix, transform.matrix);
         transform.translation = {transform.matrix[3], transform.matrix[7], transform.matrix[11]};
@@ -588,7 +652,11 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
         segmentYAtX(world.stage.segments[static_cast<size_t>(p1.groundSegment)], p1.position.x, p1.position.y);
     }
     p1.previousPosition = p1.position;
-    p1.shieldHealth = world.fighterDefs[static_cast<size_t>(fighterDefIndex)].shield.maxHealth;
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighterDefIndex)];
+    p1.shieldHealth = def.shield.maxHealth;
+    if (def.hsdAsset) {
+        p1.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
+    }
     return p1;
 }
 
@@ -685,23 +753,23 @@ static bool calculateHsdDesiredEcb(const FighterDefinition& def, FighterRuntime&
         ? fighter.hsdJointWorldPositions[1]
         : Vec3{fighter.position.x, fighter.position.y, 0};
     const Vec3 first = fighter.hsdJointWorldPositions[static_cast<size_t>(source.bones[0])];
-    Fix minX = first.x;
-    Fix maxX = first.x;
+    Fix minHorizontal = first.z;
+    Fix maxHorizontal = first.z;
     Fix minY = first.y;
     Fix maxY = first.y;
     for (size_t i = 1; i < source.bones.size(); ++i) {
         const Vec3 joint = fighter.hsdJointWorldPositions[static_cast<size_t>(source.bones[i])];
-        minX = std::min(minX, joint.x);
-        maxX = std::max(maxX, joint.x);
+        minHorizontal = std::min(minHorizontal, joint.z);
+        maxHorizontal = std::max(maxHorizontal, joint.z);
         minY = std::min(minY, joint.y);
         maxY = std::max(maxY, joint.y);
     }
 
-    const Fix halfWidth = fxMul(fxAbs(maxX - minX), fxFromFloat(0.5f));
+    const Fix halfWidth = fxMul(fxAbs(maxHorizontal - minHorizontal), fxFromFloat(0.5f));
     const Fix bottom = (fighter.grounded ? topN.y : minY) - fighter.position.y;
     const Fix top = maxY - fighter.position.y;
     const Fix sideY = source.multiplier + fxMul(bottom + top, fxFromFloat(0.5f));
-    const Fix centerX = topN.x - fighter.position.x;
+    const Fix centerX = fighter.facing * topN.z;
     out.points[0] = {centerX - halfWidth, sideY};
     out.points[1] = {centerX, top};
     out.points[2] = {centerX + halfWidth, sideY};
@@ -806,24 +874,39 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     if (target < 0) {
         return;
     }
-    if (blendFrames > 0 && !fighter.hsdPose.joints.empty()) {
+    const FighterState& targetState = def.states[static_cast<size_t>(target)];
+    int resolvedBlendFrames = blendFrames;
+    if (resolvedBlendFrames == kUseDefaultAnimationBlendFrames) {
+        resolvedBlendFrames = targetState.defaultAnimationBlendFrames;
+    } else if (resolvedBlendFrames == kDisableAnimationBlendFrames) {
+        resolvedBlendFrames = 0;
+    }
+    if (resolvedBlendFrames > 0 && !fighter.hsdPose.joints.empty()) {
         fighter.hsdBlendFromPose = fighter.hsdPose;
-        fighter.hsdBlendFrames = blendFrames;
+        fighter.hsdBlendFrames = resolvedBlendFrames;
+        fighter.hsdBlendElapsed = 0;
     } else {
         fighter.hsdBlendFromPose.joints.clear();
         fighter.hsdBlendFrames = 0;
+        fighter.hsdBlendElapsed = 0;
     }
     fighter.hsdTransN = {};
     fighter.previousHsdTransN = {};
     fighter.hsdTransNOffset = {};
     fighter.animationFrame = 0;
     fighter.animationRate = fx(1);
+    fighter.lastActionFrameExecuted = -1;
     fighter.state = target;
     fighter.lastStateChangeFrame = fighter.internalFrame;
-    fighter.interruptibleFrame = lagFrames;
+    fighter.interruptibleFrame = lagFrames > 0 ? lagFrames : targetState.initialInterruptibleFrame;
     fighter.stateAnimationLengthOverride = lagFrames > 0 ? lagFrames : 0;
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
+    if (def.hsdAsset) {
+        fighter.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
+    } else {
+        fighter.hsdModelPartAnimations.clear();
+    }
     const auto it = std::find_if(world.fighters.begin(), world.fighters.end(), [&](const FighterRuntime& item) {
         return &item == &fighter;
     });
@@ -898,26 +981,166 @@ enum class AerialAttackDirection {
     Low,
 };
 
+static float stickAngle(Vec2 stick) {
+    return std::atan2(fxToFloat(stick.y), std::abs(fxToFloat(stick.x)));
+}
+
+static bool cStickAerialAttackInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return (fxAbs(fighter.input.frames[1].cStick.x) < common.aerialAttackDeadzoneXDC &&
+            fxAbs(fighter.input.frames[0].cStick.x) >= common.aerialAttackDeadzoneXDC) ||
+           (fxAbs(fighter.input.frames[1].cStick.y) < common.aerialAttackDeadzoneXE0 &&
+            fxAbs(fighter.input.frames[0].cStick.y) >= common.aerialAttackDeadzoneXE0);
+}
+
 static AerialAttackDirection aerialAttackDirection(const FighterRuntime& fighter, const MeleeCommonData& common) {
-    const Fix x = fighter.input.frames[0].move.x;
-    const Fix y = fighter.input.frames[0].move.y;
+    const Vec2 stick = cStickAerialAttackInput(fighter, common) ? fighter.input.frames[0].cStick : fighter.input.frames[0].move;
+    const Fix x = stick.x;
+    const Fix y = stick.y;
     if (fxAbs(x) < common.aerialAttackDeadzoneXDC && fxAbs(y) < common.aerialAttackDeadzoneXE0) {
         return AerialAttackDirection::Neutral;
     }
-    const Fix verticalThreshold = fxMul(fxAbs(x), common.aerialAttackAngleTanX20);
-    if (y > 0 && y > verticalThreshold) {
+    const float angle = stickAngle(stick);
+    const float verticalAngle = fxToFloat(common.aerialAttackAngleTanX20);
+    if (angle > verticalAngle) {
         return AerialAttackDirection::High;
     }
-    if (y < 0 && -y > verticalThreshold) {
+    if (angle < -verticalAngle) {
         return AerialAttackDirection::Low;
     }
     return x * fighter.facing >= 0 ? AerialAttackDirection::Forward : AerialAttackDirection::Back;
 }
 
+static bool hasActionClip(const FighterDefinition& def, int actionIndex) {
+    return !def.hasHsdAsset || !def.hsdAsset || findClipByActionIndex(*def.hsdAsset, actionIndex) != nullptr;
+}
+
+static bool cStickSideSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return fxAbs(fighter.input.frames[1].cStick.x) < common.dashInputThresholdX3C &&
+           fxAbs(fighter.input.frames[0].cStick.x) >= common.dashInputThresholdX3C;
+}
+
+static bool sideSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common, int& facing, float& angle) {
+    if (fighter.input.justPressed(ButtonAttack) &&
+        fxAbs(fighter.input.frames[0].move.x) >= common.dashInputThresholdX3C &&
+        fighter.stickXTiltTimer < common.dashStickWindowX40)
+    {
+        facing = signOf(fighter.input.frames[0].move.x);
+        angle = stickAngle(fighter.input.frames[0].move);
+        return true;
+    }
+    if (cStickSideSmashInput(fighter, common)) {
+        facing = signOf(fighter.input.frames[0].cStick.x);
+        angle = stickAngle(fighter.input.frames[0].cStick);
+        return true;
+    }
+    return false;
+}
+
+static int sideSmashActionIndex(const FighterDefinition& def, const FighterRuntime& fighter, const MeleeCommonData& common) {
+    int facing = fighter.facing;
+    float angle = 0.0f;
+    if (!sideSmashInput(fighter, common, facing, angle)) {
+        return -1;
+    }
+    int selected = 62;
+    // These availability guards mirror Melee's ftData_80085FD4 checks, which test related action slots rather than the selected slot.
+    if (angle > fxToFloat(common.attackS4HiAngleXB8) && hasActionClip(def, 62)) {
+        selected = 60;
+    } else if (angle > fxToFloat(common.attackS4HiSAngleXBC) && hasActionClip(def, 63)) {
+        selected = 61;
+    } else if (angle < fxToFloat(common.attackS4LwAngleXC4) && hasActionClip(def, 67)) {
+        selected = 64;
+    } else if (angle < fxToFloat(common.attackS4LwSAngleXC0) && hasActionClip(def, 66)) {
+        selected = 63;
+    }
+    return hasActionClip(def, selected) ? selected : 62;
+}
+
+static bool sideTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common, float& angle) {
+    if (!fighter.input.justPressed(ButtonAttack) ||
+        fighter.input.frames[0].move.x * fighter.facing < common.attackS3StickThresholdX98)
+    {
+        return false;
+    }
+    angle = stickAngle(fighter.input.frames[0].move);
+    return std::abs(angle) < fxToFloat(common.aerialAttackAngleTanX20);
+}
+
+static int sideTiltActionIndex(const FighterDefinition& def, const FighterRuntime& fighter, const MeleeCommonData& common) {
+    float angle = 0.0f;
+    if (!sideTiltInput(fighter, common, angle)) {
+        return -1;
+    }
+    int selected = 55;
+    // These availability guards mirror Melee's ftData_80085FD4 checks, which test related action slots rather than the selected slot.
+    if (angle > fxToFloat(common.attackS3HiAngleX9C) && hasActionClip(def, 55)) {
+        selected = 53;
+    } else if (angle > fxToFloat(common.attackS3HiSAngleXA0) && hasActionClip(def, 56)) {
+        selected = 54;
+    } else if (angle < fxToFloat(common.attackS3LwAngleXA8) && hasActionClip(def, 59)) {
+        selected = 57;
+    } else if (angle < fxToFloat(common.attackS3LwSAngleXA4) && hasActionClip(def, 58)) {
+        selected = 56;
+    }
+    return hasActionClip(def, selected) ? selected : 55;
+}
+
+static bool upSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return (fighter.input.justPressed(ButtonAttack) &&
+            fighter.input.frames[0].move.y >= common.attackHi4StickThresholdYxCC &&
+            fighter.stickYTiltTimer < common.attackHi4StickWindowXD0) ||
+           (fighter.input.frames[1].cStick.y < common.attackHi4StickThresholdYxCC &&
+            fighter.input.frames[0].cStick.y >= common.attackHi4StickThresholdYxCC);
+}
+
+static bool downSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return (fighter.input.justPressed(ButtonAttack) &&
+            fighter.input.frames[0].move.y <= common.attackLw4StickThresholdYxD4 &&
+            fighter.stickYTiltTimer < common.attackLw4StickWindowXD8) ||
+           (fighter.input.frames[1].cStick.y > common.attackLw4StickThresholdYxD4 &&
+            fighter.input.frames[0].cStick.y <= common.attackLw4StickThresholdYxD4);
+}
+
+static bool upTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return fighter.input.justPressed(ButtonAttack) &&
+           fighter.input.frames[0].move.y >= common.attackHi3StickThresholdYxAC &&
+           stickAngle(fighter.input.frames[0].move) > fxToFloat(common.aerialAttackAngleTanX20);
+}
+
+static bool downTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return fighter.input.justPressed(ButtonAttack) &&
+           fighter.input.frames[0].move.y <= common.attackLw3StickThresholdYxB0 &&
+           stickAngle(fighter.input.frames[0].move) < -fxToFloat(common.aerialAttackAngleTanX20);
+}
+
+static bool ledgeStickActive(Vec2 stick, const MeleeCommonData& common) {
+    return fxAbs(stick.x) >= common.cliffOptionStickThresholdX494 ||
+           fxAbs(stick.y) >= common.cliffOptionStickThresholdX494;
+}
+
+static bool ledgeStickChoosesClimb(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    const Vec2 stick = fighter.input.frames[0].move;
+    const float angle = std::atan2(fxToFloat(stick.y), std::abs(fxToFloat(stick.x)));
+    const float cliffAngle = fxToFloat(common.aerialAttackAngleTanX20);
+    return angle > cliffAngle ||
+           (angle > -cliffAngle && stick.x * fighter.facing >= 0);
+}
+
+static bool isSideSmashCondition(InterruptCondition condition) {
+    return condition == InterruptCondition::AttackS4HiPressed ||
+           condition == InterruptCondition::AttackS4HiSPressed ||
+           condition == InterruptCondition::AttackS4Pressed ||
+           condition == InterruptCondition::AttackS4LwSPressed ||
+           condition == InterruptCondition::AttackS4LwPressed;
+}
+
 static bool conditionMet(const World& world, InterruptCondition condition, const FighterRuntime& fighter) {
-    const FighterProperties& attr = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties;
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const FighterProperties& attr = def.properties;
     const MeleeCommonData& common = attr.common;
     const Fix x = fighter.input.frames[0].move.x;
+    const bool aerialAttackInput = !fighter.grounded &&
+        (fighter.input.justPressed(ButtonAttack) || cStickAerialAttackInput(fighter, common));
     const bool aerialJumpInput =
         !fighter.grounded && fighter.jumpsUsed < attr.maxJumps &&
         (fighter.input.justPressed(ButtonJump) ||
@@ -949,20 +1172,52 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
             return fighter.grounded && fighter.input.frames[0].move.y > -common.squatReleaseThresholdX94;
         case InterruptCondition::AttackPressed:
             return fighter.input.justPressed(ButtonAttack);
+        case InterruptCondition::JabFollowupPressed:
+            return fighter.input.justPressed(ButtonAttack) && fighterCommandFlag(fighter, 2);
+        case InterruptCondition::AttackDashPressed:
+            return fighter.input.justPressed(ButtonAttack);
+        case InterruptCondition::AttackS4HiPressed:
+            return sideSmashActionIndex(def, fighter, common) == 60;
+        case InterruptCondition::AttackS4HiSPressed:
+            return sideSmashActionIndex(def, fighter, common) == 61;
+        case InterruptCondition::AttackS4Pressed:
+            return sideSmashActionIndex(def, fighter, common) == 62;
+        case InterruptCondition::AttackS4LwSPressed:
+            return sideSmashActionIndex(def, fighter, common) == 63;
+        case InterruptCondition::AttackS4LwPressed:
+            return sideSmashActionIndex(def, fighter, common) == 64;
+        case InterruptCondition::AttackHi4Pressed:
+            return upSmashInput(fighter, common);
+        case InterruptCondition::AttackLw4Pressed:
+            return downSmashInput(fighter, common);
+        case InterruptCondition::AttackS3HiPressed:
+            return sideTiltActionIndex(def, fighter, common) == 53;
+        case InterruptCondition::AttackS3HiSPressed:
+            return sideTiltActionIndex(def, fighter, common) == 54;
+        case InterruptCondition::AttackS3Pressed:
+            return sideTiltActionIndex(def, fighter, common) == 55;
+        case InterruptCondition::AttackS3LwSPressed:
+            return sideTiltActionIndex(def, fighter, common) == 56;
+        case InterruptCondition::AttackS3LwPressed:
+            return sideTiltActionIndex(def, fighter, common) == 57;
+        case InterruptCondition::AttackHi3Pressed:
+            return upTiltInput(fighter, common);
+        case InterruptCondition::AttackLw3Pressed:
+            return downTiltInput(fighter, common);
         case InterruptCondition::AerialAttackNPressed:
-            return !fighter.grounded && fighter.input.justPressed(ButtonAttack) &&
+            return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::Neutral;
         case InterruptCondition::AerialAttackFPressed:
-            return !fighter.grounded && fighter.input.justPressed(ButtonAttack) &&
+            return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::Forward;
         case InterruptCondition::AerialAttackBPressed:
-            return !fighter.grounded && fighter.input.justPressed(ButtonAttack) &&
+            return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::Back;
         case InterruptCondition::AerialAttackHiPressed:
-            return !fighter.grounded && fighter.input.justPressed(ButtonAttack) &&
+            return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::High;
         case InterruptCondition::AerialAttackLwPressed:
-            return !fighter.grounded && fighter.input.justPressed(ButtonAttack) &&
+            return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::Low;
         case InterruptCondition::DashInput:
             return x * fighter.facing >= common.dashInputThresholdX3C &&
@@ -1006,12 +1261,14 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                    fighter.stickYTiltTimer < common.spotDodgeStickWindowX318;
         case InterruptCondition::LedgeClimbInput:
             return fighter.grabbedLedge >= 0 &&
-                   (fighter.input.frames[0].move.y > common.cliffOptionStickThresholdX494 ||
-                    fighter.input.frames[0].move.x * fighter.facing > common.cliffOptionStickThresholdX494);
+                   fighter.ledgeActionReady &&
+                   ledgeStickActive(fighter.input.frames[0].move, common) &&
+                   ledgeStickChoosesClimb(fighter, common);
         case InterruptCondition::LedgeDropInput:
             return fighter.grabbedLedge >= 0 &&
-                   (fighter.input.frames[0].move.y < -common.cliffOptionStickThresholdX494 ||
-                    fighter.input.frames[0].move.x * fighter.facing < -common.cliffOptionStickThresholdX494);
+                   fighter.ledgeActionReady &&
+                   ledgeStickActive(fighter.input.frames[0].move, common) &&
+                   !ledgeStickChoosesClimb(fighter, common);
     }
     return false;
 }
@@ -1041,7 +1298,24 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "GuardSetOff") return 40;
     if (animation == "EscapeN") return 41;
     if (animation == "EscapeAir") return 44;
-    if (animation == "Jab") return 46;
+    if (animation == "Jab" || animation == "Attack11") return 46;
+    if (animation == "Attack12") return 47;
+    if (animation == "Attack13") return 48;
+    if (animation == "AttackDash") return 52;
+    if (animation == "AttackS3Hi") return 53;
+    if (animation == "AttackS3HiS") return 54;
+    if (animation == "AttackS3") return 55;
+    if (animation == "AttackS3LwS") return 56;
+    if (animation == "AttackS3Lw") return 57;
+    if (animation == "AttackHi3") return 58;
+    if (animation == "AttackLw3") return 59;
+    if (animation == "AttackS4Hi") return 60;
+    if (animation == "AttackS4HiS") return 61;
+    if (animation == "AttackS4") return 62;
+    if (animation == "AttackS4LwS") return 63;
+    if (animation == "AttackS4Lw") return 64;
+    if (animation == "AttackHi4") return 66;
+    if (animation == "AttackLw4") return 67;
     if (animation == "AirAttackN") return 68;
     if (animation == "AirAttackF") return 69;
     if (animation == "AirAttackB") return 70;
@@ -1112,9 +1386,20 @@ static AnimationPose blendedPose(const AnimationPose& from, const AnimationPose&
         out.translation.x = a.translation.x + fxMul(b.translation.x - a.translation.x, t);
         out.translation.y = a.translation.y + fxMul(b.translation.y - a.translation.y, t);
         out.translation.z = a.translation.z + fxMul(b.translation.z - a.translation.z, t);
-        out.rotation.x = blendAngle(a.rotation.x, b.rotation.x, t);
-        out.rotation.y = blendAngle(a.rotation.y, b.rotation.y, t);
-        out.rotation.z = blendAngle(a.rotation.z, b.rotation.z, t);
+        if (!a.useQuaternion && !b.useQuaternion &&
+            fxAbs(a.rotation.x - b.rotation.x) <= fxFromFloat(0.0001f) &&
+            fxAbs(a.rotation.y - b.rotation.y) <= fxFromFloat(0.0001f) &&
+            fxAbs(a.rotation.z - b.rotation.z) <= fxFromFloat(0.0001f))
+        {
+            out.rotation = b.rotation;
+            out.quaternion = {};
+            out.useQuaternion = false;
+        } else {
+            const Quaternion fromQuat = a.useQuaternion ? a.quaternion : eulerToQuaternion(a.rotation);
+            const Quaternion toQuat = b.useQuaternion ? b.quaternion : eulerToQuaternion(b.rotation);
+            out.quaternion = slerpQuaternion(fromQuat, toQuat, t);
+            out.useQuaternion = true;
+        }
         out.scale.x = a.scale.x + fxMul(b.scale.x - a.scale.x, t);
         out.scale.y = a.scale.y + fxMul(b.scale.y - a.scale.y, t);
         out.scale.z = a.scale.z + fxMul(b.scale.z - a.scale.z, t);
@@ -1153,6 +1438,30 @@ static void applyShieldPose(const FighterDefinition& def, const FighterState& st
     fighter.hsdPose = blendedPose(fighter.hsdPose, target, openingBlend);
 }
 
+static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntime& fighter) {
+    if (!def.hsdAsset || fighter.hsdModelPartAnimations.empty()) {
+        return;
+    }
+    const std::vector<HsdModelPartAnimationSet>& sets = def.hsdAsset->modelPartAnimations;
+    for (size_t partIndex = 0; partIndex < sets.size() && partIndex < fighter.hsdModelPartAnimations.size(); ++partIndex) {
+        const int animIndex = fighter.hsdModelPartAnimations[partIndex];
+        if (animIndex < 0 || static_cast<size_t>(animIndex) >= sets[partIndex].animations.size()) {
+            continue;
+        }
+        const AnimationClip& clip = sets[partIndex].animations[static_cast<size_t>(animIndex)];
+        AnimationPose partPose = evaluateClip(def.hsdAsset->skeleton, clip, 0);
+        for (const AnimationTrack& track : clip.tracks) {
+            const int joint = track.joint;
+            if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdPose.joints.size() ||
+                static_cast<size_t>(joint) >= partPose.joints.size())
+            {
+                continue;
+            }
+            fighter.hsdPose.joints[static_cast<size_t>(joint)] = partPose.joints[static_cast<size_t>(joint)];
+        }
+    }
+}
+
 static void extractTransNForModelPose(AnimationPose& pose) {
     if (pose.joints.size() > 1) {
         pose.joints[1].translation = {};
@@ -1178,10 +1487,62 @@ static void evaluateImportedHurtboxes(const FighterDefinition& def, FighterRunti
     }
 }
 
+static bool hsdRelativeBonePosition(const FighterRuntime& fighter, int joint, Vec3& out) {
+    if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdJointWorldPositions.size()) {
+        return false;
+    }
+    const Vec3 world = fighter.hsdJointWorldPositions[static_cast<size_t>(joint)];
+    out = {world.x - fighter.position.x, world.y - fighter.position.y, world.z};
+    return true;
+}
+
+static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntime& fighter) {
+    if (!def.hasHsdAsset || !def.hsdAsset || fighter.hsdJointWorldPositions.empty()) {
+        return;
+    }
+
+    // These aliases come from Melee's fighter/model lookup tables exported
+    // from Pl*.dat. The decomp resolves common parts through ftParts_GetBoneIndex
+    // before touching fp->parts[].joint; keep this as data-table plumbing, not
+    // a hand-authored anatomy guess.
+    const HsdFighterBoneTable& bones = def.hsdAsset->fighterBones;
+    Vec3 position{};
+    if (hsdRelativeBonePosition(fighter, 0, position)) {
+        fighter.bones[static_cast<size_t>(BoneId::Hip)].position = position;
+    }
+    if (hsdRelativeBonePosition(fighter, bones.head, position)) {
+        fighter.bones[static_cast<size_t>(BoneId::Head)].position = position;
+    } else if (hsdRelativeBonePosition(fighter, bones.topOfHead, position)) {
+        fighter.bones[static_cast<size_t>(BoneId::Head)].position = position;
+    }
+    if (hsdRelativeBonePosition(fighter, bones.leftArm, position)) {
+        fighter.bones[static_cast<size_t>(BoneId::HandL)].position = position;
+    }
+    if (hsdRelativeBonePosition(fighter, bones.itemHold, position) ||
+        hsdRelativeBonePosition(fighter, bones.rightArm, position))
+    {
+        fighter.bones[static_cast<size_t>(BoneId::HandR)].position = position;
+    }
+    if (hsdRelativeBonePosition(fighter, bones.leftFoot, position) ||
+        hsdRelativeBonePosition(fighter, bones.leftLeg, position))
+    {
+        fighter.bones[static_cast<size_t>(BoneId::FootL)].position = position;
+    }
+    if (hsdRelativeBonePosition(fighter, bones.rightFoot, position) ||
+        hsdRelativeBonePosition(fighter, bones.rightLeg, position))
+    {
+        fighter.bones[static_cast<size_t>(BoneId::FootR)].position = position;
+    }
+    if (hsdRelativeBonePosition(fighter, bones.shield, position)) {
+        fighter.bones[static_cast<size_t>(BoneId::Extra)].position = position;
+    }
+}
+
 static void evaluatePose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
     const AnimationClip* clip = clipForState(def, state);
     if (clip) {
         constexpr float kHalfPi = 1.57079632679f;
+        const AnimationPose previousVisiblePose = fighter.hsdPose;
         Fix frame = fighter.animationFrame;
         if (state.loopAnimation && clip->frameCount > 0) {
             const int loopFrames = std::max(1, static_cast<int>(std::round(fxToFloat(clip->frameCount))));
@@ -1191,7 +1552,9 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         }
         fighter.hsdPose = evaluateClip(def.hsdAsset->skeleton, *clip, frame);
         fighter.previousHsdTransN = fighter.hsdTransN;
-        fighter.hsdTransN = fighter.hsdPose.joints.size() > 1 ? fighter.hsdPose.joints[1].translation : Vec3{};
+        fighter.hsdTransN = fighter.hsdPose.joints.size() > 1 ?
+            scaledVec3(fighter.hsdPose.joints[1].translation, def.properties.modelScale) :
+            Vec3{};
         if (frameInState(fighter) <= 1) {
             fighter.hsdTransNOffset = {};
         } else {
@@ -1203,15 +1566,27 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         }
         extractTransNForModelPose(fighter.hsdPose);
         applyShieldPose(def, state, fighter);
+        applyModelPartAnimations(def, fighter);
         if (!fighter.hsdPose.joints.empty()) {
             const float facing = fighter.facing >= 0 ? 1.0f : -1.0f;
             fighter.hsdPose.joints[0].rotation.y = fxFromFloat(kHalfPi * facing);
+            fighter.hsdPose.joints[0].useQuaternion = false;
         }
         if (fighter.hsdBlendFrames > 0 &&
-            frameInState(fighter) < fighter.hsdBlendFrames &&
-            fighter.hsdBlendFromPose.joints.size() == fighter.hsdPose.joints.size()) {
-            const Fix t = fxDiv(fx(frameInState(fighter) + 1), fx(fighter.hsdBlendFrames));
-            fighter.hsdPose = blendedPose(fighter.hsdBlendFromPose, fighter.hsdPose, t);
+            previousVisiblePose.joints.size() == fighter.hsdPose.joints.size())
+        {
+            const Fix rate = fighter.animationRate > 0 ? fighter.animationRate : 0;
+            fighter.hsdBlendElapsed += rate;
+            if (fighter.hsdBlendElapsed >= fx(fighter.hsdBlendFrames)) {
+                fighter.hsdBlendFrames = 0;
+                fighter.hsdBlendElapsed = 0;
+            } else if (rate > 0) {
+                const Fix remaining = fx(fighter.hsdBlendFrames) - fighter.hsdBlendElapsed;
+                const Fix t = fxDiv(rate, rate + remaining);
+                fighter.hsdPose = blendedPose(previousVisiblePose, fighter.hsdPose, t);
+            } else {
+                fighter.hsdPose = previousVisiblePose;
+            }
         }
         fighter.hsdJointWorldTransforms = fighterHsdWorldTransforms(def, fighter);
         fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
@@ -1241,11 +1616,12 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
     fighter.bones[static_cast<size_t>(BoneId::Extra)].position = {0, fxFromFloat(1.7f), 0};
 
     Fix reach = fxFromFloat(0.65f);
-    if (state.name == "Jab" || state.name == "AirAttackN") {
+    if (state.name == "Attack11" || state.name == "AirAttackN") {
         reach = fxFromFloat(frame >= 3 && frame <= 8 ? 1.35f : 0.75f);
     }
     fighter.bones[static_cast<size_t>(BoneId::HandR)].position = {fxMul(reach, facing), fxFromFloat(1.75f), 0};
     fighter.bones[static_cast<size_t>(BoneId::HandL)].position = {fxMul(-fxFromFloat(0.65f), facing), fxFromFloat(1.75f), 0};
+    applyImportedBoneAliases(def, fighter);
 }
 
 static void applyAnimationGroundVelocity(const FighterState& state, FighterRuntime& fighter) {
@@ -1826,9 +2202,10 @@ static SweepContact findCeilingContact(const World& world, const FighterRuntime&
 }
 
 static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 attemptedDelta) {
+    const FighterState& state = currentState(world, fighter);
     int wallContactSide = 0;
     int wallContactSegment = -1;
-    if (attemptedDelta.x != 0) {
+    if (state.allowWallCollision && attemptedDelta.x != 0) {
         const SweepContact wall = findEcbWallContact(world, fighter, attemptedDelta.x > 0 ? 1 : -1);
         if (wall.hit) {
             fighter.position.x = wall.contact.x - wall.pointOffset.x;
@@ -1851,7 +2228,7 @@ static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 at
         }
     }
 
-    if (wallContactSide == 0) {
+    if (state.allowWallCollision && wallContactSide == 0) {
         const WallHugContact hug = findWallHugContact(world, fighter);
         wallContactSide = hug.side;
         wallContactSegment = hug.segment;
@@ -1862,7 +2239,7 @@ static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 at
         fighter.wallContactTimer = 0;
     }
 
-    if (!fighter.grounded && attemptedDelta.y > 0) {
+    if (state.allowCeilingCollision && !fighter.grounded && attemptedDelta.y > 0) {
         const Vec2 previousTop = fighter.previousPosition + fighter.previousEcb.points[1];
         const Vec2 currentTop = fighter.position + fighter.ecb.points[1];
         const SweepContact ceiling = findCeilingContact(world, fighter, previousTop, currentTop);
@@ -1880,13 +2257,16 @@ static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 at
 }
 
 static bool ledgeInSnapRange(const FighterRuntime& fighter, const FighterProperties& attr, const StageLedge& ledge) {
-    const Fix halfHeight = fxMul(attr.ledgeSnapHeight, fxFromFloat(0.5f));
+    const Fix ledgeSnapX = fxMul(attr.ledgeSnapX, attr.modelScale);
+    const Fix ledgeSnapY = fxMul(attr.ledgeSnapY, attr.modelScale);
+    const Fix ledgeSnapHeight = fxMul(attr.ledgeSnapHeight, attr.modelScale);
+    const Fix halfHeight = fxMul(ledgeSnapHeight, fxFromFloat(0.5f));
     const Fix prevX = fighter.previousPosition.x;
     const Fix curX = fighter.position.x;
     const Fix prevY = fighter.previousPosition.y;
     const Fix curY = fighter.position.y;
-    const Fix bottom = std::min(prevY, curY) + attr.ledgeSnapY - halfHeight;
-    const Fix top = std::max(prevY, curY) + attr.ledgeSnapY + halfHeight;
+    const Fix bottom = std::min(prevY, curY) + ledgeSnapY - halfHeight;
+    const Fix top = std::max(prevY, curY) + ledgeSnapY + halfHeight;
     const Vec2 currentBottom = fighter.position + fighter.ecb.points[3];
 
     if (ledge.position.y < bottom || ledge.position.y > top) {
@@ -1898,13 +2278,13 @@ static bool ledgeInSnapRange(const FighterRuntime& fighter, const FighterPropert
 
     if (ledge.direction < 0) {
         const Fix left = std::min(prevX, curX);
-        const Fix right = attr.ledgeSnapX +
+        const Fix right = ledgeSnapX +
             (prevX < curX ? curX + fighter.ecb.points[2].x : prevX + fighter.ecb.points[2].x);
         return ledge.position.x >= left && ledge.position.x <= right && currentBottom.x < ledge.position.x;
     }
 
     const Fix right = std::max(prevX, curX);
-    const Fix left = -attr.ledgeSnapX +
+    const Fix left = -ledgeSnapX +
         (prevX > curX ? curX + fighter.ecb.points[0].x : prevX + fighter.ecb.points[0].x);
     return ledge.position.x >= left && ledge.position.x <= right && currentBottom.x > ledge.position.x;
 }
@@ -1950,7 +2330,7 @@ static bool positionAtLedgeFromCurrentAnimation(const FighterDefinition& def, Fi
     if (pose.joints.size() <= 1) {
         return false;
     }
-    const Vec3 transN = pose.joints[1].translation;
+    const Vec3 transN = scaledVec3(pose.joints[1].translation, def.properties.modelScale);
     fighter.position.x = ledge.position.x + fighter.facing * transN.z;
     fighter.position.y = ledge.position.y + transN.y;
     return true;
@@ -1959,8 +2339,9 @@ static bool positionAtLedgeFromCurrentAnimation(const FighterDefinition& def, Fi
 static bool tryGrabLedge(World& world, size_t fighterIndex) {
     FighterRuntime& fighter = world.fighters[fighterIndex];
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const FighterState& state = currentState(world, fighter);
     const FighterProperties& attr = def.properties;
-    if (fighter.grounded || fighter.grabbedLedge >= 0 || fighter.ledgeCooldown > 0 ||
+    if (!state.allowLedgeGrab || fighter.grounded || fighter.grabbedLedge >= 0 || fighter.ledgeCooldown > 0 ||
         fighter.input.frames[0].move.y <= -attr.common.ledgeNoGrabDownThresholdX480)
     {
         return false;
@@ -2145,6 +2526,52 @@ static Vec3 shieldCenterWorld(const FighterDefinition& def, const FighterRuntime
     return boneWorld(fighter, BoneId::Hip, {0, fxFromFloat(0.2f), 0});
 }
 
+static Fix smashChargeDamageScale(const FighterRuntime& fighter) {
+    if (fighter.smashChargeState != 3 || fighter.smashChargeHoldFrames <= 0) {
+        return fx(1);
+    }
+    const Fix chargeRatio = std::clamp(fxDiv(fighter.smashChargeFrames, fighter.smashChargeHoldFrames), Fix{0}, fx(1));
+    return fx(1) + fxMul(fighter.smashChargeDamageMultiplier - fx(1), chargeRatio);
+}
+
+static void startSmashCharge(FighterRuntime& fighter, Fix holdFrames, Fix damageMultiplier) {
+    fighter.smashChargeState = 1;
+    fighter.smashChargeFrames = 0;
+    fighter.smashChargeHoldFrames = holdFrames;
+    fighter.smashChargeDamageMultiplier = damageMultiplier;
+    fighter.smashChargeStoredAnimationRate = fighter.animationRate;
+}
+
+static void releaseSmashCharge(FighterRuntime& fighter) {
+    fighter.smashChargeState = 3;
+    fighter.animationRate = fighter.smashChargeStoredAnimationRate;
+}
+
+static void processSmashCharge(FighterRuntime& fighter) {
+    if (fighter.smashChargeState == 1) {
+        if (fighter.input.down(ButtonAttack)) {
+            fighter.smashChargeState = 2;
+            fighter.smashChargeStoredAnimationRate = fighter.animationRate;
+            fighter.animationRate = 0;
+        } else {
+            fighter.smashChargeState = 0;
+        }
+        return;
+    }
+    if (fighter.smashChargeState != 2) {
+        return;
+    }
+    if (!fighter.input.down(ButtonAttack)) {
+        releaseSmashCharge(fighter);
+        return;
+    }
+    fighter.smashChargeFrames += fx(1);
+    if (fighter.smashChargeHoldFrames > 0 && fighter.smashChargeFrames >= fighter.smashChargeHoldFrames) {
+        fighter.smashChargeFrames = fighter.smashChargeHoldFrames;
+        releaseSmashCharge(fighter);
+    }
+}
+
 static void executeSubaction(const FighterDefinition& def, FighterRuntime& fighter, const Subaction& sub) {
     if (sub.type == SubactionType::ClearHitboxes) {
         fighter.activeHitboxes.clear();
@@ -2187,6 +2614,21 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         setFighterCommandFlag(fighter, sub.flag, sub.flagValue);
         return;
     }
+    if (sub.type == SubactionType::StartSmashCharge) {
+        startSmashCharge(fighter, sub.smashChargeHoldFrames, sub.smashChargeDamageMultiplier);
+        return;
+    }
+    if (sub.type == SubactionType::SetModelPartAnimation) {
+        if (sub.modelPartIndex >= 0) {
+            if (def.hsdAsset && fighter.hsdModelPartAnimations.size() != def.hsdAsset->modelPartAnimations.size()) {
+                fighter.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
+            }
+            if (sub.modelPartIndex < static_cast<int>(fighter.hsdModelPartAnimations.size())) {
+                fighter.hsdModelPartAnimations[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartAnimation;
+            }
+        }
+        return;
+    }
     if (sub.type == SubactionType::SetHurtboxState) {
         if (sub.hsdBone >= 0 && def.hsdAsset) {
             if (fighter.hurtboxStates.size() != def.hsdAsset->hurtboxes.size()) {
@@ -2211,6 +2653,7 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
     if (sub.type == SubactionType::CreateHitbox) {
         ActiveHitbox hitbox;
         hitbox.def = sub.hitbox;
+        hitbox.def.damage = fxMul(hitbox.def.damage, smashChargeDamageScale(fighter));
         auto existing = std::find_if(fighter.activeHitboxes.begin(), fighter.activeHitboxes.end(), [&](const ActiveHitbox& active) {
             return active.def.hitboxId == hitbox.def.hitboxId;
         });
@@ -2242,8 +2685,31 @@ static void executeActionFrame(const FighterDefinition& def, const FighterState&
     }
 }
 
+static int actionFrameForState(const FighterDefinition& def, const FighterState& state, const FighterRuntime& fighter) {
+    if (def.hasHsdAsset && def.hsdAsset && clipForState(def, state)) {
+        return std::max(0, static_cast<int>(fxToFloat(fighter.animationFrame)) + 1);
+    }
+    return frameInState(fighter);
+}
+
+static void executePendingActionFrames(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
+    const int targetFrame = actionFrameForState(def, state, fighter);
+    if (targetFrame == fighter.lastActionFrameExecuted) {
+        return;
+    }
+    if (targetFrame > fighter.lastActionFrameExecuted) {
+        for (int frame = std::max(0, fighter.lastActionFrameExecuted + 1); frame <= targetFrame; ++frame) {
+            executeActionFrame(def, state, fighter, frame);
+        }
+    } else {
+        executeActionFrame(def, state, fighter, targetFrame);
+    }
+    fighter.lastActionFrameExecuted = targetFrame;
+}
+
 static void processInterrupts(World& world, FighterRuntime& fighter) {
     const FighterState& state = currentState(world, fighter);
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     for (const InterruptRule& rule : state.interrupts) {
         if (!ruleActive(rule, fighter) || !groundAllowed(rule.ground, fighter)) {
             continue;
@@ -2251,6 +2717,13 @@ static void processInterrupts(World& world, FighterRuntime& fighter) {
         if (conditionMet(world, rule.condition, fighter)) {
             if (rule.condition == InterruptCondition::DashInput && signOf(fighter.input.frames[0].move.x) != fighter.facing) {
                 fighter.facing *= -1;
+            }
+            if (isSideSmashCondition(rule.condition)) {
+                int desiredFacing = fighter.facing;
+                float unusedAngle = 0.0f;
+                if (sideSmashInput(fighter, def.properties.common, desiredFacing, unusedAngle)) {
+                    fighter.facing = desiredFacing;
+                }
             }
             changeFighterState(world, fighter, rule.targetState, rule.lagFrames, rule.blendFrames);
             return;
@@ -2287,6 +2760,9 @@ static Fix shieldLightAmount(const FighterRuntime& fighter) {
 
 static Fix currentShieldRadius(const FighterDefinition& def, const FighterRuntime& fighter) {
     const MeleeCommonData& common = def.properties.common;
+    if (!def.properties.shieldSizeScalesWithHealth) {
+        return def.properties.initialShieldSize;
+    }
     const Fix healthRatio = def.shield.maxHealth > 0 ? fxDiv(fighter.shieldHealth, def.shield.maxHealth) : 0;
     const Fix light = shieldLightAmount(fighter);
     const Fix sizeScale = common.hardShieldSizeScaleX2D4 +
@@ -2679,7 +3155,8 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         }
 
         const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-        executeActionFrame(def, currentState(world, fighter), fighter, frameInState(fighter));
+        executePendingActionFrames(def, currentState(world, fighter), fighter);
+        processSmashCharge(fighter);
         processInterrupts(world, fighter);
         runStateFunctions(world, fighterIndex, currentState(world, fighter).onFrame);
         evaluatePose(def, currentState(world, fighter), fighter);
@@ -2717,6 +3194,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.stateAnimationLengthOverride = fighter.stateAnimationLengthOverride;
         item.animationFrame = fighter.animationFrame;
         item.animationRate = fighter.animationRate;
+        item.lastActionFrameExecuted = fighter.lastActionFrameExecuted;
         item.runAnimationVelocity = fighter.runAnimationVelocity;
         item.facing = fighter.facing;
         item.jumpsUsed = fighter.jumpsUsed;
@@ -2748,13 +3226,16 @@ WorldSnapshot saveWorld(const World& world) {
         item.platformDropTimer = fighter.platformDropTimer;
         item.grabbedLedge = fighter.grabbedLedge;
         item.ledgeCooldown = fighter.ledgeCooldown;
+        item.ledgeActionReady = fighter.ledgeActionReady;
         item.wallContactSide = fighter.wallContactSide;
         item.wallContactSegment = fighter.wallContactSegment;
         item.wallContactTimer = fighter.wallContactTimer;
         item.wallJumpsUsed = fighter.wallJumpsUsed;
         item.turnFramesToChangeDirection = fighter.turnFramesToChangeDirection;
         item.turnRunInitialFacing = fighter.turnRunInitialFacing;
+        item.turnFacingAfter = fighter.turnFacingAfter;
         item.turnHasTurned = fighter.turnHasTurned;
+        item.turnJustTurned = fighter.turnJustTurned;
         item.turnDashBuffered = fighter.turnDashBuffered;
         item.runDirectTimer = fighter.runDirectTimer;
         item.runBrakeTimer = fighter.runBrakeTimer;
@@ -2764,6 +3245,11 @@ WorldSnapshot saveWorld(const World& world) {
         item.guardReleaseQueued = fighter.guardReleaseQueued;
         item.guardPoseFrame = fighter.guardPoseFrame;
         item.guardPoseBlend = fighter.guardPoseBlend;
+        item.smashChargeState = fighter.smashChargeState;
+        item.smashChargeFrames = fighter.smashChargeFrames;
+        item.smashChargeHoldFrames = fighter.smashChargeHoldFrames;
+        item.smashChargeDamageMultiplier = fighter.smashChargeDamageMultiplier;
+        item.smashChargeStoredAnimationRate = fighter.smashChargeStoredAnimationRate;
         item.stickXTiltTimer = fighter.stickXTiltTimer;
         item.stickYTiltTimer = fighter.stickYTiltTimer;
         item.input = fighter.input;
@@ -2771,12 +3257,14 @@ WorldSnapshot saveWorld(const World& world) {
         item.hsdPose = fighter.hsdPose;
         item.hsdBlendFromPose = fighter.hsdBlendFromPose;
         item.hsdBlendFrames = fighter.hsdBlendFrames;
+        item.hsdBlendElapsed = fighter.hsdBlendElapsed;
         item.hsdTransN = fighter.hsdTransN;
         item.previousHsdTransN = fighter.previousHsdTransN;
         item.hsdTransNOffset = fighter.hsdTransNOffset;
         item.hsdJointWorldTransforms = fighter.hsdJointWorldTransforms;
         item.hsdJointWorldPositions = fighter.hsdJointWorldPositions;
         item.hsdHurtboxCapsules = fighter.hsdHurtboxCapsules;
+        item.hsdModelPartAnimations = fighter.hsdModelPartAnimations;
         item.hurtboxStates = fighter.hurtboxStates;
         item.activeHitboxes = fighter.activeHitboxes;
         item.fightersHitThisAction = fighter.fightersHitThisAction;
@@ -2798,6 +3286,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.stateAnimationLengthOverride = item.stateAnimationLengthOverride;
         fighter.animationFrame = item.animationFrame;
         fighter.animationRate = item.animationRate;
+        fighter.lastActionFrameExecuted = item.lastActionFrameExecuted;
         fighter.runAnimationVelocity = item.runAnimationVelocity;
         fighter.facing = item.facing;
         fighter.jumpsUsed = item.jumpsUsed;
@@ -2829,13 +3318,16 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.platformDropTimer = item.platformDropTimer;
         fighter.grabbedLedge = item.grabbedLedge;
         fighter.ledgeCooldown = item.ledgeCooldown;
+        fighter.ledgeActionReady = item.ledgeActionReady;
         fighter.wallContactSide = item.wallContactSide;
         fighter.wallContactSegment = item.wallContactSegment;
         fighter.wallContactTimer = item.wallContactTimer;
         fighter.wallJumpsUsed = item.wallJumpsUsed;
         fighter.turnFramesToChangeDirection = item.turnFramesToChangeDirection;
         fighter.turnRunInitialFacing = item.turnRunInitialFacing;
+        fighter.turnFacingAfter = item.turnFacingAfter;
         fighter.turnHasTurned = item.turnHasTurned;
+        fighter.turnJustTurned = item.turnJustTurned;
         fighter.turnDashBuffered = item.turnDashBuffered;
         fighter.runDirectTimer = item.runDirectTimer;
         fighter.runBrakeTimer = item.runBrakeTimer;
@@ -2845,6 +3337,11 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.guardReleaseQueued = item.guardReleaseQueued;
         fighter.guardPoseFrame = item.guardPoseFrame;
         fighter.guardPoseBlend = item.guardPoseBlend;
+        fighter.smashChargeState = item.smashChargeState;
+        fighter.smashChargeFrames = item.smashChargeFrames;
+        fighter.smashChargeHoldFrames = item.smashChargeHoldFrames;
+        fighter.smashChargeDamageMultiplier = item.smashChargeDamageMultiplier;
+        fighter.smashChargeStoredAnimationRate = item.smashChargeStoredAnimationRate;
         fighter.stickXTiltTimer = item.stickXTiltTimer;
         fighter.stickYTiltTimer = item.stickYTiltTimer;
         fighter.input = item.input;
@@ -2852,12 +3349,14 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.hsdPose = item.hsdPose;
         fighter.hsdBlendFromPose = item.hsdBlendFromPose;
         fighter.hsdBlendFrames = item.hsdBlendFrames;
+        fighter.hsdBlendElapsed = item.hsdBlendElapsed;
         fighter.hsdTransN = item.hsdTransN;
         fighter.previousHsdTransN = item.previousHsdTransN;
         fighter.hsdTransNOffset = item.hsdTransNOffset;
         fighter.hsdJointWorldTransforms = item.hsdJointWorldTransforms;
         fighter.hsdJointWorldPositions = item.hsdJointWorldPositions;
         fighter.hsdHurtboxCapsules = item.hsdHurtboxCapsules;
+        fighter.hsdModelPartAnimations = item.hsdModelPartAnimations;
         fighter.hurtboxStates = item.hurtboxStates;
         fighter.activeHitboxes = item.activeHitboxes;
         fighter.fightersHitThisAction = item.fightersHitThisAction;
