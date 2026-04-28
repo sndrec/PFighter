@@ -74,6 +74,7 @@ struct FighterRuntime {
     int lastActionFrameExecuted = -1;
     Fix runAnimationVelocity = 0;
     int facing = 1;
+    int hsdPoseFacing = 1;
     int jumpsUsed = 0;
     bool grounded = true;
     Fix percent = 0;
@@ -161,6 +162,7 @@ struct FighterSnapshot {
     int lastActionFrameExecuted = -1;
     Fix runAnimationVelocity = 0;
     int facing = 1;
+    int hsdPoseFacing = 1;
     int jumpsUsed = 0;
     bool grounded = true;
     Fix percent = 0;

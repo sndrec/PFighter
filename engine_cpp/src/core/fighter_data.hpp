@@ -127,6 +127,7 @@ struct MeleeCommonData {
     int platformDropStickWindowX468 = 6;
     Fix platformDropInitialVelocityX46C = -fxFromFloat(0.5f);
     int platformDropAnimationFramesX470 = 2;
+    Fix teeterWalkInputThresholdX474 = fxFromFloat(0.5f);
     Fix teeterForwardDistanceX478 = fxFromFloat(1.33f);
     Fix teeterBackwardDistanceX47C = fxFromFloat(0.66f);
     Fix ledgeNoGrabDownThresholdX480 = fxFromFloat(0.66f);
@@ -346,6 +347,8 @@ enum class InterruptCondition : uint8_t {
     DashInput,
     ReverseDashInput,
     RunInput,
+    RunJumpPressed,
+    TeeterWalkInput,
     HorizontalWalkSlow,
     HorizontalWalkMiddle,
     HorizontalWalkFast,
@@ -357,7 +360,10 @@ enum class InterruptCondition : uint8_t {
     ShieldReflectInput,
     ShieldPressed,
     ShieldHeld,
+    ShieldJumpPressed,
     SpotDodgeInput,
+    RollForwardInput,
+    RollBackwardInput,
     LedgeClimbInput,
     LedgeDropInput,
 };
@@ -381,6 +387,7 @@ struct FighterState {
     bool useAnimPhysics = false;
     bool allowSlideoff = true;
     bool allowLedgeGrab = true;
+    bool allowBackwardsLedgeGrab = false;
     bool allowWallCollision = true;
     bool allowCeilingCollision = true;
     bool loopAnimation = false;

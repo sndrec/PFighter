@@ -165,7 +165,7 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     using FileStream stream = File.Create(outputPath);
     using BinaryWriter writer = new(stream, Encoding.UTF8);
     writer.Write(Encoding.ASCII.GetBytes("PFCM"));
-    writer.Write(5);
+    writer.Write(6);
 
     writer.Write(F(0x08));
     writer.Write(F(0x0C));
@@ -246,6 +246,7 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     writer.Write(R(0x468));
     writer.Write(F(0x46C));
     writer.Write(R(0x470));
+    writer.Write(F(0x474));
     writer.Write(F(0x478));
     writer.Write(F(0x47C));
     writer.Write(F(0x480));
@@ -422,33 +423,55 @@ static int MeleeCommandByteSize(byte code)
     return action?.ByteSize ?? 4;
 }
 
-static List<(byte Code, byte[] Bytes)> ReadActionCommands(SBM_FighterSubactionData? subaction)
+static List<(byte Code, byte[] Bytes)> ReadActionCommandsFromStruct(HSDStruct data, HashSet<HSDStruct> callStack)
 {
     List<(byte Code, byte[] Bytes)> commands = new();
-    if (subaction is null)
+    if (!callStack.Add(data))
     {
         return commands;
     }
 
-    byte[] data = subaction._s.GetData();
+    byte[] bytes = data.GetData();
     int offset = 0;
-    while (offset < data.Length)
+    while (offset < bytes.Length)
     {
-        byte code = (byte)(data[offset] >> 2);
+        byte code = (byte)(bytes[offset] >> 2);
         int byteSize = MeleeCommandByteSize(code);
-        if (byteSize <= 0 || offset + byteSize > data.Length)
+        if (byteSize <= 0 || offset + byteSize > bytes.Length)
         {
             break;
         }
-        byte[] bytes = data.Skip(offset).Take(byteSize).ToArray();
-        commands.Add((code, bytes));
+
+        byte[] commandBytes = bytes.Skip(offset).Take(byteSize).ToArray();
+        int nextOffset = offset + byteSize;
+        if (code == 0x05 || code == 0x07)
+        {
+            if (data.References.TryGetValue(nextOffset - 4, out HSDStruct? target))
+            {
+                commands.AddRange(ReadActionCommandsFromStruct(target, callStack));
+            }
+            if (code == 0x07)
+            {
+                break;
+            }
+            offset = nextOffset;
+            continue;
+        }
+
+        commands.Add((code, commandBytes));
         offset += byteSize;
         if (code == 0)
         {
             break;
         }
     }
+    callStack.Remove(data);
     return commands;
+}
+
+static List<(byte Code, byte[] Bytes)> ReadActionCommands(SBM_FighterSubactionData? subaction)
+{
+    return subaction is null ? new() : ReadActionCommandsFromStruct(subaction._s, new HashSet<HSDStruct>());
 }
 
 static void WriteActionScriptBinary(BinaryWriter writer, SBM_FighterAction action, int actionIndex, int[] commonBoneLookup)

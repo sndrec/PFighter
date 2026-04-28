@@ -282,9 +282,6 @@ static void processDash(World& world, FighterRuntime& fighter) {
         changeFighterState(world, fighter, "Run");
         return;
     }
-    if (fighterCommandFlag(fighter, 0)) {
-        fighter.groundVelocity -= fxMul(fxMul(fighter.groundVelocity, attr.common.dashDecayX54), groundFrictionMultiplier(world, fighter));
-    }
     Fix accel = fxMul(inputX, attr.dashRunAccelerationA);
     accel += inputX > 0 ? attr.dashRunAccelerationB : -attr.dashRunAccelerationB;
     const Fix target = fxMul(inputX, attr.dashRunTerminalVelocity);
@@ -332,6 +329,7 @@ static void processRun(World& world, FighterRuntime& fighter) {
     if (fxAbs(inputX) < attr.common.runInputThresholdX58) {
         fighter.runAnimationVelocity = 0;
         updateRunAnimationRate(world, fighter);
+        applyGroundFriction(fighter, fxMul(attr.grFriction, attr.common.groundFrictionScaleX60));
         return;
     }
     Fix accel = fxMul(inputX, attr.dashRunAccelerationA);
@@ -562,6 +560,11 @@ static void processPassiveWallJump(World& world, FighterRuntime& fighter) {
 
 static void processEscapeAir(World& world, FighterRuntime& fighter) {
     FighterProperties& attr = props(world, fighter);
+    if (fighterCommandFlag(fighter, 0)) {
+        processAirborne(world, fighter);
+        fastfallCheck(world, fighter);
+        return;
+    }
     fighter.fighterVelocity.x = fxMul(fighter.fighterVelocity.x, attr.common.escapeAirDecayX33C);
     fighter.fighterVelocity.y = fxMul(fighter.fighterVelocity.y, attr.common.escapeAirDecayX33C);
 }

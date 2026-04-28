@@ -151,7 +151,7 @@ static Subaction createHitbox(int id, BoneId bone, Vec3 offset, Fix radius, Fix 
 
 static void assignMeleeActionIndices(FighterDefinition& fighter) {
     const std::unordered_map<std::string, int> actionByAnimation = {
-        {"Wait", 6},
+        {"Wait", 2},
         {"WalkSlow", 7},
         {"WalkMiddle", 8},
         {"WalkFast", 9},
@@ -271,7 +271,7 @@ FighterDefinition makeDebugRook() {
         interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
         interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
         interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::TeeterWalkInput, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
     };
 
@@ -333,14 +333,14 @@ FighterDefinition makeDebugRook() {
     dashState.animation = "Dash";
     dashState.animationLengthFrames = fighter.properties.common.dashLateInterruptWindowX4C;
     dashState.onEnter = {call("common_enter"), call("enter_dash")};
-    dashState.onFrame = {call("process_grounded"), call("process_dash")};
+    dashState.onFrame = {call("process_dash")};
     dashState.onAirborne = {call("regular_airborne")};
     dashState.action = {
         wait(8),
         setFlag(0, true),
     };
     dashState.interrupts = {
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
         interrupt("Run", InterruptCondition::RunInput, GroundRequirement::OnlyGrounded),
         timedInterrupt("Turn", InterruptCondition::ReverseDashInput, GroundRequirement::OnlyGrounded, fighter.properties.common.dashEarlyInterruptWindowX44 + 1),
@@ -355,10 +355,10 @@ FighterDefinition makeDebugRook() {
     runState.animationLengthFrames = 60;
     runState.loopAnimation = true;
     runState.onEnter = {call("common_enter"), call("enter_run")};
-    runState.onFrame = {call("process_grounded"), call("process_run")};
+    runState.onFrame = {call("process_run")};
     runState.onAirborne = {call("regular_airborne")};
     runState.interrupts = {
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
         interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
         interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
@@ -371,9 +371,9 @@ FighterDefinition makeDebugRook() {
     runDirect.name = "RunDirect";
     runDirect.animation = "Run";
     runDirect.onEnter = {call("common_enter"), call("enter_run_direct")};
-    runDirect.onFrame = {call("process_grounded"), call("process_run_direct")};
+    runDirect.onFrame = {call("process_run_direct")};
     runDirect.interrupts = {
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
         interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
         interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
@@ -389,8 +389,7 @@ FighterDefinition makeDebugRook() {
     runBrake.onAirborne = {call("teeter_or_airborne")};
     runBrake.onAnimationFinishedState = "Wait";
     runBrake.interrupts = {
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
     };
 
@@ -416,11 +415,10 @@ FighterDefinition makeDebugRook() {
     turnRun.animation = "TurnRun";
     turnRun.animationLengthFrames = 16;
     turnRun.onEnter = {call("common_enter"), call("enter_turn_run")};
-    turnRun.onFrame = {call("process_grounded"), call("process_turn_run")};
+    turnRun.onFrame = {call("process_turn_run")};
     turnRun.onAnimationFinishedState = "";
     turnRun.interrupts = {
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
     };
 
@@ -698,8 +696,6 @@ FighterDefinition makeDebugRook() {
     escapeAir.animation = "EscapeAir";
     escapeAir.animationLengthFrames = 49;
     escapeAir.allowLedgeGrab = false;
-    escapeAir.allowWallCollision = false;
-    escapeAir.allowCeilingCollision = false;
     escapeAir.onEnter = {call("common_enter"), call("enter_escape_air")};
     escapeAir.onFrame = {call("process_escape_air")};
     escapeAir.onLanding = {call("escape_air_landing")};
@@ -749,6 +745,13 @@ FighterDefinition makeDebugRook() {
     ottottoWait.loopAnimation = true;
     ottottoWait.onAnimationFinishedState = "";
 
+    const std::vector<InterruptRule> guardInterrupts = {
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeF", InterruptCondition::RollForwardInput, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeB", InterruptCondition::RollBackwardInput, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::ShieldJumpPressed, GroundRequirement::OnlyGrounded),
+    };
+
     FighterState guardOn;
     guardOn.name = "GuardOn";
     guardOn.animation = "GuardOn";
@@ -757,9 +760,7 @@ FighterDefinition makeDebugRook() {
     guardOn.onFrame = {call("process_guard_on")};
     guardOn.onAirborne = {call("regular_airborne")};
     guardOn.onAnimationFinishedState = "Guard";
-    guardOn.interrupts = {
-        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
-    };
+    guardOn.interrupts = guardInterrupts;
 
     FighterState guardReflect;
     guardReflect.name = "GuardReflect";
@@ -769,9 +770,7 @@ FighterDefinition makeDebugRook() {
     guardReflect.onFrame = {call("process_guard_reflect")};
     guardReflect.onAirborne = {call("regular_airborne")};
     guardReflect.onAnimationFinishedState = "Guard";
-    guardReflect.interrupts = {
-        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
-    };
+    guardReflect.interrupts = guardInterrupts;
 
     FighterState guard;
     guard.name = "Guard";
@@ -781,9 +780,7 @@ FighterDefinition makeDebugRook() {
     guard.onEnter = {call("common_enter")};
     guard.onFrame = {call("process_guard")};
     guard.onAirborne = {call("regular_airborne")};
-    guard.interrupts = {
-        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
-    };
+    guard.interrupts = guardInterrupts;
 
     FighterState guardOff;
     guardOff.name = "GuardOff";
@@ -801,9 +798,6 @@ FighterDefinition makeDebugRook() {
     guardSetoff.onEnter = {call("common_enter")};
     guardSetoff.onFrame = {call("process_guard_setoff")};
     guardSetoff.onAirborne = {call("regular_airborne")};
-    guardSetoff.interrupts = {
-        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
-    };
 
     FighterState escapeN;
     escapeN.name = "EscapeN";
@@ -819,6 +813,16 @@ FighterDefinition makeDebugRook() {
         wait(14),
         setHurtboxState(-1, HurtboxState::Normal),
     };
+
+    FighterState escapeF = escapeN;
+    escapeF.name = "EscapeF";
+    escapeF.animation = "EscapeF";
+    escapeF.useAnimPhysics = true;
+    escapeF.action.clear();
+
+    FighterState escapeB = escapeF;
+    escapeB.name = "EscapeB";
+    escapeB.animation = "EscapeB";
 
     FighterState shieldBreakFly;
     shieldBreakFly.name = "ShieldBreakFly";
@@ -941,7 +945,7 @@ FighterDefinition makeDebugRook() {
 
     fighter.states = {
         waitState, walkSlow, walkMiddle, walkFast, dashState, runState, runDirect, runBrake, turnState, turnRun,
-        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
+        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, escapeF, escapeB, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
         cliffClimb, cliffEscape, cliffAttack, cliffDrop, cliffJump, cliffJumpAir,
         attack11, attack12, attack13, attackDash,
         attackS3Hi, attackS3HiS, attackS3, attackS3LwS, attackS3Lw, attackHi3, attackLw3,

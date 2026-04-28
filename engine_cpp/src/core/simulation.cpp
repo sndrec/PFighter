@@ -9,6 +9,7 @@
 #include <cstring>
 #include <fstream>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
@@ -181,7 +182,7 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     }
     reader.skip(4);
     const int version = reader.readI32();
-    if (version != 1 && version != 2 && version != 3 && version != 4 && version != 5) {
+    if (version != 6) {
         throw std::runtime_error("unsupported Melee common data version");
     }
 
@@ -265,6 +266,7 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.platformDropStickWindowX468 = reader.readI32();
     common.platformDropInitialVelocityX46C = readCommonFix(reader);
     common.platformDropAnimationFramesX470 = reader.readI32();
+    common.teeterWalkInputThresholdX474 = readCommonFix(reader);
     common.teeterForwardDistanceX478 = readCommonFix(reader);
     common.teeterBackwardDistanceX47C = readCommonFix(reader);
     common.ledgeNoGrabDownThresholdX480 = readCommonFix(reader);
@@ -277,35 +279,27 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.wallJumpStickWindowX770 = reader.readI32();
     common.wallJumpStartupX774 = reader.readI32();
     common.passiveWallVelYBaseX778 = readCommonFix(reader);
-    if (version >= 2) {
-        common.aerialAttackAngleTanX20 = readCommonFix(reader);
-        common.aerialAttackDeadzoneXDC = readCommonFix(reader);
-        common.aerialAttackDeadzoneXE0 = readCommonFix(reader);
-    }
-    if (version >= 3) {
-        common.shieldStickSmoothingX44C = readCommonFix(reader);
-    }
-    if (version >= 4) {
-        common.attackS3StickThresholdX98 = readCommonFix(reader);
-        common.attackS3HiAngleX9C = readCommonFix(reader);
-        common.attackS3HiSAngleXA0 = readCommonFix(reader);
-        common.attackS3LwSAngleXA4 = readCommonFix(reader);
-        common.attackS3LwAngleXA8 = readCommonFix(reader);
-        common.attackHi3StickThresholdYxAC = readCommonFix(reader);
-        common.attackLw3StickThresholdYxB0 = readCommonFix(reader);
-        common.attackS4HiAngleXB8 = readCommonFix(reader);
-        common.attackS4HiSAngleXBC = readCommonFix(reader);
-        common.attackS4LwSAngleXC0 = readCommonFix(reader);
-        common.attackS4LwAngleXC4 = readCommonFix(reader);
-        common.attackHi4StickThresholdYxCC = readCommonFix(reader);
-        common.attackHi4StickWindowXD0 = reader.readI32();
-        common.attackLw4StickThresholdYxD4 = readCommonFix(reader);
-        common.attackLw4StickWindowXD8 = reader.readI32();
-    }
-    if (version >= 5) {
-        common.lCancelInputWindowXE4 = reader.readI32();
-        common.lCancelLandingLagDivisorXE8 = readCommonFix(reader);
-    }
+    common.aerialAttackAngleTanX20 = readCommonFix(reader);
+    common.aerialAttackDeadzoneXDC = readCommonFix(reader);
+    common.aerialAttackDeadzoneXE0 = readCommonFix(reader);
+    common.shieldStickSmoothingX44C = readCommonFix(reader);
+    common.attackS3StickThresholdX98 = readCommonFix(reader);
+    common.attackS3HiAngleX9C = readCommonFix(reader);
+    common.attackS3HiSAngleXA0 = readCommonFix(reader);
+    common.attackS3LwSAngleXA4 = readCommonFix(reader);
+    common.attackS3LwAngleXA8 = readCommonFix(reader);
+    common.attackHi3StickThresholdYxAC = readCommonFix(reader);
+    common.attackLw3StickThresholdYxB0 = readCommonFix(reader);
+    common.attackS4HiAngleXB8 = readCommonFix(reader);
+    common.attackS4HiSAngleXBC = readCommonFix(reader);
+    common.attackS4LwSAngleXC0 = readCommonFix(reader);
+    common.attackS4LwAngleXC4 = readCommonFix(reader);
+    common.attackHi4StickThresholdYxCC = readCommonFix(reader);
+    common.attackHi4StickWindowXD0 = reader.readI32();
+    common.attackLw4StickThresholdYxD4 = readCommonFix(reader);
+    common.attackLw4StickWindowXD8 = reader.readI32();
+    common.lCancelInputWindowXE4 = reader.readI32();
+    common.lCancelLandingLagDivisorXE8 = readCommonFix(reader);
     return common;
 }
 
@@ -647,6 +641,7 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     p1.position = position;
     p1.previousPosition = p1.position;
     p1.facing = facing;
+    p1.hsdPoseFacing = facing;
     p1.groundSegment = mainFloorSegmentIndex(world.stage);
     if (p1.groundSegment >= 0) {
         segmentYAtX(world.stage.segments[static_cast<size_t>(p1.groundSegment)], p1.position.x, p1.position.y);
@@ -896,6 +891,7 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.animationFrame = 0;
     fighter.animationRate = fx(1);
     fighter.lastActionFrameExecuted = -1;
+    fighter.hsdPoseFacing = fighter.facing;
     fighter.state = target;
     fighter.lastStateChangeFrame = fighter.internalFrame;
     fighter.interruptibleFrame = lagFrames > 0 ? lagFrames : targetState.initialInterruptibleFrame;
@@ -1151,6 +1147,10 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
             return fighter.input.justPressed(ButtonJump) ||
                    (fighter.input.frames[0].move.y >= common.tapJumpThresholdX70 &&
                     fighter.stickYTiltTimer < common.tapJumpWindowX74);
+        case InterruptCondition::RunJumpPressed:
+            return fighter.input.justPressed(ButtonJump) ||
+                   (fighter.input.frames[0].move.y >= common.aerialJumpStickThresholdX80 &&
+                    fighter.stickYTiltTimer < common.tapJumpWindowX74);
         case InterruptCondition::AerialJumpForwardPressed:
             return aerialJumpInput && x * fighter.facing > -common.jumpBackwardThresholdX78;
         case InterruptCondition::AerialJumpBackwardPressed:
@@ -1227,6 +1227,9 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                    fighter.stickXTiltTimer < common.dashStickWindowX40;
         case InterruptCondition::RunInput:
             return x * fighter.facing >= common.runInputThresholdX58 && fighterCommandFlag(fighter, 0);
+        case InterruptCondition::TeeterWalkInput:
+            return x * fighter.facing >= common.teeterWalkInputThresholdX474 &&
+                   x * fighter.facing >= common.walkInputThresholdX24;
         case InterruptCondition::HorizontalWalkSlow:
             return x * fighter.facing >= common.walkInputThresholdX24 &&
                    fxAbs(fighter.groundVelocity) < fxMul(common.walkMiddleThresholdX28, attr.walkMaxVel);
@@ -1255,10 +1258,31 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
             return fighter.input.justPressed(ButtonShield);
         case InterruptCondition::ShieldHeld:
             return fighter.grounded && fighter.shieldHealth > 0 && fighter.input.down(ButtonShield);
+        case InterruptCondition::ShieldJumpPressed:
+            return fighter.grounded &&
+                   (fighter.input.justPressed(ButtonJump) ||
+                    (fighter.input.frames[0].move.y >= common.tapJumpThresholdX70 &&
+                     fighter.stickYTiltTimer < common.tapJumpWindowX74) ||
+                    fighter.input.frames[0].cStick.y >= common.tapJumpThresholdX70);
         case InterruptCondition::SpotDodgeInput:
             return fighter.grounded && fighter.input.down(ButtonShield) &&
-                   fighter.input.frames[0].move.y <= common.spotDodgeStickThresholdX314 &&
-                   fighter.stickYTiltTimer < common.spotDodgeStickWindowX318;
+                   ((fighter.input.frames[0].move.y <= common.spotDodgeStickThresholdX314 &&
+                     fighter.stickYTiltTimer < common.spotDodgeStickWindowX318) ||
+                    fighter.input.frames[0].cStick.y <= common.spotDodgeStickThresholdX314);
+        case InterruptCondition::RollForwardInput:
+            return fighter.grounded && fighter.input.down(ButtonShield) &&
+                   ((fxAbs(x) >= common.rollStickThresholdX31C &&
+                     fighter.stickXTiltTimer < common.rollStickWindowX320 &&
+                     x * fighter.facing >= 0) ||
+                    (fxAbs(fighter.input.frames[0].cStick.x) >= common.rollStickThresholdX31C &&
+                     fighter.input.frames[0].cStick.x * fighter.facing >= 0));
+        case InterruptCondition::RollBackwardInput:
+            return fighter.grounded && fighter.input.down(ButtonShield) &&
+                   ((fxAbs(x) >= common.rollStickThresholdX31C &&
+                     fighter.stickXTiltTimer < common.rollStickWindowX320 &&
+                     x * fighter.facing < 0) ||
+                    (fxAbs(fighter.input.frames[0].cStick.x) >= common.rollStickThresholdX31C &&
+                     fighter.input.frames[0].cStick.x * fighter.facing < 0));
         case InterruptCondition::LedgeClimbInput:
             return fighter.grabbedLedge >= 0 &&
                    fighter.ledgeActionReady &&
@@ -1274,7 +1298,7 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
 }
 
 static int fallbackActionIndex(const std::string& animation) {
-    if (animation == "Wait") return 6;
+    if (animation == "Wait") return 2;
     if (animation == "WalkSlow") return 7;
     if (animation == "WalkMiddle") return 8;
     if (animation == "WalkFast") return 9;
@@ -1297,6 +1321,8 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "GuardOff") return 39;
     if (animation == "GuardSetOff") return 40;
     if (animation == "EscapeN") return 41;
+    if (animation == "EscapeF") return 42;
+    if (animation == "EscapeB") return 43;
     if (animation == "EscapeAir") return 44;
     if (animation == "Jab" || animation == "Attack11") return 46;
     if (animation == "Attack12") return 47;
@@ -1438,6 +1464,20 @@ static void applyShieldPose(const FighterDefinition& def, const FighterState& st
     fighter.hsdPose = blendedPose(fighter.hsdPose, target, openingBlend);
 }
 
+static void applyAnimationChannel(JointPose& pose, AnimationChannel channel, Fix value) {
+    switch (channel) {
+    case AnimationChannel::TranslateX: pose.translation.x = value; break;
+    case AnimationChannel::TranslateY: pose.translation.y = value; break;
+    case AnimationChannel::TranslateZ: pose.translation.z = value; break;
+    case AnimationChannel::RotateX: pose.rotation.x = value; pose.useQuaternion = false; break;
+    case AnimationChannel::RotateY: pose.rotation.y = value; pose.useQuaternion = false; break;
+    case AnimationChannel::RotateZ: pose.rotation.z = value; pose.useQuaternion = false; break;
+    case AnimationChannel::ScaleX: pose.scale.x = value; break;
+    case AnimationChannel::ScaleY: pose.scale.y = value; break;
+    case AnimationChannel::ScaleZ: pose.scale.z = value; break;
+    }
+}
+
 static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntime& fighter) {
     if (!def.hsdAsset || fighter.hsdModelPartAnimations.empty()) {
         return;
@@ -1449,17 +1489,23 @@ static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntim
             continue;
         }
         const AnimationClip& clip = sets[partIndex].animations[static_cast<size_t>(animIndex)];
-        AnimationPose partPose = evaluateClip(def.hsdAsset->skeleton, clip, 0);
         for (const AnimationTrack& track : clip.tracks) {
             const int joint = track.joint;
-            if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdPose.joints.size() ||
-                static_cast<size_t>(joint) >= partPose.joints.size())
-            {
+            if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdPose.joints.size()) {
                 continue;
             }
-            fighter.hsdPose.joints[static_cast<size_t>(joint)] = partPose.joints[static_cast<size_t>(joint)];
+            applyAnimationChannel(
+                fighter.hsdPose.joints[static_cast<size_t>(joint)],
+                track.channel,
+                sampleTrack(track, 0));
         }
     }
+}
+
+static bool clipAnimatesTopNYRotation(const AnimationClip& clip) {
+    return std::any_of(clip.tracks.begin(), clip.tracks.end(), [](const AnimationTrack& track) {
+        return track.joint == 0 && track.channel == AnimationChannel::RotateY && !track.keys.empty();
+    });
 }
 
 static void extractTransNForModelPose(AnimationPose& pose) {
@@ -1567,8 +1613,8 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         extractTransNForModelPose(fighter.hsdPose);
         applyShieldPose(def, state, fighter);
         applyModelPartAnimations(def, fighter);
-        if (!fighter.hsdPose.joints.empty()) {
-            const float facing = fighter.facing >= 0 ? 1.0f : -1.0f;
+        if (!fighter.hsdPose.joints.empty() && !clipAnimatesTopNYRotation(*clip)) {
+            const float facing = fighter.hsdPoseFacing >= 0 ? 1.0f : -1.0f;
             fighter.hsdPose.joints[0].rotation.y = fxFromFloat(kHalfPi * facing);
             fighter.hsdPose.joints[0].useQuaternion = false;
         }
@@ -1659,6 +1705,21 @@ static bool segmentYAtX(const StageSegment& segment, Fix x, Fix& y) {
     }
     const Fix t = fxDiv(x - segment.start.x, dx);
     y = segment.start.y + fxMul(segment.end.y - segment.start.y, t);
+    return true;
+}
+
+static bool segmentXAtY(const StageSegment& segment, Fix y, Fix& x) {
+    const Fix minY = std::min(segment.start.y, segment.end.y);
+    const Fix maxY = std::max(segment.start.y, segment.end.y);
+    if (y < minY || y > maxY) {
+        return false;
+    }
+    const Fix dy = segment.end.y - segment.start.y;
+    if (dy == 0) {
+        return false;
+    }
+    const Fix t = fxDiv(y - segment.start.y, dy);
+    x = segment.start.x + fxMul(segment.end.x - segment.start.x, t);
     return true;
 }
 
@@ -1851,114 +1912,262 @@ static void updateFloorSkip(const World& world, FighterRuntime& fighter) {
 }
 
 static bool canStandOnSegment(const FighterRuntime& fighter, const FighterProperties& attr, const StageSegment& segment, int segmentIndex) {
+    (void) attr;
     if (!isFloorLine(segment)) {
         return false;
     }
     if (fighter.floorSkipSegment == segmentIndex) {
         return false;
     }
-    if (segment.type == SegmentType::Semisolid && fighter.input.frames[0].move.y <= -attr.common.platformDropStickThresholdX464) {
-        return false;
-    }
     return true;
 }
 
-static bool sweptFloorContact(const StageSegment& segment, Vec2 previousBottom, Vec2 currentBottom, Vec2& contact, Fix& fraction) {
-    const Fix sx = segment.end.x - segment.start.x;
-    if (sx == 0) {
-        return false;
-    }
+struct MeleeLineHit {
+    bool hit = false;
+    int segment = -1;
+    Fix distanceSquared = std::numeric_limits<Fix>::max();
+    Vec2 contact = {};
+};
 
-    const Fix sy = segment.end.y - segment.start.y;
-    int64_t previousSide = static_cast<int64_t>(previousBottom.y - segment.start.y) * sx -
-                           static_cast<int64_t>(sy) * (previousBottom.x - segment.start.x);
-    int64_t currentSide = static_cast<int64_t>(currentBottom.y - segment.start.y) * sx -
-                          static_cast<int64_t>(sy) * (currentBottom.x - segment.start.x);
-    if (sx < 0) {
-        previousSide = -previousSide;
-        currentSide = -currentSide;
-    }
+static MeleeLineHit meleeCheckFloor(const World& world, const FighterRuntime& fighter, Vec2 sweepStart, Vec2 sweepEnd, int lineIdSkip = -1);
+static MeleeLineHit meleeCheckCeiling(const World& world, Vec2 sweepStart, Vec2 sweepEnd);
+static bool canMaintainGroundOnSegment(const FighterRuntime& fighter, const StageSegment& segment, int segmentIndex);
 
-    const int64_t tolerance = static_cast<int64_t>(fxFromFloat(0.1f)) * fxAbs(sx);
-    if (previousSide < -tolerance || currentSide > tolerance) {
-        return false;
-    }
+struct MeleeSurfaceProjection {
+    bool hit = false;
+    int segment = -1;
+    Vec2 point = {};
+    Vec2 normal = {};
+    Fix push = 0;
+};
 
-    const int64_t denom = previousSide - currentSide;
-    if (denom <= 0) {
-        return false;
-    }
+static constexpr Fix kMeleeSurfaceTolerance = 100;
+static constexpr Fix kMeleeFloorBias = 1;
+static constexpr Fix kMeleeCeilingBias = 1;
 
-    fraction = previousSide <= 0 ? 0 : clamp01(static_cast<Fix>((previousSide * kScale) / denom));
-    const Fix contactX = previousBottom.x + fxMul(currentBottom.x - previousBottom.x, fraction);
-    Fix y = 0;
-    if (!segmentYAtX(segment, contactX, y)) {
-        return false;
-    }
-    contact = {contactX, y};
-    return true;
+static bool endpointsTouch(Vec2 a, Vec2 b) {
+    return fxAbs(a.x - b.x) <= kMeleeSurfaceTolerance && fxAbs(a.y - b.y) <= kMeleeSurfaceTolerance;
 }
 
-static int findLandingSegment(const World& world, const FighterRuntime& fighter, Vec2 previousBottom, Vec2 currentBottom, Vec2& contact, Fix& fraction) {
-    int best = -1;
-    Fix bestY = -fx(10000);
-    Fix bestFraction = fx(1);
-    const FighterProperties& attr = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties;
-    for (size_t i = 0; i < world.stage.segments.size(); ++i) {
-        const StageSegment& segment = world.stage.segments[i];
-        if (!canStandOnSegment(fighter, attr, segment, static_cast<int>(i))) {
-            continue;
-        }
-        Vec2 candidate = {};
-        Fix candidateFraction = 0;
-        if (!sweptFloorContact(segment, previousBottom, currentBottom, candidate, candidateFraction)) {
-            continue;
-        }
-        if (candidate.y > bestY || (candidate.y == bestY && candidateFraction < bestFraction)) {
-            bestY = candidate.y;
-            bestFraction = candidateFraction;
-            contact = candidate;
-            fraction = candidateFraction;
-            best = static_cast<int>(i);
-        }
-    }
-    return best;
+static Vec2 segmentLeftEndpoint(const StageSegment& segment) {
+    return segment.start.x <= segment.end.x ? segment.start : segment.end;
 }
 
-static int findConnectedFloorFromWall(const World& world, const FighterRuntime& fighter, Vec2 currentBottom, Vec2& contact, Fix& fraction) {
-    if (fighter.wallContactSegment < 0 || fighter.wallContactSegment >= static_cast<int>(world.stage.segments.size())) {
+static Vec2 segmentRightEndpoint(const StageSegment& segment) {
+    return segment.start.x > segment.end.x ? segment.start : segment.end;
+}
+
+static int linkedSameKindLineAtEndpoint(const World& world, int segmentIndex, Vec2 endpoint, SegmentLineKind kind) {
+    if (segmentIndex < 0 || segmentIndex >= static_cast<int>(world.stage.segments.size())) {
         return -1;
     }
 
-    const StageSegment& wall = world.stage.segments[static_cast<size_t>(fighter.wallContactSegment)];
-    const std::array<int, 2> linkedSegments{wall.previousLine, wall.nextLine};
-    const FighterProperties& attr = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties;
-    int best = -1;
-    Fix bestY = -fx(10000);
-    for (int linked : linkedSegments) {
-        if (linked < 0 || linked >= static_cast<int>(world.stage.segments.size())) {
+    const StageSegment& segment = world.stage.segments[static_cast<size_t>(segmentIndex)];
+    for (int candidate : {segment.previousLine, segment.nextLine}) {
+        if (candidate < 0 || candidate >= static_cast<int>(world.stage.segments.size())) {
             continue;
         }
-        const StageSegment& segment = world.stage.segments[static_cast<size_t>(linked)];
-        if (!canStandOnSegment(fighter, attr, segment, linked)) {
+        const StageSegment& linked = world.stage.segments[static_cast<size_t>(candidate)];
+        if (linked.type != segment.type || effectiveLineKind(linked) != kind) {
             continue;
         }
-
-        Fix y = 0;
-        if (!segmentYAtX(segment, currentBottom.x, y)) {
-            continue;
-        }
-        if (y <= currentBottom.y) {
-            continue;
-        }
-        if (y > bestY) {
-            bestY = y;
-            best = linked;
-            contact = {currentBottom.x, y};
-            fraction = fx(1);
+        if (endpointsTouch(endpoint, linked.start) || endpointsTouch(endpoint, linked.end)) {
+            return candidate;
         }
     }
-    return best;
+    return -1;
+}
+
+static int linkedNonFloorLineAtEndpoint(const World& world, int segmentIndex, Vec2 endpoint) {
+    if (segmentIndex < 0 || segmentIndex >= static_cast<int>(world.stage.segments.size())) {
+        return -1;
+    }
+
+    const StageSegment& segment = world.stage.segments[static_cast<size_t>(segmentIndex)];
+    for (int candidate : {segment.previousLine, segment.nextLine}) {
+        if (candidate < 0 || candidate >= static_cast<int>(world.stage.segments.size())) {
+            continue;
+        }
+        const StageSegment& linked = world.stage.segments[static_cast<size_t>(candidate)];
+        if (effectiveLineKind(linked) == SegmentLineKind::Floor) {
+            continue;
+        }
+        if (endpointsTouch(endpoint, linked.start) || endpointsTouch(endpoint, linked.end)) {
+            return candidate;
+        }
+    }
+    return -1;
+}
+
+static bool meleeProjectFloorFromLine(
+    const World& world,
+    const FighterRuntime& fighter,
+    int lineId,
+    Vec2 point,
+    MeleeSurfaceProjection& projection)
+{
+    int current = lineId;
+    int direction = 0;
+    Fix x = point.x;
+
+    for (int guard = 0; guard < static_cast<int>(world.stage.segments.size()); ++guard) {
+        if (current < 0 || current >= static_cast<int>(world.stage.segments.size())) {
+            return false;
+        }
+        const StageSegment& segment = world.stage.segments[static_cast<size_t>(current)];
+        if (!canMaintainGroundOnSegment(fighter, segment, current)) {
+            return false;
+        }
+
+        const Vec2 left = segmentLeftEndpoint(segment);
+        const Vec2 right = segmentRightEndpoint(segment);
+        if (x < left.x) {
+            if (direction != 1) {
+                const int linked = linkedSameKindLineAtEndpoint(world, current, left, SegmentLineKind::Floor);
+                if (linked < 0) {
+                    if (x - left.x < -kMeleeSurfaceTolerance) {
+                        return false;
+                    }
+                    x = left.x;
+                    break;
+                }
+                current = linked;
+                direction = -1;
+                continue;
+            }
+            x = left.x;
+            break;
+        }
+        if (x > right.x) {
+            if (direction != -1) {
+                const int linked = linkedSameKindLineAtEndpoint(world, current, right, SegmentLineKind::Floor);
+                if (linked < 0) {
+                    if (x - right.x > kMeleeSurfaceTolerance) {
+                        return false;
+                    }
+                    x = right.x;
+                    break;
+                }
+                current = linked;
+                direction = 1;
+                continue;
+            }
+            x = right.x;
+            break;
+        }
+        break;
+    }
+
+    const StageSegment& segment = world.stage.segments[static_cast<size_t>(current)];
+    Fix y = 0;
+    if (!segmentYAtX(segment, x, y)) {
+        return false;
+    }
+
+    projection.hit = true;
+    projection.segment = current;
+    projection.point = {x, y};
+    projection.normal = segmentNormal(segment);
+    projection.push = y - point.y + kMeleeFloorBias;
+    return true;
+}
+
+static bool meleeProjectCeilingFromLine(
+    const World& world,
+    int lineId,
+    Vec2 point,
+    MeleeSurfaceProjection& projection)
+{
+    int current = lineId;
+    int direction = 0;
+    Fix x = point.x;
+
+    for (int guard = 0; guard < static_cast<int>(world.stage.segments.size()); ++guard) {
+        if (current < 0 || current >= static_cast<int>(world.stage.segments.size())) {
+            return false;
+        }
+        const StageSegment& segment = world.stage.segments[static_cast<size_t>(current)];
+        if (segment.type != SegmentType::Solid || !isCeilingLine(segment)) {
+            return false;
+        }
+
+        const Vec2 left = segmentLeftEndpoint(segment);
+        const Vec2 right = segmentRightEndpoint(segment);
+        if (x < left.x) {
+            if (direction != 1) {
+                const int linked = linkedSameKindLineAtEndpoint(world, current, left, SegmentLineKind::Ceiling);
+                if (linked < 0) {
+                    if (x - left.x < -kMeleeSurfaceTolerance) {
+                        return false;
+                    }
+                    x = left.x;
+                    break;
+                }
+                current = linked;
+                direction = -1;
+                continue;
+            }
+            x = left.x;
+            break;
+        }
+        if (x > right.x) {
+            if (direction != -1) {
+                const int linked = linkedSameKindLineAtEndpoint(world, current, right, SegmentLineKind::Ceiling);
+                if (linked < 0) {
+                    if (x - right.x > kMeleeSurfaceTolerance) {
+                        return false;
+                    }
+                    x = right.x;
+                    break;
+                }
+                current = linked;
+                direction = 1;
+                continue;
+            }
+            x = right.x;
+            break;
+        }
+        break;
+    }
+
+    const StageSegment& segment = world.stage.segments[static_cast<size_t>(current)];
+    Fix y = 0;
+    if (!segmentYAtX(segment, x, y)) {
+        return false;
+    }
+
+    projection.hit = true;
+    projection.segment = current;
+    projection.point = {x, y};
+    projection.normal = segmentNormal(segment);
+    projection.push = y - point.y - kMeleeCeilingBias;
+    return true;
+}
+
+static int findLandingSegment(const World& world, const FighterRuntime& fighter, Vec2 previousBottom, Vec2 currentBottom, Vec2& contact, Fix& fraction, int lineIdSkip = -1) {
+    MeleeLineHit best = meleeCheckFloor(world, fighter, previousBottom, currentBottom, lineIdSkip);
+    const Vec2 previousMidBottom{
+        previousBottom.x,
+        fighter.previousPosition.y + fxMul(fighter.previousEcb.points[1].y + fighter.previousEcb.points[3].y, fxFromFloat(0.5f)),
+    };
+    const MeleeLineHit midpointHit = meleeCheckFloor(world, fighter, previousMidBottom, currentBottom, lineIdSkip);
+    if (midpointHit.hit && (!best.hit || midpointHit.distanceSquared < best.distanceSquared)) {
+        best = midpointHit;
+    }
+    if (!best.hit) {
+        return -1;
+    }
+    contact = best.contact;
+    const Fix dx = currentBottom.x - previousBottom.x;
+    const Fix dy = currentBottom.y - previousBottom.y;
+    if (fxAbs(dx) >= fxAbs(dy) && dx != 0) {
+        fraction = clamp01(fxDiv(contact.x - previousBottom.x, dx));
+    } else if (dy != 0) {
+        fraction = clamp01(fxDiv(contact.y - previousBottom.y, dy));
+    } else {
+        fraction = 0;
+    }
+    return best.segment;
 }
 
 static int carryRemainingMovementOnGround(const World& world, FighterRuntime& fighter, int segmentIndex, Fix landingFraction, Vec2 attemptedDelta) {
@@ -2051,6 +2260,294 @@ static int64_t crossRaw(Vec2 a, Vec2 b) {
     return static_cast<int64_t>(a.x) * b.y - static_cast<int64_t>(a.y) * b.x;
 }
 
+static int64_t integerSqrt(int64_t value) {
+    if (value <= 0) {
+        return 0;
+    }
+    uint64_t x = static_cast<uint64_t>(value);
+    uint64_t result = 0;
+    uint64_t bit = uint64_t{1} << 62;
+    while (bit > x) {
+        bit >>= 2;
+    }
+    while (bit != 0) {
+        if (x >= result + bit) {
+            x -= result + bit;
+            result = (result >> 1) + bit;
+        } else {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    return static_cast<int64_t>(result);
+}
+
+static void meleeCollisionLineEndpoints(const World& world, int segmentIndex, Vec2& start, Vec2& end) {
+    const StageSegment& segment = world.stage.segments[static_cast<size_t>(segmentIndex)];
+    start = segment.start;
+    end = segment.end;
+    const int64_t dx = static_cast<int64_t>(start.x) - end.x;
+    const int64_t dy = static_cast<int64_t>(start.y) - end.y;
+    const int64_t length = integerSqrt(dx * dx + dy * dy);
+    if (length <= 0) {
+        return;
+    }
+    const Fix extendX = static_cast<Fix>((dx * kScale) / length);
+    const Fix extendY = static_cast<Fix>((dy * kScale) / length);
+    if (segment.previousLine != -1) {
+        start.x += extendX;
+        start.y += extendY;
+    }
+    if (segment.nextLine != -1) {
+        end.x -= extendX;
+        end.y -= extendY;
+    }
+}
+
+static Fix sweepFractionForContact(Vec2 sweepStart, Vec2 sweepEnd, Vec2 contact) {
+    const Fix dx = sweepEnd.x - sweepStart.x;
+    const Fix dy = sweepEnd.y - sweepStart.y;
+    if (fxAbs(dx) >= fxAbs(dy) && dx != 0) {
+        return clamp01(fxDiv(contact.x - sweepStart.x, dx));
+    }
+    if (dy != 0) {
+        return clamp01(fxDiv(contact.y - sweepStart.y, dy));
+    }
+    return 0;
+}
+
+static bool meleeLineIntersection(Vec2 a0, Vec2 a1, Vec2 b0, Vec2 b1, Vec2& intersection) {
+    bool b1BelowA = false;
+    bool b2AboveA = false;
+
+    if (a0.x <= a1.x) {
+        if ((b0.x < a0.x && b1.x < a0.x) || (a1.x < b0.x && a1.x < b1.x)) {
+            return false;
+        }
+    } else if ((b0.x < a1.x && b1.x < a1.x) || (a0.x < b0.x && a0.x < b1.x)) {
+        return false;
+    }
+
+    if (a0.y <= a1.y) {
+        if ((b0.y < a0.y && b1.y < a0.y) || (a1.y < b0.y && a1.y < b1.y)) {
+            return false;
+        }
+    } else if ((b0.y < a1.y && b1.y < a1.y) || (a0.y < b0.y && a0.y < b1.y)) {
+        return false;
+    }
+
+    const int64_t ah = static_cast<int64_t>(a1.y) - a0.y;
+    const int64_t aw = static_cast<int64_t>(a1.x) - a0.x;
+    const int64_t d0x = static_cast<int64_t>(b0.x) - a0.x;
+    const int64_t d0y = static_cast<int64_t>(b0.y) - a0.y;
+    const int64_t hsB0A = aw * d0y - ah * d0x;
+    constexpr int64_t areaTolerance = static_cast<int64_t>(100) * kScale;
+    if (hsB0A < 0) {
+        if (hsB0A < -areaTolerance) {
+            return false;
+        }
+        b1BelowA = true;
+    }
+
+    const int64_t d1x = static_cast<int64_t>(b1.x) - a1.x;
+    const int64_t d1y = static_cast<int64_t>(b1.y) - a1.y;
+    const int64_t hsB1A = aw * d1y - ah * d1x;
+    if (hsB1A > 0) {
+        if (hsB1A > areaTolerance) {
+            return false;
+        }
+        b2AboveA = true;
+    }
+
+    if (hsB0A == 0 && hsB1A == 0) {
+        return false;
+    }
+
+    const int64_t det = d0x * d1y - d0y * d1x;
+    if (det < hsB0A) {
+        if (det < hsB1A) {
+            return false;
+        }
+    } else if (det > hsB0A && det > hsB1A) {
+        return false;
+    }
+
+    const int64_t bw = static_cast<int64_t>(b1.x) - b0.x;
+    const int64_t bh = static_cast<int64_t>(b1.y) - b0.y;
+    if ((bw == 0 && bh == 0) || (b1BelowA && b2AboveA) || (hsB0A >= 0 && b2AboveA)) {
+        return false;
+    }
+
+    const int64_t area = bw * ah - bh * aw;
+    if (area > -10 && area < 10) {
+        return false;
+    }
+
+    const int64_t tScaled = ((bw * d0y - bh * d0x) * kScale) / area;
+    if (tScaled > 0) {
+        if (tScaled < kScale) {
+            intersection = {
+                static_cast<Fix>(a0.x + (aw * tScaled) / kScale),
+                static_cast<Fix>(a0.y + (ah * tScaled) / kScale),
+            };
+        } else {
+            intersection = a1;
+        }
+    } else {
+        intersection = a0;
+    }
+    return true;
+}
+
+static bool meleeLineIntersectionH(Vec2 a0, Fix a1x, Vec2 b0, Vec2 b1, Vec2& intersection) {
+    Fix minAx = 0;
+    Fix maxAx = 0;
+    if (a0.x < a1x) {
+        if ((b0.x < a0.x && b1.x < a0.x) || (a1x < b0.x && a1x < b1.x)) {
+            return false;
+        }
+        if (b0.y - a0.y < -kMeleeCeilingBias || b1.y - a0.y > kMeleeCeilingBias) {
+            return false;
+        }
+        minAx = a0.x;
+        maxAx = a1x;
+    } else {
+        if ((b0.x < a1x && b1.x < a1x) || (a0.x < b0.x && a0.x < b1.x)) {
+            return false;
+        }
+        if (b1.y - a0.y < -kMeleeCeilingBias || b0.y - a0.y > kMeleeCeilingBias) {
+            return false;
+        }
+        minAx = a1x;
+        maxAx = a0.x;
+    }
+
+    const Fix dby = b1.y - b0.y;
+    const Fix dbx = b1.x - b0.x;
+    if (fxAbs(dby) < kMeleeCeilingBias) {
+        return false;
+    }
+    Fix newX = b0.x + fxMul(fxDiv(dbx, dby), a0.y - b0.y);
+    const Fix minDelta = newX - minAx;
+    if (minDelta < 0) {
+        if (minDelta < -kMeleeSurfaceTolerance) {
+            return false;
+        }
+        newX = minAx;
+    }
+    const Fix maxDelta = newX - maxAx;
+    if (maxDelta > 0) {
+        if (maxDelta > kMeleeSurfaceTolerance) {
+            return false;
+        }
+        newX = maxAx;
+    }
+    intersection = {newX, a0.y};
+    return true;
+}
+
+static bool meleeLineIntersectionV(Fix a0x, Fix a0y, Fix a1y, Vec2 b0, Vec2 b1, Vec2& intersection) {
+    Fix minAy = 0;
+    Fix maxAy = 0;
+    if (a0y < a1y) {
+        if ((b0.y < a0y && b1.y < a0y) || (a1y < b0.y && a1y < b1.y)) {
+            return false;
+        }
+        if (b1.x - a0x < -kMeleeCeilingBias || b0.x - a0x > kMeleeCeilingBias) {
+            return false;
+        }
+        minAy = a0y;
+        maxAy = a1y;
+    } else {
+        if ((b0.y < a1y && b1.y < a1y) || (a0y < b0.y && a0y < b1.y)) {
+            return false;
+        }
+        if (b0.x - a0x < -kMeleeCeilingBias || b1.x - a0x > kMeleeCeilingBias) {
+            return false;
+        }
+        minAy = a1y;
+        maxAy = a0y;
+    }
+
+    const Fix dbx = b1.x - b0.x;
+    const Fix dby = b1.y - b0.y;
+    if (fxAbs(dbx) < kMeleeCeilingBias) {
+        return false;
+    }
+    Fix newY = b0.y + fxMul(fxDiv(dby, dbx), a0x - b0.x);
+    Fix delta = newY - minAy;
+    if (delta < 0) {
+        if (delta < -kMeleeSurfaceTolerance) {
+            return false;
+        }
+        newY = minAy;
+    }
+    delta = newY - maxAy;
+    if (delta > 0) {
+        if (delta > kMeleeSurfaceTolerance) {
+            return false;
+        }
+        newY = maxAy;
+    }
+    intersection = {a0x, newY};
+    return true;
+}
+
+static bool meleeCheckFloorLine(const World& world, int segmentIndex, Vec2 sweepStart, Vec2 sweepEnd, Vec2& contact, Fix& fraction) {
+    Vec2 a0{};
+    Vec2 a1{};
+    meleeCollisionLineEndpoints(world, segmentIndex, a0, a1);
+    if (fxAbs(a0.y - a1.y) > kMeleeCeilingBias) {
+        if (!meleeLineIntersection(a0, a1, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    } else {
+        if (sweepStart.y < sweepEnd.y || !meleeLineIntersectionH(a0, a1.x, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    }
+    fraction = sweepFractionForContact(sweepStart, sweepEnd, contact);
+    return true;
+}
+
+static bool meleeCheckCeilingLine(const World& world, int segmentIndex, Vec2 sweepStart, Vec2 sweepEnd, Vec2& contact, Fix& fraction) {
+    Vec2 a0{};
+    Vec2 a1{};
+    meleeCollisionLineEndpoints(world, segmentIndex, a0, a1);
+    if (fxAbs(a0.y - a1.y) > kMeleeCeilingBias) {
+        if (!meleeLineIntersection(a0, a1, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    } else {
+        if (sweepStart.y > sweepEnd.y || !meleeLineIntersectionH(a0, a1.x, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    }
+    fraction = sweepFractionForContact(sweepStart, sweepEnd, contact);
+    return true;
+}
+
+static bool meleeCheckWallLine(const World& world, int segmentIndex, int movementDir, Vec2 sweepStart, Vec2 sweepEnd, Vec2& contact, Fix& fraction) {
+    Vec2 a0{};
+    Vec2 a1{};
+    meleeCollisionLineEndpoints(world, segmentIndex, a0, a1);
+    if (fxAbs(a0.x - a1.x) > kMeleeCeilingBias) {
+        if (!meleeLineIntersection(a0, a1, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    } else if (movementDir > 0) {
+        if (sweepStart.x > sweepEnd.x || !meleeLineIntersectionV(a0.x, a0.y, a1.y, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    } else {
+        if (sweepStart.x < sweepEnd.x || !meleeLineIntersectionV(a0.x, a0.y, a1.y, sweepStart, sweepEnd, contact)) {
+            return false;
+        }
+    }
+    fraction = sweepFractionForContact(sweepStart, sweepEnd, contact);
+    return true;
+}
+
 static bool segmentSweepIntersection(Vec2 sweepStart, Vec2 sweepEnd, const StageSegment& segment, Fix& fraction, Vec2& contact) {
     const Vec2 r{sweepEnd.x - sweepStart.x, sweepEnd.y - sweepStart.y};
     const Vec2 s{segment.end.x - segment.start.x, segment.end.y - segment.start.y};
@@ -2080,6 +2577,192 @@ static bool segmentSweepIntersection(Vec2 sweepStart, Vec2 sweepEnd, const Stage
     return true;
 }
 
+static Fix distanceSquared(Vec2 a, Vec2 b) {
+    const Fix dx = a.x - b.x;
+    const Fix dy = a.y - b.y;
+    const int64_t raw = static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy;
+    return raw > std::numeric_limits<Fix>::max() ? std::numeric_limits<Fix>::max() : static_cast<Fix>(raw);
+}
+
+static MeleeLineHit meleeCheckFloor(const World& world, const FighterRuntime& fighter, Vec2 sweepStart, Vec2 sweepEnd, int lineIdSkip) {
+    MeleeLineHit best;
+    const FighterProperties& attr = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties;
+    for (size_t i = 0; i < world.stage.segments.size(); ++i) {
+        if (static_cast<int>(i) == lineIdSkip) {
+            continue;
+        }
+        const StageSegment& segment = world.stage.segments[i];
+        if (!canStandOnSegment(fighter, attr, segment, static_cast<int>(i))) {
+            continue;
+        }
+
+        Vec2 contact = {};
+        Fix fraction = 0;
+        if (!meleeCheckFloorLine(world, static_cast<int>(i), sweepStart, sweepEnd, contact, fraction)) {
+            continue;
+        }
+
+        const Fix dist2 = distanceSquared(contact, sweepStart);
+        if (!best.hit || dist2 < best.distanceSquared) {
+            best.hit = true;
+            best.segment = static_cast<int>(i);
+            best.distanceSquared = dist2;
+            best.contact = contact;
+        }
+    }
+    return best;
+}
+
+static MeleeLineHit meleeCheckCeiling(const World& world, Vec2 sweepStart, Vec2 sweepEnd) {
+    MeleeLineHit best;
+    for (size_t i = 0; i < world.stage.segments.size(); ++i) {
+        const StageSegment& segment = world.stage.segments[i];
+        if (segment.type != SegmentType::Solid || !isCeilingLine(segment)) {
+            continue;
+        }
+
+        Vec2 contact = {};
+        Fix fraction = 0;
+        if (!meleeCheckCeilingLine(world, static_cast<int>(i), sweepStart, sweepEnd, contact, fraction)) {
+            continue;
+        }
+
+        const Fix dist2 = distanceSquared(contact, sweepStart);
+        if (!best.hit || dist2 < best.distanceSquared) {
+            best.hit = true;
+            best.segment = static_cast<int>(i);
+            best.distanceSquared = dist2;
+            best.contact = contact;
+        }
+    }
+    return best;
+}
+
+static Vec2 interpolateVec2(Vec2 a, Vec2 b, Fix fraction) {
+    return {
+        a.x + fxMul(b.x - a.x, fraction),
+        a.y + fxMul(b.y - a.y, fraction),
+    };
+}
+
+static Vec2 meleeRemap2d(Vec2 a0, Vec2 a1, Vec2 b0, Vec2 b1, Vec2 point) {
+    const Fix dx = a1.x - a0.x;
+    const Fix dy = a1.y - a0.y;
+    const Fix px = point.x - a0.x;
+    const Fix py = point.y - a0.y;
+    const int64_t dist2 = static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy;
+    if (dist2 > 0) {
+        int64_t tRaw = ((static_cast<int64_t>(dy) * py + static_cast<int64_t>(dx) * px) * kScale) / dist2;
+        if (tRaw < 0) {
+            tRaw = 0;
+        } else if (tRaw > kScale) {
+            tRaw = kScale;
+        }
+        const Fix t = static_cast<Fix>(tRaw);
+        return {
+            point.x + fxMul(fx(1) - t, b0.x - a0.x) + fxMul(t, b1.x - a1.x),
+            point.y + fxMul(fx(1) - t, b0.y - a0.y) + fxMul(t, b1.y - a1.y),
+        };
+    }
+    return {
+        point.x + (b0.x - a0.x) + (b1.x - a0.x),
+        point.y + (b0.y - a0.y) + (b1.y - a0.y),
+    };
+}
+
+static Vec2 pointOffsetOnCurrentEcbEdge(const FighterRuntime& fighter, int firstPoint, int secondPoint, Vec2 worldPoint);
+
+static bool currentEcbEdgeIntersection(
+    const World& world,
+    const FighterRuntime& fighter,
+    int segmentIndex,
+    int movementDir,
+    int firstPoint,
+    int secondPoint,
+    Vec2& contact,
+    Vec2& pointOffset)
+{
+    const Vec2 currentA = fighter.position + fighter.ecb.points[static_cast<size_t>(firstPoint)];
+    const Vec2 currentB = fighter.position + fighter.ecb.points[static_cast<size_t>(secondPoint)];
+    Fix edgeFraction = fx(1);
+    if (!meleeCheckWallLine(world, segmentIndex, movementDir, currentA, currentB, contact, edgeFraction)) {
+        return false;
+    }
+
+    pointOffset = pointOffsetOnCurrentEcbEdge(fighter, firstPoint, secondPoint, contact);
+    return true;
+}
+
+static Vec2 pointOffsetOnCurrentEcbEdge(const FighterRuntime& fighter, int firstPoint, int secondPoint, Vec2 worldPoint) {
+    const Vec2 currentA = fighter.position + fighter.ecb.points[static_cast<size_t>(firstPoint)];
+    const Vec2 currentB = fighter.position + fighter.ecb.points[static_cast<size_t>(secondPoint)];
+    const Vec2 edge{currentB.x - currentA.x, currentB.y - currentA.y};
+    Fix fraction = 0;
+    if (fxAbs(edge.y) >= fxAbs(edge.x) && edge.y != 0) {
+        fraction = fxDiv(worldPoint.y - currentA.y, edge.y);
+    } else if (edge.x != 0) {
+        fraction = fxDiv(worldPoint.x - currentA.x, edge.x);
+    }
+    return interpolateVec2(
+        fighter.ecb.points[static_cast<size_t>(firstPoint)],
+        fighter.ecb.points[static_cast<size_t>(secondPoint)],
+        clamp01(fraction));
+}
+
+static bool sweptEcbEdgeEndpointContact(
+    const FighterRuntime& fighter,
+    int firstPoint,
+    int secondPoint,
+    const StageSegment& segment,
+    Vec2& contact,
+    Vec2& pointOffset)
+{
+    const Vec2 previousA = fighter.previousPosition + fighter.previousEcb.points[static_cast<size_t>(firstPoint)];
+    const Vec2 previousB = fighter.previousPosition + fighter.previousEcb.points[static_cast<size_t>(secondPoint)];
+    const Vec2 currentA = fighter.position + fighter.ecb.points[static_cast<size_t>(firstPoint)];
+    const Vec2 currentB = fighter.position + fighter.ecb.points[static_cast<size_t>(secondPoint)];
+
+    bool hit = false;
+    int64_t bestDist2 = std::numeric_limits<int64_t>::max();
+    for (Vec2 endpoint : {segment.start, segment.end}) {
+        const Vec2 remapped = meleeRemap2d(previousA, previousB, currentA, currentB, endpoint);
+        const Vec2 delta{endpoint.x - remapped.x, endpoint.y - remapped.y};
+        const int64_t deltaDist2 = static_cast<int64_t>(delta.x) * delta.x + static_cast<int64_t>(delta.y) * delta.y;
+        if (deltaDist2 <= static_cast<int64_t>(1)) {
+            continue;
+        }
+
+        Vec2 intersection = {};
+        if (!meleeLineIntersection(currentA, currentB, remapped, endpoint, intersection)) {
+            continue;
+        }
+
+        const Vec2 fromEndpoint{intersection.x - endpoint.x, intersection.y - endpoint.y};
+        int64_t dist2 = static_cast<int64_t>(fromEndpoint.x) * fromEndpoint.x +
+            static_cast<int64_t>(fromEndpoint.y) * fromEndpoint.y;
+        if (static_cast<int64_t>(delta.x) * fromEndpoint.x + static_cast<int64_t>(delta.y) * fromEndpoint.y < 0) {
+            dist2 = -dist2;
+        }
+        if (dist2 < bestDist2) {
+            bestDist2 = dist2;
+            contact = intersection;
+            pointOffset = pointOffsetOnCurrentEcbEdge(fighter, firstPoint, secondPoint, intersection);
+            hit = true;
+        }
+    }
+    return hit;
+}
+
+static bool isWallLinkedToCurrentFloor(const World& world, const FighterRuntime& fighter, int wallSegment) {
+    if (fighter.groundSegment < 0 ||
+        fighter.groundSegment >= static_cast<int>(world.stage.segments.size()))
+    {
+        return false;
+    }
+    const StageSegment& floor = world.stage.segments[static_cast<size_t>(fighter.groundSegment)];
+    return floor.nextLine == wallSegment || floor.previousLine == wallSegment;
+}
+
 static SweepContact findEcbWallContact(const World& world, const FighterRuntime& fighter, int movementDir) {
     SweepContact best;
     if (movementDir == 0) {
@@ -2087,21 +2770,33 @@ static SweepContact findEcbWallContact(const World& world, const FighterRuntime&
     }
 
     const std::array<int, 3> pointIndices = movementDir > 0
-        ? std::array<int, 3>{2, 1, 3}
-        : std::array<int, 3>{0, 1, 3};
-    for (int pointIndex : pointIndices) {
-        const Vec2 previousPoint = fighter.previousPosition + fighter.previousEcb.points[static_cast<size_t>(pointIndex)];
-        const Vec2 currentPoint = fighter.position + fighter.ecb.points[static_cast<size_t>(pointIndex)];
-        for (size_t i = 0; i < world.stage.segments.size(); ++i) {
-            const StageSegment& segment = world.stage.segments[i];
-            if (segment.type != SegmentType::Solid || !isWallLine(segment)) {
-                continue;
-            }
+        ? std::array<int, 3>{2, 3, 1}
+        : std::array<int, 3>{0, 3, 1};
+    const std::array<std::array<int, 2>, 2> sideEdges = movementDir > 0
+        ? std::array<std::array<int, 2>, 2>{std::array<int, 2>{3, 2}, std::array<int, 2>{1, 2}}
+        : std::array<std::array<int, 2>, 2>{std::array<int, 2>{3, 0}, std::array<int, 2>{1, 0}};
+    const SegmentLineKind blockingKind = movementDir > 0 ? SegmentLineKind::LeftWall : SegmentLineKind::RightWall;
+    for (size_t i = 0; i < world.stage.segments.size(); ++i) {
+        const StageSegment& segment = world.stage.segments[i];
+        if (segment.type != SegmentType::Solid || effectiveLineKind(segment) != blockingKind) {
+            continue;
+        }
 
+        const bool linkedToCurrentFloor = isWallLinkedToCurrentFloor(world, fighter, static_cast<int>(i));
+        if (linkedToCurrentFloor) {
+            continue;
+        }
+        for (int pointIndex : pointIndices) {
+            const Vec2 previousPoint = fighter.previousPosition + fighter.previousEcb.points[static_cast<size_t>(pointIndex)];
+            const Vec2 currentPoint = fighter.position + fighter.ecb.points[static_cast<size_t>(pointIndex)];
             Fix fraction = fx(1);
             Vec2 contact = {};
-            if (!segmentSweepIntersection(previousPoint, currentPoint, segment, fraction, contact)) {
+            if (!meleeCheckWallLine(world, static_cast<int>(i), movementDir, previousPoint, currentPoint, contact, fraction)) {
                 continue;
+            }
+            Fix wallX = 0;
+            if (segmentXAtY(segment, currentPoint.y, wallX)) {
+                contact = {wallX, currentPoint.y};
             }
             chooseEarlierContact(
                 best,
@@ -2110,6 +2805,23 @@ static SweepContact findEcbWallContact(const World& world, const FighterRuntime&
                 contact,
                 {movementDir > 0 ? -fx(1) : fx(1), 0},
                 fighter.ecb.points[static_cast<size_t>(pointIndex)]);
+        }
+
+        for (const auto& edge : sideEdges) {
+            Vec2 contact = {};
+            Vec2 pointOffset = {};
+            if (!currentEcbEdgeIntersection(world, fighter, static_cast<int>(i), movementDir, edge[0], edge[1], contact, pointOffset)) {
+                if (!sweptEcbEdgeEndpointContact(fighter, edge[0], edge[1], segment, contact, pointOffset)) {
+                    continue;
+                }
+            }
+            chooseEarlierContact(
+                best,
+                static_cast<int>(i),
+                fx(1),
+                contact,
+                {movementDir > 0 ? -fx(1) : fx(1), 0},
+                pointOffset);
         }
     }
     return best;
@@ -2158,73 +2870,107 @@ static WallHugContact findWallHugContact(const World& world, const FighterRuntim
     return {};
 }
 
-static SweepContact findCeilingContact(const World& world, const FighterRuntime& fighter, Vec2 previousTop, Vec2 currentTop) {
+static SweepContact findCeilingContact(const World& world, const FighterRuntime& fighter) {
     SweepContact best;
-    for (size_t i = 0; i < world.stage.segments.size(); ++i) {
-        const StageSegment& segment = world.stage.segments[i];
-        if (segment.type != SegmentType::Solid || !isCeilingLine(segment)) {
-            continue;
+    const Vec2 previousTop = fighter.previousPosition + fighter.previousEcb.points[1];
+    const Vec2 currentTop = fighter.position + fighter.ecb.points[1];
+    const MeleeLineHit hit = meleeCheckCeiling(world, previousTop, currentTop);
+    if (hit.hit) {
+        Fix fraction = 0;
+        const Fix dx = currentTop.x - previousTop.x;
+        const Fix dy = currentTop.y - previousTop.y;
+        if (fxAbs(dx) >= fxAbs(dy) && dx != 0) {
+            fraction = clamp01(fxDiv(hit.contact.x - previousTop.x, dx));
+        } else if (dy != 0) {
+            fraction = clamp01(fxDiv(hit.contact.y - previousTop.y, dy));
         }
-
-        const Fix sx = segment.end.x - segment.start.x;
-        if (sx == 0) {
-            continue;
-        }
-        const Fix sy = segment.end.y - segment.start.y;
-        int64_t previousSide = static_cast<int64_t>(previousTop.y - segment.start.y) * sx -
-                               static_cast<int64_t>(sy) * (previousTop.x - segment.start.x);
-        int64_t currentSide = static_cast<int64_t>(currentTop.y - segment.start.y) * sx -
-                              static_cast<int64_t>(sy) * (currentTop.x - segment.start.x);
-        if (sx < 0) {
-            previousSide = -previousSide;
-            currentSide = -currentSide;
-        }
-
-        const int64_t tolerance = static_cast<int64_t>(fxFromFloat(0.1f)) * fxAbs(sx);
-        if (previousSide > tolerance || currentSide < -tolerance) {
-            continue;
-        }
-
-        const int64_t denom = currentSide - previousSide;
-        if (denom <= 0) {
-            continue;
-        }
-
-        const Fix fraction = previousSide >= 0 ? 0 : clamp01(static_cast<Fix>((-previousSide * kScale) / denom));
-        const Fix contactX = previousTop.x + fxMul(currentTop.x - previousTop.x, fraction);
-        Fix y = 0;
-        if (!segmentYAtX(segment, contactX, y)) {
-            continue;
-        }
-        chooseEarlierContact(best, static_cast<int>(i), fraction, {contactX, y}, {0, -fx(1)});
+        chooseEarlierContact(best, hit.segment, fraction, hit.contact, {0, -fx(1)}, fighter.ecb.points[1]);
     }
     return best;
 }
 
-static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 attemptedDelta) {
+static int linkedCeilingAtWall(const World& world, int wallSegment) {
+    if (wallSegment < 0 || wallSegment >= static_cast<int>(world.stage.segments.size())) {
+        return -1;
+    }
+    const StageSegment& wall = world.stage.segments[static_cast<size_t>(wallSegment)];
+    for (int linked : {wall.previousLine, wall.nextLine}) {
+        if (linked >= 0 && linked < static_cast<int>(world.stage.segments.size())) {
+            const StageSegment& segment = world.stage.segments[static_cast<size_t>(linked)];
+            if (segment.type == SegmentType::Solid && isCeilingLine(segment)) {
+                return linked;
+            }
+        }
+    }
+    return -1;
+}
+
+static bool resolveMeleeLinkedCeilingFromWall(World& world, FighterRuntime& fighter, int wallSegment) {
+    const int ceilingIndex = linkedCeilingAtWall(world, wallSegment);
+    if (ceilingIndex < 0) {
+        return false;
+    }
+
+    const Vec2 top = fighter.position + fighter.ecb.points[1];
+    MeleeSurfaceProjection projection;
+    if (meleeProjectCeilingFromLine(world, ceilingIndex, top, projection)) {
+        if (projection.push >= 0) {
+            return false;
+        }
+        fighter.position.y += projection.push;
+        if (fighter.fighterVelocity.y > 0) {
+            fighter.fighterVelocity.y = 0;
+        }
+        if (fighter.attackerShieldKnockback.y > 0) {
+            fighter.attackerShieldKnockback.y = 0;
+        }
+        refreshEcbMetadata(fighter.ecb, fighter);
+        return true;
+    }
+
+    return false;
+}
+
+static bool resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 attemptedDelta) {
     const FighterState& state = currentState(world, fighter);
     int wallContactSide = 0;
     int wallContactSegment = -1;
-    if (state.allowWallCollision && attemptedDelta.x != 0) {
-        const SweepContact wall = findEcbWallContact(world, fighter, attemptedDelta.x > 0 ? 1 : -1);
+    int pushedWallSegment = -1;
+    auto resolveWallSide = [&](int side) {
+        if (wallContactSide != 0) {
+            return;
+        }
+        const SweepContact wall = findEcbWallContact(world, fighter, side);
         if (wall.hit) {
             fighter.position.x = wall.contact.x - wall.pointOffset.x;
-            fighter.position.y = wall.contact.y - wall.pointOffset.y;
-            if ((attemptedDelta.x > 0 && fighter.fighterVelocity.x > 0) || (attemptedDelta.x < 0 && fighter.fighterVelocity.x < 0)) {
+            if ((side > 0 && fighter.fighterVelocity.x > 0) || (side < 0 && fighter.fighterVelocity.x < 0)) {
                 fighter.fighterVelocity.x = 0;
             }
-            if ((attemptedDelta.x > 0 && fighter.groundVelocity > 0) || (attemptedDelta.x < 0 && fighter.groundVelocity < 0)) {
+            if ((side > 0 && fighter.groundVelocity > 0) || (side < 0 && fighter.groundVelocity < 0)) {
                 fighter.groundVelocity = 0;
             }
-            if ((attemptedDelta.x > 0 && fighter.attackerShieldKnockback.x > 0) ||
-                (attemptedDelta.x < 0 && fighter.attackerShieldKnockback.x < 0))
+            if ((side > 0 && fighter.attackerShieldKnockback.x > 0) ||
+                (side < 0 && fighter.attackerShieldKnockback.x < 0))
             {
                 fighter.attackerShieldKnockback.x = 0;
                 fighter.groundAttackerShieldKnockbackVelocity = 0;
             }
-            wallContactSide = attemptedDelta.x > 0 ? 1 : -1;
+            wallContactSide = side;
             wallContactSegment = wall.segment;
+            pushedWallSegment = wall.segment;
             refreshEcbMetadata(fighter.ecb, fighter);
+        }
+    };
+    if (state.allowWallCollision) {
+        if (attemptedDelta.x > 0) {
+            resolveWallSide(1);
+            resolveWallSide(-1);
+        } else if (attemptedDelta.x < 0) {
+            resolveWallSide(-1);
+            resolveWallSide(1);
+        } else {
+            resolveWallSide(1);
+            resolveWallSide(-1);
         }
     }
 
@@ -2239,12 +2985,17 @@ static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 at
         fighter.wallContactTimer = 0;
     }
 
+    bool hitCeiling = false;
+    const bool linkedCeilingResolved = state.allowCeilingCollision && !fighter.grounded &&
+        attemptedDelta.y > 0 &&
+        pushedWallSegment >= 0 &&
+        resolveMeleeLinkedCeilingFromWall(world, fighter, pushedWallSegment);
+    hitCeiling = linkedCeilingResolved;
+
     if (state.allowCeilingCollision && !fighter.grounded && attemptedDelta.y > 0) {
-        const Vec2 previousTop = fighter.previousPosition + fighter.previousEcb.points[1];
-        const Vec2 currentTop = fighter.position + fighter.ecb.points[1];
-        const SweepContact ceiling = findCeilingContact(world, fighter, previousTop, currentTop);
-        if (ceiling.hit) {
-            fighter.position.y = ceiling.contact.y - fighter.ecb.points[1].y;
+        const SweepContact ceiling = linkedCeilingResolved ? SweepContact{} : findCeilingContact(world, fighter);
+        if (!linkedCeilingResolved && ceiling.hit) {
+            fighter.position.y = ceiling.contact.y - ceiling.pointOffset.y;
             if (fighter.fighterVelocity.y > 0) {
                 fighter.fighterVelocity.y = 0;
             }
@@ -2252,8 +3003,10 @@ static void resolveWallAndCeiling(World& world, FighterRuntime& fighter, Vec2 at
                 fighter.attackerShieldKnockback.y = 0;
             }
             refreshEcbMetadata(fighter.ecb, fighter);
+            hitCeiling = true;
         }
     }
+    return hitCeiling;
 }
 
 static bool ledgeInSnapRange(const FighterRuntime& fighter, const FighterProperties& attr, const StageLedge& ledge) {
@@ -2352,6 +3105,9 @@ static bool tryGrabLedge(World& world, size_t fighterIndex) {
 
     for (size_t i = 0; i < world.stage.ledges.size(); ++i) {
         const StageLedge& ledge = world.stage.ledges[i];
+        if (!state.allowBackwardsLedgeGrab && fighter.facing != -ledge.direction) {
+            continue;
+        }
         if (!ledgeInSnapRange(fighter, attr, ledge)) {
             continue;
         }
@@ -2367,6 +3123,9 @@ static bool tryGrabLedge(World& world, size_t fighterIndex) {
         fighter.knockbackVelocity = {};
         fighter.attackerShieldKnockback = {};
         fighter.groundAttackerShieldKnockbackVelocity = 0;
+        fighter.jumpsUsed = 0;
+        fighter.wallJumpsUsed = 0;
+        setFighterFlag(fighter, 12, false);
         fighter.position.x = ledge.position.x + ledge.direction * attr.ledgeHangX;
         fighter.position.y = ledge.position.y + attr.ledgeHangY;
         refreshEcbMetadata(fighter.ecb, fighter);
@@ -2383,123 +3142,86 @@ static bool validStageSegmentIndex(const World& world, int segmentIndex) {
     return segmentIndex >= 0 && segmentIndex < static_cast<int>(world.stage.segments.size());
 }
 
-static bool floorEndpointForSide(const StageSegment& segment, int side, Vec2& endpoint, bool& endpointIsStart) {
-    if (side < 0) {
-        endpointIsStart = segment.start.x <= segment.end.x;
-    } else if (side > 0) {
-        endpointIsStart = segment.start.x >= segment.end.x;
-    } else {
-        return false;
-    }
-    endpoint = endpointIsStart ? segment.start : segment.end;
-    return true;
-}
-
-static int linkedLineAtFloorEndpoint(const StageSegment& segment, bool endpointIsStart) {
-    return endpointIsStart ? segment.nextLine : segment.previousLine;
-}
-
 static bool canMaintainGroundOnSegment(const FighterRuntime& fighter, const StageSegment& segment, int segmentIndex) {
     return isFloorLine(segment) && fighter.floorSkipSegment != segmentIndex;
 }
 
 static bool snapToGroundSegment(const World& world, FighterRuntime& fighter, int segmentIndex, Vec2 bottom) {
-    if (!validStageSegmentIndex(world, segmentIndex)) {
-        return false;
-    }
-    const StageSegment& segment = world.stage.segments[static_cast<size_t>(segmentIndex)];
-    if (!canMaintainGroundOnSegment(fighter, segment, segmentIndex)) {
+    MeleeSurfaceProjection projection;
+    if (!meleeProjectFloorFromLine(world, fighter, segmentIndex, bottom, projection)) {
         return false;
     }
 
-    Fix y = 0;
-    if (!segmentYAtX(segment, bottom.x, y)) {
-        return false;
-    }
-
-    fighter.groundSegment = segmentIndex;
-    fighter.groundNormal = segmentNormal(segment);
-    fighter.position.y = y - fighter.ecb.points[3].y;
+    fighter.groundSegment = projection.segment;
+    fighter.groundNormal = projection.normal;
+    fighter.position.y += projection.push;
     projectGroundVelocity(fighter);
     return true;
 }
 
-static std::array<int, 2> connectedFloorSnapOrder(const StageSegment& segment, Fix bottomX) {
-    if (bottomX < segmentMinX(segment)) {
-        return segment.start.x == segmentMinX(segment)
-            ? std::array<int, 2>{segment.nextLine, segment.previousLine}
-            : std::array<int, 2>{segment.previousLine, segment.nextLine};
-    }
-    if (bottomX > segmentMaxX(segment)) {
-        return segment.start.x == segmentMaxX(segment)
-            ? std::array<int, 2>{segment.nextLine, segment.previousLine}
-            : std::array<int, 2>{segment.previousLine, segment.nextLine};
-    }
-    return {segment.previousLine, segment.nextLine};
-}
-
-static bool groundedEdgeBlockedByWall(const World& world, FighterRuntime& fighter, int floorSegmentIndex, int side) {
-    if (!validStageSegmentIndex(world, floorSegmentIndex)) {
+static bool meleeMaintainCurrentFloor(const World& world, FighterRuntime& fighter) {
+    if (!validStageSegmentIndex(world, fighter.groundSegment)) {
         return false;
     }
 
+    const int floorSegmentIndex = fighter.groundSegment;
     const StageSegment& floor = world.stage.segments[static_cast<size_t>(floorSegmentIndex)];
-    Vec2 endpoint{};
-    bool endpointIsStart = false;
-    if (!floorEndpointForSide(floor, side, endpoint, endpointIsStart)) {
+    if (!canMaintainGroundOnSegment(fighter, floor, floorSegmentIndex)) {
         return false;
     }
 
-    const int linked = linkedLineAtFloorEndpoint(floor, endpointIsStart);
-    if (!validStageSegmentIndex(world, linked)) {
-        return false;
+    const Vec2 bottom = fighter.position + fighter.ecb.points[3];
+    if (snapToGroundSegment(world, fighter, floorSegmentIndex, bottom)) {
+        return true;
     }
 
-    const StageSegment& blocker = world.stage.segments[static_cast<size_t>(linked)];
-    if (blocker.type != SegmentType::Solid) {
-        return false;
+    bool hitWall = false;
+    Vec2 edge = {};
+    const Vec2 left = segmentLeftEndpoint(floor);
+    const Vec2 right = segmentRightEndpoint(floor);
+    if (fighter.position.x < left.x) {
+        edge = left;
+        const int nonFloor = linkedNonFloorLineAtEndpoint(world, floorSegmentIndex, edge);
+        if (validStageSegmentIndex(world, nonFloor) &&
+            effectiveLineKind(world.stage.segments[static_cast<size_t>(nonFloor)]) == SegmentLineKind::RightWall)
+        {
+            hitWall = true;
+        } else {
+            fighter.runoffSegment = floorSegmentIndex;
+            fighter.runoffDirection = -1;
+        }
+    } else if (fighter.position.x > right.x) {
+        edge = right;
+        const int nonFloor = linkedNonFloorLineAtEndpoint(world, floorSegmentIndex, edge);
+        if (validStageSegmentIndex(world, nonFloor) &&
+            effectiveLineKind(world.stage.segments[static_cast<size_t>(nonFloor)]) == SegmentLineKind::LeftWall)
+        {
+            hitWall = true;
+        } else {
+            fighter.runoffSegment = floorSegmentIndex;
+            fighter.runoffDirection = 1;
+        }
     }
 
-    const SegmentLineKind kind = effectiveLineKind(blocker);
-    const bool matchesMeleeWallCap = side < 0
-        ? kind == SegmentLineKind::RightWall
-        : kind == SegmentLineKind::LeftWall;
-    if (!matchesMeleeWallCap) {
+    if (!hitWall) {
         return false;
     }
 
     fighter.groundSegment = floorSegmentIndex;
     fighter.groundNormal = segmentNormal(floor);
-    fighter.position.x = endpoint.x - fighter.ecb.points[3].x;
-    fighter.position.y = endpoint.y - fighter.ecb.points[3].y;
+    fighter.position.x = edge.x - fighter.ecb.points[3].x;
+    fighter.position.y = edge.y - fighter.ecb.points[3].y;
     projectGroundVelocity(fighter);
     return true;
 }
 
+static bool isTeeterState(const World& world, const FighterRuntime& fighter) {
+    const std::string& stateName = currentState(world, fighter).name;
+    return stateName == "Ottotto" || stateName == "OttottoWait";
+}
+
 static bool snapToCurrentGround(const World& world, FighterRuntime& fighter) {
-    if (!validStageSegmentIndex(world, fighter.groundSegment)) {
-        return false;
-    }
-    const StageSegment& segment = world.stage.segments[static_cast<size_t>(fighter.groundSegment)];
-    const Vec2 bottom = fighter.position + fighter.ecb.points[3];
-    if (snapToGroundSegment(world, fighter, fighter.groundSegment, bottom)) {
-        return true;
-    }
-
-    for (int linked : connectedFloorSnapOrder(segment, bottom.x)) {
-        if (snapToGroundSegment(world, fighter, linked, bottom)) {
-            return true;
-        }
-    }
-
-    if (bottom.x < segmentMinX(segment) && groundedEdgeBlockedByWall(world, fighter, fighter.groundSegment, -1)) {
-        return true;
-    }
-    if (bottom.x > segmentMaxX(segment) && groundedEdgeBlockedByWall(world, fighter, fighter.groundSegment, 1)) {
-        return true;
-    }
-
-    return false;
+    return meleeMaintainCurrentFloor(world, fighter);
 }
 
 static Vec3 boneWorld(const FighterRuntime& fighter, BoneId bone, Vec3 offset = {}) {
@@ -2725,6 +3447,16 @@ static void processInterrupts(World& world, FighterRuntime& fighter) {
                     fighter.facing = desiredFacing;
                 }
             }
+            if (state.name == "Dash" &&
+                (rule.condition == InterruptCondition::ReverseDashInput ||
+                 rule.condition == InterruptCondition::ShieldReflectInput ||
+                 rule.condition == InterruptCondition::ShieldHeld))
+            {
+                fighter.groundVelocity -= fxMul(
+                    fxMul(fighter.groundVelocity, def.properties.common.dashDecayX54),
+                    groundFrictionMultiplier(world, fighter));
+                projectGroundVelocity(fighter);
+            }
             changeFighterState(world, fighter, rule.targetState, rule.lagFrames, rule.blendFrames);
             return;
         }
@@ -2819,13 +3551,33 @@ static Vec2 collisionSubstepDelta(Vec2 totalDelta, Vec2 consumedDelta, int step,
     return {totalDelta.x / steps, totalDelta.y / steps};
 }
 
-static void collideCurrentStep(World& world, size_t fighterIndex, bool wasGrounded, int previousGroundSegment, Vec2 attemptedDelta) {
+static bool shouldStartTeeterFromRunoff(
+    const World& world,
+    const FighterRuntime& fighter,
+    const StageSegment& previousSegment,
+    Vec2 previousBottom,
+    Vec2 attemptedDelta,
+    int side)
+{
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const Fix edgeX = side < 0 ? segmentMinX(previousSegment) : segmentMaxX(previousSegment);
+    const Fix epsilon = fxFromFloat(0.001f);
+    const bool alreadyAtEdge = side < 0
+        ? previousBottom.x <= edgeX + epsilon
+        : previousBottom.x >= edgeX - epsilon;
+    const bool movingOutward = attemptedDelta.x * side > 0 || fighter.groundVelocity * side > 0;
+    const bool stickOutward = fighter.input.frames[0].move.x * side >= def.properties.common.walkInputThresholdX24;
+    return !(alreadyAtEdge && movingOutward && stickOutward);
+}
+
+static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGrounded, int previousGroundSegment, Vec2 attemptedDelta) {
     FighterRuntime& fighter = world.fighters[fighterIndex];
     bool nowGrounded = false;
     int landedSegment = -1;
     Vec2 landingContact = {};
     Fix landingFraction = fx(1);
     bool resolvedAirCollision = false;
+    bool hitCeilingThisStep = false;
 
     if (wasGrounded) {
         nowGrounded = snapToCurrentGround(world, fighter);
@@ -2836,10 +3588,15 @@ static void collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
         {
             const StageSegment& previousSegment = world.stage.segments[static_cast<size_t>(previousGroundSegment)];
             const Fix bottomX = fighter.position.x + fighter.ecb.points[3].x;
-            if (bottomX < segmentMinX(previousSegment)) {
+            const Vec2 previousBottom = fighter.previousPosition + fighter.previousEcb.points[3];
+            if (bottomX < segmentMinX(previousSegment) &&
+                shouldStartTeeterFromRunoff(world, fighter, previousSegment, previousBottom, attemptedDelta, -1))
+            {
                 fighter.runoffSegment = previousGroundSegment;
                 fighter.runoffDirection = -1;
-            } else if (bottomX > segmentMaxX(previousSegment)) {
+            } else if (bottomX > segmentMaxX(previousSegment) &&
+                       shouldStartTeeterFromRunoff(world, fighter, previousSegment, previousBottom, attemptedDelta, 1))
+            {
                 fighter.runoffSegment = previousGroundSegment;
                 fighter.runoffDirection = 1;
             }
@@ -2847,17 +3604,15 @@ static void collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
     }
 
     if (!wasGrounded && !nowGrounded) {
-        resolveWallAndCeiling(world, fighter, attemptedDelta);
+        hitCeilingThisStep = resolveWallAndCeiling(world, fighter, attemptedDelta);
         resolvedAirCollision = true;
     }
 
-    if (!nowGrounded) {
+    if (!nowGrounded && !hitCeilingThisStep) {
         const Vec2 previousBottom = fighter.previousPosition + fighter.previousEcb.points[3];
         const Vec2 currentBottom = fighter.position + fighter.ecb.points[3];
-        landedSegment = findLandingSegment(world, fighter, previousBottom, currentBottom, landingContact, landingFraction);
-        if (landedSegment < 0) {
-            landedSegment = findConnectedFloorFromWall(world, fighter, currentBottom, landingContact, landingFraction);
-        }
+        const int landingSkip = wasGrounded ? previousGroundSegment : -1;
+        landedSegment = findLandingSegment(world, fighter, previousBottom, currentBottom, landingContact, landingFraction, landingSkip);
         if (landedSegment >= 0 && fighter.fighterVelocity.y <= fxFromFloat(0.2f)) {
             const StageSegment& segment = world.stage.segments[static_cast<size_t>(landedSegment)];
             fighter.lastLandingVelocityY = fighter.fighterVelocity.y;
@@ -2905,6 +3660,7 @@ static void collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
     }
 
     refreshEcbMetadata(fighter.ecb, fighter);
+    return hitCeilingThisStep;
 }
 
 static void integrateAndCollide(World& world, size_t fighterIndex) {
@@ -2942,7 +3698,10 @@ static void integrateAndCollide(World& world, size_t fighterIndex) {
         consumedDelta += stepDelta;
         fighter.position += stepDelta;
         refreshEcbMetadata(fighter.ecb, fighter);
-        collideCurrentStep(world, fighterIndex, wasGrounded, previousGroundSegment, stepDelta);
+        const bool hitCeiling = collideCurrentStep(world, fighterIndex, wasGrounded, previousGroundSegment, stepDelta);
+        if (hitCeiling || (fighter.grounded && isTeeterState(world, fighter))) {
+            break;
+        }
     }
 
     if (fighter.ledgeCooldown > 0) {
@@ -2956,32 +3715,58 @@ static void integrateAndCollide(World& world, size_t fighterIndex) {
 }
 
 static Fix calculateKnockback(const HitboxDefinition& hitbox, const FighterDefinition& victimDef, const FighterRuntime& victim) {
-    Fix percent = victim.percent;
-    Fix damage = hitbox.damage;
-    Fix weight = victimDef.properties.weight;
+    const Fix weight = victimDef.properties.weight;
+    const Fix weightScale = fxDiv(fx(200), weight + fx(100));
+    Fix knockback = 0;
     if (hitbox.knockbackWeightSet > 0) {
-        percent = fx(10);
-        damage = hitbox.knockbackWeightSet;
-        weight = fx(100);
+        const Fix setTerm = fxMul(hitbox.knockbackWeightSet, fxFromFloat(0.5f)) + fx(1);
+        knockback = fxMul(setTerm, fxMul(fxFromFloat(1.4f), fx(1))) + fx(18);
+    } else {
+        const Fix percent = fx(static_cast<int>(fxToFloat(victim.percent)));
+        const Fix damagePercent = hitbox.damage + percent;
+        const Fix damageTerm = fxMul(fxMul(hitbox.damage, damagePercent), fxFromFloat(0.05f)) +
+            fxMul(damagePercent, fxFromFloat(0.1f));
+        knockback = fxMul(damageTerm, fxMul(fxFromFloat(1.4f), weightScale)) + fx(18);
     }
-    Fix knockback = fxMul(percent, fxFromFloat(0.1f)) + fxMul(fxMul(percent, damage), fxFromFloat(0.05f));
-    knockback = fxMul(knockback, fxMul(fxDiv(fx(200), weight + fx(100)), fxFromFloat(1.4f)));
-    knockback += fx(18);
-    if (hitbox.knockbackWeightSet == 0) {
-        knockback = fxMul(knockback, fxMul(hitbox.knockbackGrowth, fxFromFloat(0.01f)));
-        knockback += hitbox.knockbackBase;
+    knockback = fxMul(knockback, fxMul(hitbox.knockbackGrowth, fxFromFloat(0.01f))) + hitbox.knockbackBase;
+    return std::min(knockback, fx(2500));
+}
+
+static Fix launchAngleDegrees(const FighterRuntime& victim, const HitboxDefinition& hitbox, Fix knockback, int side) {
+    Fix angle = hitbox.knockbackAngleDegrees;
+    if (angle == fx(361)) {
+        if (knockback < fxFromFloat(32.1f)) {
+            angle = side >= 0 ? fx(0) : fx(180);
+        } else {
+            angle = side >= 0 ? fx(44) : fx(136);
+        }
+    } else if (side < 0) {
+        angle = fx(180) - angle;
+        if (angle < 0) {
+            angle += fx(360);
+        }
     }
-    return knockback;
+    if (knockback < fx(80) && victim.grounded &&
+        (hitbox.knockbackAngleDegrees == fx(0) || hitbox.knockbackAngleDegrees == fx(180)))
+    {
+        angle = side >= 0 ? fx(0) : fx(180);
+    }
+    return angle;
 }
 
 static void applyHit(World& world, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox) {
     const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
-    victim.percent += hitbox.damage;
     const Fix kb = calculateKnockback(hitbox, victimDef, victim);
-    const float angle = fxToFloat(hitbox.knockbackAngleDegrees) * 3.14159265f / 180.0f;
     const int side = victim.position.x >= attacker.position.x ? 1 : -1;
-    victim.knockbackVelocity.x = fxFromFloat(std::cos(angle) * fxToFloat(kb) * 0.03f * static_cast<float>(side));
+    const float angle = fxToFloat(launchAngleDegrees(victim, hitbox, kb, side)) * 3.14159265f / 180.0f;
+    victim.percent += hitbox.damage;
+    victim.knockbackVelocity.x = fxFromFloat(std::cos(angle) * fxToFloat(kb) * 0.03f);
     victim.knockbackVelocity.y = fxFromFloat(std::sin(angle) * fxToFloat(kb) * 0.03f);
+    if (kb < fx(80) && victim.grounded &&
+        (hitbox.knockbackAngleDegrees == fx(0) || hitbox.knockbackAngleDegrees == fx(180)))
+    {
+        victim.knockbackVelocity.y = 0;
+    }
     victim.hitlag = std::max(3, static_cast<int>(fxToFloat(hitbox.damage) / 3.0f) + 3);
     attacker.hitlag = victim.hitlag;
     victim.hitstun = std::max(1, static_cast<int>(fxToFloat(kb) * 0.4f));
@@ -3197,6 +3982,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.lastActionFrameExecuted = fighter.lastActionFrameExecuted;
         item.runAnimationVelocity = fighter.runAnimationVelocity;
         item.facing = fighter.facing;
+        item.hsdPoseFacing = fighter.hsdPoseFacing;
         item.jumpsUsed = fighter.jumpsUsed;
         item.grounded = fighter.grounded;
         item.percent = fighter.percent;
@@ -3289,6 +4075,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.lastActionFrameExecuted = item.lastActionFrameExecuted;
         fighter.runAnimationVelocity = item.runAnimationVelocity;
         fighter.facing = item.facing;
+        fighter.hsdPoseFacing = item.hsdPoseFacing == 0 ? item.facing : item.hsdPoseFacing;
         fighter.jumpsUsed = item.jumpsUsed;
         fighter.grounded = item.grounded;
         fighter.percent = item.percent;
