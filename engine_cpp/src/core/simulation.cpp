@@ -136,6 +136,10 @@ public:
         return readU8() != 0;
     }
 
+    bool hasRemaining(size_t count) const {
+        return position + count <= data.size();
+    }
+
     int32_t readI32() {
         require(4);
         int32_t value = 0;
@@ -181,10 +185,6 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
         throw std::runtime_error("invalid Melee common data magic");
     }
     reader.skip(4);
-    const int version = reader.readI32();
-    if (version != 6) {
-        throw std::runtime_error("unsupported Melee common data version");
-    }
 
     MeleeCommonData common;
     common.stickXTiltThresholdX8 = readCommonFix(reader);
@@ -240,6 +240,26 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.attackerShieldPushbackBaseX3E4 = readCommonFix(reader);
     common.shieldKnockbackFrameDecayX3E8 = readCommonFix(reader);
     common.shieldGroundFrictionMultiplierX3EC = readCommonFix(reader);
+    common.grabTimerBaseX354 = readCommonFix(reader);
+    common.grabTimerHandicapScaleX358 = readCommonFix(reader);
+    common.grabTimerHandicapBaseX35C = readCommonFix(reader);
+    common.grabTimerPortScaleX360 = readCommonFix(reader);
+    common.grabTimerPortBaseX364 = readCommonFix(reader);
+    common.grabTimerPercentScaleX368 = readCommonFix(reader);
+    common.captureCutFrictionScaleX36C = readCommonFix(reader);
+    common.captureCutGroundVelocityX370 = readCommonFix(reader);
+    common.captureJumpVelocityX374 = readCommonFix(reader);
+    common.captureJumpVelocityYx378 = readCommonFix(reader);
+    common.throwWeightAnimationScaleX37C = readCommonFix(reader);
+    common.captureTimerDecrementX3A4 = readCommonFix(reader);
+    common.captureMashDecrementX3A8 = readCommonFix(reader);
+    common.captureJumpButtonWindowX3AC = readCommonFix(reader);
+    common.captureMashAnimHoldFramesX3B0 = readCommonFix(reader);
+    common.captureMashAnimRateX3B4 = readCommonFix(reader);
+    common.captureJumpGravityThresholdX3B8 = readCommonFix(reader);
+    common.captureFloorSnapMaxX3BC = readCommonFix(reader);
+    common.captureHighThresholdX3C4 = readCommonFix(reader);
+    common.thrownMashDecrementX3C8 = readCommonFix(reader);
     common.spotDodgeStickThresholdX314 = readCommonFix(reader);
     common.spotDodgeStickWindowX318 = reader.readI32();
     common.rollStickThresholdX31C = readCommonFix(reader);
@@ -253,6 +273,7 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.fallSpecialDriftX340 = readCommonFix(reader);
     common.landingFallSpecialLagX344 = reader.readI32();
     common.runStopTurnLagX410 = reader.readI32();
+    common.downWaitAutoStandFramesX424 = reader.readI32();
     common.runBrakeAnimFreezeVelocityX42C = readCommonFix(reader);
     common.runDirectFramesX430 = reader.readI32();
     common.jumpMomentumYScaleX438 = readCommonFix(reader);
@@ -300,6 +321,45 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.attackLw4StickWindowXD8 = reader.readI32();
     common.lCancelInputWindowXE4 = reader.readI32();
     common.lCancelLandingLagDivisorXE8 = readCommonFix(reader);
+    common.knockbackWeightScaleXF4 = readCommonFix(reader);
+    common.knockbackWeightDecayXF8 = readCommonFix(reader);
+    common.damageVelocityScaleX100 = readCommonFix(reader);
+    common.knockbackMaxX108 = readCommonFix(reader);
+    common.throwKnockbackWeightX10C = readCommonFix(reader);
+    common.knockbackDamageBaseX110 = readCommonFix(reader);
+    common.knockbackDamageScaleX114 = readCommonFix(reader);
+    common.knockbackWeightSetScaleX118 = readCommonFix(reader);
+    common.knockbackScaleX11C = readCommonFix(reader);
+    common.knockbackBaseX120 = readCommonFix(reader);
+    common.damageSakuraiAngleAirX144 = readCommonFix(reader);
+    common.damageSakuraiAngleScaleX148 = readCommonFix(reader);
+    common.damageSakuraiAngleLowX14C = readCommonFix(reader);
+    common.damageSakuraiAngleHighX150 = readCommonFix(reader);
+    common.hitstunMultiplierX154 = readCommonFix(reader);
+    common.damageLevelThresholdX158 = readCommonFix(reader);
+    common.damageLevelThresholdX15C = readCommonFix(reader);
+    common.damageLevelThresholdX160 = readCommonFix(reader);
+    common.damageAirVelocityScaleX190 = readCommonFix(reader);
+    common.damageWallBounceMinVelocityX1B0 = readCommonFix(reader);
+    common.damageWallBounceDampingX1BC = readCommonFix(reader);
+    common.damageSurfaceLockoutX1C0 = reader.readI32();
+    common.damageWallBounceMinVelocityX1E0 = readCommonFix(reader);
+    common.damageLandingMinVelocityX1E4 = readCommonFix(reader);
+    common.damageGroundBounceAngleX1E8 = readCommonFix(reader);
+    common.damageGroundBounceDampingX1EC = readCommonFix(reader);
+    common.groundKnockbackFrictionScaleX200 = readCommonFix(reader);
+    common.knockbackFrameDecayX204 = readCommonFix(reader);
+    common.damageFallStickThresholdX210 = readCommonFix(reader);
+    common.damageFallStickWindowX214 = reader.readI32();
+    common.damageFlyTopAngleMinX234 = readCommonFix(reader);
+    common.damageFlyTopAngleMaxX238 = readCommonFix(reader);
+    common.damageFlyRollPercentX23C = reader.readI32();
+    common.damageFlyRollChanceX240 = readCommonFix(reader);
+    common.downStandStickThresholdX244 = readCommonFix(reader);
+    common.downRollStickThresholdX248 = readCommonFix(reader);
+    common.downAttackInputWindowX24C = reader.readI32();
+    common.passiveInputWindowX250 = reader.readI32();
+    common.passiveStandStickThresholdX254 = readCommonFix(reader);
     return common;
 }
 
@@ -327,10 +387,6 @@ static bool loadMeleeStageCollision(StageDefinition& stage, const std::filesyste
             return false;
         }
         reader.skip(4);
-        const int version = reader.readI32();
-        if (version != 2) {
-            return false;
-        }
         stage.name = reader.readString();
         stage.segments.clear();
         stage.ledges.clear();
@@ -869,6 +925,48 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     if (target < 0) {
         return;
     }
+    const std::string oldStateName = currentState(world, fighter).name;
+    const auto ownsCapturedVictim = [](const std::string& name) {
+        return name == "Catch" || name == "CatchDash" ||
+               name == "CatchPull" || name == "CatchDashPull" ||
+               name == "CatchWait" || name == "CatchAttack" ||
+               name == "CatchCut" ||
+               name == "ThrowF" || name == "ThrowB" ||
+               name == "ThrowHi" || name == "ThrowLw";
+    };
+    const auto isCapturedVictimState = [](const std::string& name) {
+        return name == "CapturePulledHi" || name == "CapturePulledLw" ||
+               name == "CaptureWaitHi" || name == "CaptureWaitLw" ||
+               name == "CaptureDamageHi" || name == "CaptureDamageLw" ||
+               name == "ThrownF" || name == "ThrownB" ||
+               name == "ThrownHi" || name == "ThrownLw";
+    };
+    if (ownsCapturedVictim(oldStateName) && !ownsCapturedVictim(stateName) && fighter.grabbedFighter >= 0 &&
+        fighter.grabbedFighter < static_cast<int>(world.fighters.size()))
+    {
+        FighterRuntime& victim = world.fighters[static_cast<size_t>(fighter.grabbedFighter)];
+        if (victim.grabberFighter == static_cast<int>(&fighter - world.fighters.data())) {
+            victim.grabberFighter = -1;
+            victim.captureConstraintActive = false;
+            victim.captureConstraintOffset = {};
+            victim.captureOriginalXRotNTranslation = {};
+        }
+        fighter.grabbedFighter = -1;
+    }
+    if (isCapturedVictimState(oldStateName) && !isCapturedVictimState(stateName) && fighter.grabberFighter >= 0 &&
+        fighter.grabberFighter < static_cast<int>(world.fighters.size()))
+    {
+        FighterRuntime& grabber = world.fighters[static_cast<size_t>(fighter.grabberFighter)];
+        if (grabber.grabbedFighter == static_cast<int>(&fighter - world.fighters.data())) {
+            grabber.grabbedFighter = -1;
+        }
+        fighter.grabberFighter = -1;
+        fighter.captureConstraintActive = false;
+        fighter.captureConstraintOffset = {};
+        fighter.captureOriginalXRotNTranslation = {};
+        fighter.thrownAnimationFreezeActive = false;
+        fighter.thrownAnimationFreezeFrame = 0;
+    }
     const FighterState& targetState = def.states[static_cast<size_t>(target)];
     int resolvedBlendFrames = blendFrames;
     if (resolvedBlendFrames == kUseDefaultAnimationBlendFrames) {
@@ -888,6 +986,9 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.hsdTransN = {};
     fighter.previousHsdTransN = {};
     fighter.hsdTransNOffset = {};
+    fighter.throwAnimationFrozen = false;
+    fighter.thrownAnimationFreezeActive = false;
+    fighter.thrownAnimationFreezeFrame = 0;
     fighter.floorSkipSegment = -1;
     fighter.animationFrame = 0;
     fighter.animationRate = fx(1);
@@ -1136,6 +1237,14 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
     const FighterProperties& attr = def.properties;
     const MeleeCommonData& common = attr.common;
     const Fix x = fighter.input.frames[0].move.x;
+    const std::string& stateName = currentState(world, fighter).name;
+    if (stateName == "Run" &&
+        fighter.runDirectTimer > 1 &&
+        (condition == InterruptCondition::TurnRunInput ||
+         condition == InterruptCondition::RunBrakeInput))
+    {
+        return false;
+    }
     const bool aerialAttackInput = !fighter.grounded &&
         (fighter.input.justPressed(ButtonAttack) || cStickAerialAttackInput(fighter, common));
     const bool aerialJumpInput =
@@ -1294,6 +1403,10 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                    fighter.ledgeActionReady &&
                    ledgeStickActive(fighter.input.frames[0].move, common) &&
                    !ledgeStickChoosesClimb(fighter, common);
+        case InterruptCondition::GrabPressed:
+            return fighter.grounded &&
+                   (fighter.input.justPressed(ButtonGrab) ||
+                    (fighter.input.down(ButtonShield) && fighter.input.justPressed(ButtonAttack)));
     }
     return false;
 }
@@ -1353,23 +1466,64 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "LandingAirB") return 75;
     if (animation == "LandingAirHi") return 76;
     if (animation == "LandingAirLw") return 77;
-    if (animation == "DamageHi1") return 166;
-    if (animation == "DamageHi2") return 167;
-    if (animation == "DamageHi3") return 168;
-    if (animation == "DamageN1") return 169;
-    if (animation == "DamageN2") return 170;
-    if (animation == "DamageN3") return 171;
-    if (animation == "DamageLw1") return 172;
-    if (animation == "DamageLw2") return 173;
-    if (animation == "DamageLw3") return 174;
-    if (animation == "DamageAir1") return 175;
-    if (animation == "DamageAir2") return 176;
-    if (animation == "DamageAir3") return 177;
-    if (animation == "DamageFlyHi") return 178;
-    if (animation == "DamageFlyN") return 179;
-    if (animation == "DamageFlyLw") return 180;
-    if (animation == "DamageFlyTop") return 181;
-    if (animation == "DamageFlyRoll") return 182;
+    if (animation == "DamageHi1") return 165;
+    if (animation == "DamageHi2") return 166;
+    if (animation == "DamageHi3") return 167;
+    if (animation == "DamageN1") return 168;
+    if (animation == "DamageN2") return 169;
+    if (animation == "DamageN3") return 170;
+    if (animation == "DamageLw1") return 171;
+    if (animation == "DamageLw2") return 172;
+    if (animation == "DamageLw3") return 173;
+    if (animation == "DamageAir1") return 174;
+    if (animation == "DamageAir2") return 175;
+    if (animation == "DamageAir3") return 176;
+    if (animation == "DamageFlyHi") return 177;
+    if (animation == "DamageFlyN") return 178;
+    if (animation == "DamageFlyLw") return 179;
+    if (animation == "DamageFlyTop") return 180;
+    if (animation == "DamageFlyRoll") return 181;
+    if (animation == "DownBoundU") return 183;
+    if (animation == "DownWaitU") return 184;
+    if (animation == "DownDamageU") return 185;
+    if (animation == "DownBoundD") return 191;
+    if (animation == "DownWaitD") return 192;
+    if (animation == "DownDamageD") return 193;
+    if (animation == "Passive") return 199;
+    if (animation == "PassiveStandF") return 200;
+    if (animation == "PassiveStandB") return 201;
+    if (animation == "PassiveWall") return 202;
+    if (animation == "PassiveWallJump") return 203;
+    if (animation == "PassiveCeil") return 204;
+    if (animation == "ShieldBreakFly") return 205;
+    if (animation == "ShieldBreakFall") return 206;
+    if (animation == "ShieldBreakDown") return 207;
+    if (animation == "ShieldBreakStand") return 209;
+    if (animation == "Furafura") return 205;
+    if (animation == "Catch") return 242;
+    if (animation == "CatchPull") return 242;
+    if (animation == "CatchDash") return 243;
+    if (animation == "CatchDashPull") return 243;
+    if (animation == "CatchWait") return 244;
+    if (animation == "CatchAttack") return 245;
+    if (animation == "CatchCut") return 246;
+    if (animation == "ThrowF") return 247;
+    if (animation == "ThrowB") return 248;
+    if (animation == "ThrowHi") return 249;
+    if (animation == "ThrowLw") return 250;
+    if (animation == "CapturePulledHi") return 251;
+    if (animation == "CaptureWaitHi") return 252;
+    if (animation == "CaptureDamageHi") return 253;
+    if (animation == "CapturePulledLw") return 254;
+    if (animation == "CaptureWaitLw") return 255;
+    if (animation == "CaptureDamageLw") return 256;
+    if (animation == "CaptureCut") return 257;
+    if (animation == "CaptureJump") return 258;
+    if (animation == "ThrownF") return 262;
+    if (animation == "ThrownB") return 263;
+    if (animation == "ThrownHi") return 264;
+    if (animation == "ThrownLw") return 265;
+    if (animation == "ThrownLwWomen") return 266;
     if (animation == "Squat") return 30;
     if (animation == "SquatWait") return 31;
     if (animation == "SquatRv") return 34;
@@ -1377,6 +1531,10 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "Ottotto") return 210;
     if (animation == "OttottoWait") return 211;
     if (animation == "PassiveWallJump") return 203;
+    if (animation == "WallDamage") return 212;
+    if (animation == "StopWall") return 213;
+    if (animation == "StopCeil") return 214;
+    if (animation == "MissFoot") return 215;
     if (animation == "CliffCatch") return 216;
     if (animation == "CliffWait") return 217;
     if (animation == "CliffClimbQuick") return 220;
@@ -1420,10 +1578,10 @@ static Fix blendAngle(Fix from, Fix to, Fix t) {
     return from + fxMul(fxFromFloat(delta), t);
 }
 
-static AnimationPose blendedPose(const AnimationPose& from, const AnimationPose& to, Fix t) {
+static AnimationPose blendedPose(const AnimationPose& from, const AnimationPose& to, Fix t, size_t startJoint = 0) {
     AnimationPose result = to;
     const size_t count = std::min(from.joints.size(), to.joints.size());
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = startJoint; i < count; ++i) {
         JointPose& out = result.joints[i];
         const JointPose& a = from.joints[i];
         const JointPose& b = to.joints[i];
@@ -1551,6 +1709,12 @@ static void evaluateImportedHurtboxes(const FighterDefinition& def, FighterRunti
     }
 }
 
+static void refreshHsdWorldPose(const FighterDefinition& def, FighterRuntime& fighter) {
+    fighter.hsdJointWorldTransforms = fighterHsdWorldTransforms(def, fighter);
+    fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
+    evaluateImportedHurtboxes(def, fighter);
+}
+
 static bool hsdRelativeBonePosition(const FighterRuntime& fighter, int joint, Vec3& out) {
     if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdJointWorldPositions.size()) {
         return false;
@@ -1647,14 +1811,12 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
             } else if (rate > 0) {
                 const Fix remaining = fx(fighter.hsdBlendFrames) - fighter.hsdBlendElapsed;
                 const Fix t = fxDiv(rate, rate + remaining);
-                fighter.hsdPose = blendedPose(previousVisiblePose, fighter.hsdPose, t);
+                fighter.hsdPose = blendedPose(previousVisiblePose, fighter.hsdPose, t, 1);
             } else {
                 fighter.hsdPose = previousVisiblePose;
             }
         }
-        fighter.hsdJointWorldTransforms = fighterHsdWorldTransforms(def, fighter);
-        fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
-        evaluateImportedHurtboxes(def, fighter);
+        refreshHsdWorldPose(def, fighter);
     } else if (fighter.hsdPose.joints.empty()) {
         fighter.hsdPose = {};
         fighter.previousHsdTransN = fighter.hsdTransN;
@@ -1664,9 +1826,7 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         fighter.hsdJointWorldPositions.clear();
         fighter.hsdHurtboxCapsules.clear();
     } else {
-        fighter.hsdJointWorldTransforms = fighterHsdWorldTransforms(def, fighter);
-        fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
-        evaluateImportedHurtboxes(def, fighter);
+        refreshHsdWorldPose(def, fighter);
     }
 
     const int frame = frameInState(fighter);
@@ -1775,6 +1935,12 @@ static void projectGroundAttackerShieldKnockback(FighterRuntime& fighter) {
     fighter.attackerShieldKnockback.y = fxMul(tangent.y, fighter.groundAttackerShieldKnockbackVelocity);
 }
 
+static void projectGroundKnockback(FighterRuntime& fighter) {
+    const Vec2 tangent = groundTangent(fighter.groundNormal);
+    fighter.knockbackVelocity.x = fxMul(tangent.x, fighter.groundKnockbackVelocity);
+    fighter.knockbackVelocity.y = fxMul(tangent.y, fighter.groundKnockbackVelocity);
+}
+
 static Fix groundFrictionMultiplier(const World& world, const FighterRuntime& fighter) {
     if (fighter.groundSegment < 0 || fighter.groundSegment >= static_cast<int>(world.stage.segments.size())) {
         return fx(1);
@@ -1817,6 +1983,42 @@ static void updateAttackerShieldKnockback(const World& world, FighterRuntime& fi
     const float scale = (len - decay) / len;
     fighter.attackerShieldKnockback.x = fxFromFloat(x * scale);
     fighter.attackerShieldKnockback.y = fxFromFloat(y * scale);
+}
+
+static void updateKnockbackVelocity(const World& world, FighterRuntime& fighter) {
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (fighter.knockbackVelocity.x == 0 && fighter.knockbackVelocity.y == 0) {
+        fighter.groundKnockbackVelocity = 0;
+        fighter.knockbackDecay = {};
+        return;
+    }
+
+    if (fighter.grounded) {
+        if (fighter.groundKnockbackVelocity == 0) {
+            fighter.groundKnockbackVelocity = velocityAlongGround(fighter.knockbackVelocity, fighter.groundNormal);
+        }
+        Fix friction = fxMul(def.properties.grFriction, def.properties.common.groundKnockbackFrictionScaleX200);
+        friction = fxMul(friction, groundFrictionMultiplier(world, fighter));
+        fighter.groundKnockbackVelocity = fxApproach(fighter.groundKnockbackVelocity, 0, friction);
+        projectGroundKnockback(fighter);
+        return;
+    }
+
+    fighter.groundKnockbackVelocity = 0;
+    const float x = fxToFloat(fighter.knockbackVelocity.x);
+    const float y = fxToFloat(fighter.knockbackVelocity.y);
+    const float len = std::sqrt(x * x + y * y);
+    const float decay = fxToFloat(def.properties.common.knockbackFrameDecayX204);
+    if (len <= decay || len <= 0.0001f) {
+        fighter.knockbackVelocity = {};
+        fighter.knockbackDecay = {};
+        return;
+    }
+    const float scale = (len - decay) / len;
+    fighter.knockbackVelocity.x = fxFromFloat(x * scale);
+    fighter.knockbackVelocity.y = fxFromFloat(y * scale);
+    fighter.knockbackDecay.x = fxFromFloat((x / len) * decay);
+    fighter.knockbackDecay.y = fxFromFloat((y / len) * decay);
 }
 
 static void consumeGroundAcceleration(const World& world, FighterRuntime& fighter) {
@@ -2164,14 +2366,6 @@ static bool meleeProjectCeilingFromLine(
 
 static int findLandingSegment(const World& world, const FighterRuntime& fighter, Vec2 previousBottom, Vec2 currentBottom, Vec2& contact, Fix& fraction, int lineIdSkip = -1) {
     MeleeLineHit best = meleeCheckFloor(world, fighter, previousBottom, currentBottom, lineIdSkip);
-    const Vec2 previousMidBottom{
-        previousBottom.x,
-        fighter.previousPosition.y + fxMul(fighter.previousEcb.points[1].y + fighter.previousEcb.points[3].y, fxFromFloat(0.5f)),
-    };
-    const MeleeLineHit midpointHit = meleeCheckFloor(world, fighter, previousMidBottom, currentBottom, lineIdSkip);
-    if (midpointHit.hit && (!best.hit || midpointHit.distanceSquared < best.distanceSquared)) {
-        best = midpointHit;
-    }
     if (!best.hit) {
         return -1;
     }
@@ -3204,9 +3398,6 @@ static bool meleeMaintainCurrentFloor(const World& world, FighterRuntime& fighte
             effectiveLineKind(world.stage.segments[static_cast<size_t>(nonFloor)]) == SegmentLineKind::RightWall)
         {
             hitWall = true;
-        } else {
-            fighter.runoffSegment = floorSegmentIndex;
-            fighter.runoffDirection = -1;
         }
     } else if (fighter.position.x > right.x) {
         edge = right;
@@ -3215,9 +3406,6 @@ static bool meleeMaintainCurrentFloor(const World& world, FighterRuntime& fighte
             effectiveLineKind(world.stage.segments[static_cast<size_t>(nonFloor)]) == SegmentLineKind::LeftWall)
         {
             hitWall = true;
-        } else {
-            fighter.runoffSegment = floorSegmentIndex;
-            fighter.runoffDirection = 1;
         }
     }
 
@@ -3264,6 +3452,49 @@ static Vec3 shieldCenterWorld(const FighterDefinition& def, const FighterRuntime
         }
     }
     return boneWorld(fighter, BoneId::Hip, {0, fxFromFloat(0.2f), 0});
+}
+
+static int commonPartBoneFromScript(const HsdFighterAnimationAsset& asset, int actionIndex, int commonPart) {
+    if (commonPart < 0) {
+        return -1;
+    }
+    if (const HsdActionScript* script = findActionScriptByActionIndex(asset, actionIndex)) {
+        if (commonPart < static_cast<int>(script->commonBoneLookup.size())) {
+            return script->commonBoneLookup[static_cast<size_t>(commonPart)];
+        }
+    }
+    return -1;
+}
+
+static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart) {
+    if (!def.hasHsdAsset || !def.hsdAsset || commonPart < 0) {
+        return -1;
+    }
+    if (fighter.state >= 0 && fighter.state < static_cast<int>(def.states.size())) {
+        const FighterState& state = def.states[static_cast<size_t>(fighter.state)];
+        const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
+        const int mapped = commonPartBoneFromScript(*def.hsdAsset, actionIndex, commonPart);
+        if (mapped >= 0) {
+            return mapped;
+        }
+    }
+    for (const HsdActionScript& script : def.hsdAsset->actionScripts) {
+        if (commonPart < static_cast<int>(script.commonBoneLookup.size())) {
+            const int mapped = script.commonBoneLookup[static_cast<size_t>(commonPart)];
+            if (mapped >= 0) {
+                return mapped;
+            }
+        }
+    }
+    return -1;
+}
+
+static Vec3 commonPartWorld(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart) {
+    const int bone = commonPartBone(def, fighter, commonPart);
+    if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
+        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], {});
+    }
+    return {fighter.position.x, fighter.position.y, 0};
 }
 
 static Fix smashChargeDamageScale(const FighterRuntime& fighter) {
@@ -3354,8 +3585,24 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         setFighterCommandFlag(fighter, sub.flag, sub.flagValue);
         return;
     }
+    if (sub.type == SubactionType::SetThrowFlag) {
+        // ftAction_800718A4 writes action command 0x14 hit_idx 0 to
+        // throw_flags_b3 and hit_idx 1 to throw_flags_b4. Keep those bit
+        // numbers literal so throw code mirrors ftCo_800DD724's consumers.
+        if (sub.flag == 0 || sub.flag == 1) {
+            setFighterCommandFlag(fighter, sub.flag + 3, true);
+        }
+        return;
+    }
     if (sub.type == SubactionType::StartSmashCharge) {
         startSmashCharge(fighter, sub.smashChargeHoldFrames, sub.smashChargeDamageMultiplier);
+        return;
+    }
+    if (sub.type == SubactionType::CreateThrowHitbox) {
+        if (sub.hitbox.hitboxId >= 0 && sub.hitbox.hitboxId < static_cast<int>(fighter.throwHitboxes.size())) {
+            fighter.throwHitboxes[static_cast<size_t>(sub.hitbox.hitboxId)] = sub.hitbox;
+            fighter.throwHitboxActive[static_cast<size_t>(sub.hitbox.hitboxId)] = true;
+        }
         return;
     }
     if (sub.type == SubactionType::SetModelPartAnimation) {
@@ -3391,6 +3638,9 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         return;
     }
     if (sub.type == SubactionType::CreateHitbox) {
+        if (sub.hitbox.requiresThrownHitboxOwner && fighter.thrownHitboxOwner < 0) {
+            return;
+        }
         ActiveHitbox hitbox;
         hitbox.def = sub.hitbox;
         hitbox.def.damage = fxMul(hitbox.def.damage, smashChargeDamageScale(fighter));
@@ -3427,7 +3677,7 @@ static void executeActionFrame(const FighterDefinition& def, const FighterState&
 
 static int actionFrameForState(const FighterDefinition& def, const FighterState& state, const FighterRuntime& fighter) {
     if (def.hasHsdAsset && def.hsdAsset && clipForState(def, state)) {
-        return std::max(0, static_cast<int>(fxToFloat(fighter.animationFrame)) + 1);
+        return std::max(0, static_cast<int>(fxToFloat(fighter.animationFrame)));
     }
     return frameInState(fighter);
 }
@@ -3569,23 +3819,120 @@ static Vec2 collisionSubstepDelta(Vec2 totalDelta, Vec2 consumedDelta, int step,
     return {totalDelta.x / steps, totalDelta.y / steps};
 }
 
+static bool isDamageFlyStateName(const std::string& name) {
+    return name == "DamageFlyHi" || name == "DamageFlyN" || name == "DamageFlyLw" ||
+           name == "DamageFlyTop" || name == "DamageFlyRoll";
+}
+
+static bool damageFlyHitboxIgnoresVictim(const World& world, const FighterRuntime& attacker, size_t victimIndex) {
+    return attacker.damageHitboxOwner == static_cast<int>(victimIndex) &&
+        isDamageFlyStateName(currentState(world, attacker).name);
+}
+
+static bool thrownHitboxIgnoresOwner(const FighterRuntime& attacker, size_t victimIndex) {
+    return attacker.thrownHitboxOwner == static_cast<int>(victimIndex);
+}
+
+static bool fightersAreInActiveCaptureLink(const FighterRuntime& attacker, size_t attackerIndex, const FighterRuntime& victim, size_t victimIndex) {
+    return attacker.grabberFighter == static_cast<int>(victimIndex) ||
+        attacker.grabbedFighter == static_cast<int>(victimIndex) ||
+        victim.grabberFighter == static_cast<int>(attackerIndex) ||
+        victim.grabbedFighter == static_cast<int>(attackerIndex);
+}
+
+static bool recentTechInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    const int maxAge = std::min(std::max(0, common.passiveInputWindowX250 - 1), InputBuffer::kSize - 2);
+    for (int age = 0; age <= maxAge; ++age) {
+        const InputFrame& current = fighter.input.frames[static_cast<size_t>(age)];
+        const InputFrame& previous = fighter.input.frames[static_cast<size_t>(age + 1)];
+        const bool currentPress = (current.buttons & (ButtonShield | ButtonGrab)) != 0 || current.shieldAnalog > 0;
+        const bool previousPress = (previous.buttons & (ButtonShield | ButtonGrab)) != 0 || previous.shieldAnalog > 0;
+        if (currentPress && !previousPress) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void clearDamageVelocity(FighterRuntime& fighter) {
+    fighter.fighterVelocity = {};
+    fighter.knockbackVelocity = {};
+    fighter.knockbackDecay = {};
+    fighter.attackerShieldKnockback = {};
+    fighter.groundVelocity = 0;
+    fighter.groundKnockbackVelocity = 0;
+    fighter.groundAttackerShieldKnockbackVelocity = 0;
+    fighter.groundAccel = 0;
+    fighter.groundAccelSecondary = 0;
+    fighter.hitstun = 0;
+    fighter.damageTumble = false;
+}
+
+static void reflectDamageVelocity(FighterRuntime& fighter, Vec2 normal, Fix damping) {
+    const Fix lenSq = fxMul(normal.x, normal.x) + fxMul(normal.y, normal.y);
+    if (lenSq <= 0) {
+        return;
+    }
+    const Fix invLen = fxDiv(fx(1), fxFromFloat(std::sqrt(fxToFloat(lenSq))));
+    normal.x = fxMul(normal.x, invLen);
+    normal.y = fxMul(normal.y, invLen);
+    const Fix dotVel = fxMul(fighter.knockbackVelocity.x, normal.x) + fxMul(fighter.knockbackVelocity.y, normal.y);
+    if (dotVel < 0) {
+        fighter.knockbackVelocity.x = fxMul(fighter.knockbackVelocity.x - fxMul(fx(2), fxMul(dotVel, normal.x)), damping);
+        fighter.knockbackVelocity.y = fxMul(fighter.knockbackVelocity.y - fxMul(fx(2), fxMul(dotVel, normal.y)), damping);
+    } else {
+        fighter.knockbackVelocity.x = fxMul(fighter.knockbackVelocity.x, damping);
+        fighter.knockbackVelocity.y = fxMul(fighter.knockbackVelocity.y, damping);
+    }
+    const Fix dotDecay = fxMul(fighter.knockbackDecay.x, normal.x) + fxMul(fighter.knockbackDecay.y, normal.y);
+    if (dotDecay < 0) {
+        fighter.knockbackDecay.x = fighter.knockbackDecay.x - fxMul(fx(2), fxMul(dotDecay, normal.x));
+        fighter.knockbackDecay.y = fighter.knockbackDecay.y - fxMul(fx(2), fxMul(dotDecay, normal.y));
+    }
+}
+
+static bool handleDamageSurfaceContact(World& world, FighterRuntime& fighter, Vec2 normal, const char* damageState, const char* techState) {
+    if (!fighter.damageTumble || !isDamageFlyStateName(currentState(world, fighter).name)) {
+        return false;
+    }
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (recentTechInput(fighter, def.properties.common)) {
+        const InputFrame& input = fighter.input.frames[0];
+        const bool wallTechJump =
+            std::strcmp(techState, "PassiveWall") == 0 &&
+            (fighter.input.justPressed(ButtonJump) ||
+             fxAbs(input.move.x) >= def.properties.common.wallJumpStickThresholdX76C ||
+             input.move.y >= def.properties.common.wallJumpStickThresholdX76C ||
+             fxAbs(input.cStick.x) >= def.properties.common.wallJumpStickThresholdX76C ||
+             input.cStick.y >= def.properties.common.wallJumpStickThresholdX76C);
+        clearDamageVelocity(fighter);
+        changeFighterState(world, fighter, wallTechJump ? "PassiveWallJump" : techState);
+        return true;
+    }
+    const bool floorLike = normal.y > fxFromFloat(0.5f);
+    reflectDamageVelocity(
+        fighter,
+        normal,
+        floorLike ? def.properties.common.damageGroundBounceDampingX1EC
+                  : def.properties.common.damageWallBounceDampingX1BC);
+    fighter.damageSurfaceTimer = 0;
+    changeFighterState(world, fighter, damageState);
+    return true;
+}
+
 static bool shouldStartTeeterFromRunoff(
-    const World& world,
     const FighterRuntime& fighter,
     const StageSegment& previousSegment,
-    Vec2 previousBottom,
-    Vec2 attemptedDelta,
     int side)
 {
-    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Fix edgeX = side < 0 ? segmentMinX(previousSegment) : segmentMaxX(previousSegment);
-    const Fix epsilon = fxFromFloat(0.001f);
-    const bool alreadyAtEdge = side < 0
-        ? previousBottom.x <= edgeX + epsilon
-        : previousBottom.x >= edgeX - epsilon;
-    const bool movingOutward = attemptedDelta.x * side > 0 || fighter.groundVelocity * side > 0;
-    const bool stickOutward = fighter.input.frames[0].move.x * side >= def.properties.common.walkInputThresholdX24;
-    return !(alreadyAtEdge && movingOutward && stickOutward);
+    const Fix bottomX = fighter.position.x + fighter.ecb.points[3].x;
+    const bool pastEdge = side < 0 ? bottomX <= edgeX : bottomX >= edgeX;
+    if (!pastEdge || fighter.facing != side) {
+        return false;
+    }
+
+    return fighter.input.frames[0].move.x * side < fxFromFloat(0.75f);
 }
 
 static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGrounded, int previousGroundSegment, Vec2 attemptedDelta) {
@@ -3606,14 +3953,13 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
         {
             const StageSegment& previousSegment = world.stage.segments[static_cast<size_t>(previousGroundSegment)];
             const Fix bottomX = fighter.position.x + fighter.ecb.points[3].x;
-            const Vec2 previousBottom = fighter.previousPosition + fighter.previousEcb.points[3];
             if (bottomX < segmentMinX(previousSegment) &&
-                shouldStartTeeterFromRunoff(world, fighter, previousSegment, previousBottom, attemptedDelta, -1))
+                shouldStartTeeterFromRunoff(fighter, previousSegment, -1))
             {
                 fighter.runoffSegment = previousGroundSegment;
                 fighter.runoffDirection = -1;
             } else if (bottomX > segmentMaxX(previousSegment) &&
-                       shouldStartTeeterFromRunoff(world, fighter, previousSegment, previousBottom, attemptedDelta, 1))
+                       shouldStartTeeterFromRunoff(fighter, previousSegment, 1))
             {
                 fighter.runoffSegment = previousGroundSegment;
                 fighter.runoffDirection = 1;
@@ -3624,6 +3970,16 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
     if (!wasGrounded && !nowGrounded) {
         hitCeilingThisStep = resolveWallAndCeiling(world, fighter, attemptedDelta);
         resolvedAirCollision = true;
+        if (hitCeilingThisStep &&
+            handleDamageSurfaceContact(world, fighter, {0, -fx(1)}, "StopCeil", "PassiveCeil"))
+        {
+            return true;
+        }
+        if (fighter.wallContactSide != 0 &&
+            handleDamageSurfaceContact(world, fighter, {-fighter.wallContactSide * fx(1), 0}, "WallDamage", "PassiveWall"))
+        {
+            return true;
+        }
     }
 
     if (!nowGrounded && !hitCeilingThisStep) {
@@ -3631,9 +3987,9 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
         const Vec2 currentBottom = fighter.position + fighter.ecb.points[3];
         const int landingSkip = wasGrounded ? previousGroundSegment : -1;
         landedSegment = findLandingSegment(world, fighter, previousBottom, currentBottom, landingContact, landingFraction, landingSkip);
-        if (landedSegment >= 0 && fighter.fighterVelocity.y <= fxFromFloat(0.2f)) {
+        if (landedSegment >= 0 && attemptedDelta.y <= fx(0)) {
             const StageSegment& segment = world.stage.segments[static_cast<size_t>(landedSegment)];
-            fighter.lastLandingVelocityY = fighter.fighterVelocity.y;
+            fighter.lastLandingVelocityY = attemptedDelta.y;
             fighter.groundNormal = segmentNormal(segment);
             fighter.groundVelocity = velocityAlongGround(fighter.fighterVelocity, fighter.groundNormal);
             fighter.position.x = landingContact.x - fighter.ecb.points[3].x;
@@ -3675,6 +4031,9 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
 
     if (!resolvedAirCollision) {
         resolveWallAndCeiling(world, fighter, attemptedDelta);
+        if (fighter.wallContactSide != 0) {
+            handleDamageSurfaceContact(world, fighter, {-fighter.wallContactSide * fx(1), 0}, "WallDamage", "PassiveWall");
+        }
     }
 
     refreshEcbMetadata(fighter.ecb, fighter);
@@ -3728,35 +4087,70 @@ static void integrateAndCollide(World& world, size_t fighterIndex) {
     if (fighter.wallContactSide == 0) {
         fighter.wallContactTimer = incrementTiltTimer(fighter.wallContactTimer);
     }
-    fighter.knockbackVelocity.x = fxApproach(fighter.knockbackVelocity.x, 0, fxFromFloat(0.051f));
-    fighter.knockbackVelocity.y = fxApproach(fighter.knockbackVelocity.y, 0, fxFromFloat(0.051f));
+    updateKnockbackVelocity(world, fighter);
+}
+
+static uint32_t nextRandom(World& world) {
+    uint32_t x = world.rngState == 0 ? 0x4D454C45 : world.rngState;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    world.rngState = x;
+    return x;
+}
+
+static Fix nextRandomUnit(World& world) {
+    return fxFromFloat(static_cast<float>(nextRandom(world) & 0x00FFFFFF) / static_cast<float>(0x01000000));
+}
+
+static Fix calculateKnockbackWithWeight(const HitboxDefinition& hitbox, const MeleeCommonData& common, Fix victimPercent, Fix weight) {
+    const Fix weighted = fxMul(weight, common.knockbackWeightScaleXF4);
+    Fix decay = common.knockbackWeightDecayXF8;
+    if (weighted + fx(1) != 0) {
+        decay -= fxDiv(fxMul(weighted, decay), fx(1) + weighted);
+    }
+
+    Fix knockback = 0;
+    if (hitbox.knockbackWeightSet > 0) {
+        knockback = fxMul(common.knockbackWeightSetScaleX118, hitbox.knockbackWeightSet);
+        knockback = fxMul(common.knockbackWeightSetScaleX118, common.knockbackDamageBaseX110) +
+            fxMul(common.knockbackDamageScaleX114, knockback);
+    } else {
+        const Fix damage = fx(static_cast<int>(fxToFloat(victimPercent))) + hitbox.damage;
+        knockback = fxMul(hitbox.damage, damage);
+        knockback = fxMul(common.knockbackDamageBaseX110, damage) +
+            fxMul(common.knockbackDamageScaleX114, knockback);
+    }
+
+    knockback = fxMul(decay, knockback);
+    knockback = fxMul(common.knockbackScaleX11C, knockback) + common.knockbackBaseX120;
+    knockback = fxMul(fxMul(hitbox.knockbackGrowth, fxFromFloat(0.01f)), knockback) + hitbox.knockbackBase;
+    return std::min(knockback, common.knockbackMaxX108);
 }
 
 static Fix calculateKnockback(const HitboxDefinition& hitbox, const FighterDefinition& victimDef, const FighterRuntime& victim) {
-    const Fix weight = victimDef.properties.weight;
-    const Fix weightScale = fxDiv(fx(200), weight + fx(100));
-    Fix knockback = 0;
-    if (hitbox.knockbackWeightSet > 0) {
-        const Fix setTerm = fxMul(hitbox.knockbackWeightSet, fxFromFloat(0.5f)) + fx(1);
-        knockback = fxMul(setTerm, fxMul(fxFromFloat(1.4f), fx(1))) + fx(18);
-    } else {
-        const Fix percent = fx(static_cast<int>(fxToFloat(victim.percent)));
-        const Fix damagePercent = hitbox.damage + percent;
-        const Fix damageTerm = fxMul(fxMul(hitbox.damage, damagePercent), fxFromFloat(0.05f)) +
-            fxMul(damagePercent, fxFromFloat(0.1f));
-        knockback = fxMul(damageTerm, fxMul(fxFromFloat(1.4f), weightScale)) + fx(18);
-    }
-    knockback = fxMul(knockback, fxMul(hitbox.knockbackGrowth, fxFromFloat(0.01f))) + hitbox.knockbackBase;
-    return std::min(knockback, fx(2500));
+    return calculateKnockbackWithWeight(hitbox, victimDef.properties.common, victim.percent, victimDef.properties.weight);
 }
 
-static Fix launchAngleDegrees(const FighterRuntime& victim, const HitboxDefinition& hitbox, Fix knockback, int side) {
+static Fix calculateThrowKnockback(const HitboxDefinition& hitbox, const FighterDefinition& victimDef, const FighterRuntime& victim) {
+    return calculateKnockbackWithWeight(hitbox, victimDef.properties.common, victim.percent, victimDef.properties.common.throwKnockbackWeightX10C);
+}
+
+static Fix launchAngleDegrees(const FighterRuntime& victim, const HitboxDefinition& hitbox, const MeleeCommonData& common, Fix knockback, int side) {
     Fix angle = hitbox.knockbackAngleDegrees;
     if (angle == fx(361)) {
-        if (knockback < fxFromFloat(32.1f)) {
+        if (victim.grounded && knockback < common.damageSakuraiAngleLowX14C) {
             angle = side >= 0 ? fx(0) : fx(180);
         } else {
-            angle = side >= 0 ? fx(44) : fx(136);
+            const Fix high = common.damageSakuraiAngleHighX150;
+            const Fix span = std::max(Fix{1}, high - common.damageSakuraiAngleLowX14C);
+            Fix scaled = fx(1) + fxMul(common.damageSakuraiAngleScaleX148,
+                std::clamp(fxDiv(knockback - common.damageSakuraiAngleLowX14C, span), Fix{0}, fx(1)));
+            scaled = std::min(scaled, common.damageSakuraiAngleScaleX148);
+            if (!victim.grounded) {
+                scaled = fxMul(common.damageSakuraiAngleAirX144, fxFromFloat(180.0f / 3.14159265f));
+            }
+            angle = side >= 0 ? scaled : fx(180) - scaled;
         }
     } else if (side < 0) {
         angle = fx(180) - angle;
@@ -3772,32 +4166,653 @@ static Fix launchAngleDegrees(const FighterRuntime& victim, const HitboxDefiniti
     return angle;
 }
 
-static void applyHit(World& world, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox) {
+static Fix throwLaunchAngleDegrees(const FighterRuntime& victim, const HitboxDefinition& hitbox, const MeleeCommonData& common, Fix knockback) {
+    Fix angle = hitbox.knockbackAngleDegrees;
+    if (angle != fx(361)) {
+        return angle;
+    }
+    if (!victim.grounded) {
+        return fxMul(common.damageSakuraiAngleAirX144, fxFromFloat(180.0f / 3.14159265f));
+    }
+    if (knockback < common.damageSakuraiAngleLowX14C) {
+        return 0;
+    }
+    const Fix high = common.damageSakuraiAngleHighX150;
+    const Fix span = std::max(Fix{1}, high - common.damageSakuraiAngleLowX14C);
+    Fix result = fx(1) + fxMul(common.damageSakuraiAngleScaleX148,
+        std::clamp(fxDiv(knockback - common.damageSakuraiAngleLowX14C, span), Fix{0}, fx(1)));
+    return std::min(result, common.damageSakuraiAngleScaleX148);
+}
+
+static Fix applyDirectionalInfluence(const FighterRuntime& victim, const MeleeCommonData& common, Fix angleDegrees, Fix knockback) {
+    if (knockback < fx(80) && victim.grounded &&
+        (angleDegrees == fx(0) || angleDegrees == fx(180)))
+    {
+        return angleDegrees;
+    }
+
+    Fix stickX = victim.input.frames[0].move.x;
+    Fix stickY = victim.input.frames[0].move.y;
+    if (fxAbs(stickX) < common.aerialAttackDeadzoneXDC) {
+        stickX = 0;
+    }
+    if (fxAbs(stickY) < common.aerialAttackDeadzoneXE0) {
+        stickY = 0;
+    }
+    if (stickX == 0 && stickY == 0) {
+        return angleDegrees;
+    }
+
+    const float trajectory = fxToFloat(angleDegrees);
+    const float diAngle = std::atan2(fxToFloat(stickY), fxToFloat(stickX)) * 180.0f / 3.14159265f;
+    float relative = trajectory - (diAngle < 0.0f ? diAngle + 360.0f : diAngle);
+    if (relative > 180.0f) {
+        relative -= 360.0f;
+    }
+    const float stickMag = std::min(1.0f, std::sqrt(std::pow(fxToFloat(stickX), 2.0f) + std::pow(fxToFloat(stickY), 2.0f)));
+    float offset = std::sin(relative * 3.14159265f / 180.0f) * stickMag;
+    offset = std::min(18.0f, offset * offset * 18.0f) * (relative < 0.0f && relative > -180.0f ? -1.0f : 1.0f);
+    return fxFromFloat(std::max(0.0f, trajectory - offset));
+}
+
+static int damageLevelFromHitstun(Fix scaledHitstun, const MeleeCommonData& common) {
+    if (scaledHitstun < common.damageLevelThresholdX158) return 0;
+    if (scaledHitstun < common.damageLevelThresholdX15C) return 1;
+    if (scaledHitstun < common.damageLevelThresholdX160) return 2;
+    return 3;
+}
+
+static int hurtboxRegionForHit(const FighterDefinition& victimDef, size_t hurtboxIndex) {
+    if (victimDef.hasHsdAsset && victimDef.hsdAsset && hurtboxIndex < victimDef.hsdAsset->hurtboxes.size()) {
+        const std::string& type = victimDef.hsdAsset->hurtboxes[hurtboxIndex].type;
+        if (type == "Low") return 0;
+        if (type == "High") return 2;
+        return 1;
+    }
+    if (hurtboxIndex == 0) return 1;
+    if (hurtboxIndex == 1) return 2;
+    return 0;
+}
+
+static const char* groundedDamageStateName(int level, int region) {
+    static constexpr const char* names[3][3] = {
+        {"DamageLw1", "DamageN1", "DamageHi1"},
+        {"DamageLw2", "DamageN2", "DamageHi2"},
+        {"DamageLw3", "DamageN3", "DamageHi3"},
+    };
+    return names[std::clamp(level, 0, 2)][std::clamp(region, 0, 2)];
+}
+
+static const char* airDamageStateName(int level) {
+    static constexpr const char* names[3] = {"DamageAir1", "DamageAir2", "DamageAir3"};
+    return names[std::clamp(level, 0, 2)];
+}
+
+static const char* flyDamageStateName(World& world, const FighterRuntime& victim, const MeleeCommonData& common, int region, Fix angleDegrees) {
+    if (!victim.grounded) {
+        const Fix angleRadians = fxMul(angleDegrees, fxFromFloat(3.14159265f / 180.0f));
+        if (angleRadians > common.damageFlyTopAngleMinX234 &&
+            angleRadians < common.damageFlyTopAngleMaxX238)
+        {
+            return "DamageFlyTop";
+        }
+        if (victim.percent >= fx(common.damageFlyRollPercentX23C) &&
+            nextRandomUnit(world) < common.damageFlyRollChanceX240)
+        {
+            return "DamageFlyRoll";
+        }
+    }
+    static constexpr const char* names[3] = {"DamageFlyLw", "DamageFlyN", "DamageFlyHi"};
+    return names[std::clamp(region, 0, 2)];
+}
+
+static Fix vectorMagnitude(Vec2 value) {
+    return fxFromFloat(std::sqrt(std::pow(fxToFloat(value.x), 2.0f) + std::pow(fxToFloat(value.y), 2.0f)));
+}
+
+static Fix angleBetween(Vec2 a, Vec2 b) {
+    const float ax = fxToFloat(a.x);
+    const float ay = fxToFloat(a.y);
+    const float bx = fxToFloat(b.x);
+    const float by = fxToFloat(b.y);
+    const float lenA = std::sqrt(ax * ax + ay * ay);
+    const float lenB = std::sqrt(bx * bx + by * by);
+    if (lenA <= 0.0001f || lenB <= 0.0001f) {
+        return 0;
+    }
+    const float dot = std::clamp((ax * bx + ay * by) / (lenA * lenB), -1.0f, 1.0f);
+    return fxFromFloat(std::acos(dot));
+}
+
+static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox, size_t hurtboxIndex) {
     const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+    const MeleeCommonData& common = victimDef.properties.common;
     const Fix kb = calculateKnockback(hitbox, victimDef, victim);
     const bool wasGrounded = victim.grounded;
     const int side = victim.position.x >= attacker.position.x ? 1 : -1;
-    const Fix launchAngle = launchAngleDegrees(victim, hitbox, kb, side);
-    const float angle = fxToFloat(launchAngle) * 3.14159265f / 180.0f;
+    const Fix launchAngle = applyDirectionalInfluence(victim, common, launchAngleDegrees(victim, hitbox, common, kb, side), kb);
+    Fix resolvedLaunchAngle = launchAngle;
+    const float angle = fxToFloat(resolvedLaunchAngle) * 3.14159265f / 180.0f;
     victim.percent += hitbox.damage;
-    victim.knockbackVelocity.x = fxFromFloat(std::cos(angle) * fxToFloat(kb) * 0.03f);
-    victim.knockbackVelocity.y = fxFromFloat(std::sin(angle) * fxToFloat(kb) * 0.03f);
+    const Fix scaledVelocity = fxMul(kb, common.damageVelocityScaleX100);
+    Vec2 knockbackVelocity{
+        fxFromFloat(std::cos(angle) * fxToFloat(scaledVelocity)),
+        fxFromFloat(std::sin(angle) * fxToFloat(scaledVelocity)),
+    };
     if (kb < fx(80) && victim.grounded &&
         (hitbox.knockbackAngleDegrees == fx(0) || hitbox.knockbackAngleDegrees == fx(180)))
     {
-        victim.knockbackVelocity.y = 0;
+        knockbackVelocity.y = 0;
+        resolvedLaunchAngle = side >= 0 ? fx(0) : fx(180);
     }
     victim.hitlag = std::max(3, static_cast<int>(fxToFloat(hitbox.damage) / 3.0f) + 3);
     attacker.hitlag = victim.hitlag;
-    victim.hitstun = std::max(1, static_cast<int>(fxToFloat(kb) * 0.4f));
-    if (kb >= fx(80) || !wasGrounded) {
+    const Fix scaledHitstun = fxMul(kb, common.hitstunMultiplierX154);
+    victim.hitstun = std::max(1, static_cast<int>(fxToFloat(scaledHitstun)));
+    victim.damageLevel = damageLevelFromHitstun(scaledHitstun, common);
+    victim.damageHurtboxRegion = hurtboxRegionForHit(victimDef, hurtboxIndex);
+    victim.damageKnockback = kb;
+    victim.damageLaunchAngle = resolvedLaunchAngle;
+    victim.damageTumble = victim.damageLevel >= 3;
+    victim.damageSurfaceTimer = 0;
+    victim.damageHitboxOwner = static_cast<int>(attackerIndex);
+    victim.fighterVelocity = {};
+    victim.groundVelocity = 0;
+    victim.groundKnockbackVelocity = 0;
+    victim.groundAccel = 0;
+    victim.groundAccelSecondary = 0;
+    victim.facing = -side;
+
+    const bool shouldFly = victim.damageLevel >= 3;
+    bool launchOffGround = !wasGrounded;
+    bool groundBounce = false;
+    if (wasGrounded) {
+        const Vec2 floorNormal = victim.groundNormal;
+        const Fix floorAngle = angleBetween(floorNormal, knockbackVelocity);
+        if (floorAngle < fxFromFloat(1.57079632679f)) {
+            launchOffGround = true;
+        } else if (shouldFly && floorAngle > fxFromFloat(1.57079632679f) + common.damageGroundBounceAngleX1E8) {
+            knockbackVelocity.y = fxMul(-knockbackVelocity.y, common.damageGroundBounceDampingX1EC);
+            resolvedLaunchAngle = fxFromFloat(std::atan2(fxToFloat(knockbackVelocity.y), fxToFloat(knockbackVelocity.x)) * 180.0f / 3.14159265f);
+            if (resolvedLaunchAngle < 0) {
+                resolvedLaunchAngle += fx(360);
+            }
+            victim.damageLaunchAngle = resolvedLaunchAngle;
+            launchOffGround = true;
+            groundBounce = true;
+        } else {
+            victim.groundKnockbackVelocity = velocityAlongGround(knockbackVelocity, victim.groundNormal);
+            knockbackVelocity.x = fxMul(victim.groundNormal.y, victim.groundKnockbackVelocity);
+            knockbackVelocity.y = fxMul(-victim.groundNormal.x, victim.groundKnockbackVelocity);
+        }
+    }
+    victim.knockbackVelocity = knockbackVelocity;
+    const Fix velocityMag = vectorMagnitude(knockbackVelocity);
+    if (velocityMag > 0) {
+        victim.knockbackDecay.x = fxMul(fxDiv(knockbackVelocity.x, velocityMag), common.knockbackFrameDecayX204);
+        victim.knockbackDecay.y = fxMul(fxDiv(knockbackVelocity.y, velocityMag), common.knockbackFrameDecayX204);
+    } else {
+        victim.knockbackDecay = {};
+    }
+
+    if (wasGrounded && launchOffGround) {
+        victim.jumpsUsed = std::max(1, victim.jumpsUsed);
+        lockFighterEcb(victim, 10);
+    }
+
+    if (shouldFly) {
+        victim.grounded = !launchOffGround && !groundBounce;
+        if (!victim.grounded) {
+            victim.groundSegment = -1;
+        }
+        changeFighterState(world, victim, flyDamageStateName(world, victim, common, victim.damageHurtboxRegion, resolvedLaunchAngle));
+    } else if (launchOffGround) {
         victim.grounded = false;
         victim.groundSegment = -1;
-        changeFighterState(world, victim, "DamageFlyN");
+        changeFighterState(world, victim, airDamageStateName(victim.damageLevel));
     } else {
         victim.grounded = wasGrounded;
-        changeFighterState(world, victim, "DamageN2");
+        changeFighterState(world, victim, groundedDamageStateName(victim.damageLevel, victim.damageHurtboxRegion));
     }
+}
+
+static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox, bool forceDamageFlyTop) {
+    const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+    const MeleeCommonData& common = victimDef.properties.common;
+    const Fix kb = calculateThrowKnockback(hitbox, victimDef, victim);
+    const bool wasGrounded = victim.grounded;
+    const int damageFacing = -attacker.facing;
+    Fix resolvedLaunchAngle = throwLaunchAngleDegrees(victim, hitbox, common, kb);
+    const float angle = fxToFloat(resolvedLaunchAngle) * 3.14159265f / 180.0f;
+    const Fix scaledVelocity = fxMul(kb, common.damageVelocityScaleX100);
+    Vec2 knockbackVelocity{
+        fxFromFloat(-std::cos(angle) * fxToFloat(scaledVelocity) * static_cast<float>(damageFacing)),
+        fxFromFloat(std::sin(angle) * fxToFloat(scaledVelocity)),
+    };
+
+    victim.percent += hitbox.damage;
+    const Fix scaledHitstun = fxMul(kb, common.hitstunMultiplierX154);
+    victim.hitstun = std::max(1, static_cast<int>(fxToFloat(scaledHitstun)));
+    victim.damageLevel = forceDamageFlyTop ? 3 : damageLevelFromHitstun(scaledHitstun, common);
+    victim.damageHurtboxRegion = 1;
+    victim.damageKnockback = kb;
+    victim.damageLaunchAngle = resolvedLaunchAngle;
+    victim.damageTumble = victim.damageLevel >= 3;
+    victim.damageSurfaceTimer = 0;
+    victim.damageHitboxOwner = static_cast<int>(attackerIndex);
+    victim.fighterVelocity = {};
+    victim.groundVelocity = 0;
+    victim.groundKnockbackVelocity = 0;
+    victim.groundAccel = 0;
+    victim.groundAccelSecondary = 0;
+    victim.hitlag = 0;
+    attacker.hitlag = 0;
+    victim.facing = damageFacing;
+    if (hitbox.knockbackAngleDegrees > fx(90) && hitbox.knockbackAngleDegrees < fx(270)) {
+        victim.facing = -damageFacing;
+    }
+
+    bool launchOffGround = !wasGrounded || forceDamageFlyTop;
+    bool groundBounce = false;
+    if (wasGrounded) {
+        const Vec2 floorNormal = victim.groundNormal;
+        const Vec2 pos{knockbackVelocity.x, knockbackVelocity.y};
+        const Fix floorAngle = angleBetween(floorNormal, pos);
+        if (floorAngle < fxFromFloat(1.57079632679f)) {
+            launchOffGround = true;
+        } else if (victim.damageLevel >= 3) {
+            launchOffGround = true;
+            if (floorAngle > fxFromFloat(1.57079632679f) + common.damageGroundBounceAngleX1E8) {
+                knockbackVelocity.y = fxMul(-knockbackVelocity.y, common.damageGroundBounceDampingX1EC);
+                resolvedLaunchAngle = fxFromFloat(std::atan2(fxToFloat(knockbackVelocity.y), fxToFloat(knockbackVelocity.x)) * 180.0f / 3.14159265f);
+                if (resolvedLaunchAngle < 0) {
+                    resolvedLaunchAngle += fx(360);
+                }
+                victim.damageLaunchAngle = resolvedLaunchAngle;
+                groundBounce = true;
+            }
+        } else {
+            victim.groundKnockbackVelocity = velocityAlongGround(knockbackVelocity, victim.groundNormal);
+            knockbackVelocity.x = fxMul(victim.groundNormal.y, victim.groundKnockbackVelocity);
+            knockbackVelocity.y = fxMul(-victim.groundNormal.x, victim.groundKnockbackVelocity);
+        }
+    }
+
+    victim.knockbackVelocity = knockbackVelocity;
+    const Fix velocityMag = vectorMagnitude(knockbackVelocity);
+    if (velocityMag > 0) {
+        victim.knockbackDecay.x = fxMul(fxDiv(knockbackVelocity.x, velocityMag), common.knockbackFrameDecayX204);
+        victim.knockbackDecay.y = fxMul(fxDiv(knockbackVelocity.y, velocityMag), common.knockbackFrameDecayX204);
+    } else {
+        victim.knockbackDecay = {};
+    }
+
+    if (wasGrounded && launchOffGround) {
+        victim.jumpsUsed = std::max(1, victim.jumpsUsed);
+        lockFighterEcb(victim, 10);
+    }
+
+    if (forceDamageFlyTop) {
+        victim.grounded = false;
+        victim.groundSegment = -1;
+        changeFighterState(world, victim, "DamageFlyTop");
+    } else if (victim.damageLevel >= 3) {
+        victim.grounded = !launchOffGround && !groundBounce;
+        if (!victim.grounded) {
+            victim.groundSegment = -1;
+        }
+        changeFighterState(world, victim, flyDamageStateName(world, victim, common, victim.damageHurtboxRegion, resolvedLaunchAngle));
+    } else if (launchOffGround) {
+        victim.grounded = false;
+        victim.groundSegment = -1;
+        changeFighterState(world, victim, airDamageStateName(victim.damageLevel));
+    } else {
+        victim.grounded = wasGrounded;
+        changeFighterState(world, victim, groundedDamageStateName(victim.damageLevel, victim.damageHurtboxRegion));
+    }
+}
+
+static bool isHeldCaptureStateName(const std::string& name) {
+    return name == "CapturePulledHi" || name == "CapturePulledLw" ||
+           name == "CaptureWaitHi" || name == "CaptureWaitLw" ||
+           name == "CaptureDamageHi" || name == "CaptureDamageLw" ||
+           name == "ThrownF" || name == "ThrownB" ||
+           name == "ThrownHi" || name == "ThrownLw";
+}
+
+static bool isThrowStateNameSim(const std::string& name) {
+    return name == "ThrowF" || name == "ThrowB" || name == "ThrowHi" || name == "ThrowLw";
+}
+
+static bool validFighterIndex(const World& world, int index) {
+    return index >= 0 && index < static_cast<int>(world.fighters.size());
+}
+
+static Fix initialGrabTimer(const FighterRuntime& victim, const MeleeCommonData& common, size_t attackerIndex) {
+    const Fix slot = fx(static_cast<int>(attackerIndex) + 1);
+    const Fix portTerm = fxMul(common.grabTimerPortScaleX360, common.grabTimerPortBaseX364 - slot);
+    const Fix handicapTerm = fxMul(common.grabTimerHandicapScaleX358, common.grabTimerHandicapBaseX35C - fx(9));
+    return fxMul(victim.percent, common.grabTimerPercentScaleX368) + common.grabTimerBaseX354 + handicapTerm + portTerm;
+}
+
+static int xRotNBone(const FighterDefinition& def, const FighterRuntime& fighter) {
+    return commonPartBone(def, fighter, 2);
+}
+
+static int transN2Bone(const FighterDefinition& def, const FighterRuntime& fighter) {
+    return commonPartBone(def, fighter, 52);
+}
+
+static Vec3 boneWorldByIndex(const FighterRuntime& fighter, int bone) {
+    if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
+        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], {});
+    }
+    return {fighter.position.x, fighter.position.y, 0};
+}
+
+static Vec3 meleeCaptureAnchorWorld(const FighterDefinition& grabberDef, const FighterRuntime& grabber, bool constrained) {
+    if (constrained) {
+        const int bone = transN2Bone(grabberDef, grabber);
+        if (bone >= 0) {
+            return boneWorldByIndex(grabber, bone);
+        }
+    }
+    if (grabberDef.hasHsdAsset && grabberDef.hsdAsset) {
+        const int shieldBone = grabberDef.hsdAsset->fighterBones.shield;
+        if (shieldBone >= 0) {
+            return boneWorldByIndex(grabber, shieldBone);
+        }
+    }
+    return commonPartWorld(grabberDef, grabber, 52);
+}
+
+static Vec3 meleeTopNFromXRotN(const FighterDefinition& def, const FighterRuntime& fighter) {
+    const Vec3 transN = commonPartWorld(def, fighter, 1);
+    const Vec3 xRotN = commonPartWorld(def, fighter, 2);
+    return {transN.x - xRotN.x, transN.y - xRotN.y, transN.z - xRotN.z};
+}
+
+static bool isZeroVec3(Vec3 value) {
+    return value.x == 0 && value.y == 0 && value.z == 0;
+}
+
+static Vec3 meleeInitialTopNFromXRotN(const FighterDefinition& def, const FighterRuntime& fighter) {
+    if (!def.hasHsdAsset || !def.hsdAsset) {
+        return {};
+    }
+
+    AnimationPose pose = bindPose(def.hsdAsset->skeleton);
+    const int waitIndex = def.stateIndex("Wait");
+    if (waitIndex >= 0) {
+        if (const AnimationClip* clip = clipForState(def, def.states[static_cast<size_t>(waitIndex)])) {
+            pose = evaluateClip(def.hsdAsset->skeleton, *clip, 0);
+        }
+    }
+    if (!pose.joints.empty()) {
+        constexpr float kHalfPi = 1.57079632679f;
+        const float facing = fighter.hsdPoseFacing >= 0 ? 1.0f : -1.0f;
+        pose.joints[0].rotation.y = fxFromFloat(kHalfPi * facing);
+        pose.joints[0].useQuaternion = false;
+    }
+
+    FighterRuntime temp = fighter;
+    temp.hsdPose = pose;
+    const std::vector<JointWorldTransform> transforms = fighterHsdWorldTransforms(def, temp);
+    const int transN = commonPartBone(def, fighter, 1);
+    const int xRotN = commonPartBone(def, fighter, 2);
+    if (transN < 0 || xRotN < 0 ||
+        static_cast<size_t>(transN) >= transforms.size() ||
+        static_cast<size_t>(xRotN) >= transforms.size())
+    {
+        return meleeTopNFromXRotN(def, fighter);
+    }
+    const Vec3 transNWorld = transformPoint(transforms[static_cast<size_t>(transN)], {});
+    const Vec3 xRotNWorld = transformPoint(transforms[static_cast<size_t>(xRotN)], {});
+    return {transNWorld.x - xRotNWorld.x, transNWorld.y - xRotNWorld.y, transNWorld.z - xRotNWorld.z};
+}
+
+static Vec2 meleeCurPosFromXRotN(const FighterRuntime& fighter, Vec3 xRotNWorld) {
+    return {
+        xRotNWorld.x + fighter.facing * fighter.captureConstraintOffset.z,
+        xRotNWorld.y + fighter.captureConstraintOffset.y,
+    };
+}
+
+static void storeMeleeCaptureOffsets(const FighterDefinition& victimDef, FighterRuntime& victim) {
+    victim.captureConstraintOffset = meleeInitialTopNFromXRotN(victimDef, victim);
+    const int xRotN = xRotNBone(victimDef, victim);
+    if (xRotN >= 0 && static_cast<size_t>(xRotN) < victim.hsdPose.joints.size()) {
+        victim.captureOriginalXRotNTranslation = victim.hsdPose.joints[static_cast<size_t>(xRotN)].translation;
+    } else {
+        victim.captureOriginalXRotNTranslation = {};
+    }
+}
+
+void beginMeleeThrowConstraint(World& world, size_t grabberIndex, size_t victimIndex) {
+    if (grabberIndex >= world.fighters.size() || victimIndex >= world.fighters.size()) {
+        return;
+    }
+    FighterRuntime& victim = world.fighters[victimIndex];
+    const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+    storeMeleeCaptureOffsets(victimDef, victim);
+
+    // ftCo_800DB368: constrain victim XRotN to thrower TransN2 and zero XRotN rotation.
+    const int xRotN = xRotNBone(victimDef, victim);
+    if (xRotN >= 0 && static_cast<size_t>(xRotN) < victim.hsdPose.joints.size()) {
+        JointPose& xRotNPose = victim.hsdPose.joints[static_cast<size_t>(xRotN)];
+        xRotNPose.rotation = {};
+        xRotNPose.quaternion = {};
+        xRotNPose.useQuaternion = false;
+    }
+    victim.captureConstraintActive = true;
+    updateMeleeCapturePosition(world, victimIndex);
+}
+
+bool updateMeleeCapturePosition(World& world, size_t victimIndex) {
+    if (victimIndex >= world.fighters.size()) {
+        return false;
+    }
+    FighterRuntime& victim = world.fighters[victimIndex];
+    if (!validFighterIndex(world, victim.grabberFighter)) {
+        return false;
+    }
+
+    FighterRuntime& grabber = world.fighters[static_cast<size_t>(victim.grabberFighter)];
+    const FighterDefinition& grabberDef = world.fighterDefs[static_cast<size_t>(grabber.fighterDef)];
+    const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+    if (isZeroVec3(victim.captureConstraintOffset)) {
+        storeMeleeCaptureOffsets(victimDef, victim);
+    }
+
+    // ftCo_800DAD18 aligns non-constrained capture states by adding
+    // (anchor - XRotN) to cur_pos. ftCo_800DB464 / ftCo_800DE508 use the
+    // fighter-load x1A70 (TopN - XRotN) only after XRotN is constrained under
+    // the thrower's TransN2.
+    const Vec3 xRotN = commonPartWorld(victimDef, victim, 2);
+    const Vec3 anchor = meleeCaptureAnchorWorld(grabberDef, grabber, victim.captureConstraintActive);
+    const Vec3 delta{anchor.x - xRotN.x, anchor.y - xRotN.y, anchor.z - xRotN.z};
+    const bool high = delta.y > victimDef.properties.common.captureHighThresholdX3C4;
+    victim.previousPosition = victim.position;
+    if (victim.captureConstraintActive) {
+        victim.position = meleeCurPosFromXRotN(victim, anchor);
+    } else {
+        victim.position.x += delta.x;
+        victim.position.y += delta.y;
+    }
+    victim.fighterVelocity = {};
+    victim.knockbackVelocity = {};
+    victim.groundVelocity = 0;
+    victim.groundAccel = 0;
+    victim.groundAccelSecondary = 0;
+    victim.facing = grabber.facing;
+    calculateEcb(victimDef, victim, true);
+    refreshHsdWorldPose(victimDef, victim);
+    applyImportedBoneAliases(victimDef, victim);
+    return high;
+}
+
+void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int capturedIndex, bool applyOffset) {
+    if (ownerIndex >= world.fighters.size() || !validFighterIndex(world, capturedIndex)) {
+        return;
+    }
+    FighterRuntime& owner = world.fighters[ownerIndex];
+    FighterRuntime& captured = world.fighters[static_cast<size_t>(capturedIndex)];
+    const FighterDefinition& ownerDef = world.fighterDefs[static_cast<size_t>(owner.fighterDef)];
+    const FighterDefinition& capturedDef = world.fighterDefs[static_cast<size_t>(captured.fighterDef)];
+    const Vec3 anchor = meleeCaptureAnchorWorld(ownerDef, owner, captured.captureConstraintActive);
+
+    if (captured.captureConstraintActive) {
+        const int xRotN = xRotNBone(capturedDef, captured);
+        if (xRotN >= 0 && static_cast<size_t>(xRotN) < captured.hsdPose.joints.size()) {
+            captured.hsdPose.joints[static_cast<size_t>(xRotN)].translation = captured.captureOriginalXRotNTranslation;
+        }
+    }
+    if (applyOffset) {
+        captured.position = meleeCurPosFromXRotN(captured, anchor);
+    }
+    captured.previousPosition = captured.position;
+    captured.captureConstraintActive = false;
+    captured.captureConstraintOffset = {};
+    captured.captureOriginalXRotNTranslation = {};
+    captured.grabberFighter = -1;
+    if (owner.grabbedFighter == capturedIndex) {
+        owner.grabbedFighter = -1;
+    }
+    refreshHsdWorldPose(capturedDef, captured);
+    calculateEcb(capturedDef, captured, true);
+}
+
+static void breakGrabLinks(World& world, size_t grabberIndex, int victimIndex) {
+    if (grabberIndex < world.fighters.size()) {
+        FighterRuntime& grabber = world.fighters[grabberIndex];
+        if (grabber.grabbedFighter == victimIndex) {
+            grabber.grabbedFighter = -1;
+        }
+    }
+    if (validFighterIndex(world, victimIndex)) {
+        FighterRuntime& victim = world.fighters[static_cast<size_t>(victimIndex)];
+        if (victim.grabberFighter == static_cast<int>(grabberIndex)) {
+            victim.grabberFighter = -1;
+        }
+    }
+}
+
+static void maintainCapturedFighterPosition(World& world, size_t victimIndex) {
+    updateMeleeCapturePosition(world, victimIndex);
+}
+
+static bool changeCaptureLowToHighAfterMeleeAlign(World& world, FighterRuntime& fighter) {
+    const std::string stateName = currentState(world, fighter).name;
+    const char* target = nullptr;
+    if (stateName == "CapturePulledLw") {
+        target = "CapturePulledHi";
+    } else if (stateName == "CaptureWaitLw") {
+        target = "CaptureWaitHi";
+    } else if (stateName == "CaptureDamageLw") {
+        target = "CaptureDamageHi";
+    }
+    if (!target) {
+        return false;
+    }
+
+    const Fix frame = fighter.animationFrame;
+    changeFighterState(world, fighter, target, 0, kDisableAnimationBlendFrames);
+    fighter.animationFrame = frame;
+    return true;
+}
+
+static void maintainCapturedFighterAfterPose(World& world, size_t victimIndex) {
+    if (victimIndex >= world.fighters.size()) {
+        return;
+    }
+    FighterRuntime& fighter = world.fighters[victimIndex];
+    if (fighter.grabberFighter < 0 || !isHeldCaptureStateName(currentState(world, fighter).name)) {
+        return;
+    }
+    const bool high = updateMeleeCapturePosition(world, victimIndex);
+    if (high) {
+        changeCaptureLowToHighAfterMeleeAlign(world, fighter);
+    }
+}
+
+static void captureVictim(World& world, size_t attackerIndex, size_t victimIndex) {
+    FighterRuntime& attacker = world.fighters[attackerIndex];
+    FighterRuntime& victim = world.fighters[victimIndex];
+    if (attacker.grabbedFighter >= 0 || victim.grabberFighter >= 0) {
+        return;
+    }
+    const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+    attacker.grabbedFighter = static_cast<int>(victimIndex);
+    victim.grabberFighter = static_cast<int>(attackerIndex);
+    victim.grabbedFighter = -1;
+    victim.grabTimer = std::max(Fix{1}, initialGrabTimer(victim, victimDef.properties.common, attackerIndex));
+    victim.captureWaitTimer = 0;
+    victim.captureMashAnimTimer = 0;
+    victim.grabMashStickX = 0;
+    victim.grabMashStickY = 0;
+    victim.captureJumpQueued = false;
+    victim.hitlag = 0;
+    victim.hitstun = 0;
+    victim.fighterVelocity = {};
+    victim.knockbackVelocity = {};
+    victim.groundVelocity = 0;
+    victim.groundAccel = 0;
+    victim.groundAccelSecondary = 0;
+    victim.facing = attacker.facing;
+    storeMeleeCaptureOffsets(victimDef, victim);
+    const bool high = victim.position.y >= attacker.position.y + victimDef.properties.common.captureHighThresholdX3C4;
+    changeFighterState(world, victim, high ? "CapturePulledHi" : "CapturePulledLw", 0, kDisableAnimationBlendFrames);
+    changeFighterState(world, attacker, currentState(world, attacker).name == "CatchDash" ? "CatchDashPull" : "CatchPull", 0, kDisableAnimationBlendFrames);
+    attacker.grabbedFighter = static_cast<int>(victimIndex);
+    victim.grabberFighter = static_cast<int>(attackerIndex);
+    maintainCapturedFighterPosition(world, victimIndex);
+}
+
+static void applyCapturedDamage(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox) {
+    victim.percent += hitbox.damage;
+    const int hitlagFrames = std::max(3, static_cast<int>(fxToFloat(hitbox.damage) / 3.0f) + 3);
+    attacker.hitlag = std::max(attacker.hitlag, hitlagFrames);
+    victim.hitlag = std::max(victim.hitlag, hitlagFrames);
+    const std::string& victimState = currentState(world, victim).name;
+    if (victimState == "CaptureWaitLw" || victimState == "CapturePulledLw" || victimState == "CaptureDamageLw") {
+        changeFighterState(world, victim, "CaptureDamageLw", 0, kDisableAnimationBlendFrames);
+    } else {
+        changeFighterState(world, victim, "CaptureDamageHi", 0, kDisableAnimationBlendFrames);
+    }
+    victim.grabberFighter = static_cast<int>(attackerIndex);
+}
+
+static const HitboxDefinition* throwHitboxForRelease(FighterRuntime& attacker) {
+    if (attacker.throwHitboxActive[0]) {
+        return &attacker.throwHitboxes[0];
+    }
+    return nullptr;
+}
+
+static void processThrowRelease(World& world, size_t attackerIndex) {
+    FighterRuntime& attacker = world.fighters[attackerIndex];
+    if (!fighterCommandFlag(attacker, 3) || !isThrowStateNameSim(currentState(world, attacker).name)) {
+        return;
+    }
+    setFighterCommandFlag(attacker, 3, false);
+    const int victimIndex = attacker.grabbedFighter;
+    if (!validFighterIndex(world, victimIndex)) {
+        return;
+    }
+    const HitboxDefinition* hitbox = throwHitboxForRelease(attacker);
+    if (!hitbox) {
+        return;
+    }
+    FighterRuntime& victim = world.fighters[static_cast<size_t>(victimIndex)];
+    const bool forceDamageFlyTop = currentState(world, attacker).name == "ThrowLw";
+    victim.previousPosition = victim.position;
+    releaseMeleeCaptureConstraint(world, attackerIndex, victimIndex, true);
+    victim.thrownAnimationFreezeActive = false;
+    victim.thrownAnimationFreezeFrame = 0;
+    victim.thrownHitboxOwner = static_cast<int>(attackerIndex);
+    attacker.throwAnimationFrozen = false;
+    attacker.animationRate = fx(1);
+    applyThrowReleaseDamage(world, attackerIndex, attacker, victim, *hitbox, forceDamageFlyTop);
 }
 
 static void applyInvincibleHit(FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox) {
@@ -3874,11 +4889,23 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
             if (victimIndex == attackerIndex) {
                 continue;
             }
-            if (std::find(attacker.fightersHitThisAction.begin(), attacker.fightersHitThisAction.end(), static_cast<int>(victimIndex)) != attacker.fightersHitThisAction.end()) {
+            if (damageFlyHitboxIgnoresVictim(world, attacker, victimIndex)) {
+                continue;
+            }
+            if (thrownHitboxIgnoresOwner(attacker, victimIndex)) {
                 continue;
             }
             FighterRuntime& victim = world.fighters[victimIndex];
+            if (!hitbox.def.onlyHitGrabbed && fightersAreInActiveCaptureLink(attacker, attackerIndex, victim, victimIndex)) {
+                continue;
+            }
+            if (std::find(attacker.fightersHitThisAction.begin(), attacker.fightersHitThisAction.end(), static_cast<int>(victimIndex)) != attacker.fightersHitThisAction.end()) {
+                continue;
+            }
             const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+            if (hitbox.def.onlyHitGrabbed && attacker.grabbedFighter != static_cast<int>(victimIndex)) {
+                continue;
+            }
             if ((victim.grounded && !hitbox.def.hitGrounded) || (!victim.grounded && !hitbox.def.hitAirborne)) {
                 continue;
             }
@@ -3895,7 +4922,12 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                 victim.hurtboxStates.assign(hurtboxCount, fillState);
             }
             Capsule hitCapsule{hitbox.previous, hitbox.current, hitbox.def.radius};
-            if (isShieldActiveState(currentState(world, victim)) && victim.shieldHealth > 0) {
+            if (hitbox.def.onlyHitGrabbed && attacker.grabbedFighter == static_cast<int>(victimIndex)) {
+                attacker.fightersHitThisAction.push_back(static_cast<int>(victimIndex));
+                applyCapturedDamage(world, attackerIndex, attacker, victim, hitbox.def);
+                continue;
+            }
+            if (!hitbox.def.isGrab && isShieldActiveState(currentState(world, victim)) && victim.shieldHealth > 0) {
                 const Vec3 center = shieldCenterWorld(victimDef, victim);
                 const Fix radius = currentShieldRadius(victimDef, victim);
                 if (capsuleCapsule(hitCapsule, {center, center, radius})) {
@@ -3910,12 +4942,21 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                     if (state == HurtboxState::Intangible) {
                         continue;
                     }
+                    if (hitbox.def.isGrab &&
+                        (hurtboxIndex >= victimDef.hsdAsset->hurtboxes.size() ||
+                         !victimDef.hsdAsset->hurtboxes[hurtboxIndex].grabbable))
+                    {
+                        continue;
+                    }
                     if (capsuleCapsule(hitCapsule, victim.hsdHurtboxCapsules[hurtboxIndex])) {
                         attacker.fightersHitThisAction.push_back(static_cast<int>(victimIndex));
-                        if (state == HurtboxState::Invincible) {
+                        if (hitbox.def.isGrab) {
+                            captureVictim(world, attackerIndex, victimIndex);
+                            return;
+                        } else if (state == HurtboxState::Invincible) {
                             applyInvincibleHit(attacker, victim, hitbox.def);
                         } else {
-                            applyHit(world, attacker, victim, hitbox.def);
+                            applyHit(world, attackerIndex, attacker, victim, hitbox.def, hurtboxIndex);
                         }
                         break;
                     }
@@ -3928,13 +4969,19 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                 if (state == HurtboxState::Intangible) {
                     continue;
                 }
+                if (hitbox.def.isGrab && !hurtbox.grabbable) {
+                    continue;
+                }
                 Capsule hurtCapsule{boneWorld(victim, hurtbox.bone, hurtbox.startOffset), boneWorld(victim, hurtbox.bone, hurtbox.endOffset), hurtbox.radius};
                 if (capsuleCapsule(hitCapsule, hurtCapsule)) {
                     attacker.fightersHitThisAction.push_back(static_cast<int>(victimIndex));
-                    if (state == HurtboxState::Invincible) {
+                    if (hitbox.def.isGrab) {
+                        captureVictim(world, attackerIndex, victimIndex);
+                        return;
+                    } else if (state == HurtboxState::Invincible) {
                         applyInvincibleHit(attacker, victim, hitbox.def);
                     } else {
-                        applyHit(world, attacker, victim, hitbox.def);
+                        applyHit(world, attackerIndex, attacker, victim, hitbox.def, hurtboxIndex);
                     }
                     break;
                 }
@@ -3970,9 +5017,14 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         processSmashCharge(fighter);
         processInterrupts(world, fighter);
         runStateFunctions(world, fighterIndex, currentState(world, fighter).onFrame);
+        processThrowRelease(world, fighterIndex);
         evaluatePose(def, currentState(world, fighter), fighter);
-        applyAnimationGroundVelocity(currentState(world, fighter), fighter);
-        integrateAndCollide(world, fighterIndex);
+        if (fighter.grabberFighter >= 0 && isHeldCaptureStateName(currentState(world, fighter).name)) {
+            maintainCapturedFighterAfterPose(world, fighterIndex);
+        } else {
+            applyAnimationGroundVelocity(currentState(world, fighter), fighter);
+            integrateAndCollide(world, fighterIndex);
+        }
 
         const FighterState& stateAfterPhysics = currentState(world, fighter);
         const int animationLengthFrames = fighter.stateAnimationLengthOverride > 0
@@ -3995,6 +5047,7 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
 WorldSnapshot saveWorld(const World& world) {
     WorldSnapshot snapshot;
     snapshot.frame = world.frame;
+    snapshot.rngState = world.rngState;
     for (const FighterRuntime& fighter : world.fighters) {
         FighterSnapshot item;
         item.fighterDef = fighter.fighterDef;
@@ -4017,8 +5070,10 @@ WorldSnapshot saveWorld(const World& world) {
         item.previousPosition = fighter.previousPosition;
         item.fighterVelocity = fighter.fighterVelocity;
         item.knockbackVelocity = fighter.knockbackVelocity;
+        item.knockbackDecay = fighter.knockbackDecay;
         item.attackerShieldKnockback = fighter.attackerShieldKnockback;
         item.groundVelocity = fighter.groundVelocity;
+        item.groundKnockbackVelocity = fighter.groundKnockbackVelocity;
         item.groundAttackerShieldKnockbackVelocity = fighter.groundAttackerShieldKnockbackVelocity;
         item.lastLandingVelocityY = fighter.lastLandingVelocityY;
         item.groundAccel = fighter.groundAccel;
@@ -4026,6 +5081,31 @@ WorldSnapshot saveWorld(const World& world) {
         item.groundNormal = fighter.groundNormal;
         item.hitlag = fighter.hitlag;
         item.hitstun = fighter.hitstun;
+        item.damageLevel = fighter.damageLevel;
+        item.damageHurtboxRegion = fighter.damageHurtboxRegion;
+        item.damageKnockback = fighter.damageKnockback;
+        item.damageLaunchAngle = fighter.damageLaunchAngle;
+        item.damageTumble = fighter.damageTumble;
+        item.damageSurfaceTimer = fighter.damageSurfaceTimer;
+        item.downWaitTimer = fighter.downWaitTimer;
+        item.damageHitboxOwner = fighter.damageHitboxOwner;
+        item.thrownHitboxOwner = fighter.thrownHitboxOwner;
+        item.grabbedFighter = fighter.grabbedFighter;
+        item.grabberFighter = fighter.grabberFighter;
+        item.grabTimer = fighter.grabTimer;
+        item.captureWaitTimer = fighter.captureWaitTimer;
+        item.captureMashAnimTimer = fighter.captureMashAnimTimer;
+        item.grabMashStickX = fighter.grabMashStickX;
+        item.grabMashStickY = fighter.grabMashStickY;
+        item.captureJumpQueued = fighter.captureJumpQueued;
+        item.captureConstraintOffset = fighter.captureConstraintOffset;
+        item.captureOriginalXRotNTranslation = fighter.captureOriginalXRotNTranslation;
+        item.captureConstraintActive = fighter.captureConstraintActive;
+        item.throwAnimationFrozen = fighter.throwAnimationFrozen;
+        item.thrownAnimationFreezeActive = fighter.thrownAnimationFreezeActive;
+        item.thrownAnimationFreezeFrame = fighter.thrownAnimationFreezeFrame;
+        item.throwHitboxes = fighter.throwHitboxes;
+        item.throwHitboxActive = fighter.throwHitboxActive;
         item.stateFlags = fighter.stateFlags;
         item.commandFlags = fighter.commandFlags;
         item.ecb = fighter.ecb;
@@ -4087,6 +5167,7 @@ WorldSnapshot saveWorld(const World& world) {
 
 void loadWorld(World& world, const WorldSnapshot& snapshot) {
     world.frame = snapshot.frame;
+    world.rngState = snapshot.rngState;
     world.fighters.clear();
     for (const FighterSnapshot& item : snapshot.fighters) {
         FighterRuntime fighter;
@@ -4110,8 +5191,10 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.previousPosition = item.previousPosition;
         fighter.fighterVelocity = item.fighterVelocity;
         fighter.knockbackVelocity = item.knockbackVelocity;
+        fighter.knockbackDecay = item.knockbackDecay;
         fighter.attackerShieldKnockback = item.attackerShieldKnockback;
         fighter.groundVelocity = item.groundVelocity;
+        fighter.groundKnockbackVelocity = item.groundKnockbackVelocity;
         fighter.groundAttackerShieldKnockbackVelocity = item.groundAttackerShieldKnockbackVelocity;
         fighter.lastLandingVelocityY = item.lastLandingVelocityY;
         fighter.groundAccel = item.groundAccel;
@@ -4119,6 +5202,31 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.groundNormal = item.groundNormal;
         fighter.hitlag = item.hitlag;
         fighter.hitstun = item.hitstun;
+        fighter.damageLevel = item.damageLevel;
+        fighter.damageHurtboxRegion = item.damageHurtboxRegion;
+        fighter.damageKnockback = item.damageKnockback;
+        fighter.damageLaunchAngle = item.damageLaunchAngle;
+        fighter.damageTumble = item.damageTumble;
+        fighter.damageSurfaceTimer = item.damageSurfaceTimer;
+        fighter.downWaitTimer = item.downWaitTimer;
+        fighter.damageHitboxOwner = item.damageHitboxOwner;
+        fighter.thrownHitboxOwner = item.thrownHitboxOwner;
+        fighter.grabbedFighter = item.grabbedFighter;
+        fighter.grabberFighter = item.grabberFighter;
+        fighter.grabTimer = item.grabTimer;
+        fighter.captureWaitTimer = item.captureWaitTimer;
+        fighter.captureMashAnimTimer = item.captureMashAnimTimer;
+        fighter.grabMashStickX = item.grabMashStickX;
+        fighter.grabMashStickY = item.grabMashStickY;
+        fighter.captureJumpQueued = item.captureJumpQueued;
+        fighter.captureConstraintOffset = item.captureConstraintOffset;
+        fighter.captureOriginalXRotNTranslation = item.captureOriginalXRotNTranslation;
+        fighter.captureConstraintActive = item.captureConstraintActive;
+        fighter.throwAnimationFrozen = item.throwAnimationFrozen;
+        fighter.thrownAnimationFreezeActive = item.thrownAnimationFreezeActive;
+        fighter.thrownAnimationFreezeFrame = item.thrownAnimationFreezeFrame;
+        fighter.throwHitboxes = item.throwHitboxes;
+        fighter.throwHitboxActive = item.throwHitboxActive;
         fighter.stateFlags = item.stateFlags;
         fighter.commandFlags = item.commandFlags;
         fighter.ecb = item.ecb;

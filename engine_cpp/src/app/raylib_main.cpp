@@ -59,6 +59,7 @@ static pf::InputFrame readKeyboardInput(bool arrows) {
         if (IsKeyDown(KEY_W)) input.buttons |= pf::ButtonJump;
         if (IsKeyPressed(KEY_F)) input.buttons |= pf::ButtonAttack;
         if (IsKeyDown(KEY_Q)) input.buttons |= pf::ButtonShield;
+        if (IsKeyDown(KEY_Z)) input.buttons |= pf::ButtonGrab;
     }
     return input;
 }
@@ -99,6 +100,9 @@ static pf::InputFrame readGamepadInput(int gamepad) {
     {
         input.buttons |= pf::ButtonShield;
         input.shieldAnalog = 0;
+    }
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_2)) {
+        input.buttons |= pf::ButtonGrab;
     }
 
     const float leftTrigger = readGamepadTrigger(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER);

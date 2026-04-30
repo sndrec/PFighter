@@ -165,7 +165,6 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     using FileStream stream = File.Create(outputPath);
     using BinaryWriter writer = new(stream, Encoding.UTF8);
     writer.Write(Encoding.ASCII.GetBytes("PFCM"));
-    writer.Write(6);
 
     writer.Write(F(0x08));
     writer.Write(F(0x0C));
@@ -220,6 +219,26 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     writer.Write(F(0x3E4));
     writer.Write(F(0x3E8));
     writer.Write(F(0x3EC));
+    writer.Write(F(0x354));
+    writer.Write(F(0x358));
+    writer.Write(F(0x35C));
+    writer.Write(F(0x360));
+    writer.Write(F(0x364));
+    writer.Write(F(0x368));
+    writer.Write(F(0x36C));
+    writer.Write(F(0x370));
+    writer.Write(F(0x374));
+    writer.Write(F(0x378));
+    writer.Write(F(0x37C));
+    writer.Write(F(0x3A4));
+    writer.Write(F(0x3A8));
+    writer.Write(F(0x3AC));
+    writer.Write(F(0x3B0));
+    writer.Write(F(0x3B4));
+    writer.Write(F(0x3B8));
+    writer.Write(F(0x3BC));
+    writer.Write(F(0x3C4));
+    writer.Write(F(0x3C8));
     writer.Write(F(0x314));
     writer.Write(I(0x318));
     writer.Write(F(0x31C));
@@ -233,6 +252,7 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     writer.Write(F(0x340));
     writer.Write(R(0x344));
     writer.Write(I(0x410));
+    writer.Write(R(0x424));
     writer.Write(F(0x42C));
     writer.Write(R(0x430));
     writer.Write(F(0x438));
@@ -280,6 +300,45 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     writer.Write(R(0xD8));
     writer.Write(R(0xE4));
     writer.Write(F(0xE8));
+    writer.Write(F(0xF4));
+    writer.Write(F(0xF8));
+    writer.Write(F(0x100));
+    writer.Write(F(0x108));
+    writer.Write(F(0x10C));
+    writer.Write(F(0x110));
+    writer.Write(F(0x114));
+    writer.Write(F(0x118));
+    writer.Write(F(0x11C));
+    writer.Write(F(0x120));
+    writer.Write(F(0x144));
+    writer.Write(F(0x148));
+    writer.Write(F(0x14C));
+    writer.Write(F(0x150));
+    writer.Write(F(0x154));
+    writer.Write(F(0x158));
+    writer.Write(F(0x15C));
+    writer.Write(F(0x160));
+    writer.Write(F(0x190));
+    writer.Write(F(0x1B0));
+    writer.Write(F(0x1BC));
+    writer.Write(R(0x1C0));
+    writer.Write(F(0x1E0));
+    writer.Write(F(0x1E4));
+    writer.Write(F(0x1E8));
+    writer.Write(F(0x1EC));
+    writer.Write(F(0x200));
+    writer.Write(F(0x204));
+    writer.Write(F(0x210));
+    writer.Write(R(0x214));
+    writer.Write(F(0x234));
+    writer.Write(F(0x238));
+    writer.Write(I(0x23C));
+    writer.Write(F(0x240));
+    writer.Write(F(0x244));
+    writer.Write(F(0x248));
+    writer.Write(R(0x24C));
+    writer.Write(R(0x250));
+    writer.Write(F(0x254));
 }
 
 static void WriteSkeletonBinary(BinaryWriter writer, HSD_JOBJ joint, int parent, List<HSD_JOBJ> joints)
@@ -415,6 +474,10 @@ static int MeleeCommandByteSize(byte code)
     {
         return 20;
     }
+    if (code == 0x22)
+    {
+        return 12;
+    }
     if (code == 0x38)
     {
         return 8;
@@ -508,7 +571,6 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
     using BinaryWriter writer = new(stream, Encoding.UTF8);
 
     writer.Write(Encoding.ASCII.GetBytes("PFHA"));
-    writer.Write(9);
     WriteString(writer, Path.GetFileNameWithoutExtension(fighterDatPath));
 
     using MemoryStream skeletonStream = new();
@@ -680,6 +742,12 @@ static void ExportStageCollisionBinary(string outputPath, string stageDatPath)
 {
     HSDRawFile stageFile = new(stageDatPath);
     SBM_Coll_Data collision = stageFile.Roots.Select(root => root.Data).OfType<SBM_Coll_Data>().First();
+    SBM_GroundParam? groundParam = stageFile.Roots.Select(root => root.Data).OfType<SBM_GroundParam>().FirstOrDefault();
+    float stageScale = groundParam?.StageScale ?? 1.0f;
+    if (stageScale == 0.0f)
+    {
+        stageScale = 1.0f;
+    }
     SBM_CollVertex[] vertices = collision.Vertices ?? Array.Empty<SBM_CollVertex>();
     SBM_CollLine[] lines = collision.Links ?? Array.Empty<SBM_CollLine>();
 
@@ -688,7 +756,6 @@ static void ExportStageCollisionBinary(string outputPath, string stageDatPath)
     using BinaryWriter writer = new(stream, Encoding.UTF8);
 
     writer.Write(Encoding.ASCII.GetBytes("PFST"));
-    writer.Write(2);
     WriteString(writer, Path.GetFileNameWithoutExtension(stageDatPath));
 
     List<(SBM_CollLine Line, int OriginalIndex)> exported = lines
@@ -710,10 +777,10 @@ static void ExportStageCollisionBinary(string outputPath, string stageDatPath)
     {
         SBM_CollVertex a = vertices[line.VertexIndex1];
         SBM_CollVertex b = vertices[line.VertexIndex2];
-        writer.Write(a.X);
-        writer.Write(a.Y);
-        writer.Write(b.X);
-        writer.Write(b.Y);
+        writer.Write(a.X * stageScale);
+        writer.Write(a.Y * stageScale);
+        writer.Write(b.X * stageScale);
+        writer.Write(b.Y * stageScale);
         writer.Write(line.Flag.HasFlag(CollProperty.DropThrough) ? (byte)1 : (byte)0);
         writer.Write(StageLineKindId(line.CollisionFlag));
         bool ledgeGrab = line.Flag.HasFlag(CollProperty.LedgeGrab);

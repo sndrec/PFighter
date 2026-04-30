@@ -10,8 +10,6 @@
 namespace pf {
 namespace {
 
-constexpr int32_t kCurrentPfhaLayout = 9;
-
 class BinaryReader {
 public:
     explicit BinaryReader(std::vector<uint8_t> data) : data(std::move(data)) {}
@@ -170,10 +168,6 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
         throw std::runtime_error("invalid binary fighter asset magic");
     }
     reader.skip(4);
-    const int32_t layout = reader.readI32();
-    if (layout != kCurrentPfhaLayout) {
-        throw std::runtime_error("unsupported binary fighter asset layout");
-    }
 
     HsdFighterAnimationAsset asset;
     asset.name = reader.readString();

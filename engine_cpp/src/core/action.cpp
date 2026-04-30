@@ -82,7 +82,7 @@ static Subaction decodeCreateHitbox(const HsdActionScript& script, const HsdActi
     sub.type = SubactionType::CreateHitbox;
     sub.hitbox.hitboxId = static_cast<int>(reader.read(3));
     reader.read(3); // hit group
-    reader.read(1); // only-hit-grabbed flag
+    sub.hitbox.onlyHitGrabbed = reader.read(1) != 0;
     const int bone = static_cast<int>(reader.read(8));
     const bool useCommonBoneIds = reader.read(1) != 0;
     sub.hitbox.damage = fx(static_cast<int>(reader.read(10)));
@@ -95,18 +95,40 @@ static Subaction decodeCreateHitbox(const HsdActionScript& script, const HsdActi
     sub.hitbox.knockbackGrowth = fx(static_cast<int>(reader.read(9)));
     sub.hitbox.knockbackWeightSet = fx(static_cast<int>(reader.read(9)));
     reader.read(1); // item hit interaction
-    reader.read(1); // ignore thrown fighters
+    sub.hitbox.requiresThrownHitboxOwner = reader.read(1) != 0;
     reader.read(1); // ignore fighter scale
     reader.read(1); // clank
     reader.read(1); // rebound
     sub.hitbox.knockbackBase = fx(static_cast<int>(reader.read(9)));
-    reader.read(5); // element
+    sub.hitbox.element = static_cast<int>(reader.read(5));
+    sub.hitbox.isGrab = sub.hitbox.element == 8;
     sub.hitbox.damageShield = fx(reader.readSigned(8));
     reader.read(3); // hit sfx severity
     reader.read(5); // hit sfx kind
     sub.hitbox.hitGrounded = reader.read(1) != 0;
     sub.hitbox.hitAirborne = reader.read(1) != 0;
     sub.hitbox.hsdBone = useCommonBoneIds ? mapCommonFighterPart(script, bone) : bone;
+    return sub;
+}
+
+static Subaction decodeThrowHitbox(const HsdActionCommand& command) {
+    HsdCommandBitReader reader(command.bytes);
+    reader.skip(6);
+
+    Subaction sub;
+    sub.type = SubactionType::CreateThrowHitbox;
+    sub.hitbox.hitboxId = static_cast<int>(reader.read(3));
+    sub.hitbox.damage = fx(static_cast<int>(reader.read(23)));
+    sub.hitbox.knockbackAngleDegrees = fx(static_cast<int>(reader.read(9)));
+    sub.hitbox.knockbackGrowth = fx(static_cast<int>(reader.read(9)));
+    sub.hitbox.knockbackWeightSet = fx(static_cast<int>(reader.read(9)));
+    reader.skip(5);
+    sub.hitbox.knockbackBase = fx(static_cast<int>(reader.read(9)));
+    sub.hitbox.element = static_cast<int>(reader.read(4));
+    reader.read(3); // hit sfx severity
+    reader.read(4); // hit sfx kind
+    sub.hitbox.hitGrounded = true;
+    sub.hitbox.hitAirborne = true;
     return sub;
 }
 
@@ -249,7 +271,9 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             result.push_back(sub);
             break;
         case 0x14:
-            sub.type = SubactionType::ReverseDirection;
+            sub.type = SubactionType::SetThrowFlag;
+            sub.flag = static_cast<int>(reader.read(26));
+            sub.flagValue = true;
             result.push_back(sub);
             break;
         case 0x17:
@@ -269,6 +293,11 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             sub.flag = 2;
             sub.flagValue = reader.read(26) != 0;
             result.push_back(sub);
+            break;
+        case 0x22:
+            if (command.bytes.size() >= 12) {
+                result.push_back(decodeThrowHitbox(command));
+            }
             break;
         case 0x29:
             sub.type = SubactionType::SetModelPartAnimation;

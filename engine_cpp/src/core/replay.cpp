@@ -39,7 +39,7 @@ bool saveReplay(const std::string& path, const ReplayData& replay, std::string* 
         return fail(error, "failed to open replay for writing: " + path);
     }
 
-    out << "PFREPLAY 1\n";
+    out << "PFREPLAY\n";
     out << "fighters " << replay.p1FighterDef << ' ' << replay.p2FighterDef << '\n';
     out << "frames " << replay.frames.size() << '\n';
     for (const ReplayFrame& frame : replay.frames) {
@@ -62,8 +62,7 @@ bool loadReplay(const std::string& path, ReplayData& replay, std::string* error)
     }
 
     std::string magic;
-    int version = 0;
-    if (!(in >> magic >> version) || magic != "PFREPLAY" || version != 1) {
+    if (!(in >> magic) || magic != "PFREPLAY") {
         return fail(error, "invalid replay header: " + path);
     }
 

@@ -83,8 +83,10 @@ struct FighterRuntime {
     Vec2 previousPosition;
     Vec2 fighterVelocity;
     Vec2 knockbackVelocity;
+    Vec2 knockbackDecay;
     Vec2 attackerShieldKnockback;
     Fix groundVelocity = 0;
+    Fix groundKnockbackVelocity = 0;
     Fix groundAttackerShieldKnockbackVelocity = 0;
     Fix lastLandingVelocityY = 0;
     Fix groundAccel = 0;
@@ -92,6 +94,31 @@ struct FighterRuntime {
     Vec2 groundNormal{0, fx(1)};
     int hitlag = 0;
     int hitstun = 0;
+    int damageLevel = 0;
+    int damageHurtboxRegion = 1;
+    Fix damageKnockback = 0;
+    Fix damageLaunchAngle = 0;
+    bool damageTumble = false;
+    int damageSurfaceTimer = 0;
+    int downWaitTimer = 0;
+    int damageHitboxOwner = -1;
+    int thrownHitboxOwner = -1;
+    int grabbedFighter = -1;
+    int grabberFighter = -1;
+    Fix grabTimer = 0;
+    Fix captureWaitTimer = 0;
+    Fix captureMashAnimTimer = 0;
+    int grabMashStickX = 0;
+    int grabMashStickY = 0;
+    bool captureJumpQueued = false;
+    Vec3 captureConstraintOffset = {};
+    Vec3 captureOriginalXRotNTranslation = {};
+    bool captureConstraintActive = false;
+    bool throwAnimationFrozen = false;
+    bool thrownAnimationFreezeActive = false;
+    Fix thrownAnimationFreezeFrame = 0;
+    std::array<HitboxDefinition, 2> throwHitboxes{};
+    std::array<bool, 2> throwHitboxActive{};
     uint32_t stateFlags = 0;
     uint32_t commandFlags = 0;
     Ecb ecb;
@@ -171,8 +198,10 @@ struct FighterSnapshot {
     Vec2 previousPosition;
     Vec2 fighterVelocity;
     Vec2 knockbackVelocity;
+    Vec2 knockbackDecay;
     Vec2 attackerShieldKnockback;
     Fix groundVelocity = 0;
+    Fix groundKnockbackVelocity = 0;
     Fix groundAttackerShieldKnockbackVelocity = 0;
     Fix lastLandingVelocityY = 0;
     Fix groundAccel = 0;
@@ -180,6 +209,31 @@ struct FighterSnapshot {
     Vec2 groundNormal{0, fx(1)};
     int hitlag = 0;
     int hitstun = 0;
+    int damageLevel = 0;
+    int damageHurtboxRegion = 1;
+    Fix damageKnockback = 0;
+    Fix damageLaunchAngle = 0;
+    bool damageTumble = false;
+    int damageSurfaceTimer = 0;
+    int downWaitTimer = 0;
+    int damageHitboxOwner = -1;
+    int thrownHitboxOwner = -1;
+    int grabbedFighter = -1;
+    int grabberFighter = -1;
+    Fix grabTimer = 0;
+    Fix captureWaitTimer = 0;
+    Fix captureMashAnimTimer = 0;
+    int grabMashStickX = 0;
+    int grabMashStickY = 0;
+    bool captureJumpQueued = false;
+    Vec3 captureConstraintOffset = {};
+    Vec3 captureOriginalXRotNTranslation = {};
+    bool captureConstraintActive = false;
+    bool throwAnimationFrozen = false;
+    bool thrownAnimationFreezeActive = false;
+    Fix thrownAnimationFreezeFrame = 0;
+    std::array<HitboxDefinition, 2> throwHitboxes{};
+    std::array<bool, 2> throwHitboxActive{};
     uint32_t stateFlags = 0;
     uint32_t commandFlags = 0;
     Ecb ecb;
@@ -238,11 +292,13 @@ struct FighterSnapshot {
 
 struct WorldSnapshot {
     int frame = 0;
+    uint32_t rngState = 0x4D454C45;
     std::vector<FighterSnapshot> fighters;
 };
 
 struct World {
     int frame = 0;
+    uint32_t rngState = 0x4D454C45;
     StageDefinition stage;
     std::vector<FighterDefinition> fighterDefs;
     std::vector<FighterRuntime> fighters;
@@ -264,5 +320,8 @@ void setFighterCommandFlag(FighterRuntime& fighter, int flag, bool value);
 void lockFighterEcb(FighterRuntime& fighter, int frames);
 void unlockFighterEcb(FighterRuntime& fighter);
 void calculateEcb(const FighterDefinition& def, FighterRuntime& fighter, bool updatePrevious);
+void beginMeleeThrowConstraint(World& world, size_t grabberIndex, size_t victimIndex);
+bool updateMeleeCapturePosition(World& world, size_t victimIndex);
+void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int capturedIndex, bool applyOffset);
 
 } // namespace pf

@@ -24,10 +24,13 @@ struct InputFrame {
 };
 
 struct InputBuffer {
-    static constexpr int kSize = 8;
+    static constexpr int kSize = 32;
     std::array<InputFrame, kSize> frames{};
 
     void push(InputFrame input) {
+        if ((input.buttons & ButtonGrab) != 0) {
+            input.buttons |= ButtonShield | ButtonAttack;
+        }
         for (int i = kSize - 1; i > 0; --i) {
             frames[static_cast<size_t>(i)] = frames[static_cast<size_t>(i - 1)];
         }

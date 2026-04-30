@@ -208,39 +208,104 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"LandingAirB", 75},
         {"LandingAirHi", 76},
         {"LandingAirLw", 77},
-        {"DamageHi1", 166},
-        {"DamageHi2", 167},
-        {"DamageHi3", 168},
-        {"DamageN1", 169},
-        {"DamageN2", 170},
-        {"DamageN3", 171},
-        {"DamageLw1", 172},
-        {"DamageLw2", 173},
-        {"DamageLw3", 174},
-        {"DamageAir1", 175},
-        {"DamageAir2", 176},
-        {"DamageAir3", 177},
-        {"DamageFlyHi", 178},
-        {"DamageFlyN", 179},
-        {"DamageFlyLw", 180},
-        {"DamageFlyTop", 181},
-        {"DamageFlyRoll", 182},
-        {"Squat", 30},
-        {"SquatWait", 31},
-        {"SquatRv", 34},
+        {"DamageHi1", 165},
+        {"DamageHi2", 166},
+        {"DamageHi3", 167},
+        {"DamageN1", 168},
+        {"DamageN2", 169},
+        {"DamageN3", 170},
+        {"DamageLw1", 171},
+        {"DamageLw2", 172},
+        {"DamageLw3", 173},
+        {"DamageAir1", 174},
+        {"DamageAir2", 175},
+        {"DamageAir3", 176},
+        {"DamageFlyHi", 177},
+        {"DamageFlyN", 178},
+        {"DamageFlyLw", 179},
+        {"DamageFlyTop", 180},
+        {"DamageFlyRoll", 181},
+        {"DownBoundU", 183},
+        {"DownWaitU", 184},
+        {"DownDamageU", 185},
+        {"DownStandU", 186},
+        {"DownAttackU", 187},
+        {"DownForwardU", 188},
+        {"DownBackU", 189},
+        {"DownSpotU", 190},
+        {"DownBoundD", 191},
+        {"DownWaitD", 192},
+        {"DownDamageD", 193},
+        {"DownStandD", 194},
+        {"DownAttackD", 195},
+        {"DownForwardD", 196},
+        {"DownBackD", 197},
+        {"DownSpotD", 198},
+        {"Passive", 199},
+        {"PassiveStandF", 200},
+        {"PassiveStandB", 201},
+        {"PassiveWall", 202},
+        {"PassiveWallJump", 203},
+        {"PassiveCeil", 204},
+        {"ShieldBreakFly", 205},
+        {"ShieldBreakFall", 206},
+        {"ShieldBreakDownU", 207},
+        {"ShieldBreakDownD", 208},
+        {"ShieldBreakStandU", 209},
+        {"ShieldBreakStandD", 210},
+        {"Furafura", 205},
+        {"Catch", 242},
+        {"CatchPull", 242},
+        {"CatchDash", 243},
+        {"CatchDashPull", 243},
+        {"CatchWait", 244},
+        {"CatchAttack", 245},
+        {"CatchCut", 246},
+        {"ThrowF", 247},
+        {"ThrowB", 248},
+        {"ThrowHi", 249},
+        {"ThrowLw", 250},
+        {"CapturePulledHi", 251},
+        {"CaptureWaitHi", 252},
+        {"CaptureDamageHi", 253},
+        {"CapturePulledLw", 254},
+        {"CaptureWaitLw", 255},
+        {"CaptureDamageLw", 256},
+        {"CaptureCut", 257},
+        {"CaptureJump", 258},
+        {"ThrownF", 262},
+        {"ThrownB", 263},
+        {"ThrownHi", 264},
+        {"ThrownLw", 265},
+        {"ThrownLwWomen", 266},
         {"Pass", 209},
         {"Ottotto", 210},
         {"OttottoWait", 211},
+        {"Squat", 30},
+        {"SquatWait", 31},
+        {"SquatRv", 34},
         {"PassiveWallJump", 203},
+        {"FlyReflectWall", 247},
+        {"FlyReflectCeil", 248},
+        {"StopWall", 213},
+        {"StopCeil", 214},
+        {"MissFoot", 215},
         {"CliffCatch", 216},
         {"CliffWait", 217},
+        {"CliffClimbSlow", 219},
         {"CliffClimbQuick", 220},
+        {"CliffAttackSlow", 221},
         {"CliffAttackQuick", 222},
+        {"CliffEscapeSlow", 223},
         {"CliffEscapeQuick", 224},
+        {"CliffJumpSlow1", 225},
+        {"CliffJumpSlow2", 226},
         {"CliffJumpQuick1", 227},
         {"CliffJumpQuick2", 228},
     };
     const std::unordered_map<std::string, int> actionByState = {
+        {"ShieldBreakDown", 207},
+        {"ShieldBreakStand", 209},
         {"CliffClimb", 220},
         {"CliffAttack", 222},
         {"CliffEscape", 224},
@@ -631,7 +696,7 @@ FighterDefinition makeDebugRook() {
         interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
         interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
         interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::TeeterWalkInput, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
     };
 
@@ -673,21 +738,43 @@ FighterDefinition makeDebugRook() {
     landingFallSpecial.onAirborne = {call("teeter_or_airborne")};
     landingFallSpecial.onAnimationFinishedState = "Wait";
 
-    FighterState damageN2;
-    damageN2.name = "DamageN2";
-    damageN2.animation = "DamageN2";
-    damageN2.animationLengthFrames = 24;
-    damageN2.allowLedgeGrab = false;
-    damageN2.onEnter = {call("common_enter")};
-    damageN2.onFrame = {call("process_damage")};
-    damageN2.onLanding = {call("regular_landing")};
+    auto makeDamageState = [&](const std::string& name, int length) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = length;
+        state.allowLedgeGrab = false;
+        state.onEnter = {call("common_enter")};
+        state.onFrame = {call("process_damage")};
+        state.onLanding = {call("damage_fly_landing")};
+        return state;
+    };
 
-    FighterState damageFlyN = damageN2;
-    damageFlyN.name = "DamageFlyN";
-    damageFlyN.animation = "DamageFlyN";
-    damageFlyN.animationLengthFrames = 30;
-    damageFlyN.onFrame = {call("process_damage")};
-    damageFlyN.onLanding = {call("regular_landing")};
+    FighterState damageHi1 = makeDamageState("DamageHi1", 18);
+    FighterState damageHi2 = makeDamageState("DamageHi2", 24);
+    FighterState damageHi3 = makeDamageState("DamageHi3", 30);
+    FighterState damageN1 = makeDamageState("DamageN1", 18);
+    FighterState damageN2 = makeDamageState("DamageN2", 24);
+    FighterState damageN3 = makeDamageState("DamageN3", 30);
+    FighterState damageLw1 = makeDamageState("DamageLw1", 18);
+    FighterState damageLw2 = makeDamageState("DamageLw2", 24);
+    FighterState damageLw3 = makeDamageState("DamageLw3", 30);
+    FighterState damageAir1 = makeDamageState("DamageAir1", 18);
+    FighterState damageAir2 = makeDamageState("DamageAir2", 24);
+    FighterState damageAir3 = makeDamageState("DamageAir3", 30);
+
+    auto makeDamageFlyState = [&](const std::string& name) {
+        FighterState state = makeDamageState(name, 40);
+        state.onFrame = {call("process_damage_fly")};
+        state.onLanding = {call("damage_fly_landing")};
+        state.allowLedgeGrab = false;
+        return state;
+    };
+    FighterState damageFlyHi = makeDamageFlyState("DamageFlyHi");
+    FighterState damageFlyN = makeDamageFlyState("DamageFlyN");
+    FighterState damageFlyLw = makeDamageFlyState("DamageFlyLw");
+    FighterState damageFlyTop = makeDamageFlyState("DamageFlyTop");
+    FighterState damageFlyRoll = makeDamageFlyState("DamageFlyRoll");
 
     FighterState damageFall = fallState;
     damageFall.name = "DamageFall";
@@ -697,8 +784,119 @@ FighterDefinition makeDebugRook() {
     damageFall.allowLedgeGrab = true;
     damageFall.onEnter = {call("common_enter")};
     damageFall.onFrame = {call("process_damage_fall")};
-    damageFall.onLanding = {call("regular_landing")};
+    damageFall.onLanding = {call("damage_fall_landing")};
     damageFall.interrupts = fallState.interrupts;
+
+    FighterState downBoundU;
+    downBoundU.name = "DownBoundU";
+    downBoundU.animation = "DownBoundU";
+    downBoundU.animationLengthFrames = 18;
+    downBoundU.onEnter = {call("common_enter"), call("enter_clear_damage")};
+    downBoundU.onFrame = {call("process_landing")};
+    downBoundU.onAnimationFinishedState = "DownWaitU";
+
+    FighterState downWaitU = downBoundU;
+    downWaitU.name = "DownWaitU";
+    downWaitU.animation = "DownWaitU";
+    downWaitU.animationLengthFrames = fighter.properties.common.downWaitAutoStandFramesX424;
+    downWaitU.onEnter = {call("common_enter"), call("enter_down_wait")};
+    downWaitU.onFrame = {call("process_down_wait")};
+    downWaitU.onAnimationFinishedState.clear();
+
+    FighterState downDamageU = downWaitU;
+    downDamageU.name = "DownDamageU";
+    downDamageU.animation = "DownDamageU";
+    downDamageU.animationLengthFrames = 18;
+    downDamageU.onEnter = {call("common_enter")};
+    downDamageU.onFrame = {call("process_down_getup")};
+    downDamageU.onAnimationFinishedState = "DownWaitU";
+
+    auto makeDownGetupState = [&](const std::string& name, int length) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = length;
+        state.onEnter = {call("common_enter"), call("enter_clear_damage")};
+        state.onFrame = {call("process_down_getup")};
+        state.onAirborne = {call("regular_airborne")};
+        state.onAnimationFinishedState = "Wait";
+        return state;
+    };
+    FighterState downStandU = makeDownGetupState("DownStandU", 30);
+    FighterState downAttackU = makeDownGetupState("DownAttackU", 50);
+    FighterState downForwardU = makeDownGetupState("DownForwardU", 35);
+    downForwardU.useAnimPhysics = true;
+    FighterState downBackU = makeDownGetupState("DownBackU", 35);
+    downBackU.useAnimPhysics = true;
+    FighterState downSpotU = makeDownGetupState("DownSpotU", 26);
+    downSpotU.onAnimationFinishedState = "DownWaitU";
+
+    FighterState downBoundD = downBoundU;
+    downBoundD.name = "DownBoundD";
+    downBoundD.animation = "DownBoundD";
+    downBoundD.onAnimationFinishedState = "DownWaitD";
+
+    FighterState downWaitD = downWaitU;
+    downWaitD.name = "DownWaitD";
+    downWaitD.animation = "DownWaitD";
+
+    FighterState downDamageD = downWaitU;
+    downDamageD.name = "DownDamageD";
+    downDamageD.animation = "DownDamageD";
+    downDamageD.animationLengthFrames = 18;
+    downDamageD.onEnter = {call("common_enter")};
+    downDamageD.onFrame = {call("process_down_getup")};
+    downDamageD.onAnimationFinishedState = "DownWaitD";
+
+    FighterState downStandD = downStandU;
+    downStandD.name = "DownStandD";
+    downStandD.animation = "DownStandD";
+    FighterState downAttackD = downAttackU;
+    downAttackD.name = "DownAttackD";
+    downAttackD.animation = "DownAttackD";
+    FighterState downForwardD = downForwardU;
+    downForwardD.name = "DownForwardD";
+    downForwardD.animation = "DownForwardD";
+    FighterState downBackD = downBackU;
+    downBackD.name = "DownBackD";
+    downBackD.animation = "DownBackD";
+    FighterState downSpotD = downSpotU;
+    downSpotD.name = "DownSpotD";
+    downSpotD.animation = "DownSpotD";
+    downSpotD.onAnimationFinishedState = "DownWaitD";
+
+    auto makePassiveState = [&](const std::string& name, int length, const std::string& finished) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = length;
+        state.onEnter = {call("common_enter"), call("enter_clear_damage")};
+        state.onFrame = {call("process_landing")};
+        state.onAirborne = {call("regular_airborne")};
+        state.onAnimationFinishedState = finished;
+        return state;
+    };
+    FighterState passive = makePassiveState("Passive", 26, "Wait");
+    FighterState passiveStandF = makePassiveState("PassiveStandF", 40, "Wait");
+    passiveStandF.useAnimPhysics = true;
+    FighterState passiveStandB = makePassiveState("PassiveStandB", 40, "Wait");
+    passiveStandB.useAnimPhysics = true;
+
+    FighterState passiveWall = makePassiveState("PassiveWall", 28, "Fall");
+    passiveWall.onFrame = {call("process_airborne")};
+    passiveWall.onLanding = {call("regular_landing")};
+    FighterState passiveCeil = passiveWall;
+    passiveCeil.name = "PassiveCeil";
+    passiveCeil.animation = "PassiveCeil";
+
+    FighterState wallDamage = makeDamageFlyState("WallDamage");
+    wallDamage.animationLengthFrames = 16;
+    wallDamage.onFrame = {call("process_damage_surface")};
+    wallDamage.onLanding = {call("damage_fly_landing")};
+
+    FighterState stopCeil = wallDamage;
+    stopCeil.name = "StopCeil";
+    stopCeil.animation = "StopCeil";
 
     FighterState pass;
     pass.name = "Pass";
@@ -769,6 +967,7 @@ FighterDefinition makeDebugRook() {
     ottotto.animation = "Ottotto";
     ottotto.animationLengthFrames = 25;
     ottotto.onEnter = {call("common_enter")};
+    ottotto.onFrame = {call("process_ottotto")};
     ottotto.onAnimationFinishedState = "OttottoWait";
     ottotto.interrupts = {
         interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
@@ -778,7 +977,7 @@ FighterDefinition makeDebugRook() {
         interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
         interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
         interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::TeeterWalkInput, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
     };
 
@@ -842,6 +1041,131 @@ FighterDefinition makeDebugRook() {
     guardSetoff.onEnter = {call("common_enter")};
     guardSetoff.onFrame = {call("process_guard_setoff")};
     guardSetoff.onAirborne = {call("regular_airborne")};
+
+    auto makeCatchState = [&](const std::string& name, int length, const std::string& finished) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = length;
+        state.onEnter = {call("common_enter")};
+        state.onFrame = {call("process_catch")};
+        state.onAirborne = {call("catch_airborne")};
+        state.onAnimationFinishedState = finished;
+        return state;
+    };
+
+    FighterState catchState = makeCatchState("Catch", 30, "Wait");
+    FighterState catchDash = makeCatchState("CatchDash", 40, "Wait");
+    catchDash.onFrame = {call("process_catch_dash")};
+
+    FighterState catchPull = makeCatchState("CatchPull", 18, "");
+    catchPull.onFrame = {call("process_catch_pull")};
+    FighterState catchDashPull = catchPull;
+    catchDashPull.name = "CatchDashPull";
+    catchDashPull.animation = "CatchDashPull";
+
+    FighterState catchWait;
+    catchWait.name = "CatchWait";
+    catchWait.animation = "CatchWait";
+    catchWait.animationLengthFrames = 60;
+    catchWait.loopAnimation = true;
+    catchWait.onEnter = {call("common_enter")};
+    catchWait.onFrame = {call("process_catch_wait")};
+    catchWait.onAirborne = {call("catch_airborne")};
+
+    FighterState catchAttack;
+    catchAttack.name = "CatchAttack";
+    catchAttack.animation = "CatchAttack";
+    catchAttack.animationLengthFrames = 24;
+    catchAttack.onEnter = {call("common_enter")};
+    catchAttack.onFrame = {call("process_catch_attack")};
+    catchAttack.onAirborne = {call("catch_airborne")};
+    catchAttack.onAnimationFinishedState = "CatchWait";
+
+    FighterState catchCut;
+    catchCut.name = "CatchCut";
+    catchCut.animation = "CatchCut";
+    catchCut.animationLengthFrames = 30;
+    catchCut.onEnter = {call("common_enter"), call("enter_catch_cut")};
+    catchCut.onFrame = {call("process_catch_cut")};
+    catchCut.onLanding = {call("regular_landing")};
+    catchCut.onAnimationFinishedState = "Wait";
+
+    auto makeThrowState = [&](const std::string& name, int length) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = length;
+        state.onEnter = {call("common_enter"), call("enter_throw")};
+        state.onFrame = {call("process_throw")};
+        state.onAirborne = {call("throw_airborne")};
+        state.onAnimationFinishedState = "Wait";
+        return state;
+    };
+    FighterState throwF = makeThrowState("ThrowF", 45);
+    FighterState throwB = makeThrowState("ThrowB", 45);
+    FighterState throwHi = makeThrowState("ThrowHi", 45);
+    FighterState throwLw = makeThrowState("ThrowLw", 45);
+
+    auto makeCaptureState = [&](const std::string& name, int length, const std::string& finished) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = length;
+        state.onEnter = {call("common_enter")};
+        state.onFrame = {call("process_capture")};
+        state.onAnimationFinishedState = finished;
+        state.allowLedgeGrab = false;
+        state.allowWallCollision = false;
+        state.allowCeilingCollision = false;
+        return state;
+    };
+    FighterState capturePulledHi = makeCaptureState("CapturePulledHi", 18, "CaptureWaitHi");
+    FighterState capturePulledLw = makeCaptureState("CapturePulledLw", 18, "CaptureWaitLw");
+    FighterState captureWaitHi = makeCaptureState("CaptureWaitHi", 60, "");
+    captureWaitHi.loopAnimation = true;
+    captureWaitHi.onFrame = {call("process_capture_wait")};
+    FighterState captureWaitLw = captureWaitHi;
+    captureWaitLw.name = "CaptureWaitLw";
+    captureWaitLw.animation = "CaptureWaitLw";
+    FighterState captureDamageHi = makeCaptureState("CaptureDamageHi", 18, "CaptureWaitHi");
+    captureDamageHi.onFrame = {call("process_capture_damage")};
+    FighterState captureDamageLw = captureDamageHi;
+    captureDamageLw.name = "CaptureDamageLw";
+    captureDamageLw.animation = "CaptureDamageLw";
+    captureDamageLw.onAnimationFinishedState = "CaptureWaitLw";
+
+    FighterState captureCut = catchCut;
+    captureCut.name = "CaptureCut";
+    captureCut.animation = "CaptureCut";
+    captureCut.onEnter = {call("common_enter"), call("enter_capture_cut")};
+    captureCut.onFrame = {call("process_capture_cut")};
+
+    FighterState captureJump = fallState;
+    captureJump.name = "CaptureJump";
+    captureJump.animation = "CaptureJump";
+    captureJump.animationLengthFrames = 35;
+    captureJump.loopAnimation = false;
+    captureJump.allowLedgeGrab = false;
+    captureJump.onEnter = {call("common_enter"), call("enter_capture_jump")};
+    captureJump.onAnimationFinishedState = "Fall";
+
+    auto makeThrownState = [&](const std::string& name) {
+        FighterState state;
+        state.name = name;
+        state.animation = name;
+        state.animationLengthFrames = 60;
+        state.onEnter = {call("common_enter")};
+        state.onFrame = {call("process_thrown")};
+        state.allowLedgeGrab = false;
+        state.allowWallCollision = false;
+        state.allowCeilingCollision = false;
+        return state;
+    };
+    FighterState thrownF = makeThrownState("ThrownF");
+    FighterState thrownB = makeThrownState("ThrownB");
+    FighterState thrownHi = makeThrownState("ThrownHi");
+    FighterState thrownLw = makeThrownState("ThrownLw");
 
     FighterState escapeN;
     escapeN.name = "EscapeN";
@@ -984,12 +1308,30 @@ FighterDefinition makeDebugRook() {
         &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
         &turnState, &turnRun, &squat, &squatWait, &squatRv, &landing, &ottotto, &ottottoWait,
     }) {
+        state->interrupts.insert(state->interrupts.begin(), interrupt(
+            state == &dashState || state == &runState || state == &runDirect ? "CatchDash" : "Catch",
+            InterruptCondition::GrabPressed,
+            GroundRequirement::OnlyGrounded));
         expandGroundedAttackShortcut(*state, state == &dashState || state == &runState || state == &runDirect);
+    }
+    for (FighterState* state : {&guardOn, &guardReflect, &guard, &guardSetoff}) {
+        state->interrupts.insert(state->interrupts.begin(), interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded));
     }
 
     fighter.states = {
         waitState, walkSlow, walkMiddle, walkFast, dashState, runState, runDirect, runBrake, turnState, turnRun,
-        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial, damageN2, damageFlyN, damageFall, ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff, escapeN, escapeF, escapeB, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
+        jumpSquat, squat, squatWait, squatRv, jumpF, jumpB, jumpAerialF, jumpAerialB, fallState, pass, escapeAir, fallSpecial, passiveWallJump, landing, landingAirN, landingAirF, landingAirB, landingAirHi, landingAirLw, landingFallSpecial,
+        damageHi1, damageHi2, damageHi3, damageN1, damageN2, damageN3, damageLw1, damageLw2, damageLw3,
+        damageAir1, damageAir2, damageAir3, damageFlyHi, damageFlyN, damageFlyLw, damageFlyTop, damageFlyRoll, damageFall,
+        downBoundU, downWaitU, downDamageU, downStandU, downAttackU, downForwardU, downBackU, downSpotU,
+        downBoundD, downWaitD, downDamageD, downStandD, downAttackD, downForwardD, downBackD, downSpotD,
+        passive, passiveStandF, passiveStandB, passiveWall, passiveCeil, wallDamage, stopCeil,
+        ottotto, ottottoWait, guardOn, guardReflect, guard, guardOff, guardSetoff,
+        catchState, catchPull, catchDash, catchDashPull, catchWait, catchAttack, catchCut,
+        throwF, throwB, throwHi, throwLw,
+        capturePulledHi, captureWaitHi, captureDamageHi, capturePulledLw, captureWaitLw, captureDamageLw, captureCut, captureJump,
+        thrownF, thrownB, thrownHi, thrownLw,
+        escapeN, escapeF, escapeB, shieldBreakFly, shieldBreakFall, shieldBreakDown, shieldBreakStand, cliffCatch, cliffWait,
         cliffClimb, cliffEscape, cliffAttack, cliffDrop, cliffJump, cliffJumpAir,
         attack11, attack12, attack13, attackDash,
         attackS3Hi, attackS3HiS, attackS3, attackS3LwS, attackS3Lw, attackHi3, attackLw3,

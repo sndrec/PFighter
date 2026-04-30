@@ -75,6 +75,45 @@ struct MeleeCommonData {
     int attackLw4StickWindowXD8 = 4;
     int lCancelInputWindowXE4 = 7;
     Fix lCancelLandingLagDivisorXE8 = fx(2);
+    Fix knockbackWeightScaleXF4 = fxFromFloat(0.01f);
+    Fix knockbackWeightDecayXF8 = fx(2);
+    Fix damageVelocityScaleX100 = fxFromFloat(0.03f);
+    Fix knockbackMaxX108 = fx(2500);
+    Fix throwKnockbackWeightX10C = fx(100);
+    Fix knockbackDamageBaseX110 = fxFromFloat(0.1f);
+    Fix knockbackDamageScaleX114 = fxFromFloat(0.05f);
+    Fix knockbackWeightSetScaleX118 = fxFromFloat(0.1f);
+    Fix knockbackScaleX11C = fxFromFloat(1.4f);
+    Fix knockbackBaseX120 = fx(18);
+    Fix damageSakuraiAngleAirX144 = fxFromFloat(0.7679449f);
+    Fix damageSakuraiAngleScaleX148 = fx(44);
+    Fix damageSakuraiAngleLowX14C = fxFromFloat(32.0f);
+    Fix damageSakuraiAngleHighX150 = fxFromFloat(32.1f);
+    Fix hitstunMultiplierX154 = fxFromFloat(0.4f);
+    Fix damageLevelThresholdX158 = fxFromFloat(8.0f);
+    Fix damageLevelThresholdX15C = fxFromFloat(14.0f);
+    Fix damageLevelThresholdX160 = fxFromFloat(20.0f);
+    Fix damageAirVelocityScaleX190 = fx(1);
+    Fix damageWallBounceMinVelocityX1B0 = fxFromFloat(2.4f);
+    Fix damageWallBounceDampingX1BC = fxFromFloat(0.8f);
+    int damageSurfaceLockoutX1C0 = 6;
+    Fix damageWallBounceMinVelocityX1E0 = fxFromFloat(2.4f);
+    Fix damageLandingMinVelocityX1E4 = fxFromFloat(1.0f);
+    Fix damageGroundBounceAngleX1E8 = fxFromFloat(0.7853982f);
+    Fix damageGroundBounceDampingX1EC = fxFromFloat(0.8f);
+    Fix groundKnockbackFrictionScaleX200 = fx(1);
+    Fix knockbackFrameDecayX204 = fxFromFloat(0.051f);
+    Fix damageFallStickThresholdX210 = fxFromFloat(0.7f);
+    int damageFallStickWindowX214 = 3;
+    Fix damageFlyTopAngleMinX234 = fxFromFloat(1.2217305f);
+    Fix damageFlyTopAngleMaxX238 = fxFromFloat(1.9198622f);
+    int damageFlyRollPercentX23C = 100;
+    Fix damageFlyRollChanceX240 = fxFromFloat(0.5f);
+    Fix downStandStickThresholdX244 = fxFromFloat(0.7f);
+    Fix downRollStickThresholdX248 = fxFromFloat(0.7f);
+    int downAttackInputWindowX24C = 8;
+    int passiveInputWindowX250 = 20;
+    Fix passiveStandStickThresholdX254 = fxFromFloat(0.5f);
     Fix startShieldHealthX260 = fx(60);
     Fix minShieldScaleX264 = fxFromFloat(0.15f);
     int guardMinHoldFramesX268 = 8;
@@ -101,6 +140,26 @@ struct MeleeCommonData {
     Fix attackerShieldPushbackBaseX3E4 = fxFromFloat(0.02f);
     Fix shieldKnockbackFrameDecayX3E8 = fxFromFloat(0.05f);
     Fix shieldGroundFrictionMultiplierX3EC = fxFromFloat(1.1f);
+    Fix grabTimerBaseX354 = fxFromFloat(76.0f);
+    Fix grabTimerHandicapScaleX358 = fxFromFloat(1.0f);
+    Fix grabTimerHandicapBaseX35C = fxFromFloat(9.0f);
+    Fix grabTimerPortScaleX360 = fxFromFloat(0.0f);
+    Fix grabTimerPortBaseX364 = fxFromFloat(0.0f);
+    Fix grabTimerPercentScaleX368 = fxFromFloat(1.7f);
+    Fix captureCutFrictionScaleX36C = fx(1);
+    Fix captureCutGroundVelocityX370 = fxFromFloat(1.0f);
+    Fix captureJumpVelocityX374 = fxFromFloat(1.0f);
+    Fix captureJumpVelocityYx378 = fxFromFloat(1.5f);
+    Fix throwWeightAnimationScaleX37C = fxFromFloat(0.01f);
+    Fix captureTimerDecrementX3A4 = fx(1);
+    Fix captureMashDecrementX3A8 = fxFromFloat(6.0f);
+    Fix captureJumpButtonWindowX3AC = fxFromFloat(15.0f);
+    Fix captureMashAnimHoldFramesX3B0 = fxFromFloat(8.0f);
+    Fix captureMashAnimRateX3B4 = fxFromFloat(0.5f);
+    Fix captureJumpGravityThresholdX3B8 = fxFromFloat(0.0f);
+    Fix captureFloorSnapMaxX3BC = fxFromFloat(2.0f);
+    Fix captureHighThresholdX3C4 = fxFromFloat(0.0f);
+    Fix thrownMashDecrementX3C8 = fxFromFloat(6.0f);
     Fix spotDodgeStickThresholdX314 = -fxFromFloat(0.7f);
     int spotDodgeStickWindowX318 = 4;
     Fix rollStickThresholdX31C = fxFromFloat(0.7f);
@@ -113,6 +172,7 @@ struct MeleeCommonData {
     Fix fallSpecialDriftX340 = fxFromFloat(0.6f);
     int landingFallSpecialLagX344 = 10;
     int runStopTurnLagX410 = 6;
+    int downWaitAutoStandFramesX424 = 60;
     Fix runBrakeAnimFreezeVelocityX42C = 0;
     int runDirectFramesX430 = 10;
     Fix jumpMomentumYScaleX438 = fxFromFloat(0.3f);
@@ -259,6 +319,10 @@ struct HitboxDefinition {
     Fix knockbackBase = 0;
     Fix knockbackGrowth = 0;
     Fix knockbackWeightSet = 0;
+    int element = 0;
+    bool isGrab = false;
+    bool onlyHitGrabbed = false;
+    bool requiresThrownHitboxOwner = false;
     bool hitGrounded = true;
     bool hitAirborne = true;
 };
@@ -279,10 +343,12 @@ enum class SubactionType : uint8_t {
     RemoveHitbox,
     AdjustHitboxDamage,
     AdjustHitboxSize,
+    CreateThrowHitbox,
     ClearHitboxes,
     SetHurtboxState,
     SetInterruptible,
     SetFlag,
+    SetThrowFlag,
     ReverseDirection,
     StartSmashCharge,
     SetModelPartAnimation,
@@ -366,6 +432,7 @@ enum class InterruptCondition : uint8_t {
     RollBackwardInput,
     LedgeClimbInput,
     LedgeDropInput,
+    GrabPressed,
 };
 
 struct InterruptRule {
