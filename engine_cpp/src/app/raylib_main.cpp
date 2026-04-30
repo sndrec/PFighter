@@ -4,11 +4,16 @@
 #include "editor/fighter_editor.hpp"
 
 #include <raylib.h>
+#include <raymath.h>
+#include <rlgl.h>
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cmath>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 static Vector3 toRay(pf::Vec3 v) {
@@ -17,6 +22,46 @@ static Vector3 toRay(pf::Vec3 v) {
 
 static Vector3 toRayGround(pf::Vec2 v) {
     return {pf::fxToFloat(v.x), pf::fxToFloat(v.y), 0.0f};
+}
+
+static Matrix toRayMatrix(const std::array<float, 16>& m) {
+    return {
+        m[0], m[1], m[2], m[3],
+        m[4], m[5], m[6], m[7],
+        m[8], m[9], m[10], m[11],
+        m[12], m[13], m[14], m[15],
+    };
+}
+
+static Matrix toRayMatrix(const std::array<pf::Fix, 16>& m) {
+    return {
+        pf::fxToFloat(m[0]), pf::fxToFloat(m[1]), pf::fxToFloat(m[2]), pf::fxToFloat(m[3]),
+        pf::fxToFloat(m[4]), pf::fxToFloat(m[5]), pf::fxToFloat(m[6]), pf::fxToFloat(m[7]),
+        pf::fxToFloat(m[8]), pf::fxToFloat(m[9]), pf::fxToFloat(m[10]), pf::fxToFloat(m[11]),
+        pf::fxToFloat(m[12]), pf::fxToFloat(m[13]), pf::fxToFloat(m[14]), pf::fxToFloat(m[15]),
+    };
+}
+
+static std::array<float, 16> multiplyRowMajor(const std::array<float, 16>& a, const std::array<float, 16>& b) {
+    std::array<float, 16> result{};
+    for (int row = 0; row < 4; ++row) {
+        for (int col = 0; col < 4; ++col) {
+            float value = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                value += a[static_cast<size_t>(row * 4 + k)] * b[static_cast<size_t>(k * 4 + col)];
+            }
+            result[static_cast<size_t>(row * 4 + col)] = value;
+        }
+    }
+    return result;
+}
+
+static std::array<float, 16> toFloatMatrix(const pf::JointWorldTransform& transform) {
+    std::array<float, 16> matrix{};
+    for (size_t i = 0; i < matrix.size(); ++i) {
+        matrix[i] = pf::fxToFloat(transform.matrix[i]);
+    }
+    return matrix;
 }
 
 static pf::Fix axisToFix(float value) {
@@ -240,6 +285,474 @@ static void drawImportedSkeleton(const pf::FighterDefinition& def, const pf::Fig
     }
 }
 
+namespace {
+
+constexpr int kHsdShaderMaxBones = 200;
+constexpr uint32_t kPobjCullBack = 1u << 14;
+constexpr uint32_t kPobjCullFront = 1u << 15;
+constexpr uint32_t kJObjSkeletonRoot = 1u << 1;
+
+struct HsdRenderBatch {
+    unsigned int vao = 0;
+    std::array<unsigned int, 8> vbo{};
+    int vertexCount = 0;
+    int parentBone = -1;
+    int singleBindBone = -1;
+    uint32_t parentFlags = 0;
+    uint32_t polygonFlags = 0;
+    bool hasEnvelopes = false;
+    bool unknown2 = false;
+    bool shapeSetAverage = false;
+    int texture = -1;
+    std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
+};
+
+struct HsdRenderCache {
+    Shader shader{};
+    int locMvp = -1;
+    int locParentMatrix = -1;
+    int locTexture0 = -1;
+    int locHasTexture = -1;
+    int locHasEnvelopes = -1;
+    int locUnknown2 = -1;
+    int locShapeSetAverage = -1;
+    int locParentIsSkeletonRoot = -1;
+    int locMaterialColor = -1;
+    unsigned int boneUniformBuffer = 0;
+    std::vector<Texture2D> textures;
+    std::vector<HsdRenderBatch> batches;
+};
+
+#ifndef APIENTRY
+#if defined(_WIN32)
+#define APIENTRY __stdcall
+#else
+#define APIENTRY
+#endif
+#endif
+
+using GlGenBuffersFn = void (APIENTRY*)(int, unsigned int*);
+using GlBindBufferFn = void (APIENTRY*)(unsigned int, unsigned int);
+using GlBufferDataFn = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
+using GlBufferSubDataFn = void (APIENTRY*)(unsigned int, ptrdiff_t, ptrdiff_t, const void*);
+using GlBindBufferBaseFn = void (APIENTRY*)(unsigned int, unsigned int, unsigned int);
+using GlGetUniformBlockIndexFn = unsigned int (APIENTRY*)(unsigned int, const char*);
+using GlUniformBlockBindingFn = void (APIENTRY*)(unsigned int, unsigned int, unsigned int);
+
+struct GlUniformBufferApi {
+    GlGenBuffersFn genBuffers = nullptr;
+    GlBindBufferFn bindBuffer = nullptr;
+    GlBufferDataFn bufferData = nullptr;
+    GlBufferSubDataFn bufferSubData = nullptr;
+    GlBindBufferBaseFn bindBufferBase = nullptr;
+    GlGetUniformBlockIndexFn getUniformBlockIndex = nullptr;
+    GlUniformBlockBindingFn uniformBlockBinding = nullptr;
+};
+
+static GlUniformBufferApi& glUniformBufferApi() {
+    static GlUniformBufferApi api{
+        reinterpret_cast<GlGenBuffersFn>(rlGetProcAddress("glGenBuffers")),
+        reinterpret_cast<GlBindBufferFn>(rlGetProcAddress("glBindBuffer")),
+        reinterpret_cast<GlBufferDataFn>(rlGetProcAddress("glBufferData")),
+        reinterpret_cast<GlBufferSubDataFn>(rlGetProcAddress("glBufferSubData")),
+        reinterpret_cast<GlBindBufferBaseFn>(rlGetProcAddress("glBindBufferBase")),
+        reinterpret_cast<GlGetUniformBlockIndexFn>(rlGetProcAddress("glGetUniformBlockIndex")),
+        reinterpret_cast<GlUniformBlockBindingFn>(rlGetProcAddress("glUniformBlockBinding")),
+    };
+    return api;
+}
+
+static unsigned int createBoneUniformBuffer(Shader shader) {
+    constexpr unsigned int kGlUniformBuffer = 0x8A11;
+    constexpr unsigned int kGlDynamicDraw = 0x88E8;
+    constexpr unsigned int kInvalidIndex = 0xFFFFFFFFu;
+    GlUniformBufferApi& api = glUniformBufferApi();
+    if (!api.genBuffers || !api.bindBuffer || !api.bufferData || !api.bindBufferBase ||
+        !api.getUniformBlockIndex || !api.uniformBlockBinding) {
+        return 0;
+    }
+
+    unsigned int buffer = 0;
+    api.genBuffers(1, &buffer);
+    api.bindBuffer(kGlUniformBuffer, buffer);
+    api.bufferData(kGlUniformBuffer, sizeof(Matrix) * kHsdShaderMaxBones * 2, nullptr, kGlDynamicDraw);
+    api.bindBuffer(kGlUniformBuffer, 0);
+
+    unsigned int blockIndex = api.getUniformBlockIndex(shader.id, "BoneTransforms");
+    if (blockIndex != kInvalidIndex) {
+        api.uniformBlockBinding(shader.id, blockIndex, 0);
+        api.bindBufferBase(kGlUniformBuffer, 0, buffer);
+    }
+    return buffer;
+}
+
+static void appendGpuMatrix(std::vector<float>& out, Matrix matrix) {
+    out.push_back(matrix.m0);
+    out.push_back(matrix.m1);
+    out.push_back(matrix.m2);
+    out.push_back(matrix.m3);
+    out.push_back(matrix.m4);
+    out.push_back(matrix.m5);
+    out.push_back(matrix.m6);
+    out.push_back(matrix.m7);
+    out.push_back(matrix.m8);
+    out.push_back(matrix.m9);
+    out.push_back(matrix.m10);
+    out.push_back(matrix.m11);
+    out.push_back(matrix.m12);
+    out.push_back(matrix.m13);
+    out.push_back(matrix.m14);
+    out.push_back(matrix.m15);
+}
+
+static std::vector<float> gpuMatrixBlock(const std::vector<Matrix>& boneMatrices, const std::vector<Matrix>& boneWorldMatrices) {
+    std::vector<float> block;
+    block.reserve(static_cast<size_t>(kHsdShaderMaxBones) * 2 * 16);
+    for (Matrix matrix : boneMatrices) {
+        appendGpuMatrix(block, matrix);
+    }
+    for (Matrix matrix : boneWorldMatrices) {
+        appendGpuMatrix(block, matrix);
+    }
+    return block;
+}
+
+static void uploadBoneUniformBuffer(unsigned int buffer, const std::vector<Matrix>& boneMatrices, const std::vector<Matrix>& boneWorldMatrices) {
+    constexpr unsigned int kGlUniformBuffer = 0x8A11;
+    GlUniformBufferApi& api = glUniformBufferApi();
+    if (buffer == 0 || !api.bindBuffer || !api.bufferSubData || !api.bindBufferBase) {
+        return;
+    }
+    std::vector<float> block = gpuMatrixBlock(boneMatrices, boneWorldMatrices);
+    api.bindBuffer(kGlUniformBuffer, buffer);
+    api.bufferSubData(kGlUniformBuffer, 0, static_cast<ptrdiff_t>(block.size() * sizeof(float)), block.data());
+    api.bindBufferBase(kGlUniformBuffer, 0, buffer);
+    api.bindBuffer(kGlUniformBuffer, 0);
+}
+
+const char* hsdMeshVertexShader() {
+    return R"glsl(
+#version 330
+layout(location = 0) in vec3 vertexPosition;
+layout(location = 1) in vec2 vertexTexCoord;
+layout(location = 2) in vec3 vertexNormal;
+layout(location = 3) in vec4 vertexColor;
+layout(location = 6) in vec4 boneIndex0;
+layout(location = 7) in vec4 boneWeight0;
+layout(location = 8) in vec2 boneIndex1;
+layout(location = 9) in vec2 boneWeight1;
+
+uniform mat4 mvp;
+layout(std140) uniform BoneTransforms
+{
+    mat4 boneMatrices[200];
+    mat4 boneWorldMatrices[200];
+};
+uniform mat4 parentMatrix;
+uniform int hasEnvelopes;
+uniform int unknown2;
+uniform int shapeSetAverage;
+uniform int parentIsSkeletonRoot;
+
+out vec2 fragTexCoord;
+out vec4 fragColor;
+out vec3 fragNormal;
+
+void addWeightedBone(inout vec4 position, inout vec3 normal, vec4 basePosition, vec3 baseNormal, float bone, float weight, int useBind)
+{
+    if (weight <= 0.0 || bone < 0.0) return;
+    int index = clamp(int(bone + 0.5), 0, 199);
+    mat4 transform = useBind == 1 ? boneMatrices[index] : boneWorldMatrices[index];
+    position += (transform * basePosition) * weight;
+    normal += mat3(transform) * baseNormal * weight;
+}
+
+void main()
+{
+    vec4 basePosition = vec4(vertexPosition, 1.0);
+    vec3 baseNormal = vertexNormal;
+    vec4 skinnedPosition = basePosition;
+    vec3 skinnedNormal = baseNormal;
+
+    if (hasEnvelopes == 1) {
+        if (shapeSetAverage == 0 && parentIsSkeletonRoot == 0) {
+            basePosition = parentMatrix * basePosition;
+            baseNormal = mat3(parentMatrix) * baseNormal;
+        }
+
+        skinnedPosition = vec4(0.0);
+        skinnedNormal = vec3(0.0);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.x, boneWeight0.x, 1);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.y, boneWeight0.y, 1);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.z, boneWeight0.z, 1);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.w, boneWeight0.w, 1);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex1.x, boneWeight1.x, 1);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex1.y, boneWeight1.y, 1);
+        if (skinnedPosition.w == 0.0) {
+            skinnedPosition = basePosition;
+            skinnedNormal = baseNormal;
+        }
+    } else if (unknown2 == 1) {
+        skinnedPosition = vec4(0.0);
+        skinnedNormal = vec3(0.0);
+        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.x, boneWeight0.x, 0);
+        if (skinnedPosition.w == 0.0) {
+            skinnedPosition = parentMatrix * basePosition;
+            skinnedNormal = mat3(parentMatrix) * baseNormal;
+        }
+    } else if (shapeSetAverage == 0) {
+        skinnedPosition = parentMatrix * basePosition;
+        skinnedNormal = mat3(parentMatrix) * baseNormal;
+    }
+
+    fragTexCoord = vertexTexCoord;
+    fragColor = vertexColor;
+    fragNormal = normalize(skinnedNormal);
+    gl_Position = mvp * skinnedPosition;
+}
+)glsl";
+}
+
+const char* hsdMeshFragmentShader() {
+    return R"glsl(
+#version 330
+in vec2 fragTexCoord;
+in vec4 fragColor;
+in vec3 fragNormal;
+
+uniform sampler2D texture0;
+uniform int hasTexture;
+uniform vec4 materialColor;
+
+out vec4 finalColor;
+
+void main()
+{
+    vec4 texel = hasTexture == 1 ? texture(texture0, fragTexCoord) : vec4(1.0);
+    vec3 lightDir = normalize(vec3(-0.35, 0.75, 0.55));
+    float diffuse = max(dot(normalize(fragNormal), lightDir), 0.0);
+    float light = 0.45 + diffuse * 0.75;
+    finalColor = vec4(texel.rgb * fragColor.rgb * materialColor.rgb * light, texel.a * fragColor.a * materialColor.a);
+}
+)glsl";
+}
+
+static unsigned int uploadFloatAttribute(int location, int components, const std::vector<float>& data) {
+    if (data.empty()) {
+        return 0;
+    }
+    unsigned int vbo = rlLoadVertexBuffer(data.data(), static_cast<int>(data.size() * sizeof(float)), false);
+    rlEnableVertexBuffer(vbo);
+    rlSetVertexAttribute(static_cast<unsigned int>(location), components, RL_FLOAT, false, 0, 0);
+    rlEnableVertexAttribute(static_cast<unsigned int>(location));
+    return vbo;
+}
+
+static unsigned int uploadColorAttribute(const std::vector<unsigned char>& data) {
+    if (data.empty()) {
+        return 0;
+    }
+    unsigned int vbo = rlLoadVertexBuffer(data.data(), static_cast<int>(data.size() * sizeof(unsigned char)), false);
+    rlEnableVertexBuffer(vbo);
+    rlSetVertexAttribute(3, 4, RL_UNSIGNED_BYTE, true, 0, 0);
+    rlEnableVertexAttribute(3);
+    return vbo;
+}
+
+static Texture2D loadTextureFromRgba(const pf::HsdMeshTexture& texture) {
+    Image image{};
+    image.data = const_cast<uint8_t*>(texture.rgba.data());
+    image.width = texture.width;
+    image.height = texture.height;
+    image.mipmaps = 1;
+    image.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+    Texture2D loaded = LoadTextureFromImage(image);
+    SetTextureFilter(loaded, TEXTURE_FILTER_BILINEAR);
+    return loaded;
+}
+
+static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& asset) {
+    HsdRenderCache cache;
+    cache.shader = LoadShaderFromMemory(hsdMeshVertexShader(), hsdMeshFragmentShader());
+    cache.locMvp = GetShaderLocation(cache.shader, "mvp");
+    cache.locParentMatrix = GetShaderLocation(cache.shader, "parentMatrix");
+    cache.locTexture0 = GetShaderLocation(cache.shader, "texture0");
+    cache.locHasTexture = GetShaderLocation(cache.shader, "hasTexture");
+    cache.locHasEnvelopes = GetShaderLocation(cache.shader, "hasEnvelopes");
+    cache.locUnknown2 = GetShaderLocation(cache.shader, "unknown2");
+    cache.locShapeSetAverage = GetShaderLocation(cache.shader, "shapeSetAverage");
+    cache.locParentIsSkeletonRoot = GetShaderLocation(cache.shader, "parentIsSkeletonRoot");
+    cache.locMaterialColor = GetShaderLocation(cache.shader, "materialColor");
+    cache.boneUniformBuffer = createBoneUniformBuffer(cache.shader);
+
+    cache.textures.reserve(asset.mesh.textures.size());
+    for (const pf::HsdMeshTexture& texture : asset.mesh.textures) {
+        if (texture.width > 0 && texture.height > 0 && !texture.rgba.empty()) {
+            cache.textures.push_back(loadTextureFromRgba(texture));
+        }
+    }
+
+    cache.batches.reserve(asset.mesh.batches.size());
+    for (const pf::HsdMeshBatch& source : asset.mesh.batches) {
+        HsdRenderBatch batch;
+        batch.parentBone = source.parentBone;
+        batch.singleBindBone = source.singleBindBone;
+        batch.parentFlags = source.parentFlags;
+        batch.polygonFlags = source.polygonFlags;
+        batch.hasEnvelopes = source.hasEnvelopes;
+        batch.unknown2 = source.unknown2;
+        batch.shapeSetAverage = source.shapeSetAverage;
+        batch.texture = source.texture;
+        batch.materialColor = source.materialColor;
+        batch.vertexCount = static_cast<int>(source.vertices.size());
+
+        std::vector<float> positions;
+        std::vector<float> texcoords;
+        std::vector<float> normals;
+        std::vector<unsigned char> colors;
+        std::vector<float> bone0;
+        std::vector<float> weight0;
+        std::vector<float> bone1;
+        std::vector<float> weight1;
+        positions.reserve(source.vertices.size() * 3);
+        texcoords.reserve(source.vertices.size() * 2);
+        normals.reserve(source.vertices.size() * 3);
+        colors.reserve(source.vertices.size() * 4);
+        bone0.reserve(source.vertices.size() * 4);
+        weight0.reserve(source.vertices.size() * 4);
+        bone1.reserve(source.vertices.size() * 2);
+        weight1.reserve(source.vertices.size() * 2);
+
+        for (const pf::HsdMeshVertex& vertex : source.vertices) {
+            positions.push_back(pf::fxToFloat(vertex.position.x));
+            positions.push_back(pf::fxToFloat(vertex.position.y));
+            positions.push_back(pf::fxToFloat(vertex.position.z));
+            texcoords.push_back(vertex.u);
+            texcoords.push_back(vertex.v);
+            normals.push_back(pf::fxToFloat(vertex.normal.x));
+            normals.push_back(pf::fxToFloat(vertex.normal.y));
+            normals.push_back(pf::fxToFloat(vertex.normal.z));
+            colors.insert(colors.end(), vertex.color.begin(), vertex.color.end());
+            for (int i = 0; i < 4; ++i) {
+                bone0.push_back(static_cast<float>(vertex.influences[static_cast<size_t>(i)].bone));
+                weight0.push_back(vertex.influences[static_cast<size_t>(i)].weight);
+            }
+            for (int i = 4; i < 6; ++i) {
+                bone1.push_back(static_cast<float>(vertex.influences[static_cast<size_t>(i)].bone));
+                weight1.push_back(vertex.influences[static_cast<size_t>(i)].weight);
+            }
+        }
+
+        batch.vao = rlLoadVertexArray();
+        rlEnableVertexArray(batch.vao);
+        batch.vbo[0] = uploadFloatAttribute(0, 3, positions);
+        batch.vbo[1] = uploadFloatAttribute(1, 2, texcoords);
+        batch.vbo[2] = uploadFloatAttribute(2, 3, normals);
+        batch.vbo[3] = uploadColorAttribute(colors);
+        batch.vbo[4] = uploadFloatAttribute(6, 4, bone0);
+        batch.vbo[5] = uploadFloatAttribute(7, 4, weight0);
+        batch.vbo[6] = uploadFloatAttribute(8, 2, bone1);
+        batch.vbo[7] = uploadFloatAttribute(9, 2, weight1);
+        rlDisableVertexArray();
+        rlDisableVertexBuffer();
+
+        cache.batches.push_back(batch);
+    }
+
+    return cache;
+}
+
+static HsdRenderCache& hsdRenderCache(const pf::HsdFighterAnimationAsset& asset) {
+    static std::unordered_map<const pf::HsdFighterAnimationAsset*, std::unique_ptr<HsdRenderCache>> caches;
+    auto it = caches.find(&asset);
+    if (it == caches.end()) {
+        it = caches.emplace(&asset, std::make_unique<HsdRenderCache>(createHsdRenderCache(asset))).first;
+    }
+    return *it->second;
+}
+
+static Matrix parentMatrixForBatch(const HsdRenderBatch& batch,
+                                   const std::vector<Matrix>& boneWorldMatrices) {
+    int bone = batch.singleBindBone >= 0 ? batch.singleBindBone : batch.parentBone;
+    if (bone >= 0 && static_cast<size_t>(bone) < boneWorldMatrices.size()) {
+        return boneWorldMatrices[static_cast<size_t>(bone)];
+    }
+    return MatrixIdentity();
+}
+
+static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
+    if (!def.hsdAsset || def.hsdAsset->mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
+        return;
+    }
+
+    HsdRenderCache& cache = hsdRenderCache(*def.hsdAsset);
+    constexpr int kMaxBones = kHsdShaderMaxBones;
+    std::vector<Matrix> boneWorldMatrices(kMaxBones, MatrixIdentity());
+    std::vector<Matrix> boneMatrices(kMaxBones, MatrixIdentity());
+    const size_t boneCount = std::min({fighter.hsdJointWorldTransforms.size(),
+                                       def.hsdAsset->mesh.inverseBindMatrices.size(),
+                                       static_cast<size_t>(kMaxBones)});
+    for (size_t i = 0; i < boneCount; ++i) {
+        std::array<float, 16> world = toFloatMatrix(fighter.hsdJointWorldTransforms[i]);
+        boneWorldMatrices[i] = toRayMatrix(world);
+        boneMatrices[i] = toRayMatrix(multiplyRowMajor(world, def.hsdAsset->mesh.inverseBindMatrices[i]));
+    }
+
+    Matrix mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
+    rlEnableShader(cache.shader.id);
+    if (cache.locMvp >= 0) {
+        SetShaderValueMatrix(cache.shader, cache.locMvp, mvp);
+    }
+    uploadBoneUniformBuffer(cache.boneUniformBuffer, boneMatrices, boneWorldMatrices);
+
+    for (const HsdRenderBatch& batch : cache.batches) {
+        Matrix parent = parentMatrixForBatch(batch, boneWorldMatrices);
+        const int hasEnvelopes = batch.hasEnvelopes ? 1 : 0;
+        const int unknown2 = batch.unknown2 ? 1 : 0;
+        const int shapeSetAverage = batch.shapeSetAverage ? 1 : 0;
+        const int parentIsSkeletonRoot = (batch.parentFlags & kJObjSkeletonRoot) != 0 ? 1 : 0;
+        const int hasTexture = batch.texture >= 0 && static_cast<size_t>(batch.texture) < cache.textures.size() ? 1 : 0;
+        const float materialColor[4] = {
+            batch.materialColor[0] / 255.0f,
+            batch.materialColor[1] / 255.0f,
+            batch.materialColor[2] / 255.0f,
+            batch.materialColor[3] / 255.0f,
+        };
+
+        if (cache.locParentMatrix >= 0) SetShaderValueMatrix(cache.shader, cache.locParentMatrix, parent);
+        if (cache.locHasEnvelopes >= 0) SetShaderValue(cache.shader, cache.locHasEnvelopes, &hasEnvelopes, SHADER_UNIFORM_INT);
+        if (cache.locUnknown2 >= 0) SetShaderValue(cache.shader, cache.locUnknown2, &unknown2, SHADER_UNIFORM_INT);
+        if (cache.locShapeSetAverage >= 0) SetShaderValue(cache.shader, cache.locShapeSetAverage, &shapeSetAverage, SHADER_UNIFORM_INT);
+        if (cache.locParentIsSkeletonRoot >= 0) SetShaderValue(cache.shader, cache.locParentIsSkeletonRoot, &parentIsSkeletonRoot, SHADER_UNIFORM_INT);
+        if (cache.locHasTexture >= 0) SetShaderValue(cache.shader, cache.locHasTexture, &hasTexture, SHADER_UNIFORM_INT);
+        if (cache.locMaterialColor >= 0) SetShaderValue(cache.shader, cache.locMaterialColor, materialColor, SHADER_UNIFORM_VEC4);
+        if (hasTexture != 0 && cache.locTexture0 >= 0) {
+            SetShaderValueTexture(cache.shader, cache.locTexture0, cache.textures[static_cast<size_t>(batch.texture)]);
+        }
+
+        if ((batch.polygonFlags & kPobjCullFront) != 0) {
+            rlEnableBackfaceCulling();
+            rlSetCullFace(RL_CULL_FACE_FRONT);
+        } else if ((batch.polygonFlags & kPobjCullBack) != 0) {
+            rlEnableBackfaceCulling();
+            rlSetCullFace(RL_CULL_FACE_BACK);
+        } else {
+            rlDisableBackfaceCulling();
+        }
+
+        if (rlEnableVertexArray(batch.vao)) {
+            rlDrawVertexArray(0, batch.vertexCount);
+            rlDisableVertexArray();
+        }
+    }
+
+    rlDisableBackfaceCulling();
+    rlDisableTexture();
+    rlDisableShader();
+}
+
+} // namespace
+
 static bool drawsShield(const pf::FighterState& state) {
     return state.name == "GuardOn" || state.name == "Guard" || state.name == "GuardSetOff" || state.name == "GuardReflect";
 }
@@ -259,8 +772,12 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     const Vector3 pos = toRayGround(fighter.position);
     const bool hasImportedPose = def.hsdAsset && !fighter.hsdJointWorldPositions.empty();
     if (hasImportedPose) {
-        DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
-        drawImportedSkeleton(def, fighter, color);
+        if (!def.hsdAsset->mesh.batches.empty()) {
+            drawImportedMesh(def, fighter);
+        } else {
+            DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
+            drawImportedSkeleton(def, fighter, color);
+        }
     } else {
         DrawCube(pos, 0.55f, 1.1f, 0.35f, color);
         DrawCubeWires(pos, 0.55f, 1.1f, 0.35f, BLACK);

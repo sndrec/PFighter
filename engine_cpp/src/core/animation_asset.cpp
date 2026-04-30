@@ -160,6 +160,67 @@ AnimationClip readAnimationClip(BinaryReader& reader) {
     return clip;
 }
 
+HsdFighterMesh readFighterMesh(BinaryReader& reader) {
+    HsdFighterMesh mesh;
+    const int32_t inverseBindCount = reader.readI32();
+    mesh.inverseBindMatrices.reserve(static_cast<size_t>(inverseBindCount));
+    for (int32_t i = 0; i < inverseBindCount; ++i) {
+        std::array<float, 16> matrix{};
+        for (float& item : matrix) {
+            item = reader.readF32();
+        }
+        mesh.inverseBindMatrices.push_back(matrix);
+    }
+
+    const int32_t textureCount = reader.readI32();
+    mesh.textures.reserve(static_cast<size_t>(textureCount));
+    for (int32_t i = 0; i < textureCount; ++i) {
+        HsdMeshTexture texture;
+        texture.width = reader.readI32();
+        texture.height = reader.readI32();
+        const int32_t byteCount = reader.readI32();
+        texture.rgba = reader.readBytes(static_cast<size_t>(byteCount));
+        mesh.textures.push_back(std::move(texture));
+    }
+
+    const int32_t batchCount = reader.readI32();
+    mesh.batches.reserve(static_cast<size_t>(batchCount));
+    for (int32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex) {
+        HsdMeshBatch batch;
+        batch.parentBone = reader.readI32();
+        batch.singleBindBone = reader.readI32();
+        batch.parentFlags = reader.readU32();
+        batch.polygonFlags = reader.readU32();
+        batch.hasEnvelopes = reader.readBool();
+        batch.unknown2 = reader.readBool();
+        batch.shapeSetAverage = reader.readBool();
+        batch.texture = reader.readI32();
+        for (uint8_t& channel : batch.materialColor) {
+            channel = reader.readU8();
+        }
+
+        const int32_t vertexCount = reader.readI32();
+        batch.vertices.reserve(static_cast<size_t>(vertexCount));
+        for (int32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+            HsdMeshVertex vertex;
+            vertex.position = reader.readVec3();
+            vertex.normal = reader.readVec3();
+            vertex.u = reader.readF32();
+            vertex.v = reader.readF32();
+            for (uint8_t& channel : vertex.color) {
+                channel = reader.readU8();
+            }
+            for (HsdMeshVertexInfluence& influence : vertex.influences) {
+                influence.bone = reader.readI32();
+                influence.weight = reader.readF32();
+            }
+            batch.vertices.push_back(vertex);
+        }
+        mesh.batches.push_back(std::move(batch));
+    }
+    return mesh;
+}
+
 } // namespace
 
 HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
@@ -276,6 +337,8 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
         hurtbox.radius = fxFromFloat(reader.readF32());
         asset.hurtboxes.push_back(std::move(hurtbox));
     }
+
+    asset.mesh = readFighterMesh(reader);
 
     const int32_t modelPartCount = reader.readI32();
     asset.modelPartAnimations.reserve(static_cast<size_t>(modelPartCount));

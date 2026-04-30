@@ -2,6 +2,7 @@ using System.Text;
 using HSDRaw;
 using HSDRaw.Common;
 using HSDRaw.Common.Animation;
+using HSDRaw.GX;
 using HSDRaw.Melee;
 using HSDRaw.Melee.Cmd;
 using HSDRaw.Melee.Gr;
@@ -482,6 +483,296 @@ static void WritePoseBinary(BinaryWriter writer, HSD_JOBJ poseRoot)
     }
 }
 
+static void WriteMatrix4x4(BinaryWriter writer, float[] matrix)
+{
+    for (int i = 0; i < 16; ++i)
+    {
+        writer.Write(i < matrix.Length ? matrix[i] : (i % 5 == 0 ? 1.0f : 0.0f));
+    }
+}
+
+static float[] HsdInverseBindToRowMajor(HSD_Matrix4x3? matrix)
+{
+    if (matrix is null)
+    {
+        return new[]
+        {
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f,
+        };
+    }
+
+    // HSD stores the 3x4 transform as rows used by HSD_MtxPosition.
+    return new[]
+    {
+        matrix.M11, matrix.M12, matrix.M13, matrix.M14,
+        matrix.M21, matrix.M22, matrix.M23, matrix.M24,
+        matrix.M31, matrix.M32, matrix.M33, matrix.M34,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+}
+
+static List<GX_Vertex> Triangulate(GXPrimitiveType type, List<GX_Vertex> input)
+{
+    List<GX_Vertex> output = new();
+    switch (type)
+    {
+        case GXPrimitiveType.Quads:
+            for (int i = 0; i + 3 < input.Count; i += 4)
+            {
+                output.Add(input[i]);
+                output.Add(input[i + 1]);
+                output.Add(input[i + 2]);
+                output.Add(input[i + 2]);
+                output.Add(input[i + 3]);
+                output.Add(input[i]);
+            }
+            break;
+        case GXPrimitiveType.TriangleStrip:
+            for (int i = 2; i < input.Count; ++i)
+            {
+                bool even = i % 2 != 1;
+                GX_Vertex a = input[i - 2];
+                GX_Vertex b = even ? input[i] : input[i - 1];
+                GX_Vertex c = even ? input[i - 1] : input[i];
+                if (a != b && b != c && c != a)
+                {
+                    output.Add(c);
+                    output.Add(b);
+                    output.Add(a);
+                }
+            }
+            break;
+        case GXPrimitiveType.Triangles:
+            output.AddRange(input);
+            break;
+    }
+    return output;
+}
+
+static void WriteColor(BinaryWriter writer, byte r, byte g, byte b, byte a)
+{
+    writer.Write(r);
+    writer.Write(g);
+    writer.Write(b);
+    writer.Write(a);
+}
+
+static (byte R, byte G, byte B, byte A) MaterialDiffuse(HSD_MOBJ? mobj)
+{
+    HSD_Material? material = mobj?.Material;
+    if (material is null)
+    {
+        return (255, 255, 255, 255);
+    }
+    byte alpha = material.DIF_A != 0 ? material.DIF_A : (byte)Math.Clamp((int)MathF.Round(material.Alpha * 255.0f), 0, 255);
+    if (alpha == 0)
+    {
+        alpha = 255;
+    }
+    return (material.DIF_R, material.DIF_G, material.DIF_B, alpha);
+}
+
+static int RegisterTexture(HSD_MOBJ? mobj, Dictionary<string, int> textureLookup, List<(int Width, int Height, byte[] Rgba)> textures)
+{
+    HSD_TOBJ? texture = mobj?.Textures?.List.FirstOrDefault(t => t.ImageData is not null);
+    if (texture?.ImageData is null)
+    {
+        return -1;
+    }
+
+    byte[]? rgba = texture.GetDecodedImageData();
+    if (rgba is null || rgba.Length == 0)
+    {
+        return -1;
+    }
+
+    string key = $"{texture.ImageData.Width}x{texture.ImageData.Height}:{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(rgba))}";
+    if (textureLookup.TryGetValue(key, out int existing))
+    {
+        return existing;
+    }
+
+    int index = textures.Count;
+    textures.Add((texture.ImageData.Width, texture.ImageData.Height, rgba));
+    textureLookup.Add(key, index);
+    return index;
+}
+
+static Dictionary<HSD_JOBJ, HSD_JOBJ?> BuildParentLookup(List<HSD_JOBJ> joints)
+{
+    Dictionary<HSD_JOBJ, HSD_JOBJ?> parents = new();
+    foreach (HSD_JOBJ joint in joints)
+    {
+        if (!parents.ContainsKey(joint))
+        {
+            parents[joint] = null;
+        }
+        HSD_JOBJ? child = joint.Child;
+        while (child is not null)
+        {
+            parents[child] = joint;
+            child = child.Next;
+        }
+    }
+    return parents;
+}
+
+static int JObjIndex(Dictionary<HSD_JOBJ, int> boneIndex, HSD_JOBJ? joint)
+{
+    return joint is not null && boneIndex.TryGetValue(joint, out int index) ? index : -1;
+}
+
+static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD_JOBJ> joints)
+{
+    Dictionary<HSD_JOBJ, int> boneIndex = joints.Select((joint, index) => (joint, index)).ToDictionary(item => item.joint, item => item.index);
+    Dictionary<HSD_JOBJ, HSD_JOBJ?> parents = BuildParentLookup(joints);
+    Dictionary<string, int> textureLookup = new();
+    List<(int Width, int Height, byte[] Rgba)> textures = new();
+
+    using MemoryStream batchStream = new();
+    using BinaryWriter batchWriter = new(batchStream, Encoding.UTF8, leaveOpen: true);
+    int batchCount = 0;
+
+    foreach (HSD_JOBJ parent in joints)
+    {
+        if (parent.Dobj is null)
+        {
+            continue;
+        }
+
+        foreach (HSD_DOBJ dobj in parent.Dobj.List)
+        {
+            if (dobj.Pobj is null)
+            {
+                continue;
+            }
+
+            int textureIndex = RegisterTexture(dobj.Mobj, textureLookup, textures);
+            (byte materialR, byte materialG, byte materialB, byte materialA) = MaterialDiffuse(dobj.Mobj);
+
+            foreach (HSD_POBJ pobj in dobj.Pobj.List)
+            {
+                if (pobj.Attributes is null)
+                {
+                    continue;
+                }
+
+                GX_Attribute[] attrs = pobj.ToGXAttributes();
+                if (attrs.Length == 0 || attrs[^1].AttributeName != GXAttribName.GX_VA_NULL)
+                {
+                    continue;
+                }
+
+                GX_DisplayList displayList = pobj.ToDisplayList(attrs);
+                HSD_Envelope[] envelopes = pobj.EnvelopeWeights ?? Array.Empty<HSD_Envelope>();
+                bool hasMatrixIndex = pobj.HasAttribute(GXAttribName.GX_VA_PNMTXIDX);
+                bool hasVertexColor = pobj.HasAttribute(GXAttribName.GX_VA_CLR0);
+                List<GX_Vertex> triangles = new();
+                int offset = 0;
+                foreach (GX_PrimitiveGroup primitive in displayList.Primitives)
+                {
+                    List<GX_Vertex> vertices = displayList.Vertices.GetRange(offset, primitive.Count);
+                    offset += primitive.Count;
+                    triangles.AddRange(Triangulate(primitive.PrimitiveType, vertices));
+                }
+
+                if (triangles.Count == 0)
+                {
+                    continue;
+                }
+
+                int parentBone = JObjIndex(boneIndex, parent);
+                int singleBindBone = JObjIndex(boneIndex, pobj.SingleBoundJOBJ) is int single && single >= 0 ? single : parentBone;
+                batchWriter.Write(parentBone);
+                batchWriter.Write(singleBindBone);
+                batchWriter.Write((uint)parent.Flags);
+                batchWriter.Write((uint)pobj.Flags);
+                batchWriter.Write(hasMatrixIndex && !pobj.Flags.HasFlag(POBJ_FLAG.UNKNOWN2));
+                batchWriter.Write(pobj.Flags.HasFlag(POBJ_FLAG.UNKNOWN2));
+                batchWriter.Write(pobj.Flags.HasFlag(POBJ_FLAG.SHAPESET_AVERAGE));
+                batchWriter.Write(textureIndex);
+                WriteColor(batchWriter, materialR, materialG, materialB, materialA);
+                batchWriter.Write(triangles.Count);
+
+                foreach (GX_Vertex vertex in triangles)
+                {
+                    WriteVec3(batchWriter, vertex.POS.X, vertex.POS.Y, vertex.POS.Z);
+                    WriteVec3(batchWriter, vertex.NRM.X, vertex.NRM.Y, vertex.NRM.Z);
+                    batchWriter.Write(vertex.TEX0.X);
+                    batchWriter.Write(vertex.TEX0.Y);
+                    if (hasVertexColor)
+                    {
+                        WriteColor(batchWriter,
+                            (byte)Math.Clamp((int)MathF.Round(vertex.CLR0.R * 255.0f), 0, 255),
+                            (byte)Math.Clamp((int)MathF.Round(vertex.CLR0.G * 255.0f), 0, 255),
+                            (byte)Math.Clamp((int)MathF.Round(vertex.CLR0.B * 255.0f), 0, 255),
+                            (byte)Math.Clamp((int)MathF.Round(vertex.CLR0.A * 255.0f), 0, 255));
+                    }
+                    else
+                    {
+                        WriteColor(batchWriter, 255, 255, 255, 255);
+                    }
+
+                    (int Bone, float Weight)[] influences = new (int Bone, float Weight)[6];
+                    for (int i = 0; i < influences.Length; ++i)
+                    {
+                        influences[i] = (-1, 0.0f);
+                    }
+
+                    if (pobj.Flags.HasFlag(POBJ_FLAG.UNKNOWN2))
+                    {
+                        int matrixIndex = vertex.PNMTXIDX / 3;
+                        HSD_JOBJ? influenceJoint = matrixIndex == 1 && parents.TryGetValue(parent, out HSD_JOBJ? grandparent) ? grandparent : parent;
+                        influences[0] = (JObjIndex(boneIndex, influenceJoint), 1.0f);
+                    }
+                    else if (hasMatrixIndex && envelopes.Length > 0)
+                    {
+                        int envelopeIndex = vertex.PNMTXIDX / 3;
+                        if (envelopeIndex >= 0 && envelopeIndex < envelopes.Length)
+                        {
+                            HSD_Envelope envelope = envelopes[envelopeIndex];
+                            int count = Math.Min(envelope.EnvelopeCount, influences.Length);
+                            for (int i = 0; i < count; ++i)
+                            {
+                                influences[i] = (JObjIndex(boneIndex, envelope.GetJOBJAt(i)), envelope.GetWeightAt(i));
+                            }
+                        }
+                    }
+
+                    for (int i = 0; i < influences.Length; ++i)
+                    {
+                        batchWriter.Write(influences[i].Bone);
+                        batchWriter.Write(influences[i].Weight);
+                    }
+                }
+
+                batchCount++;
+            }
+        }
+    }
+
+    writer.Write(joints.Count);
+    foreach (HSD_JOBJ joint in joints)
+    {
+        WriteMatrix4x4(writer, HsdInverseBindToRowMajor(joint.InverseWorldTransform));
+    }
+
+    writer.Write(textures.Count);
+    foreach ((int width, int height, byte[] rgba) in textures)
+    {
+        writer.Write(width);
+        writer.Write(height);
+        writer.Write(rgba.Length);
+        writer.Write(rgba);
+    }
+
+    writer.Write(batchCount);
+    writer.Write(batchStream.ToArray());
+}
+
 static List<FOBJKey> SampleKeys(FOBJ_Player player, float frameCount, JointTrackType trackType)
 {
     int lastFrame = Math.Max(1, (int)MathF.Ceiling(frameCount));
@@ -676,10 +967,10 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
     writer.Write(Encoding.ASCII.GetBytes("PFHA"));
     WriteString(writer, Path.GetFileNameWithoutExtension(fighterDatPath));
 
+    List<HSD_JOBJ> joints = new();
     using MemoryStream skeletonStream = new();
     using (BinaryWriter skeletonWriter = new(skeletonStream, Encoding.UTF8, leaveOpen: true))
     {
-        List<HSD_JOBJ> joints = new();
         WriteSkeletonBinary(skeletonWriter, skeletonRoot, -1, joints);
         writer.Write(joints.Count);
     }
@@ -732,6 +1023,8 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
         WriteVec3(writer, hurtbox.X2, hurtbox.Y2, hurtbox.Z2);
         writer.Write(hurtbox.Size);
     }
+
+    WriteMeshBinary(writer, skeletonRoot, joints);
 
     SBM_ModelPart[] modelParts = fighterData.ModelPartAnimations?.Array ?? Array.Empty<SBM_ModelPart>();
     writer.Write(modelParts.Length);

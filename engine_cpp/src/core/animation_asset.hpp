@@ -106,11 +106,51 @@ struct HsdModelPartAnimationSet {
     std::vector<AnimationClip> animations;
 };
 
+struct HsdMeshTexture {
+    int width = 0;
+    int height = 0;
+    std::vector<uint8_t> rgba;
+};
+
+struct HsdMeshVertexInfluence {
+    int bone = -1;
+    float weight = 0.0f;
+};
+
+struct HsdMeshVertex {
+    Vec3 position;
+    Vec3 normal;
+    float u = 0.0f;
+    float v = 0.0f;
+    std::array<uint8_t, 4> color{255, 255, 255, 255};
+    std::array<HsdMeshVertexInfluence, 6> influences{};
+};
+
+struct HsdMeshBatch {
+    int parentBone = -1;
+    int singleBindBone = -1;
+    uint32_t parentFlags = 0;
+    uint32_t polygonFlags = 0;
+    bool hasEnvelopes = false;
+    bool unknown2 = false;
+    bool shapeSetAverage = false;
+    int texture = -1;
+    std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
+    std::vector<HsdMeshVertex> vertices;
+};
+
+struct HsdFighterMesh {
+    std::vector<std::array<float, 16>> inverseBindMatrices;
+    std::vector<HsdMeshTexture> textures;
+    std::vector<HsdMeshBatch> batches;
+};
+
 struct HsdFighterAnimationAsset {
     std::string name;
     std::vector<AnimationJoint> skeleton;
     std::vector<AnimationClip> clips;
     std::vector<HsdModelPartAnimationSet> modelPartAnimations;
+    HsdFighterMesh mesh;
     bool hasShieldPose = false;
     AnimationPose shieldPose;
     HsdFighterBoneTable fighterBones;
