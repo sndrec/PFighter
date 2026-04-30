@@ -17,6 +17,7 @@
 namespace pf {
 
 static void evaluatePose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter);
+static void updateAndCheckHitboxes(World& world, size_t attackerIndex);
 static bool segmentYAtX(const StageSegment& segment, Fix x, Fix& y);
 static int fallbackActionIndex(const std::string& animation);
 static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart);
@@ -4033,6 +4034,9 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
         fighter.wallJumpsUsed = 0;
         fighter.grabbedLedge = -1;
         if (!wasGrounded) {
+            if (!fighter.activeHitboxes.empty()) {
+                updateAndCheckHitboxes(world, fighterIndex);
+            }
             unlockFighterEcb(fighter);
             fighter.platformDropTimer = 0;
             fighter.jumpsUsed = 0;
@@ -5101,6 +5105,8 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         } else {
             applyAnimationGroundVelocity(currentState(world, fighter), fighter);
             integrateAndCollide(world, fighterIndex);
+            refreshHsdWorldPose(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter);
+            applyImportedBoneAliases(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter);
         }
 
         const FighterState& stateAfterPhysics = currentState(world, fighter);
