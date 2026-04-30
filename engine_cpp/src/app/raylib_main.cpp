@@ -480,17 +480,26 @@ void main()
             baseNormal = mat3(parentMatrix) * baseNormal;
         }
 
-        skinnedPosition = vec4(0.0);
-        skinnedNormal = vec3(0.0);
-        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.x, boneWeight0.x, 1);
-        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.y, boneWeight0.y, 1);
-        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.z, boneWeight0.z, 1);
-        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.w, boneWeight0.w, 1);
-        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex1.x, boneWeight1.x, 1);
-        addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex1.y, boneWeight1.y, 1);
-        if (skinnedPosition.w == 0.0) {
-            skinnedPosition = basePosition;
-            skinnedNormal = baseNormal;
+        if (parentIsSkeletonRoot == 1 &&
+            boneWeight0.x == 1.0 &&
+            boneWeight0.y == 0.0 && boneWeight0.z == 0.0 && boneWeight0.w == 0.0 &&
+            boneWeight1.x == 0.0 && boneWeight1.y == 0.0) {
+            skinnedPosition = vec4(0.0);
+            skinnedNormal = vec3(0.0);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.x, boneWeight0.x, 0);
+        } else {
+            skinnedPosition = vec4(0.0);
+            skinnedNormal = vec3(0.0);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.x, boneWeight0.x, 1);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.y, boneWeight0.y, 1);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.z, boneWeight0.z, 1);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex0.w, boneWeight0.w, 1);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex1.x, boneWeight1.x, 1);
+            addWeightedBone(skinnedPosition, skinnedNormal, basePosition, baseNormal, boneIndex1.y, boneWeight1.y, 1);
+            if (skinnedPosition.w == 0.0) {
+                skinnedPosition = basePosition;
+                skinnedNormal = baseNormal;
+            }
         }
     } else if (unknown2 == 1) {
         skinnedPosition = vec4(0.0);
