@@ -1286,13 +1286,26 @@ static void escapeAirLanding(World& world, FighterRuntime& fighter) {
     changeFighterState(world, fighter, "LandingFallSpecial", attr.common.landingFallSpecialLagX344);
 }
 
+static bool currentAnimationFinished(World& world, const FighterRuntime& fighter) {
+    const FighterState& state = currentState(world, fighter);
+    const int animationLengthFrames = fighter.stateAnimationLengthOverride > 0
+        ? fighter.stateAnimationLengthOverride
+        : state.animationLengthFrames;
+    return frameInState(fighter) > animationLengthFrames;
+}
+
 static void processDamage(World& world, FighterRuntime& fighter) {
+    if (fighter.grounded) {
+        applyGroundFriction(fighter, props(world, fighter).grFriction);
+    } else {
+        processDamageAirborne(world, fighter);
+    }
+
     if (fighter.hitstun > 0) {
-        if (fighter.grounded) {
-            applyGroundFriction(fighter, props(world, fighter).grFriction);
-        } else {
-            processDamageAirborne(world, fighter);
-        }
+        return;
+    }
+
+    if (!currentAnimationFinished(world, fighter)) {
         return;
     }
 
@@ -1300,15 +1313,17 @@ static void processDamage(World& world, FighterRuntime& fighter) {
         changeFighterState(world, fighter, "Wait");
         return;
     }
-    changeFighterState(world, fighter, "DamageFall");
+    changeFighterState(world, fighter, "Fall");
 }
 
 static void processDamageFly(World& world, FighterRuntime& fighter) {
+    processDamageAirborne(world, fighter);
     if (fighter.hitstun <= 0) {
-        changeFighterState(world, fighter, "DamageFall");
+        if (currentState(world, fighter).name == "DamageFlyRoll" || currentAnimationFinished(world, fighter)) {
+            changeFighterState(world, fighter, "DamageFall");
+        }
         return;
     }
-    processDamageAirborne(world, fighter);
 }
 
 static void processDamageFall(World& world, FighterRuntime& fighter) {
@@ -1338,6 +1353,46 @@ static bool recentTechInput(const FighterRuntime& fighter, int window) {
     return false;
 }
 
+static Fix vecMagnitude(Vec2 value) {
+    return fxFromFloat(std::sqrt(std::pow(fxToFloat(value.x), 2.0f) + std::pow(fxToFloat(value.y), 2.0f)));
+}
+
+static int currentActionCommonBone(const World& world, const FighterRuntime& fighter, int commonPart) {
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (!def.hasHsdAsset || !def.hsdAsset || commonPart < 0) {
+        return -1;
+    }
+
+    const FighterState& state = currentState(world, fighter);
+    if (const HsdActionScript* script = findActionScriptByActionIndex(*def.hsdAsset, state.animationActionIndex)) {
+        if (commonPart < static_cast<int>(script->commonBoneLookup.size())) {
+            const int mapped = script->commonBoneLookup[static_cast<size_t>(commonPart)];
+            if (mapped >= 0) {
+                return mapped;
+            }
+        }
+    }
+
+    if (commonPart < static_cast<int>(def.hsdAsset->commonBoneLookup.size())) {
+        return def.hsdAsset->commonBoneLookup[static_cast<size_t>(commonPart)];
+    }
+    return -1;
+}
+
+static bool meleeDownBoundFaceUpPose(const World& world, const FighterRuntime& fighter) {
+    const int hipN = currentActionCommonBone(world, fighter, 4);
+    if (hipN >= 0 && static_cast<size_t>(hipN) < fighter.hsdJointWorldTransforms.size()) {
+        return fighter.hsdJointWorldTransforms[static_cast<size_t>(hipN)].matrix[5] > 0;
+    }
+    return true;
+}
+
+static void enterDownBoundFromDamagePose(World& world, FighterRuntime& fighter) {
+    fighter.fighterVelocity.y = 0;
+    fighter.knockbackVelocity.y = 0;
+    changeFighterState(world, fighter, meleeDownBoundFaceUpPose(world, fighter) ? "DownBoundU" : "DownBoundD");
+}
+
 static void enterClearDamage(World&, FighterRuntime& fighter) {
     fighter.hitstun = 0;
     fighter.damageTumble = false;
@@ -1355,28 +1410,24 @@ static void enterClearDamage(World&, FighterRuntime& fighter) {
     fighter.groundAccelSecondary = 0;
 }
 
-static void damageFlyLanding(World& world, FighterRuntime& fighter) {
+static void damageLanding(World& world, FighterRuntime& fighter) {
     FighterProperties& attr = props(world, fighter);
     fighter.fighterVelocity.y = 0;
-    if (fighter.damageTumble && fighter.hitstun > 0) {
-        if (recentTechInput(fighter, attr.common.passiveInputWindowX250)) {
-            const Fix x = fighter.input.frames[0].move.x * fighter.facing;
-            if (x >= attr.common.passiveStandStickThresholdX254) {
-                changeFighterState(world, fighter, "PassiveStandF");
-            } else if (x <= -attr.common.passiveStandStickThresholdX254) {
-                changeFighterState(world, fighter, "PassiveStandB");
-            } else {
-                changeFighterState(world, fighter, "Passive");
-            }
-            return;
-        }
-        changeFighterState(world, fighter, "DownBoundU");
+    const Vec2 combined{
+        fighter.fighterVelocity.x + fighter.knockbackVelocity.x,
+        fighter.fighterVelocity.y + fighter.knockbackVelocity.y,
+    };
+    const Fix speed = vecMagnitude(combined);
+    if (fighter.damageTumble || speed >= attr.common.damageWallBounceMinVelocityX1E0) {
+        enterDownBoundFromDamagePose(world, fighter);
         return;
     }
-    regularLanding(world, fighter);
+    if (speed >= attr.common.damageLandingMinVelocityX1E4) {
+        regularLanding(world, fighter);
+    }
 }
 
-static void damageFallLanding(World& world, FighterRuntime& fighter) {
+static void damageFlyLanding(World& world, FighterRuntime& fighter) {
     FighterProperties& attr = props(world, fighter);
     fighter.fighterVelocity.y = 0;
     if (recentTechInput(fighter, attr.common.passiveInputWindowX250)) {
@@ -1390,7 +1441,7 @@ static void damageFallLanding(World& world, FighterRuntime& fighter) {
         }
         return;
     }
-    changeFighterState(world, fighter, "DownBoundU");
+    enterDownBoundFromDamagePose(world, fighter);
 }
 
 static bool faceUpDownState(const std::string& name) {
@@ -1465,6 +1516,47 @@ static void processDownWait(World& world, FighterRuntime& fighter) {
     }
     if (fighter.downWaitTimer <= 0) {
         changeFighterState(world, fighter, downVariantState(stateName, "DownStandU", "DownStandD"));
+    }
+}
+
+static void processDownBound(World& world, FighterRuntime& fighter) {
+    processLanding(world, fighter);
+    if (frameInState(fighter) <= currentState(world, fighter).animationLengthFrames) {
+        return;
+    }
+
+    const std::string& stateName = currentState(world, fighter).name;
+    if (fighter.input.justPressed(ButtonAttack | ButtonSpecial)) {
+        changeFighterState(world, fighter, downVariantState(stateName, "DownAttackU", "DownAttackD"));
+        return;
+    }
+
+    Fix stickX = 0;
+    if (downRollInput(fighter, props(world, fighter), stickX)) {
+        const bool forward = fxMul(stickX, fx(fighter.facing)) >= 0;
+        changeFighterState(world, fighter, downVariantState(
+            stateName,
+            forward ? "DownForwardU" : "DownBackU",
+            forward ? "DownForwardD" : "DownBackD"));
+        return;
+    }
+
+    changeFighterState(world, fighter, downVariantState(stateName, "DownWaitU", "DownWaitD"));
+}
+
+static void processDownDamage(World& world, FighterRuntime& fighter) {
+    if (!fighter.grounded) {
+        if (frameInState(fighter) > currentState(world, fighter).animationLengthFrames) {
+            changeFighterState(world, fighter, "Fall");
+            return;
+        }
+        processDamageAirborne(world, fighter);
+        return;
+    }
+
+    processLanding(world, fighter);
+    if (frameInState(fighter) > currentState(world, fighter).animationLengthFrames) {
+        changeFighterState(world, fighter, downVariantState(currentState(world, fighter).name, "DownWaitU", "DownWaitD"));
     }
 }
 
@@ -1770,10 +1862,12 @@ void runStateFunction(World& world, size_t fighterIndex, const FunctionCall& cal
     if (call.name == "process_damage") return processDamage(world, fighter);
     if (call.name == "process_damage_fly") return processDamageFly(world, fighter);
     if (call.name == "process_damage_fall") return processDamageFall(world, fighter);
+    if (call.name == "damage_landing") return damageLanding(world, fighter);
     if (call.name == "damage_fly_landing") return damageFlyLanding(world, fighter);
-    if (call.name == "damage_fall_landing") return damageFallLanding(world, fighter);
     if (call.name == "enter_clear_damage") return enterClearDamage(world, fighter);
     if (call.name == "enter_down_wait") return enterDownWait(world, fighter);
+    if (call.name == "process_down_bound") return processDownBound(world, fighter);
+    if (call.name == "process_down_damage") return processDownDamage(world, fighter);
     if (call.name == "process_down_wait") return processDownWait(world, fighter);
     if (call.name == "process_down_getup") return processDownGetup(world, fighter);
     if (call.name == "process_damage_surface") return processDamageSurface(world, fighter);

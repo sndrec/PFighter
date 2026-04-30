@@ -3849,6 +3849,10 @@ static bool isDamageFlyStateName(const std::string& name) {
            name == "DamageFlyTop" || name == "DamageFlyRoll";
 }
 
+static bool isDamageSurfaceStateName(const std::string& name) {
+    return name == "WallDamage" || name == "StopCeil";
+}
+
 static bool damageFlyHitboxIgnoresVictim(const World& world, const FighterRuntime& attacker, size_t victimIndex) {
     return attacker.damageHitboxOwner == static_cast<int>(victimIndex) &&
         isDamageFlyStateName(currentState(world, attacker).name);
@@ -3917,10 +3921,26 @@ static void reflectDamageVelocity(FighterRuntime& fighter, Vec2 normal, Fix damp
 }
 
 static bool handleDamageSurfaceContact(World& world, FighterRuntime& fighter, Vec2 normal, const char* damageState, const char* techState) {
-    if (!fighter.damageTumble || !isDamageFlyStateName(currentState(world, fighter).name)) {
+    const std::string& stateName = currentState(world, fighter).name;
+    if (!fighter.damageTumble || (!isDamageFlyStateName(stateName) && !isDamageSurfaceStateName(stateName))) {
         return false;
     }
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (isDamageSurfaceStateName(stateName) &&
+        fighter.damageSurfaceTimer < def.properties.common.damageSurfaceLockoutX1C0)
+    {
+        return false;
+    }
+    if (normal.x != 0 &&
+        fxAbs(fighter.knockbackVelocity.x) <= def.properties.common.damageWallBounceMinVelocityX1B0)
+    {
+        return false;
+    }
+    if (normal.y < 0 &&
+        fighter.knockbackVelocity.y <= def.properties.common.damageWallBounceMinVelocityX1B0)
+    {
+        return false;
+    }
     if (recentTechInput(fighter, def.properties.common)) {
         const InputFrame& input = fighter.input.frames[0];
         const bool wallTechJump =

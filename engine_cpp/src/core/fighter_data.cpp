@@ -747,7 +747,7 @@ FighterDefinition makeDebugRook() {
         state.allowLedgeGrab = false;
         state.onEnter = {call("common_enter")};
         state.onFrame = {call("process_damage")};
-        state.onLanding = {call("damage_fly_landing")};
+        state.onLanding = {call("damage_landing")};
         return state;
     };
 
@@ -785,7 +785,7 @@ FighterDefinition makeDebugRook() {
     damageFall.allowLedgeGrab = true;
     damageFall.onEnter = {call("common_enter")};
     damageFall.onFrame = {call("process_damage_fall")};
-    damageFall.onLanding = {call("damage_fall_landing")};
+    damageFall.onLanding = {call("damage_fly_landing")};
     damageFall.interrupts = fallState.interrupts;
 
     FighterState downBoundU;
@@ -793,8 +793,8 @@ FighterDefinition makeDebugRook() {
     downBoundU.animation = "DownBoundU";
     downBoundU.animationLengthFrames = 18;
     downBoundU.onEnter = {call("common_enter"), call("enter_clear_damage")};
-    downBoundU.onFrame = {call("process_landing")};
-    downBoundU.onAnimationFinishedState = "DownWaitU";
+    downBoundU.onFrame = {call("process_down_bound")};
+    downBoundU.onAirborne = {call("regular_airborne")};
 
     FighterState downWaitU = downBoundU;
     downWaitU.name = "DownWaitU";
@@ -809,8 +809,8 @@ FighterDefinition makeDebugRook() {
     downDamageU.animation = "DownDamageU";
     downDamageU.animationLengthFrames = 18;
     downDamageU.onEnter = {call("common_enter")};
-    downDamageU.onFrame = {call("process_down_getup")};
-    downDamageU.onAnimationFinishedState = "DownWaitU";
+    downDamageU.onFrame = {call("process_down_damage")};
+    downDamageU.onAnimationFinishedState.clear();
 
     auto makeDownGetupState = [&](const std::string& name, int length) {
         FighterState state;
@@ -835,7 +835,6 @@ FighterDefinition makeDebugRook() {
     FighterState downBoundD = downBoundU;
     downBoundD.name = "DownBoundD";
     downBoundD.animation = "DownBoundD";
-    downBoundD.onAnimationFinishedState = "DownWaitD";
 
     FighterState downWaitD = downWaitU;
     downWaitD.name = "DownWaitD";
@@ -846,8 +845,8 @@ FighterDefinition makeDebugRook() {
     downDamageD.animation = "DownDamageD";
     downDamageD.animationLengthFrames = 18;
     downDamageD.onEnter = {call("common_enter")};
-    downDamageD.onFrame = {call("process_down_getup")};
-    downDamageD.onAnimationFinishedState = "DownWaitD";
+    downDamageD.onFrame = {call("process_down_damage")};
+    downDamageD.onAnimationFinishedState.clear();
 
     FighterState downStandD = downStandU;
     downStandD.name = "DownStandD";
