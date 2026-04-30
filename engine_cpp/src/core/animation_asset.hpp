@@ -139,6 +139,9 @@ struct HsdMeshBatch {
     bool unknown2 = false;
     bool shapeSetAverage = false;
     int texture = -1;
+    int textureColorOperation = 0;
+    int textureAlphaOperation = 0;
+    float textureBlend = 0.0f;
     std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
     std::vector<HsdMeshVertex> vertices;
 };

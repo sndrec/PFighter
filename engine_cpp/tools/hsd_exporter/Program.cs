@@ -637,6 +637,12 @@ static (float U, float V) TransformTextureCoords(GXVector2 uv, HSD_TOBJ? texture
     return (rotatedU - texture.TX, rotatedV - (texture.TY + mirrorOffsetV));
 }
 
+static int TextureColorOperation(HSD_TOBJ? texture) =>
+    texture is null ? 0 : (((int)texture.Flags >> 16) & 0xF);
+
+static int TextureAlphaOperation(HSD_TOBJ? texture) =>
+    texture is null ? 0 : (((int)texture.Flags >> 20) & 0xF);
+
 static int RegisterTexture(HSD_TOBJ? texture, Dictionary<string, int> textureLookup, List<(int Width, int Height, byte[] Rgba)> textures)
 {
     if (texture?.ImageData is null)
@@ -855,6 +861,9 @@ static void WriteMeshBinary(BinaryWriter writer, SBM_FighterData fighterData, HS
                 batchWriter.Write(pobj.Flags.HasFlag(POBJ_FLAG.UNKNOWN2));
                 batchWriter.Write(pobj.Flags.HasFlag(POBJ_FLAG.SHAPESET_AVERAGE));
                 batchWriter.Write(textureIndex);
+                batchWriter.Write(TextureColorOperation(selectedTexture));
+                batchWriter.Write(TextureAlphaOperation(selectedTexture));
+                batchWriter.Write(selectedTexture?.Blending ?? 0.0f);
                 WriteColor(batchWriter, materialR, materialG, materialB, materialA);
                 batchWriter.Write(triangles.Count);
 

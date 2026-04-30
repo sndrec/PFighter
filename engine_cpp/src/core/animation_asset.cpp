@@ -199,6 +199,9 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
         batch.unknown2 = reader.readBool();
         batch.shapeSetAverage = reader.readBool();
         batch.texture = reader.readI32();
+        batch.textureColorOperation = reader.readI32();
+        batch.textureAlphaOperation = reader.readI32();
+        batch.textureBlend = reader.readF32();
         for (uint8_t& channel : batch.materialColor) {
             channel = reader.readU8();
         }

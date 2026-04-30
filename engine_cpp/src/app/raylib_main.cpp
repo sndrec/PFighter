@@ -308,6 +308,9 @@ struct HsdRenderBatch {
     bool unknown2 = false;
     bool shapeSetAverage = false;
     int texture = -1;
+    int textureColorOperation = 0;
+    int textureAlphaOperation = 0;
+    float textureBlend = 0.0f;
     std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
 };
 
@@ -317,6 +320,9 @@ struct HsdRenderCache {
     int locParentMatrix = -1;
     int locTexture0 = -1;
     int locHasTexture = -1;
+    int locTextureColorOperation = -1;
+    int locTextureAlphaOperation = -1;
+    int locTextureBlend = -1;
     int locHasEnvelopes = -1;
     int locUnknown2 = -1;
     int locShapeSetAverage = -1;
@@ -535,6 +541,9 @@ in vec3 fragNormal;
 
 uniform sampler2D texture0;
 uniform int hasTexture;
+uniform int textureColorOperation;
+uniform int textureAlphaOperation;
+uniform float textureBlend;
 uniform vec4 materialColor;
 
 out vec4 finalColor;
@@ -542,10 +551,39 @@ out vec4 finalColor;
 void main()
 {
     vec4 texel = hasTexture == 1 ? texture(texture0, fragTexCoord) : vec4(1.0);
+    vec4 surface = materialColor;
+    if (hasTexture == 1) {
+        if (textureColorOperation == 1 || textureColorOperation == 2) {
+            surface.rgb = mix(surface.rgb, texel.rgb, texel.a);
+        } else if (textureColorOperation == 3) {
+            surface.rgb = mix(surface.rgb, texel.rgb, textureBlend);
+        } else if (textureColorOperation == 4) {
+            surface.rgb *= texel.rgb;
+        } else if (textureColorOperation == 5) {
+            surface.rgb = texel.rgb;
+        } else if (textureColorOperation == 7) {
+            surface.rgb += texel.rgb * texel.a;
+        } else if (textureColorOperation == 8) {
+            surface.rgb -= texel.rgb * texel.a;
+        }
+
+        if (textureAlphaOperation == 2) {
+            surface.a = mix(surface.a, texel.a, textureBlend);
+        } else if (textureAlphaOperation == 3) {
+            surface.a *= texel.a;
+        } else if (textureAlphaOperation == 4) {
+            surface.a = texel.a;
+        } else if (textureAlphaOperation == 6) {
+            surface.a += texel.a;
+        } else if (textureAlphaOperation == 7) {
+            surface.a -= texel.a;
+        }
+    }
+
     vec3 lightDir = normalize(vec3(-0.35, 0.75, 0.55));
     float diffuse = max(dot(normalize(fragNormal), lightDir), 0.0);
     float light = 0.45 + diffuse * 0.75;
-    finalColor = vec4(texel.rgb * fragColor.rgb * materialColor.rgb * light, texel.a * fragColor.a * materialColor.a);
+    finalColor = vec4(surface.rgb * fragColor.rgb * light, surface.a * fragColor.a);
 }
 )glsl";
 }
@@ -592,6 +630,9 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& a
     cache.locParentMatrix = GetShaderLocation(cache.shader, "parentMatrix");
     cache.locTexture0 = GetShaderLocation(cache.shader, "texture0");
     cache.locHasTexture = GetShaderLocation(cache.shader, "hasTexture");
+    cache.locTextureColorOperation = GetShaderLocation(cache.shader, "textureColorOperation");
+    cache.locTextureAlphaOperation = GetShaderLocation(cache.shader, "textureAlphaOperation");
+    cache.locTextureBlend = GetShaderLocation(cache.shader, "textureBlend");
     cache.locHasEnvelopes = GetShaderLocation(cache.shader, "hasEnvelopes");
     cache.locUnknown2 = GetShaderLocation(cache.shader, "unknown2");
     cache.locShapeSetAverage = GetShaderLocation(cache.shader, "shapeSetAverage");
@@ -621,6 +662,9 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& a
         batch.unknown2 = source.unknown2;
         batch.shapeSetAverage = source.shapeSetAverage;
         batch.texture = source.texture;
+        batch.textureColorOperation = source.textureColorOperation;
+        batch.textureAlphaOperation = source.textureAlphaOperation;
+        batch.textureBlend = source.textureBlend;
         batch.materialColor = source.materialColor;
         batch.vertexCount = static_cast<int>(source.vertices.size());
 
@@ -761,11 +805,15 @@ static void drawImportedMesh(const pf::FighterDefinition& def, const pf::Fighter
         if (cache.locShapeSetAverage >= 0) SetShaderValue(cache.shader, cache.locShapeSetAverage, &shapeSetAverage, SHADER_UNIFORM_INT);
         if (cache.locParentIsSkeletonRoot >= 0) SetShaderValue(cache.shader, cache.locParentIsSkeletonRoot, &parentIsSkeletonRoot, SHADER_UNIFORM_INT);
         if (cache.locHasTexture >= 0) SetShaderValue(cache.shader, cache.locHasTexture, &hasTexture, SHADER_UNIFORM_INT);
+        if (cache.locTextureColorOperation >= 0) SetShaderValue(cache.shader, cache.locTextureColorOperation, &batch.textureColorOperation, SHADER_UNIFORM_INT);
+        if (cache.locTextureAlphaOperation >= 0) SetShaderValue(cache.shader, cache.locTextureAlphaOperation, &batch.textureAlphaOperation, SHADER_UNIFORM_INT);
+        if (cache.locTextureBlend >= 0) SetShaderValue(cache.shader, cache.locTextureBlend, &batch.textureBlend, SHADER_UNIFORM_FLOAT);
         if (cache.locMaterialColor >= 0) SetShaderValue(cache.shader, cache.locMaterialColor, materialColor, SHADER_UNIFORM_VEC4);
         if (hasTexture != 0 && cache.locTexture0 >= 0) {
+            const int textureUnit = 0;
             rlActiveTextureSlot(0);
             rlEnableTexture(cache.textures[static_cast<size_t>(batch.texture)].id);
-            rlSetUniformSampler(cache.locTexture0, cache.textures[static_cast<size_t>(batch.texture)].id);
+            SetShaderValue(cache.shader, cache.locTexture0, &textureUnit, SHADER_UNIFORM_INT);
         } else {
             rlActiveTextureSlot(0);
             rlDisableTexture();
@@ -875,7 +923,7 @@ static void drawEditor(const pf::World& world, pf::FighterEditor& editor) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
 
-    DrawRectangle(12, 12, 390, 210, Fade(RAYWHITE, 0.92f));
+    DrawRectangle(12, 12, 390, 210, Fade(RAYWHITE, 0.5f));
     DrawRectangleLines(12, 12, 390, 210, DARKGRAY);
     DrawText("PFighter C++ prototype editor", 24, 24, 18, BLACK);
     DrawText(("Fighter: " + def.name).c_str(), 24, 54, 16, DARKGRAY);
@@ -969,20 +1017,23 @@ static void stepReplayPlayback(ReplayHarness& replay, pf::World& world) {
 }
 
 static void drawReplayStatus(const ReplayHarness& replay) {
-    DrawRectangle(12, 232, 390, 72, Fade(RAYWHITE, 0.9f));
-    DrawRectangleLines(12, 232, 390, 72, DARKGRAY);
-    DrawText(replay.status.c_str(), 24, 244, 14, DARKGRAY);
+    const int panelWidth = 390;
+    const int panelX = GetScreenWidth() - panelWidth - 12;
+    DrawRectangle(panelX, 12, panelWidth, 72, Fade(RAYWHITE, 0.5f));
+    DrawRectangleLines(panelX, 12, panelWidth, 72, DARKGRAY);
+    DrawText(replay.status.c_str(), panelX + 12, 24, 14, DARKGRAY);
     const std::string mode = replay.recordingActive ? "Mode: recording" :
         (replay.playbackLoaded ? (replay.realtimePlayback ? "Mode: replay realtime" : "Mode: replay paused") : "Mode: live");
-    DrawText(mode.c_str(), 24, 266, 14, DARKGRAY);
-    DrawText(("File: " + replay.path).c_str(), 24, 286, 14, GRAY);
+    DrawText(mode.c_str(), panelX + 12, 46, 14, DARKGRAY);
+    DrawText(("File: " + replay.path).c_str(), panelX + 12, 66, 14, GRAY);
 }
 
 static void updateTickrateControl(TickrateControl& tickrate) {
     constexpr int kMinTickrate = 5;
     constexpr int kMaxTickrate = 60;
-    const Rectangle panel{12.0f, 316.0f, 390.0f, 58.0f};
-    const Rectangle track{108.0f, 352.0f, 260.0f, 8.0f};
+    const float panelX = static_cast<float>(GetScreenWidth() - 390 - 12);
+    const Rectangle panel{panelX, 96.0f, 390.0f, 58.0f};
+    const Rectangle track{panelX + 96.0f, 132.0f, 260.0f, 8.0f};
     const Vector2 mouse = GetMousePosition();
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mouse, panel)) {
@@ -1000,17 +1051,18 @@ static void updateTickrateControl(TickrateControl& tickrate) {
 static void drawTickrateControl(const TickrateControl& tickrate) {
     constexpr int kMinTickrate = 5;
     constexpr int kMaxTickrate = 60;
-    const Rectangle panel{12.0f, 316.0f, 390.0f, 58.0f};
-    const Rectangle track{108.0f, 352.0f, 260.0f, 8.0f};
+    const float panelX = static_cast<float>(GetScreenWidth() - 390 - 12);
+    const Rectangle panel{panelX, 96.0f, 390.0f, 58.0f};
+    const Rectangle track{panelX + 96.0f, 132.0f, 260.0f, 8.0f};
     const float t = static_cast<float>(tickrate.ticksPerSecond - kMinTickrate) /
         static_cast<float>(kMaxTickrate - kMinTickrate);
     const float knobX = track.x + track.width * t;
 
-    DrawRectangleRec(panel, Fade(RAYWHITE, 0.9f));
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.5f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
-    DrawText(("Sim tickrate: " + std::to_string(tickrate.ticksPerSecond) + " Hz").c_str(), 24, 328, 14, DARKGRAY);
-    DrawText("5", 24, 348, 14, GRAY);
-    DrawText("60", 372, 348, 14, GRAY);
+    DrawText(("Sim tickrate: " + std::to_string(tickrate.ticksPerSecond) + " Hz").c_str(), static_cast<int>(panel.x + 12), 108, 14, DARKGRAY);
+    DrawText("5", static_cast<int>(panel.x + 12), 128, 14, GRAY);
+    DrawText("60", static_cast<int>(panel.x + 360), 128, 14, GRAY);
     DrawRectangleRec(track, Fade(GRAY, 0.45f));
     DrawRectangle(track.x, track.y, knobX - track.x, track.height, ORANGE);
     DrawCircle(static_cast<int>(std::round(knobX)), static_cast<int>(track.y + track.height * 0.5f), 8.0f, ORANGE);
@@ -1144,7 +1196,6 @@ int main() {
         drawEditor(world, editor);
         drawReplayStatus(replay);
         drawTickrateControl(tickrate);
-        DrawText("Gamepad: left stick move, right stick c-stick, A attack, B special, X/Y jump, Z/RB grab, triggers shield    Keyboard fallback: P1 WASD/F/Q/Z, P2 arrows/Enter/Ctrl", 24, 680, 16, DARKGRAY);
         EndDrawing();
     }
 
