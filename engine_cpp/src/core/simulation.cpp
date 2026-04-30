@@ -4406,7 +4406,7 @@ static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterR
     const Fix kb = calculateThrowKnockback(hitbox, victimDef, victim);
     const bool wasGrounded = victim.grounded;
     const int damageFacing = -attacker.facing;
-    Fix resolvedLaunchAngle = throwLaunchAngleDegrees(victim, hitbox, common, kb);
+    Fix resolvedLaunchAngle = forceDamageFlyTop ? fx(90) : throwLaunchAngleDegrees(victim, hitbox, common, kb);
     const float angle = fxToFloat(resolvedLaunchAngle) * 3.14159265f / 180.0f;
     const Fix scaledVelocity = fxMul(kb, common.damageVelocityScaleX100);
     Vec2 knockbackVelocity{
@@ -4626,6 +4626,13 @@ static Vec2 meleeCurPosFromXRotN(const FighterRuntime& fighter, Vec3 xRotNWorld)
     };
 }
 
+static Vec2 meleeThrowReleaseLastPosition(const FighterRuntime& anchorOwner) {
+    return {
+        anchorOwner.position.x,
+        anchorOwner.position.y + fxMul(anchorOwner.ecb.points[1].y + anchorOwner.ecb.points[3].y, fxFromFloat(0.5f)),
+    };
+}
+
 static void storeMeleeCaptureOffsets(const FighterDefinition& victimDef, FighterRuntime& victim) {
     victim.captureConstraintOffset = meleeInitialTopNFromXRotN(victimDef, victim);
     const int xRotN = xRotNBone(victimDef, victim);
@@ -4693,7 +4700,6 @@ bool updateMeleeCapturePosition(World& world, size_t victimIndex) {
     victim.groundAccel = 0;
     victim.groundAccelSecondary = 0;
     victim.facing = grabber.facing;
-    calculateEcb(victimDef, victim, true);
     refreshHsdWorldPose(victimDef, victim);
     if (victim.captureConstraintActive) {
         const int xRotNRoot = xRotNBone(victimDef, victim);
@@ -4705,10 +4711,11 @@ bool updateMeleeCapturePosition(World& world, size_t victimIndex) {
         });
     }
     applyImportedBoneAliases(victimDef, victim);
+    calculateEcb(victimDef, victim, true);
     return high;
 }
 
-void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int capturedIndex, bool applyOffset) {
+void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int capturedIndex, bool applyOffset, bool meleeThrowRelease) {
     if (ownerIndex >= world.fighters.size() || !validFighterIndex(world, capturedIndex)) {
         return;
     }
@@ -4717,6 +4724,7 @@ void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int captured
     const FighterDefinition& ownerDef = world.fighterDefs[static_cast<size_t>(owner.fighterDef)];
     const FighterDefinition& capturedDef = world.fighterDefs[static_cast<size_t>(captured.fighterDef)];
     const Vec3 anchor = meleeCaptureAnchorWorld(ownerDef, owner, captured.captureConstraintActive);
+    const Vec2 lastPosition = meleeThrowRelease ? meleeThrowReleaseLastPosition(owner) : captured.position;
 
     if (captured.captureConstraintActive) {
         const int xRotN = xRotNBone(capturedDef, captured);
@@ -4727,7 +4735,7 @@ void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int captured
     if (applyOffset) {
         captured.position = meleeCurPosFromXRotN(captured, anchor);
     }
-    captured.previousPosition = captured.position;
+    captured.previousPosition = lastPosition;
     captured.captureConstraintActive = false;
     captured.captureConstraintOffset = {};
     captured.captureOriginalXRotNTranslation = {};
@@ -4735,8 +4743,15 @@ void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int captured
     if (owner.grabbedFighter == capturedIndex) {
         owner.grabbedFighter = -1;
     }
+    if (meleeThrowRelease) {
+        unlockFighterEcb(captured);
+    }
     refreshHsdWorldPose(capturedDef, captured);
     calculateEcb(capturedDef, captured, true);
+    if (meleeThrowRelease && captured.grounded && snapToCurrentGround(world, captured)) {
+        refreshHsdWorldPose(capturedDef, captured);
+        calculateEcb(capturedDef, captured, false);
+    }
 }
 
 static void breakGrabLinks(World& world, size_t grabberIndex, int victimIndex) {
@@ -4868,7 +4883,7 @@ static void processThrowRelease(World& world, size_t attackerIndex) {
     FighterRuntime& victim = world.fighters[static_cast<size_t>(victimIndex)];
     const bool forceDamageFlyTop = currentState(world, attacker).name == "ThrowLw";
     victim.previousPosition = victim.position;
-    releaseMeleeCaptureConstraint(world, attackerIndex, victimIndex, true);
+    releaseMeleeCaptureConstraint(world, attackerIndex, victimIndex, true, true);
     victim.thrownAnimationFreezeActive = false;
     victim.thrownAnimationFreezeFrame = 0;
     victim.thrownHitboxOwner = static_cast<int>(attackerIndex);

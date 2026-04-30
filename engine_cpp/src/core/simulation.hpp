@@ -322,6 +322,6 @@ void unlockFighterEcb(FighterRuntime& fighter);
 void calculateEcb(const FighterDefinition& def, FighterRuntime& fighter, bool updatePrevious);
 void beginMeleeThrowConstraint(World& world, size_t grabberIndex, size_t victimIndex);
 bool updateMeleeCapturePosition(World& world, size_t victimIndex);
-void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int capturedIndex, bool applyOffset);
+void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int capturedIndex, bool applyOffset, bool meleeThrowRelease = false);
 
 } // namespace pf
