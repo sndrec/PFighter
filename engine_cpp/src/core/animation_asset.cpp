@@ -195,6 +195,14 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
     asset.fighterBones.topOfHead = reader.readI32();
     asset.fighterBones.leftFoot = reader.readI32();
     asset.fighterBones.rightFoot = reader.readI32();
+    asset.commonBoneLookup.fill(-1);
+    const int32_t fighterLookupCount = reader.readI32();
+    for (int32_t i = 0; i < fighterLookupCount; ++i) {
+        const int32_t bone = reader.readI32();
+        if (i >= 0 && i < static_cast<int32_t>(asset.commonBoneLookup.size())) {
+            asset.commonBoneLookup[static_cast<size_t>(i)] = bone;
+        }
+    }
 
     asset.hasAttributes = reader.readBool();
     if (asset.hasAttributes) {

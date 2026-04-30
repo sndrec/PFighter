@@ -114,6 +114,7 @@ struct HsdFighterAnimationAsset {
     bool hasShieldPose = false;
     AnimationPose shieldPose;
     HsdFighterBoneTable fighterBones;
+    std::array<int, 54> commonBoneLookup{};
     bool hasAttributes = false;
     HsdFighterAttributes attributes;
     std::vector<HsdHurtbox> hurtboxes;

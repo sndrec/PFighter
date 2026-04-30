@@ -19,6 +19,7 @@ namespace pf {
 static void evaluatePose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter);
 static bool segmentYAtX(const StageSegment& segment, Fix x, Fix& y);
 static int fallbackActionIndex(const std::string& animation);
+static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart);
 
 struct HsdFighterAssetSpec {
     const char* displayName;
@@ -1684,10 +1685,45 @@ static bool clipAnimatesTopNYRotation(const AnimationClip& clip) {
     });
 }
 
+static int poseJointForCommonPart(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart, int fallback) {
+    const int mapped = commonPartBone(def, fighter, commonPart);
+    return mapped >= 0 ? mapped : fallback;
+}
+
+static Vec3 poseJointTranslation(const AnimationPose& pose, int joint) {
+    if (joint >= 0 && static_cast<size_t>(joint) < pose.joints.size()) {
+        return pose.joints[static_cast<size_t>(joint)].translation;
+    }
+    return {};
+}
+
+static void setPoseJointTranslation(AnimationPose& pose, int joint, Vec3 translation) {
+    if (joint >= 0 && static_cast<size_t>(joint) < pose.joints.size()) {
+        pose.joints[static_cast<size_t>(joint)].translation = translation;
+    }
+}
+
 static void extractTransNForModelPose(AnimationPose& pose) {
     if (pose.joints.size() > 1) {
         pose.joints[1].translation = {};
     }
+}
+
+static Vec3 extractMeleeAnimTranslation(const FighterDefinition& def, const FighterRuntime& fighter, const AnimationClip& clip, AnimationPose& pose) {
+    constexpr uint32_t kMeleeActionFlagSecondaryRoot = 0x04000000u; // Fighter::x594_b5
+    const int transN = poseJointForCommonPart(def, fighter, 1, 1);
+    const Vec3 primary = poseJointTranslation(pose, transN);
+    if ((clip.actionFlags & kMeleeActionFlagSecondaryRoot) != 0) {
+        const int secondaryRoot = commonPartBone(def, fighter, 0x35);
+        if (secondaryRoot >= 0) {
+            const Vec3 secondary = poseJointTranslation(pose, secondaryRoot);
+            setPoseJointTranslation(pose, transN, primary - secondary);
+            setPoseJointTranslation(pose, secondaryRoot, {});
+            return secondary;
+        }
+    }
+    setPoseJointTranslation(pose, transN, {});
+    return primary;
 }
 
 static void evaluateImportedHurtboxes(const FighterDefinition& def, FighterRuntime& fighter) {
@@ -1780,9 +1816,7 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         }
         fighter.hsdPose = evaluateClip(def.hsdAsset->skeleton, *clip, frame);
         fighter.previousHsdTransN = fighter.hsdTransN;
-        fighter.hsdTransN = fighter.hsdPose.joints.size() > 1 ?
-            scaledVec3(fighter.hsdPose.joints[1].translation, def.properties.modelScale) :
-            Vec3{};
+        fighter.hsdTransN = scaledVec3(extractMeleeAnimTranslation(def, fighter, *clip, fighter.hsdPose), def.properties.modelScale);
         if (frameInState(fighter) <= 1) {
             fighter.hsdTransNOffset = {};
         } else {
@@ -1792,7 +1826,6 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
                 fighter.hsdTransN.z - fighter.previousHsdTransN.z,
             };
         }
-        extractTransNForModelPose(fighter.hsdPose);
         applyShieldPose(def, state, fighter);
         applyModelPartAnimations(def, fighter);
         if (!fighter.hsdPose.joints.empty() && !clipAnimatesTopNYRotation(*clip)) {
@@ -3470,20 +3503,11 @@ static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fi
     if (!def.hasHsdAsset || !def.hsdAsset || commonPart < 0) {
         return -1;
     }
-    if (fighter.state >= 0 && fighter.state < static_cast<int>(def.states.size())) {
-        const FighterState& state = def.states[static_cast<size_t>(fighter.state)];
-        const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
-        const int mapped = commonPartBoneFromScript(*def.hsdAsset, actionIndex, commonPart);
+    (void)fighter;
+    if (commonPart < static_cast<int>(def.hsdAsset->commonBoneLookup.size())) {
+        const int mapped = def.hsdAsset->commonBoneLookup[static_cast<size_t>(commonPart)];
         if (mapped >= 0) {
             return mapped;
-        }
-    }
-    for (const HsdActionScript& script : def.hsdAsset->actionScripts) {
-        if (commonPart < static_cast<int>(script.commonBoneLookup.size())) {
-            const int mapped = script.commonBoneLookup[static_cast<size_t>(commonPart)];
-            if (mapped >= 0) {
-                return mapped;
-            }
         }
     }
     return -1;
@@ -4510,6 +4534,43 @@ static Vec3 boneWorldByIndex(const FighterRuntime& fighter, int bone) {
     return {fighter.position.x, fighter.position.y, 0};
 }
 
+static bool isJointInSubtree(const HsdFighterAnimationAsset& asset, int joint, int root) {
+    if (joint < 0 || root < 0 ||
+        static_cast<size_t>(joint) >= asset.skeleton.size() ||
+        static_cast<size_t>(root) >= asset.skeleton.size())
+    {
+        return false;
+    }
+    for (int current = joint; current >= 0 && static_cast<size_t>(current) < asset.skeleton.size();
+         current = asset.skeleton[static_cast<size_t>(current)].parent)
+    {
+        if (current == root) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void translateHsdJointSubtree(const FighterDefinition& def, FighterRuntime& fighter, int root, Vec3 delta) {
+    if (!def.hasHsdAsset || !def.hsdAsset || root < 0) {
+        return;
+    }
+    for (size_t i = 0; i < fighter.hsdJointWorldTransforms.size(); ++i) {
+        if (!isJointInSubtree(*def.hsdAsset, static_cast<int>(i), root)) {
+            continue;
+        }
+        JointWorldTransform& transform = fighter.hsdJointWorldTransforms[i];
+        transform.translation.x += delta.x;
+        transform.translation.y += delta.y;
+        transform.translation.z += delta.z;
+        transform.matrix[3] += delta.x;
+        transform.matrix[7] += delta.y;
+        transform.matrix[11] += delta.z;
+    }
+    fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
+    evaluateImportedHurtboxes(def, fighter);
+}
+
 static Vec3 meleeCaptureAnchorWorld(const FighterDefinition& grabberDef, const FighterRuntime& grabber, bool constrained) {
     if (constrained) {
         const int bone = transN2Bone(grabberDef, grabber);
@@ -4542,19 +4603,6 @@ static Vec3 meleeInitialTopNFromXRotN(const FighterDefinition& def, const Fighte
     }
 
     AnimationPose pose = bindPose(def.hsdAsset->skeleton);
-    const int waitIndex = def.stateIndex("Wait");
-    if (waitIndex >= 0) {
-        if (const AnimationClip* clip = clipForState(def, def.states[static_cast<size_t>(waitIndex)])) {
-            pose = evaluateClip(def.hsdAsset->skeleton, *clip, 0);
-        }
-    }
-    if (!pose.joints.empty()) {
-        constexpr float kHalfPi = 1.57079632679f;
-        const float facing = fighter.hsdPoseFacing >= 0 ? 1.0f : -1.0f;
-        pose.joints[0].rotation.y = fxFromFloat(kHalfPi * facing);
-        pose.joints[0].useQuaternion = false;
-    }
-
     FighterRuntime temp = fighter;
     temp.hsdPose = pose;
     const std::vector<JointWorldTransform> transforms = fighterHsdWorldTransforms(def, temp);
@@ -4647,6 +4695,15 @@ bool updateMeleeCapturePosition(World& world, size_t victimIndex) {
     victim.facing = grabber.facing;
     calculateEcb(victimDef, victim, true);
     refreshHsdWorldPose(victimDef, victim);
+    if (victim.captureConstraintActive) {
+        const int xRotNRoot = xRotNBone(victimDef, victim);
+        const Vec3 constrainedXRotN = boneWorldByIndex(victim, xRotNRoot);
+        translateHsdJointSubtree(victimDef, victim, xRotNRoot, {
+            anchor.x - constrainedXRotN.x,
+            anchor.y - constrainedXRotN.y,
+            anchor.z - constrainedXRotN.z,
+        });
+    }
     applyImportedBoneAliases(victimDef, victim);
     return high;
 }
@@ -4762,9 +4819,14 @@ static void captureVictim(World& world, size_t attackerIndex, size_t victimIndex
     storeMeleeCaptureOffsets(victimDef, victim);
     const bool high = victim.position.y >= attacker.position.y + victimDef.properties.common.captureHighThresholdX3C4;
     changeFighterState(world, victim, high ? "CapturePulledHi" : "CapturePulledLw", 0, kDisableAnimationBlendFrames);
+    const Fix catchFrame = attacker.animationFrame;
     changeFighterState(world, attacker, currentState(world, attacker).name == "CatchDash" ? "CatchDashPull" : "CatchPull", 0, kDisableAnimationBlendFrames);
+    attacker.animationFrame = catchFrame;
     attacker.grabbedFighter = static_cast<int>(victimIndex);
     victim.grabberFighter = static_cast<int>(attackerIndex);
+    const FighterDefinition& attackerDef = world.fighterDefs[static_cast<size_t>(attacker.fighterDef)];
+    evaluatePose(attackerDef, currentState(world, attacker), attacker);
+    evaluatePose(victimDef, currentState(world, victim), victim);
     maintainCapturedFighterPosition(world, victimIndex);
 }
 

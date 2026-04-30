@@ -150,6 +150,104 @@ static int[] ReadCommonBoneLookup(SBM_ftLoadCommonData? commonData, int boneTabl
     return lookup;
 }
 
+static int[] ReverseCommonBoneLookup(int[] partToJoint)
+{
+    int maxJoint = -1;
+    foreach (int joint in partToJoint)
+    {
+        if (joint >= 0)
+        {
+            maxJoint = Math.Max(maxJoint, joint);
+        }
+    }
+
+    if (maxJoint < 0)
+    {
+        return Array.Empty<int>();
+    }
+
+    int[] jointToPart = new int[maxJoint + 1];
+    Array.Fill(jointToPart, -1);
+    for (int part = 0; part < partToJoint.Length; ++part)
+    {
+        int joint = partToJoint[part];
+        if (joint >= 0 && joint < jointToPart.Length)
+        {
+            jointToPart[joint] = part;
+        }
+    }
+    return jointToPart;
+}
+
+static int FighterKindForDatPath(string fighterDatPath)
+{
+    string name = Path.GetFileNameWithoutExtension(fighterDatPath);
+    if (name.StartsWith("Pl", StringComparison.OrdinalIgnoreCase))
+    {
+        name = name[2..];
+    }
+    if (name.Length > 2)
+    {
+        name = name[..2];
+    }
+
+    return name.ToLowerInvariant() switch
+    {
+        "mr" => 0,
+        "fx" => 1,
+        "ca" => 2,
+        "dk" => 3,
+        "kb" => 4,
+        "kp" => 5,
+        "lk" => 6,
+        "sk" => 7,
+        "ns" => 8,
+        "pe" => 9,
+        "pp" => 10,
+        "nn" => 11,
+        "pk" => 12,
+        "ss" => 13,
+        "ys" => 14,
+        "pr" => 15,
+        "mt" => 16,
+        "lg" => 17,
+        "ms" => 18,
+        "zd" => 19,
+        "cl" => 20,
+        "dr" => 21,
+        "fc" => 22,
+        "pc" => 23,
+        "gw" => 24,
+        "gn" => 25,
+        "fe" => 26,
+        _ => -1,
+    };
+}
+
+static int RemapFigaNodeToTargetJoint(SBM_ftLoadCommonData? commonData, uint actionFlags, int targetFighterKind, int sourceNode)
+{
+    int sourceBoneTableIndex = (int)(actionFlags & 0x3F);
+    if (commonData is null || targetFighterKind < 0 || sourceBoneTableIndex == targetFighterKind)
+    {
+        return sourceNode;
+    }
+
+    int[] sourceLookup = ReadCommonBoneLookup(commonData, sourceBoneTableIndex);
+    int[] targetLookup = ReadCommonBoneLookup(commonData, targetFighterKind);
+    int[] sourceReverse = ReverseCommonBoneLookup(sourceLookup);
+    if (sourceNode < 0 || sourceNode >= sourceReverse.Length)
+    {
+        return -1;
+    }
+
+    int part = sourceReverse[sourceNode];
+    if (part < 0 || part >= targetLookup.Length)
+    {
+        return -1;
+    }
+    return targetLookup[part];
+}
+
 static void WriteCommonDataBinary(string outputPath, string commonDatPath)
 {
     HSDRawFile commonFile = new(commonDatPath);
@@ -442,12 +540,17 @@ static void WriteAnimationClipBinary(BinaryWriter writer, string name, int actio
     }
 }
 
-static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, uint flags, byte defaultBlendFrames, HSD_FigaTree clip)
+static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, uint flags, byte defaultBlendFrames, int targetFighterKind, SBM_ftLoadCommonData? commonData, HSD_FigaTree clip)
 {
     List<(int Joint, JointTrackType TrackType, List<FOBJKey> Keys)> tracks = new();
     List<FigaTreeNode> nodes = clip.Nodes;
     for (int nodeIndex = 0; nodeIndex < nodes.Count; ++nodeIndex)
     {
+        int targetJoint = RemapFigaNodeToTargetJoint(commonData, flags, targetFighterKind, nodeIndex);
+        if (targetJoint < 0)
+        {
+            continue;
+        }
         foreach (HSD_Track track in nodes[nodeIndex].Tracks)
         {
             byte trackId = TrackId(track.JointTrackType);
@@ -460,7 +563,7 @@ static void WriteClipBinary(BinaryWriter writer, string name, int actionIndex, u
             {
                 continue;
             }
-            tracks.Add((nodeIndex, track.JointTrackType, SampleKeys(player, clip.FrameCount, track.JointTrackType)));
+            tracks.Add((targetJoint, track.JointTrackType, SampleKeys(player, clip.FrameCount, track.JointTrackType)));
         }
     }
     WriteAnimationClipBinary(writer, name, actionIndex, flags, defaultBlendFrames, clip.FrameCount, tracks);
@@ -594,6 +697,13 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
     writer.Write(modelLookup?.TopOfHeadBone ?? -1);
     writer.Write(modelLookup?.LeftFootBone ?? -1);
     writer.Write(modelLookup?.RightFootBone ?? -1);
+    int targetFighterKind = FighterKindForDatPath(fighterDatPath);
+    int[] fighterCommonBoneLookup = ReadCommonBoneLookup(commonData, targetFighterKind);
+    writer.Write(fighterCommonBoneLookup.Length);
+    foreach (int bone in fighterCommonBoneLookup)
+    {
+        writer.Write(bone);
+    }
     WriteFighterAttributesBinary(writer, fighterData.Attributes);
 
     SBM_EnvironmentCollision? env = fighterData.EnvironmentCollision;
@@ -699,7 +809,7 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
     writer.Write(clips.Count);
     foreach ((string name, int index, uint flags, byte defaultBlendFrames, HSD_FigaTree clip) in clips)
     {
-        WriteClipBinary(writer, name, index, flags, defaultBlendFrames, clip);
+        WriteClipBinary(writer, name, index, flags, defaultBlendFrames, targetFighterKind, commonData, clip);
     }
 
     List<(SBM_FighterAction Action, int Index, int[] CommonBoneLookup)> scripts = new();

@@ -342,6 +342,12 @@ struct ReplayHarness {
     bool realtimePlayback = false;
 };
 
+struct TickrateControl {
+    int ticksPerSecond = 60;
+    float accumulator = 0.0f;
+    bool dragging = false;
+};
+
 static pf::World makeReplayStartWorld(int p1FighterDef, int p2FighterDef) {
     return pf::makeTrainingWorld(p1FighterDef, p2FighterDef);
 }
@@ -415,6 +421,45 @@ static void drawReplayStatus(const ReplayHarness& replay) {
     DrawText(("File: " + replay.path).c_str(), 24, 286, 14, GRAY);
 }
 
+static void updateTickrateControl(TickrateControl& tickrate) {
+    constexpr int kMinTickrate = 5;
+    constexpr int kMaxTickrate = 60;
+    const Rectangle panel{12.0f, 316.0f, 390.0f, 58.0f};
+    const Rectangle track{108.0f, 352.0f, 260.0f, 8.0f};
+    const Vector2 mouse = GetMousePosition();
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mouse, panel)) {
+        tickrate.dragging = true;
+    }
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        tickrate.dragging = false;
+    }
+    if (tickrate.dragging) {
+        const float t = std::clamp((mouse.x - track.x) / track.width, 0.0f, 1.0f);
+        tickrate.ticksPerSecond = kMinTickrate + static_cast<int>(std::round(t * static_cast<float>(kMaxTickrate - kMinTickrate)));
+    }
+}
+
+static void drawTickrateControl(const TickrateControl& tickrate) {
+    constexpr int kMinTickrate = 5;
+    constexpr int kMaxTickrate = 60;
+    const Rectangle panel{12.0f, 316.0f, 390.0f, 58.0f};
+    const Rectangle track{108.0f, 352.0f, 260.0f, 8.0f};
+    const float t = static_cast<float>(tickrate.ticksPerSecond - kMinTickrate) /
+        static_cast<float>(kMaxTickrate - kMinTickrate);
+    const float knobX = track.x + track.width * t;
+
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.9f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText(("Sim tickrate: " + std::to_string(tickrate.ticksPerSecond) + " Hz").c_str(), 24, 328, 14, DARKGRAY);
+    DrawText("5", 24, 348, 14, GRAY);
+    DrawText("60", 372, 348, 14, GRAY);
+    DrawRectangleRec(track, Fade(GRAY, 0.45f));
+    DrawRectangle(track.x, track.y, knobX - track.x, track.height, ORANGE);
+    DrawCircle(static_cast<int>(std::round(knobX)), static_cast<int>(track.y + track.height * 0.5f), 8.0f, ORANGE);
+    DrawCircleLines(static_cast<int>(std::round(knobX)), static_cast<int>(track.y + track.height * 0.5f), 8.0f, BROWN);
+}
+
 int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(1280, 720, "PFighter C++ raylib prototype");
@@ -431,11 +476,13 @@ int main() {
     pf::World world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
     pf::FighterEditor editor;
     ReplayHarness replay;
+    TickrateControl tickrate;
     const std::array<int, 7> fighterKeys{
         KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,
     };
 
     while (!WindowShouldClose()) {
+        updateTickrateControl(tickrate);
         if (IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
         if (IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
         if (IsKeyPressed(KEY_SPACE)) {
@@ -486,14 +533,24 @@ int main() {
 
         const pf::InputFrame p1Input = readPlayerInput(0, false);
         const pf::InputFrame p2Input = readPlayerInput(1, true);
-        if (replay.playbackLoaded && replay.realtimePlayback) {
-            stepReplayPlayback(replay, world);
-        } else if (!editor.paused) {
-            pf::tickWorld(world, {p1Input, p2Input});
-            if (replay.recordingActive) {
-                replay.recording.frames.push_back({{p1Input, p2Input}});
-                replay.status = "Recording frame " + std::to_string(replay.recording.frames.size());
+        const bool simRunning = (replay.playbackLoaded && replay.realtimePlayback) || !editor.paused;
+        if (simRunning) {
+            tickrate.accumulator += GetFrameTime();
+            const float tickStep = 1.0f / static_cast<float>(tickrate.ticksPerSecond);
+            while (tickrate.accumulator >= tickStep) {
+                if (replay.playbackLoaded && replay.realtimePlayback) {
+                    stepReplayPlayback(replay, world);
+                } else {
+                    pf::tickWorld(world, {p1Input, p2Input});
+                    if (replay.recordingActive) {
+                        replay.recording.frames.push_back({{p1Input, p2Input}});
+                        replay.status = "Recording frame " + std::to_string(replay.recording.frames.size());
+                    }
+                }
+                tickrate.accumulator -= tickStep;
             }
+        } else {
+            tickrate.accumulator = 0.0f;
         }
 
         if (editor.sideView) {
@@ -529,6 +586,7 @@ int main() {
         EndMode3D();
         drawEditor(world, editor);
         drawReplayStatus(replay);
+        drawTickrateControl(tickrate);
         DrawText("Gamepad: left stick move, right stick c-stick, A attack, B special, X/Y jump, triggers shield    Keyboard fallback: P1 WASD/F/Q, P2 arrows/Enter/Ctrl", 24, 680, 16, DARKGRAY);
         EndDrawing();
     }
