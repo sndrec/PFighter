@@ -129,6 +129,10 @@ struct HsdMeshVertex {
 struct HsdMeshBatch {
     int parentBone = -1;
     int singleBindBone = -1;
+    int dobjIndex = -1;
+    int modelPartIndex = -1;
+    int modelPartState = -1;
+    bool hiddenByVisibilityTable = false;
     uint32_t parentFlags = 0;
     uint32_t polygonFlags = 0;
     bool hasEnvelopes = false;

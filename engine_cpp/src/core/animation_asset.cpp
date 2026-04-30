@@ -189,6 +189,10 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
         HsdMeshBatch batch;
         batch.parentBone = reader.readI32();
         batch.singleBindBone = reader.readI32();
+        batch.dobjIndex = reader.readI32();
+        batch.modelPartIndex = reader.readI32();
+        batch.modelPartState = reader.readI32();
+        batch.hiddenByVisibilityTable = reader.readBool();
         batch.parentFlags = reader.readU32();
         batch.polygonFlags = reader.readU32();
         batch.hasEnvelopes = reader.readBool();

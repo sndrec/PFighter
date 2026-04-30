@@ -575,9 +575,70 @@ static (byte R, byte G, byte B, byte A) MaterialDiffuse(HSD_MOBJ? mobj)
     return (material.DIF_R, material.DIF_G, material.DIF_B, alpha);
 }
 
-static int RegisterTexture(HSD_MOBJ? mobj, Dictionary<string, int> textureLookup, List<(int Width, int Height, byte[] Rgba)> textures)
+static bool TextureSlotEnabled(HSD_MOBJ? mobj, int slot)
 {
-    HSD_TOBJ? texture = mobj?.Textures?.List.FirstOrDefault(t => t.ImageData is not null);
+    if (mobj is null || slot < 0 || slot >= 8)
+    {
+        return false;
+    }
+    return mobj.RenderFlags.HasFlag(RENDER_MODE.DF_ALL) || mobj.RenderFlags.HasFlag((RENDER_MODE)(1 << (slot + 4)));
+}
+
+static HSD_TOBJ? SelectDiffuseTexture(HSD_MOBJ? mobj)
+{
+    List<HSD_TOBJ>? textureList = mobj?.Textures?.List;
+    if (textureList is null || textureList.Count == 0)
+    {
+        return null;
+    }
+
+    for (int i = 0; i < textureList.Count; ++i)
+    {
+        HSD_TOBJ texture = textureList[i];
+        if (texture.ImageData is not null && TextureSlotEnabled(mobj, i) && texture.Flags.HasFlag(TOBJ_FLAGS.LIGHTMAP_DIFFUSE))
+        {
+            return texture;
+        }
+    }
+
+    for (int i = 0; i < textureList.Count; ++i)
+    {
+        HSD_TOBJ texture = textureList[i];
+        if (texture.ImageData is not null && TextureSlotEnabled(mobj, i))
+        {
+            return texture;
+        }
+    }
+
+    return textureList.FirstOrDefault(t => t.ImageData is not null);
+}
+
+static (float U, float V) TransformTextureCoords(GXVector2 uv, HSD_TOBJ? texture)
+{
+    if (texture is null)
+    {
+        return (uv.X, uv.Y);
+    }
+
+    float scaleU = Math.Abs(texture.SX) < float.Epsilon ? 0.0f : texture.RepeatS / texture.SX;
+    float scaleV = Math.Abs(texture.SY) < float.Epsilon ? 0.0f : texture.RepeatT / texture.SY;
+    float u = uv.X * scaleU;
+    float v = uv.Y * scaleV;
+
+    float rotation = -texture.RZ;
+    float c = MathF.Cos(rotation);
+    float s = MathF.Sin(rotation);
+    float rotatedU = u * c - v * s;
+    float rotatedV = u * s + v * c;
+
+    float mirrorOffsetV = texture.WrapT == GXWrapMode.MIRROR && Math.Abs(texture.RepeatT / texture.SY) > float.Epsilon
+        ? 1.0f / (texture.RepeatT / texture.SY)
+        : 0.0f;
+    return (rotatedU - texture.TX, rotatedV - (texture.TY + mirrorOffsetV));
+}
+
+static int RegisterTexture(HSD_TOBJ? texture, Dictionary<string, int> textureLookup, List<(int Width, int Height, byte[] Rgba)> textures)
+{
     if (texture?.ImageData is null)
     {
         return -1;
@@ -587,6 +648,10 @@ static int RegisterTexture(HSD_MOBJ? mobj, Dictionary<string, int> textureLookup
     if (rgba is null || rgba.Length == 0)
     {
         return -1;
+    }
+    for (int i = 0; i + 3 < rgba.Length; i += 4)
+    {
+        (rgba[i], rgba[i + 2]) = (rgba[i + 2], rgba[i]);
     }
 
     string key = $"{texture.ImageData.Width}x{texture.ImageData.Height}:{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(rgba))}";
@@ -625,10 +690,96 @@ static int JObjIndex(Dictionary<HSD_JOBJ, int> boneIndex, HSD_JOBJ? joint)
     return joint is not null && boneIndex.TryGetValue(joint, out int index) ? index : -1;
 }
 
-static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD_JOBJ> joints)
+static bool ShouldExportDObj(HSD_JOBJ parent, HSD_DOBJ dobj)
+{
+    if (dobj.Mobj is null)
+    {
+        return false;
+    }
+    bool materialXlu = dobj.Mobj.RenderFlags.HasFlag(RENDER_MODE.XLU);
+    if (!materialXlu && parent.Flags.HasFlag(JOBJ_FLAG.OPA))
+    {
+        return true;
+    }
+    return materialXlu && (parent.Flags.HasFlag(JOBJ_FLAG.XLU) || parent.Flags.HasFlag(JOBJ_FLAG.TEXEDGE));
+}
+
+static void AddVisibilityTableEntries(
+    Dictionary<int, (int ModelPartIndex, int ModelPartState, bool HiddenByVisibilityTable)> visibility,
+    HSDArrayAccessor<SBM_LookupTable>? lookupArray,
+    int modelCount,
+    bool actionControlled)
+{
+    if (lookupArray is null)
+    {
+        return;
+    }
+
+    int count = Math.Min(modelCount, lookupArray.Length);
+    for (int modelIndex = 0; modelIndex < count; ++modelIndex)
+    {
+        SBM_LookupTable? table = lookupArray[modelIndex];
+        HSDArrayAccessor<SBM_LookupEntry>? entries = table?.LookupEntries;
+        if (entries is null)
+        {
+            continue;
+        }
+
+        int stateCount = Math.Min(table?.Count ?? 0, entries.Length);
+        for (int stateIndex = 0; stateIndex < stateCount; ++stateIndex)
+        {
+            SBM_LookupEntry? entry = entries[stateIndex];
+            byte[] indexes = entry?.Entries ?? Array.Empty<byte>();
+            if (indexes.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (byte dobjIndex in indexes)
+            {
+                if (actionControlled)
+                {
+                    visibility[dobjIndex] = (modelIndex, stateIndex, true);
+                }
+                else if (!visibility.ContainsKey(dobjIndex))
+                {
+                    visibility[dobjIndex] = (-1, -1, true);
+                }
+            }
+        }
+    }
+}
+
+static Dictionary<int, (int ModelPartIndex, int ModelPartState, bool HiddenByVisibilityTable)> BuildDObjVisibilityTable(SBM_FighterData fighterData)
+{
+    Dictionary<int, (int ModelPartIndex, int ModelPartState, bool HiddenByVisibilityTable)> visibility = new();
+    SBM_PlayerModelLookupTables? modelLookup = fighterData.ModelLookupTables;
+    HSDArrayAccessor<SBM_CostumeLookupTable>? costumeLookups = modelLookup?.CostumeVisibilityLookups;
+    if (modelLookup is null || costumeLookups is null || costumeLookups.Length == 0)
+    {
+        return visibility;
+    }
+
+    SBM_CostumeLookupTable? costume = costumeLookups[0];
+    if (costume is null)
+    {
+        return visibility;
+    }
+
+    int modelCount = modelLookup.VisibilityLookupLength;
+    AddVisibilityTableEntries(visibility, costume.HighPoly, modelCount, true);
+    AddVisibilityTableEntries(visibility, costume.LowPoly, modelCount, false);
+    AddVisibilityTableEntries(visibility, costume.MetalPoly, modelCount, false);
+    AddVisibilityTableEntries(visibility, costume.MetalMainModel, modelCount, false);
+
+    return visibility;
+}
+
+static void WriteMeshBinary(BinaryWriter writer, SBM_FighterData fighterData, HSD_JOBJ skeletonRoot, List<HSD_JOBJ> joints)
 {
     Dictionary<HSD_JOBJ, int> boneIndex = joints.Select((joint, index) => (joint, index)).ToDictionary(item => item.joint, item => item.index);
     Dictionary<HSD_JOBJ, HSD_JOBJ?> parents = BuildParentLookup(joints);
+    Dictionary<int, (int ModelPartIndex, int ModelPartState, bool HiddenByVisibilityTable)> visibility = BuildDObjVisibilityTable(fighterData);
     Dictionary<string, int> textureLookup = new();
     List<(int Width, int Height, byte[] Rgba)> textures = new();
 
@@ -636,6 +787,7 @@ static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD
     using BinaryWriter batchWriter = new(batchStream, Encoding.UTF8, leaveOpen: true);
     int batchCount = 0;
 
+    int globalDObjIndex = 0;
     foreach (HSD_JOBJ parent in joints)
     {
         if (parent.Dobj is null)
@@ -645,13 +797,18 @@ static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD
 
         foreach (HSD_DOBJ dobj in parent.Dobj.List)
         {
-            if (dobj.Pobj is null)
+            if (dobj.Pobj is null || !ShouldExportDObj(parent, dobj))
             {
+                globalDObjIndex++;
                 continue;
             }
 
-            int textureIndex = RegisterTexture(dobj.Mobj, textureLookup, textures);
+            HSD_TOBJ? selectedTexture = SelectDiffuseTexture(dobj.Mobj);
+            int textureIndex = RegisterTexture(selectedTexture, textureLookup, textures);
             (byte materialR, byte materialG, byte materialB, byte materialA) = MaterialDiffuse(dobj.Mobj);
+            (int ModelPartIndex, int ModelPartState, bool HiddenByVisibilityTable) dobjVisibility = visibility.TryGetValue(globalDObjIndex, out (int ModelPartIndex, int ModelPartState, bool HiddenByVisibilityTable) entry)
+                ? entry
+                : (-1, -1, false);
 
             foreach (HSD_POBJ pobj in dobj.Pobj.List)
             {
@@ -688,6 +845,10 @@ static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD
                 int singleBindBone = JObjIndex(boneIndex, pobj.SingleBoundJOBJ) is int single && single >= 0 ? single : parentBone;
                 batchWriter.Write(parentBone);
                 batchWriter.Write(singleBindBone);
+                batchWriter.Write(globalDObjIndex);
+                batchWriter.Write(dobjVisibility.ModelPartIndex);
+                batchWriter.Write(dobjVisibility.ModelPartState);
+                batchWriter.Write(dobjVisibility.HiddenByVisibilityTable);
                 batchWriter.Write((uint)parent.Flags);
                 batchWriter.Write((uint)pobj.Flags);
                 batchWriter.Write(hasMatrixIndex && !pobj.Flags.HasFlag(POBJ_FLAG.UNKNOWN2));
@@ -701,8 +862,9 @@ static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD
                 {
                     WriteVec3(batchWriter, vertex.POS.X, vertex.POS.Y, vertex.POS.Z);
                     WriteVec3(batchWriter, vertex.NRM.X, vertex.NRM.Y, vertex.NRM.Z);
-                    batchWriter.Write(vertex.TEX0.X);
-                    batchWriter.Write(vertex.TEX0.Y);
+                    (float u, float v) = TransformTextureCoords(vertex.TEX0, selectedTexture);
+                    batchWriter.Write(u);
+                    batchWriter.Write(v);
                     if (hasVertexColor)
                     {
                         WriteColor(batchWriter,
@@ -751,6 +913,7 @@ static void WriteMeshBinary(BinaryWriter writer, HSD_JOBJ skeletonRoot, List<HSD
 
                 batchCount++;
             }
+            globalDObjIndex++;
         }
     }
 
@@ -1024,7 +1187,7 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
         writer.Write(hurtbox.Size);
     }
 
-    WriteMeshBinary(writer, skeletonRoot, joints);
+    WriteMeshBinary(writer, fighterData, skeletonRoot, joints);
 
     SBM_ModelPart[] modelParts = fighterData.ModelPartAnimations?.Array ?? Array.Empty<SBM_ModelPart>();
     writer.Write(modelParts.Length);

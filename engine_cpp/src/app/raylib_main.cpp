@@ -298,6 +298,10 @@ struct HsdRenderBatch {
     int vertexCount = 0;
     int parentBone = -1;
     int singleBindBone = -1;
+    int dobjIndex = -1;
+    int modelPartIndex = -1;
+    int modelPartState = -1;
+    bool hiddenByVisibilityTable = false;
     uint32_t parentFlags = 0;
     uint32_t polygonFlags = 0;
     bool hasEnvelopes = false;
@@ -577,6 +581,7 @@ static Texture2D loadTextureFromRgba(const pf::HsdMeshTexture& texture) {
     image.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
     Texture2D loaded = LoadTextureFromImage(image);
     SetTextureFilter(loaded, TEXTURE_FILTER_BILINEAR);
+    SetTextureWrap(loaded, TEXTURE_WRAP_REPEAT);
     return loaded;
 }
 
@@ -606,6 +611,10 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& a
         HsdRenderBatch batch;
         batch.parentBone = source.parentBone;
         batch.singleBindBone = source.singleBindBone;
+        batch.dobjIndex = source.dobjIndex;
+        batch.modelPartIndex = source.modelPartIndex;
+        batch.modelPartState = source.modelPartState;
+        batch.hiddenByVisibilityTable = source.hiddenByVisibilityTable;
         batch.parentFlags = source.parentFlags;
         batch.polygonFlags = source.polygonFlags;
         batch.hasEnvelopes = source.hasEnvelopes;
@@ -689,6 +698,20 @@ static Matrix parentMatrixForBatch(const HsdRenderBatch& batch,
     return MatrixIdentity();
 }
 
+static bool isBatchVisible(const HsdRenderBatch& batch, const pf::FighterRuntime& fighter) {
+    if (!batch.hiddenByVisibilityTable) {
+        return true;
+    }
+    if (batch.modelPartIndex < 0 || batch.modelPartState < 0) {
+        return false;
+    }
+    if (static_cast<size_t>(batch.modelPartIndex) >= fighter.hsdModelPartAnimations.size()) {
+        return batch.modelPartState == 0;
+    }
+    const int selectedState = fighter.hsdModelPartAnimations[static_cast<size_t>(batch.modelPartIndex)];
+    return selectedState < 0 ? batch.modelPartState == 0 : selectedState == batch.modelPartState;
+}
+
 static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     if (!def.hsdAsset || def.hsdAsset->mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
         return;
@@ -715,6 +738,10 @@ static void drawImportedMesh(const pf::FighterDefinition& def, const pf::Fighter
     uploadBoneUniformBuffer(cache.boneUniformBuffer, boneMatrices, boneWorldMatrices);
 
     for (const HsdRenderBatch& batch : cache.batches) {
+        if (!isBatchVisible(batch, fighter)) {
+            continue;
+        }
+
         Matrix parent = parentMatrixForBatch(batch, boneWorldMatrices);
         const int hasEnvelopes = batch.hasEnvelopes ? 1 : 0;
         const int unknown2 = batch.unknown2 ? 1 : 0;
@@ -736,7 +763,12 @@ static void drawImportedMesh(const pf::FighterDefinition& def, const pf::Fighter
         if (cache.locHasTexture >= 0) SetShaderValue(cache.shader, cache.locHasTexture, &hasTexture, SHADER_UNIFORM_INT);
         if (cache.locMaterialColor >= 0) SetShaderValue(cache.shader, cache.locMaterialColor, materialColor, SHADER_UNIFORM_VEC4);
         if (hasTexture != 0 && cache.locTexture0 >= 0) {
-            SetShaderValueTexture(cache.shader, cache.locTexture0, cache.textures[static_cast<size_t>(batch.texture)]);
+            rlActiveTextureSlot(0);
+            rlEnableTexture(cache.textures[static_cast<size_t>(batch.texture)].id);
+            rlSetUniformSampler(cache.locTexture0, cache.textures[static_cast<size_t>(batch.texture)].id);
+        } else {
+            rlActiveTextureSlot(0);
+            rlDisableTexture();
         }
 
         if ((batch.polygonFlags & kPobjCullFront) != 0) {
