@@ -396,7 +396,7 @@ static void WriteCommonDataBinary(string outputPath, string commonDatPath)
     writer.Write(R(0xD0));
     writer.Write(F(0xD4));
     writer.Write(R(0xD8));
-    writer.Write(R(0xE4));
+    writer.Write(I(0xE4));
     writer.Write(F(0xE8));
     writer.Write(F(0xF4));
     writer.Write(F(0xF8));

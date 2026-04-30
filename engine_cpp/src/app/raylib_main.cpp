@@ -95,13 +95,12 @@ static pf::InputFrame readGamepadInput(int gamepad) {
     {
         input.buttons |= pf::ButtonJump;
     }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_TRIGGER_1) ||
-        IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1))
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_TRIGGER_1))
     {
         input.buttons |= pf::ButtonShield;
         input.shieldAnalog = 0;
     }
-    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_2)) {
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)) {
         input.buttons |= pf::ButtonGrab;
     }
 
@@ -587,7 +586,7 @@ int main() {
         drawEditor(world, editor);
         drawReplayStatus(replay);
         drawTickrateControl(tickrate);
-        DrawText("Gamepad: left stick move, right stick c-stick, A attack, B special, X/Y jump, triggers shield    Keyboard fallback: P1 WASD/F/Q, P2 arrows/Enter/Ctrl", 24, 680, 16, DARKGRAY);
+        DrawText("Gamepad: left stick move, right stick c-stick, A attack, B special, X/Y jump, Z/RB grab, triggers shield    Keyboard fallback: P1 WASD/F/Q/Z, P2 arrows/Enter/Ctrl", 24, 680, 16, DARKGRAY);
         EndDrawing();
     }
 

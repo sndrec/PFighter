@@ -1245,6 +1245,22 @@ static int lCancelAdjustedLandingLag(const FighterRuntime& fighter, const Fighte
     return std::max(1, static_cast<int>(fxToFloat(fxDiv(fx(lag), attr.common.lCancelLandingLagDivisorXE8))));
 }
 
+static void enterLandingAirWithLag(World& world, FighterRuntime& fighter, const std::string& stateName, int lag) {
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    changeFighterState(world, fighter, stateName, lag);
+
+    const FighterState& state = currentState(world, fighter);
+    Fix clipLength = fx(state.animationLengthFrames);
+    if (def.hasHsdAsset && def.hsdAsset) {
+        if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, state.animationActionIndex)) {
+            if (clip->frameCount > 0) {
+                clipLength = clip->frameCount;
+            }
+        }
+    }
+    fighter.animationRate = fxDiv(clipLength + fxFromFloat(0.1f), fx(std::max(1, lag)));
+}
+
 static void aerialLandingAttack(World& world, FighterRuntime& fighter) {
     FighterProperties& attr = props(world, fighter);
     if (!fighterCommandFlag(fighter, 0)) {
@@ -1256,15 +1272,15 @@ static void aerialLandingAttack(World& world, FighterRuntime& fighter) {
     fighter.fighterVelocity.y = 0;
     const std::string& stateName = currentState(world, fighter).name;
     if (stateName == "AirAttackF") {
-        changeFighterState(world, fighter, "LandingAirF", lCancelAdjustedLandingLag(fighter, attr, attr.fairLandingLag));
+        enterLandingAirWithLag(world, fighter, "LandingAirF", lCancelAdjustedLandingLag(fighter, attr, attr.fairLandingLag));
     } else if (stateName == "AirAttackB") {
-        changeFighterState(world, fighter, "LandingAirB", lCancelAdjustedLandingLag(fighter, attr, attr.bairLandingLag));
+        enterLandingAirWithLag(world, fighter, "LandingAirB", lCancelAdjustedLandingLag(fighter, attr, attr.bairLandingLag));
     } else if (stateName == "AirAttackHi") {
-        changeFighterState(world, fighter, "LandingAirHi", lCancelAdjustedLandingLag(fighter, attr, attr.uairLandingLag));
+        enterLandingAirWithLag(world, fighter, "LandingAirHi", lCancelAdjustedLandingLag(fighter, attr, attr.uairLandingLag));
     } else if (stateName == "AirAttackLw") {
-        changeFighterState(world, fighter, "LandingAirLw", lCancelAdjustedLandingLag(fighter, attr, attr.dairLandingLag));
+        enterLandingAirWithLag(world, fighter, "LandingAirLw", lCancelAdjustedLandingLag(fighter, attr, attr.dairLandingLag));
     } else {
-        changeFighterState(world, fighter, "LandingAirN", lCancelAdjustedLandingLag(fighter, attr, attr.nairLandingLag));
+        enterLandingAirWithLag(world, fighter, "LandingAirN", lCancelAdjustedLandingLag(fighter, attr, attr.nairLandingLag));
     }
 }
 
