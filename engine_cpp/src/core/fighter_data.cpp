@@ -483,6 +483,7 @@ FighterDefinition makeDebugRook() {
     turnState.onFrame = {call("process_turn")};
     turnState.onAirborne = {call("teeter_or_airborne")};
     turnState.onAnimationFinishedState = "Wait";
+    turnState.onAnimationFinishedBlendFrames = kDisableAnimationBlendFrames;
     turnState.interrupts = {
         interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
