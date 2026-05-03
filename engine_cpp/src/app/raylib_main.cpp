@@ -3673,6 +3673,42 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         }
         pf::AnimationTrack& track = selectedAuthoredClip->tracks[static_cast<size_t>(editor.selectedAnimationTrack)];
         DrawText(("Track " + std::to_string(editor.selectedAnimationTrack) + " j" + std::to_string(track.joint) + " " + animationChannelName(track.channel)).c_str(), 352, 530, 13, DARKGRAY);
+        if (!track.keys.empty()) {
+            const Rectangle keyTimeline{24.0f, 584.0f, 310.0f, 28.0f};
+            DrawRectangleRec(keyTimeline, Fade(LIGHTGRAY, 0.62f));
+            DrawRectangleLinesEx(keyTimeline, 1.0f, DARKGRAY);
+            const int clipFrameCount = std::max(1, static_cast<int>(pf::fxToFloat(selectedAuthoredClip->frameCount)) - 1);
+            for (size_t keyIndex = 0; keyIndex < track.keys.size(); ++keyIndex) {
+                const int keyFrame = static_cast<int>(pf::fxToFloat(track.keys[keyIndex].frame));
+                const float t = static_cast<float>(std::clamp(keyFrame, 0, clipFrameCount)) / static_cast<float>(clipFrameCount);
+                const float x = keyTimeline.x + 5.0f + (keyTimeline.width - 10.0f) * t;
+                const bool selected = static_cast<int>(keyIndex) == editor.selectedAnimationKey;
+                DrawRectangle(static_cast<int>(x - 2.0f), static_cast<int>(keyTimeline.y + 4.0f), 5, static_cast<int>(keyTimeline.height - 8.0f), selected ? BLUE : ORANGE);
+            }
+            const float scrubT = static_cast<float>(std::clamp(editor.animationScrubFrame, 0, clipFrameCount)) /
+                static_cast<float>(clipFrameCount);
+            const float scrubX = keyTimeline.x + 5.0f + (keyTimeline.width - 10.0f) * scrubT;
+            DrawRectangle(static_cast<int>(scrubX), static_cast<int>(keyTimeline.y - 3.0f), 2, static_cast<int>(keyTimeline.height + 6.0f), BLACK);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), keyTimeline)) {
+                const float clickT = std::clamp((GetMousePosition().x - keyTimeline.x - 5.0f) / (keyTimeline.width - 10.0f), 0.0f, 1.0f);
+                const int clickedFrame = static_cast<int>(std::round(clickT * static_cast<float>(clipFrameCount)));
+                int bestKey = 0;
+                int bestDistance = 1000000;
+                for (size_t keyIndex = 0; keyIndex < track.keys.size(); ++keyIndex) {
+                    const int keyFrame = static_cast<int>(pf::fxToFloat(track.keys[keyIndex].frame));
+                    const int distance = std::abs(keyFrame - clickedFrame);
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestKey = static_cast<int>(keyIndex);
+                    }
+                }
+                editor.selectedAnimationKey = bestKey;
+                editor.animationScrubFrame = static_cast<int>(pf::fxToFloat(track.keys[static_cast<size_t>(bestKey)].frame));
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                editor.status = "Editor: selected authored key on timeline";
+            }
+        }
         if (uiButton({434.0f, 500.0f, 72.0f, 24.0f}, "Chan")) {
             track.channel = nextAnimationChannel(track.channel);
             editor.status = "Editor: cycled authored track channel";
