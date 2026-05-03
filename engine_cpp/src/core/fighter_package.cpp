@@ -710,6 +710,361 @@ int32_t assetIndexFor(const FighterPackage& package, const std::shared_ptr<const
     return static_cast<int32_t>(std::distance(package.hsdAssets.begin(), found));
 }
 
+#define PF_PACKAGE_MELEE_COMMON_FIELDS(X) \
+    X(stickXTiltThresholdX8) \
+    X(stickYTiltThresholdXC) \
+    X(inputRepeatWindowX1C) \
+    X(aerialAttackAngleTanX20) \
+    X(walkInputThresholdX24) \
+    X(walkMiddleThresholdX28) \
+    X(walkFastThresholdX2C) \
+    X(walkAccelScaleX30) \
+    X(turnInputThresholdX34) \
+    X(turnRunInputThresholdX38) \
+    X(dashInputThresholdX3C) \
+    X(dashStickWindowX40) \
+    X(dashEarlyInterruptWindowX44) \
+    X(dashItemThrowWindowX48) \
+    X(dashLateInterruptWindowX4C) \
+    X(attackDashFrictionScaleX50) \
+    X(dashDecayX54) \
+    X(runInputThresholdX58) \
+    X(runAccelScaleX5C) \
+    X(groundFrictionScaleX60) \
+    X(catchCutFrictionScaleX64) \
+    X(attackDashGrabBufferFramesX68) \
+    X(turnFrictionScaleAboveWalkMaxX6C) \
+    X(tapJumpThresholdX70) \
+    X(tapJumpWindowX74) \
+    X(jumpBackwardThresholdX78) \
+    X(tapJumpReleaseThresholdX7C) \
+    X(aerialJumpStickThresholdX80) \
+    X(fastfallStickThresholdX88) \
+    X(fastfallStickWindowX8C) \
+    X(squatStickThresholdX90) \
+    X(squatReleaseThresholdX94) \
+    X(attackS3StickThresholdX98) \
+    X(attackS3HiAngleX9C) \
+    X(attackS3HiSAngleXA0) \
+    X(attackS3LwSAngleXA4) \
+    X(attackS3LwAngleXA8) \
+    X(attackHi3StickThresholdYxAC) \
+    X(attackLw3StickThresholdYxB0) \
+    X(attackS4HiAngleXB8) \
+    X(attackS4HiSAngleXBC) \
+    X(attackS4LwSAngleXC0) \
+    X(attackS4LwAngleXC4) \
+    X(attackHi4StickThresholdYxCC) \
+    X(attackHi4StickWindowXD0) \
+    X(attackLw4StickThresholdYxD4) \
+    X(attackLw4StickWindowXD8) \
+    X(lCancelInputWindowXE4) \
+    X(lCancelLandingLagDivisorXE8) \
+    X(knockbackWeightScaleXF4) \
+    X(knockbackWeightDecayXF8) \
+    X(damageVelocityScaleX100) \
+    X(knockbackMaxX108) \
+    X(throwKnockbackWeightX10C) \
+    X(knockbackDamageBaseX110) \
+    X(knockbackDamageScaleX114) \
+    X(knockbackWeightSetScaleX118) \
+    X(knockbackScaleX11C) \
+    X(knockbackBaseX120) \
+    X(damageSakuraiAngleAirX144) \
+    X(damageSakuraiAngleScaleX148) \
+    X(damageSakuraiAngleLowX14C) \
+    X(damageSakuraiAngleHighX150) \
+    X(hitstunMultiplierX154) \
+    X(damageLevelThresholdX158) \
+    X(damageLevelThresholdX15C) \
+    X(damageLevelThresholdX160) \
+    X(damageGroundKnockbackClampX164) \
+    X(damageAirVelocityScaleX190) \
+    X(damageWallBounceMinVelocityX1B0) \
+    X(damageWallBounceDampingX1BC) \
+    X(damageSurfaceLockoutX1C0) \
+    X(thrownHitboxClearVelocityX1C8) \
+    X(damageWallBounceMinVelocityX1E0) \
+    X(damageLandingMinVelocityX1E4) \
+    X(damageGroundBounceAngleX1E8) \
+    X(damageGroundBounceDampingX1EC) \
+    X(groundKnockbackFrictionScaleX200) \
+    X(knockbackFrameDecayX204) \
+    X(damageFallStickThresholdX210) \
+    X(damageFallStickWindowX214) \
+    X(specialSStickThresholdX218) \
+    X(specialLwHiStickThresholdX21C) \
+    X(specialSReverseThresholdX220) \
+    X(specialNReverseFramesX224) \
+    X(damageFlyTopAngleMinX234) \
+    X(damageFlyTopAngleMaxX238) \
+    X(damageFlyRollPercentX23C) \
+    X(damageFlyRollChanceX240) \
+    X(downStandStickThresholdX244) \
+    X(downRollStickThresholdX248) \
+    X(downAttackInputWindowX24C) \
+    X(passiveInputWindowX250) \
+    X(passiveStandStickThresholdX254) \
+    X(downAttackCStickThresholdX7F4) \
+    X(startShieldHealthX260) \
+    X(minShieldScaleX264) \
+    X(guardMinHoldFramesX268) \
+    X(shieldDrainRateX278) \
+    X(shieldRegenRateX27C) \
+    X(shieldDamageScaleX284) \
+    X(shieldDamageBaseX288) \
+    X(shieldSetoffScaleX28C) \
+    X(shieldSetoffBaseX290) \
+    X(shieldPushbackScaleX294) \
+    X(shieldPushbackMaxX298) \
+    X(shieldReflectInputWindowX2A0) \
+    X(guardHitReleaseLockoutX2B8) \
+    X(hardShieldSizeScaleX2D4) \
+    X(lightShieldSizeScaleX2D8) \
+    X(hardShieldDamageScaleX2DC) \
+    X(lightShieldDamageScaleX2E0) \
+    X(hardShieldSetoffScaleX2E4) \
+    X(lightShieldSetoffScaleX2E8) \
+    X(hardShieldDrainScaleX2EC) \
+    X(lightShieldDrainScaleX2F0) \
+    X(shieldAlphaMinX2F4) \
+    X(furafuraTimerBaseX2F8) \
+    X(furafuraTimerMinX2FC) \
+    X(furafuraTimerDecrementX300) \
+    X(furafuraMashDecrementX304) \
+    X(furafuraShieldHealthX280) \
+    X(attackerShieldPushbackScaleX3E0) \
+    X(attackerShieldPushbackBaseX3E4) \
+    X(shieldKnockbackFrameDecayX3E8) \
+    X(shieldGroundFrictionMultiplierX3EC) \
+    X(grabMashStickThresholdX308) \
+    X(grabTimerBaseX354) \
+    X(grabTimerHandicapScaleX358) \
+    X(grabTimerHandicapBaseX35C) \
+    X(grabTimerPortScaleX360) \
+    X(grabTimerPortBaseX364) \
+    X(grabTimerPercentScaleX368) \
+    X(captureCutFrictionScaleX36C) \
+    X(captureCutGroundVelocityX370) \
+    X(captureJumpVelocityX374) \
+    X(captureJumpVelocityYx378) \
+    X(throwWeightAnimationScaleX37C) \
+    X(captureTimerDecrementX3A4) \
+    X(captureMashDecrementX3A8) \
+    X(captureJumpButtonWindowX3AC) \
+    X(captureMashAnimHoldFramesX3B0) \
+    X(captureMashAnimRateX3B4) \
+    X(captureJumpGravityThresholdX3B8) \
+    X(captureFloorSnapMaxX3BC) \
+    X(captureHighThresholdX3C4) \
+    X(thrownMashDecrementX3C8) \
+    X(reboundDamageScaleX3D0) \
+    X(reboundDamageBaseX3D4) \
+    X(reboundAccelScaleX3D8) \
+    X(reboundAccelBaseX3DC) \
+    X(damageSongBaseX624) \
+    X(damageSongHandicapScaleX628) \
+    X(damageSongHandicapBaseX62C) \
+    X(damageSongPortScaleX630) \
+    X(damageSongPortBaseX634) \
+    X(damageSongPercentScaleX638) \
+    X(damageSongTimerDecrementX63C) \
+    X(damageSongMashDecrementX640) \
+    X(damageSongElement7TimerMultiplierX644) \
+    X(damageBindBaseX658) \
+    X(damageBindHandicapScaleX65C) \
+    X(damageBindHandicapBaseX660) \
+    X(damageBindPortScaleX664) \
+    X(damageBindPortBaseX668) \
+    X(damageBindPercentScaleX66C) \
+    X(damageBindTimerDecrementX670) \
+    X(damageBindMashDecrementX674) \
+    X(burySubmergeFramesX5F4) \
+    X(buryBaseX5F8) \
+    X(buryHandicapScaleX5FC) \
+    X(buryHandicapBaseX600) \
+    X(buryPortScaleX604) \
+    X(buryPortBaseX608) \
+    X(buryPercentScaleX60C) \
+    X(buryTimerDecrementX610) \
+    X(buryMashDecrementX614) \
+    X(buryJumpVelocityYx618) \
+    X(buryJumpGravityThresholdX61C) \
+    X(buryJumpCollisionFramesX620) \
+    X(spotDodgeStickThresholdX314) \
+    X(spotDodgeStickWindowX318) \
+    X(rollStickThresholdX31C) \
+    X(rollStickWindowX320) \
+    X(rollFromGuardFlagX324) \
+    X(escapeAirTimerX334) \
+    X(escapeAirForceX338) \
+    X(escapeAirDecayX33C) \
+    X(fallSpecialDriftX340) \
+    X(landingFallSpecialLagX344) \
+    X(fallSpecialPlatformStickThresholdX25C) \
+    X(itemScrewJumpMultiplierX800) \
+    X(runStopTurnLagX410) \
+    X(downWaitAutoStandFramesX424) \
+    X(downDamageThresholdX428) \
+    X(runBrakeAnimFreezeVelocityX42C) \
+    X(runDirectFramesX430) \
+    X(jumpMomentumYScaleX438) \
+    X(animVelocityScaleX440) \
+    X(fallAnimationDriftThresholdX444) \
+    X(fallAnimationBlendRateX448) \
+    X(shieldStickSmoothingX44C) \
+    X(sdiMinStickMagX4B0) \
+    X(sdiStickWindowX4B4) \
+    X(sdiPosScaleX4B8) \
+    X(shieldAsdiPosScaleX4BC) \
+    X(shieldSdiDistanceX4C0) \
+    X(platformDropStickThresholdX464) \
+    X(platformDropStickWindowX468) \
+    X(platformDropInitialVelocityX46C) \
+    X(platformDropAnimationFramesX470) \
+    X(teeterWalkInputThresholdX474) \
+    X(teeterForwardDistanceX478) \
+    X(teeterBackwardDistanceX47C) \
+    X(ledgeNoGrabDownThresholdX480) \
+    X(cliffActionPercentThresholdX488) \
+    X(cliffWaitAutoReleaseFramesQuickX48C) \
+    X(cliffWaitAutoReleaseFramesSlowX490) \
+    X(cliffOptionStickThresholdX494) \
+    X(cliffCStickAttackThresholdX7F8) \
+    X(cliffCStickEscapeThresholdX7FC) \
+    X(ledgeCooldownX498) \
+    X(damageIceGravityMultiplierX77C) \
+    X(damageIceTimerDamageScaleX790) \
+    X(damageIceTimerDecrementX794) \
+    X(damageIceMashDecrementX798) \
+    X(damageIceHitDamageTimerReductionX79C) \
+    X(damageIceJumpEscapeFramesX7A4) \
+    X(passiveWallTimerX760) \
+    X(passiveWallIntangibilityX764) \
+    X(wallJumpInputWindowX768) \
+    X(wallJumpStickThresholdX76C) \
+    X(wallJumpStickWindowX770) \
+    X(wallJumpStartupX774) \
+    X(passiveWallVelYBaseX778) \
+    X(aerialAttackDeadzoneXDC) \
+    X(aerialAttackDeadzoneXE0)
+
+#define PF_PACKAGE_FIGHTER_PROPERTY_FIELDS(X) \
+    X(walkInitVel) \
+    X(walkAccel) \
+    X(walkMaxVel) \
+    X(slowWalkMax) \
+    X(midWalkPoint) \
+    X(fastWalkMin) \
+    X(grFriction) \
+    X(dashInitialVelocity) \
+    X(dashRunAccelerationA) \
+    X(dashRunAccelerationB) \
+    X(dashRunTerminalVelocity) \
+    X(groundMaxHorizontalVelocity) \
+    X(runAnimationScaling) \
+    X(maxRunBrakeFrames) \
+    X(jumpHInitialVelocity) \
+    X(jumpVInitialVelocity) \
+    X(damageScrewVerticalVelocity) \
+    X(hopVInitialVelocity) \
+    X(groundToAirJumpMomentumMultiplier) \
+    X(jumpHMaxVelocity) \
+    X(airJumpVMultiplier) \
+    X(airJumpHMultiplier) \
+    X(grav) \
+    X(terminalVel) \
+    X(airDriftStickMul) \
+    X(aerialDriftBase) \
+    X(airFriction) \
+    X(airDriftMax) \
+    X(airMaxHorizontalVelocity) \
+    X(ledgeSnapX) \
+    X(ledgeSnapY) \
+    X(ledgeSnapHeight) \
+    X(ledgeHangX) \
+    X(ledgeHangY) \
+    X(ledgeClimbX) \
+    X(ledgeEscapeX) \
+    X(ledgeJumpHorizontalVelocity) \
+    X(ledgeJumpVerticalVelocity) \
+    X(ledgeDropHorizontalVelocity) \
+    X(ledgeDropVerticalVelocity) \
+    X(passiveWallHorizontalVelocity) \
+    X(wallJumpHorizontalVelocity) \
+    X(wallJumpVerticalVelocity) \
+    X(passiveCeilHorizontalVelocity) \
+    X(damageIceJumpVelocityY) \
+    X(damageIceJumpVelocityXMultiplier) \
+    X(initialShieldSize) \
+    X(shieldBreakInitialVelocity) \
+    X(gravity) \
+    X(terminalVelocity) \
+    X(fastFallTerminalVelocity) \
+    X(noImpactLandingVelocity) \
+    X(normalLandingLag) \
+    X(nairLandingLag) \
+    X(fairLandingLag) \
+    X(bairLandingLag) \
+    X(uairLandingLag) \
+    X(dairLandingLag) \
+    X(framesToChangeDirectionOnStandingTurn) \
+    X(weight) \
+    X(weightIndependentThrowsMask) \
+    X(rapidJabWindow) \
+    X(maxJumps) \
+    X(jumpStartupLag) \
+    X(modelScale) \
+    X(initialWalkSpeed) \
+    X(initialDashSpeed) \
+    X(initialRunSpeed) \
+    X(walkAcceleration) \
+    X(runAcceleration) \
+    X(maxWalkSpeed) \
+    X(friction) \
+    X(aerialAcceleration) \
+    X(aerialFriction) \
+    X(maxAerialHorizontalSpeed) \
+    X(initialHorizontalJumpVelocity) \
+    X(initialVerticalJumpVelocity) \
+    X(maximumShorthopVerticalVelocity)
+
+void writeMeleeCommonData(PackageWriter& writer, const MeleeCommonData& common) {
+#define PF_WRITE_FIELD(field) writer.writeI32(common.field);
+    PF_PACKAGE_MELEE_COMMON_FIELDS(PF_WRITE_FIELD)
+#undef PF_WRITE_FIELD
+    writeVec2(writer, common.escapeAirDeadzoneX32C);
+}
+
+MeleeCommonData readMeleeCommonData(PackageReader& reader) {
+    MeleeCommonData common;
+#define PF_READ_FIELD(field) common.field = reader.readI32();
+    PF_PACKAGE_MELEE_COMMON_FIELDS(PF_READ_FIELD)
+#undef PF_READ_FIELD
+    common.escapeAirDeadzoneX32C = readVec2(reader);
+    return common;
+}
+
+void writeFighterProperties(PackageWriter& writer, const FighterProperties& properties) {
+#define PF_WRITE_FIELD(field) writer.writeI32(properties.field);
+    PF_PACKAGE_FIGHTER_PROPERTY_FIELDS(PF_WRITE_FIELD)
+#undef PF_WRITE_FIELD
+    writer.writeBool(properties.shieldSizeScalesWithHealth);
+    writer.writeBool(properties.canWallJump);
+    writeMeleeCommonData(writer, properties.common);
+}
+
+FighterProperties readFighterProperties(PackageReader& reader) {
+    FighterProperties properties;
+#define PF_READ_FIELD(field) properties.field = reader.readI32();
+    PF_PACKAGE_FIGHTER_PROPERTY_FIELDS(PF_READ_FIELD)
+#undef PF_READ_FIELD
+    properties.shieldSizeScalesWithHealth = reader.readBool();
+    properties.canWallJump = reader.readBool();
+    properties.common = readMeleeCommonData(reader);
+    return properties;
+}
+
 void writeShieldDefinition(PackageWriter& writer, const ShieldDefinition& shield) {
     writer.writeI32(shield.startSizeHardShield);
     writer.writeI32(shield.endSizeHardShield);
@@ -730,7 +1085,7 @@ ShieldDefinition readShieldDefinition(PackageReader& reader) {
 
 void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
     writer.writeString(fighter.name);
-    writeNativeStruct(writer, fighter.properties);
+    writeFighterProperties(writer, fighter.properties);
     writeShieldDefinition(writer, fighter.shield);
     writer.writeBool(fighter.hasHsdAsset);
     const int32_t assetIndex = assetIndexFor(package, fighter.hsdAsset);
@@ -762,7 +1117,7 @@ FighterDefinition readFighterDefinition(
 {
     FighterDefinition fighter;
     fighter.name = reader.readString();
-    fighter.properties = readNativeStruct<FighterProperties>(reader, "fighter properties");
+    fighter.properties = readFighterProperties(reader);
     fighter.shield = readShieldDefinition(reader);
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
