@@ -2154,6 +2154,29 @@ static int uniqueAuthoredClipActionIndex(const pf::FighterDefinition& def) {
     return static_cast<int>(def.authoredClips.size());
 }
 
+static bool authoredClipActionIndexAvailable(const pf::FighterDefinition& def, int actionIndex, int ignoredIndex) {
+    if (actionIndex < 0) {
+        return false;
+    }
+    for (size_t i = 0; i < def.authoredClips.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.authoredClips[i].actionIndex == actionIndex) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int nextAuthoredClipActionIndex(const pf::FighterDefinition& def, int currentActionIndex, int direction, int ignoredIndex) {
+    int candidate = std::max(0, currentActionIndex);
+    for (int step = 0; step < 10000; ++step) {
+        candidate = std::max(0, candidate + direction);
+        if (authoredClipActionIndexAvailable(def, candidate, ignoredIndex)) {
+            return candidate;
+        }
+    }
+    return currentActionIndex;
+}
+
 static void ensureAuthoredRootJoint(pf::FighterDefinition& def) {
     if (!def.authoredSkeleton.empty()) {
         return;
@@ -4937,6 +4960,32 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         clip.frameCount = std::max(pf::fx(1), clip.frameCount - pf::fx(5));
         editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, std::max(0, static_cast<int>(pf::fxToFloat(clip.frameCount)) - 1));
         editor.status = "Editor: shortened authored animation clip";
+    }
+    if (showingAuthoredClips && selectedAuthoredClip && uiButton({102.0f, 576.0f, 72.0f, 24.0f}, "Act+")) {
+        const int oldAction = selectedAuthoredClip->actionIndex;
+        const int newAction = nextAuthoredClipActionIndex(def, oldAction, 1, editor.selectedAnimationClip);
+        selectedAuthoredClip->actionIndex = newAction;
+        for (pf::FighterState& fighterState : def.states) {
+            if (fighterState.animationActionIndex == oldAction ||
+                fighterState.animation == selectedAuthoredClip->name)
+            {
+                fighterState.animationActionIndex = newAction;
+            }
+        }
+        editor.status = "Editor: raised authored clip action index to " + std::to_string(newAction);
+    }
+    if (showingAuthoredClips && selectedAuthoredClip && uiButton({184.0f, 576.0f, 72.0f, 24.0f}, "Act-")) {
+        const int oldAction = selectedAuthoredClip->actionIndex;
+        const int newAction = nextAuthoredClipActionIndex(def, oldAction, -1, editor.selectedAnimationClip);
+        selectedAuthoredClip->actionIndex = newAction;
+        for (pf::FighterState& fighterState : def.states) {
+            if (fighterState.animationActionIndex == oldAction ||
+                fighterState.animation == selectedAuthoredClip->name)
+            {
+                fighterState.animationActionIndex = newAction;
+            }
+        }
+        editor.status = "Editor: lowered authored clip action index to " + std::to_string(newAction);
     }
     if (showingAuthoredClips && uiButton({184.0f, 516.0f, 72.0f, 24.0f}, "+ Joint")) {
         ensureAuthoredRootJoint(def);
