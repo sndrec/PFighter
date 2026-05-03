@@ -2808,9 +2808,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         collectEditorPackageAssets(package.fighters, package);
         package.objects = world.objectDefs;
         std::string error;
-        if (pf::saveFighterPackage(editor.packagePath, package, &error)) {
-            const std::vector<uint8_t> bytes = pf::writeFighterPackage(package, &error);
-            editor.status = "Editor: saved " + editor.packagePath + " bytes=" + std::to_string(bytes.size());
+        const std::vector<uint8_t> bytes = pf::writeFighterPackage(package, &error);
+        if (!bytes.empty() && pf::saveFighterPackage(editor.packagePath, package, &error)) {
+            editor.status = "Editor: saved " + editor.packagePath +
+                " bytes=" + std::to_string(bytes.size()) +
+                " checksum=" + std::to_string(pf::fighterPackageChecksum(bytes));
         } else {
             editor.status = "Editor package save failed: " + error;
         }
