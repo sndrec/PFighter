@@ -5990,6 +5990,10 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         DrawText(("Interrupt #" + std::to_string(editor.selectedInterrupt) + " -> " + interrupt.targetState +
                   " " + interruptConditionName(interrupt.condition) +
                   " " + groundRequirementName(interrupt.ground)).c_str(), 276, 506, 13, DARKGRAY);
+        DrawText(("en " + std::to_string(interrupt.enableFrame) +
+                  " dis " + std::to_string(interrupt.disableFrame) +
+                  " lag " + std::to_string(interrupt.lagFrames) +
+                  " blend " + animationBlendLabel(interrupt.blendFrames)).c_str(), 714, 506, 13, DARKGRAY);
         if (interrupt.condition == pf::InterruptCondition::PackageVarAtLeast) {
             DrawText(("v" + std::to_string(interrupt.packageVariable) + " >= " + std::to_string(interrupt.packageValue)).c_str(), 516, 506, 13, DARKGRAY);
         }
@@ -6058,6 +6062,54 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
                 --interrupt.packageValue;
                 editor.status = "Editor: lowered interrupt package variable threshold";
             }
+        }
+        if (uiButton({276.0f, 554.0f, 44.0f, 22.0f}, "En-")) {
+            interrupt.enableFrame = std::max(0, interrupt.enableFrame - 1);
+            editor.status = "Editor: moved interrupt enable frame earlier";
+        }
+        if (uiButton({326.0f, 554.0f, 44.0f, 22.0f}, "En+")) {
+            ++interrupt.enableFrame;
+            editor.status = "Editor: moved interrupt enable frame later";
+        }
+        if (uiButton({376.0f, 554.0f, 44.0f, 22.0f}, "Dis-")) {
+            interrupt.disableFrame = std::max(0, interrupt.disableFrame - 1);
+            editor.status = "Editor: moved interrupt disable frame earlier";
+        }
+        if (uiButton({426.0f, 554.0f, 44.0f, 22.0f}, "Dis+")) {
+            ++interrupt.disableFrame;
+            editor.status = "Editor: moved interrupt disable frame later";
+        }
+        if (uiButton({276.0f, 580.0f, 44.0f, 22.0f}, "Lag-")) {
+            interrupt.lagFrames = std::max(0, interrupt.lagFrames - 1);
+            editor.status = "Editor: shortened interrupt transition lag";
+        }
+        if (uiButton({326.0f, 580.0f, 44.0f, 22.0f}, "Lag+")) {
+            ++interrupt.lagFrames;
+            editor.status = "Editor: lengthened interrupt transition lag";
+        }
+        if (uiButton({376.0f, 580.0f, 44.0f, 22.0f}, "Bl-")) {
+            if (interrupt.blendFrames == pf::kDisableAnimationBlendFrames) {
+                editor.status = "Editor: interrupt blend is already disabled";
+            } else {
+                --interrupt.blendFrames;
+                editor.status = "Editor: shortened interrupt transition blend";
+            }
+        }
+        if (uiButton({426.0f, 580.0f, 44.0f, 22.0f}, "Bl+")) {
+            ++interrupt.blendFrames;
+            editor.status = "Editor: lengthened interrupt transition blend";
+        }
+        if (uiButton({276.0f, 606.0f, 54.0f, 22.0f}, "Start", interrupt.startActive)) {
+            interrupt.startActive = !interrupt.startActive;
+            editor.status = "Editor: toggled interrupt start-active flag";
+        }
+        if (uiButton({336.0f, 606.0f, 54.0f, 22.0f}, "Always", interrupt.alwaysActive)) {
+            interrupt.alwaysActive = !interrupt.alwaysActive;
+            editor.status = "Editor: toggled interrupt always-active flag";
+        }
+        if (uiButton({396.0f, 606.0f, 54.0f, 22.0f}, "NoHit", interrupt.requireNoHitstun)) {
+            interrupt.requireNoHitstun = !interrupt.requireNoHitstun;
+            editor.status = "Editor: toggled interrupt no-hitstun requirement";
         }
     }
 
