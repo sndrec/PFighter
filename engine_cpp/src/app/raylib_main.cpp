@@ -2239,6 +2239,26 @@ static pf::HsdMeshVertex* authoredMeshVertexAt(pf::HsdFighterMesh& mesh, int ver
     return nullptr;
 }
 
+static std::string authoredMeshVertexInfluenceSummary(const pf::HsdMeshVertex& vertex) {
+    std::string summary;
+    int shown = 0;
+    for (const pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+        if (influence.bone < 0 || influence.weight <= 0.0f) {
+            continue;
+        }
+        if (!summary.empty()) {
+            summary += " ";
+        }
+        summary += "j" + std::to_string(influence.bone) + ":" +
+            std::to_string(static_cast<int>(std::lround(influence.weight * 100.0f)));
+        ++shown;
+        if (shown >= 3) {
+            break;
+        }
+    }
+    return summary.empty() ? "none" : summary;
+}
+
 static pf::Vec2 authoredMeshSize(const pf::HsdFighterMesh& mesh) {
     bool haveVertex = false;
     pf::Fix minX = 0;
@@ -2279,6 +2299,88 @@ static void nudgeAuthoredMeshVertex(pf::HsdFighterMesh& mesh, int vertexIndex, p
     vertex->position.x += delta.x;
     vertex->position.y += delta.y;
     vertex->position.z += delta.z;
+}
+
+static void normalizeAuthoredMeshVertexInfluences(pf::HsdMeshVertex& vertex, int fallbackJoint) {
+    float sum = 0.0f;
+    for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+        if (influence.bone < 0 || influence.weight <= 0.0f) {
+            influence = {};
+            influence.bone = -1;
+            continue;
+        }
+        sum += influence.weight;
+    }
+    if (sum <= 0.0f) {
+        vertex.influences = {};
+        vertex.influences[0] = {fallbackJoint, 1.0f};
+        return;
+    }
+    for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+        if (influence.bone >= 0 && influence.weight > 0.0f) {
+            influence.weight /= sum;
+        }
+    }
+}
+
+static void bindAuthoredMeshVertexToJoint(pf::HsdFighterMesh& mesh, int vertexIndex, int joint, int skeletonSize) {
+    int cursor = 0;
+    for (pf::HsdMeshBatch& batch : mesh.batches) {
+        const int next = cursor + static_cast<int>(batch.vertices.size());
+        if (vertexIndex >= cursor && vertexIndex < next) {
+            pf::HsdMeshVertex& vertex = batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
+            vertex.influences = {};
+            vertex.influences[0] = {joint, 1.0f};
+            batch.parentBone = skeletonSize > 1 ? -1 : joint;
+            batch.singleBindBone = skeletonSize > 1 ? -1 : joint;
+            batch.hasEnvelopes = skeletonSize > 1;
+            return;
+        }
+        cursor = next;
+    }
+}
+
+static void blendAuthoredMeshVertexTowardJoint(
+    pf::HsdFighterMesh& mesh,
+    int vertexIndex,
+    int joint,
+    int skeletonSize,
+    float amount)
+{
+    int cursor = 0;
+    for (pf::HsdMeshBatch& batch : mesh.batches) {
+        const int next = cursor + static_cast<int>(batch.vertices.size());
+        if (vertexIndex < cursor || vertexIndex >= next) {
+            cursor = next;
+            continue;
+        }
+
+        pf::HsdMeshVertex& vertex = batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
+        pf::HsdMeshVertexInfluence* target = nullptr;
+        pf::HsdMeshVertexInfluence* empty = nullptr;
+        for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+            if (influence.bone == joint) {
+                target = &influence;
+            }
+            if (!empty && (influence.bone < 0 || influence.weight <= 0.0f)) {
+                empty = &influence;
+            }
+            if (influence.weight > 0.0f) {
+                influence.weight *= (1.0f - amount);
+            }
+        }
+        if (!target) {
+            target = empty ? empty : &vertex.influences.back();
+            target->bone = joint;
+            target->weight = 0.0f;
+        }
+        target->weight += amount;
+        normalizeAuthoredMeshVertexInfluences(vertex, joint);
+        batch.parentBone = skeletonSize > 1 ? -1 : joint;
+        batch.singleBindBone = skeletonSize > 1 ? -1 : joint;
+        batch.hasEnvelopes = skeletonSize > 1;
+        return;
+    }
 }
 
 static void bindAuthoredMeshToJoint(pf::HsdFighterMesh& mesh, int joint) {
@@ -3972,6 +4074,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         const int meshParent = def.authoredMesh.batches.front().parentBone;
         DrawText(("Mesh verts=" + std::to_string(meshVerts) +
                   " v=" + std::to_string(editor.selectedAuthoredMeshVertex) +
+                  " wt=" + (selectedVertex ? authoredMeshVertexInfluenceSummary(*selectedVertex) : std::string{"none"}) +
                   " inf=" + std::to_string(authoredMeshMaxInfluences(def.authoredMesh)) +
                   " size " + std::to_string(pf::fxToFloat(meshSize.x)) +
                   "," + std::to_string(pf::fxToFloat(meshSize.y)) +
@@ -4031,6 +4134,33 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             if (uiButton({832.0f, 398.0f, 34.0f, 22.0f}, "Y+")) {
                 nudgeAuthoredMeshVertex(def.authoredMesh, editor.selectedAuthoredMeshVertex, {0, pf::fxFromFloat(0.05f), 0});
                 editor.status = "Editor: raised authored mesh vertex";
+            }
+            if (uiButton({870.0f, 398.0f, 42.0f, 22.0f}, "Wt1")) {
+                ensureAuthoredRootJoint(def);
+                const int joint = std::clamp(
+                    editor.selectedAnimationJoint,
+                    0,
+                    std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+                bindAuthoredMeshVertexToJoint(
+                    def.authoredMesh,
+                    editor.selectedAuthoredMeshVertex,
+                    joint,
+                    static_cast<int>(def.authoredSkeleton.size()));
+                editor.status = "Editor: bound authored mesh vertex to selected joint";
+            }
+            if (uiButton({916.0f, 398.0f, 42.0f, 22.0f}, "Wt+")) {
+                ensureAuthoredRootJoint(def);
+                const int joint = std::clamp(
+                    editor.selectedAnimationJoint,
+                    0,
+                    std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+                blendAuthoredMeshVertexTowardJoint(
+                    def.authoredMesh,
+                    editor.selectedAuthoredMeshVertex,
+                    joint,
+                    static_cast<int>(def.authoredSkeleton.size()),
+                    0.25f);
+                editor.status = "Editor: blended authored mesh vertex toward selected joint";
             }
         }
     }
