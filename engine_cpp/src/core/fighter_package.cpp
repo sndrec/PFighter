@@ -1642,6 +1642,26 @@ void validateInterruptRuleTiming(const InterruptRule& rule) {
     }
 }
 
+bool validAnimationBlendFrames(int blendFrames) {
+    return blendFrames >= 0 ||
+        blendFrames == kUseDefaultAnimationBlendFrames ||
+        blendFrames == kDisableAnimationBlendFrames;
+}
+
+void validateFighterStateTiming(const FighterState& state) {
+    if (state.animationLengthFrames <= 0 || state.initialInterruptibleFrame < 0 ||
+        state.defaultAnimationBlendFrames < 0 || !validAnimationBlendFrames(state.onAnimationFinishedBlendFrames))
+    {
+        throw std::runtime_error("fighter package state timing is invalid");
+    }
+}
+
+void validateObjectStateTiming(const GameObjectStateDefinition& state) {
+    if (state.animationLengthFrames < 0) {
+        throw std::runtime_error("fighter package object state timing is invalid");
+    }
+}
+
 void validateSubactionTiming(const Subaction& subaction) {
     if (subaction.frames < 0 || subaction.loopCount < 0) {
         throw std::runtime_error("fighter package subaction timing is invalid");
@@ -1684,6 +1704,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             validateHurtboxGeometry(hurtbox);
         }
         for (const FighterState& state : fighter.states) {
+            validateFighterStateTiming(state);
             if (!state.onAnimationFinishedState.empty() && !hasResolvableStateTarget(states, state.onAnimationFinishedState)) {
                 throw std::runtime_error("fighter package animation finished state target is invalid");
             }
@@ -1725,6 +1746,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             throw std::runtime_error("fighter package object initial state is invalid");
         }
         for (const GameObjectStateDefinition& state : object.states) {
+            validateObjectStateTiming(state);
             validateFunctionCalls(state.onEnter, scripts);
             validateFunctionCalls(state.onFrame, scripts);
             validateFunctionCalls(state.onPhysics, scripts);

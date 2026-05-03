@@ -4659,6 +4659,12 @@ int main(int argc, char** argv) {
     }};
     invalidAnimationWritePackage.fighters[0].authoredClips = {invalidAnimationClip};
     const bool invalidPackageAnimationWriteRejected = pf::writeFighterPackage(invalidAnimationWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidStateTimingWritePackage = sourcePackage;
+    invalidStateTimingWritePackage.fighters[0].states[0].animationLengthFrames = 0;
+    const bool invalidPackageStateTimingWriteRejected = pf::writeFighterPackage(invalidStateTimingWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectStateTimingWritePackage = sourcePackage;
+    invalidObjectStateTimingWritePackage.objects[1].states[0].animationLengthFrames = -1;
+    const bool invalidPackageObjectStateTimingWriteRejected = pf::writeFighterPackage(invalidObjectStateTimingWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidReferenceWritePackage = sourcePackage;
     invalidReferenceWritePackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     const bool invalidPackageReferenceWriteRejected = pf::writeFighterPackage(invalidReferenceWritePackage, &invalidPackageError).empty();
@@ -4811,6 +4817,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
+              << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
+              << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
