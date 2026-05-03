@@ -4933,6 +4933,9 @@ int main(int argc, char** argv) {
         invalidSkeletonNameWritePackage.fighters[0].authoredSkeleton[0]);
     invalidSkeletonNameWritePackage.fighters[0].authoredSkeleton.back().parent = 0;
     const bool invalidPackageSkeletonNameWriteRejected = pf::writeFighterPackage(invalidSkeletonNameWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidSkeletonScaleWritePackage = authoredStateAnimationWritePackage;
+    invalidSkeletonScaleWritePackage.fighters[0].authoredSkeleton[0].scale.y = 0;
+    const bool invalidPackageSkeletonScaleWriteRejected = pf::writeFighterPackage(invalidSkeletonScaleWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidStateTimingWritePackage = sourcePackage;
     invalidStateTimingWritePackage.fighters[0].states[0].animationLengthFrames = 0;
     const bool invalidPackageStateTimingWriteRejected = pf::writeFighterPackage(invalidStateTimingWritePackage, &invalidPackageError).empty();
@@ -5686,6 +5689,7 @@ int main(int argc, char** argv) {
               << " fighter_package_authored_state_animation_write_ok=" << packageAuthoredStateAnimationWriteOk
               << " fighter_package_invalid_authored_state_animation_write_rejected=" << invalidPackageAuthoredStateAnimationWriteRejected
               << " fighter_package_invalid_skeleton_name_write_rejected=" << invalidPackageSkeletonNameWriteRejected
+              << " fighter_package_invalid_skeleton_scale_write_rejected=" << invalidPackageSkeletonScaleWriteRejected
               << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
               << " fighter_package_invalid_duplicate_state_write_rejected=" << invalidPackageDuplicateStateWriteRejected
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected
