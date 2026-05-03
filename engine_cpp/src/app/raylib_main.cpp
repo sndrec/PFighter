@@ -2834,9 +2834,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     *existing = packageFighter;
                 }
             }
-            if (!package.objects.empty()) {
-                world.objectDefs = package.objects;
-            }
+            world.objectDefs = package.objects;
             world.objects.clear();
             pf::resetTrainingFighter(world, fighterIndex, fighterDef, position, facing);
             selectedFighterDef = fighterDef;
@@ -2845,7 +2843,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedPackageVariable = 0;
             editor.selectedPackageScript = 0;
             editor.selectedPackageInstruction = 0;
-            editor.status = "Editor: loaded package fighter " + world.fighterDefs[static_cast<size_t>(fighterDef)].name;
+            editor.selectedObjectDef = 0;
+            editor.selectedObjectState = 0;
+            editor.selectedObjectHitbox = 0;
+            editor.selectedObjectHurtbox = 0;
+            editor.selectedObjectTouchbox = 0;
+            editor.status = "Editor: loaded package fighter " + world.fighterDefs[static_cast<size_t>(fighterDef)].name +
+                " objects=" + std::to_string(world.objectDefs.size());
         }
     }
     if (uiButton({338.0f, 370.0f, 82.0f, 26.0f}, "Blank")) {
