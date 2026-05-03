@@ -3732,6 +3732,41 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
                 editor.paused = true;
                 editor.status = "Editor: raised authored key value";
             }
+            auto moveSelectedKeyFrame = [&](int delta) {
+                const int keyIndex = std::clamp(editor.selectedAnimationKey, 0, static_cast<int>(track.keys.size()) - 1);
+                const int currentFrame = static_cast<int>(pf::fxToFloat(track.keys[static_cast<size_t>(keyIndex)].frame));
+                const int maxClipFrame = std::max(0, static_cast<int>(pf::fxToFloat(selectedAuthoredClip->frameCount)) - 1);
+                const int targetFrame = std::clamp(currentFrame + delta, 0, maxClipFrame);
+                if (targetFrame == currentFrame) {
+                    return;
+                }
+                const pf::Fix target = pf::fx(targetFrame);
+                const auto duplicate = std::find_if(track.keys.begin(), track.keys.end(), [&](const pf::AnimationKey& candidate) {
+                    return candidate.frame == target;
+                });
+                if (duplicate != track.keys.end() && static_cast<int>(std::distance(track.keys.begin(), duplicate)) != keyIndex) {
+                    editor.status = "Editor: authored key frame already exists";
+                    return;
+                }
+                track.keys[static_cast<size_t>(keyIndex)].frame = target;
+                sortAnimationKeys(track.keys);
+                for (size_t i = 0; i < track.keys.size(); ++i) {
+                    if (track.keys[i].frame == target) {
+                        editor.selectedAnimationKey = static_cast<int>(i);
+                        break;
+                    }
+                }
+                editor.animationScrubFrame = targetFrame;
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                editor.status = "Editor: moved authored key frame";
+            };
+            if (uiButton({352.0f, 656.0f, 72.0f, 24.0f}, "Frame-")) {
+                moveSelectedKeyFrame(-1);
+            }
+            if (uiButton({434.0f, 656.0f, 72.0f, 24.0f}, "Frame+")) {
+                moveSelectedKeyFrame(1);
+            }
         }
     } else if (showingAuthoredClips) {
         DrawText("No authored tracks", 352, 530, 13, GRAY);
