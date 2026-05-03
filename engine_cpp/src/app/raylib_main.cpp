@@ -1033,6 +1033,41 @@ static int nextPackageInputButton(int mask) {
     }
 }
 
+static std::string packageFighterTargetName(const pf::World& world, int fighterDef) {
+    if (world.fighterDefs.empty()) {
+        return {};
+    }
+    const int index = std::clamp(fighterDef, 0, static_cast<int>(world.fighterDefs.size()) - 1);
+    return world.fighterDefs[static_cast<size_t>(index)].name;
+}
+
+static void cyclePackageFighterTarget(
+    pf::PackageScriptInstruction& instruction,
+    pf::PackageScriptOp op,
+    const pf::World& world,
+    int fallbackFighterDef)
+{
+    if (world.fighterDefs.empty()) {
+        return;
+    }
+    if (instruction.op != op || instruction.text.empty()) {
+        instruction.op = op;
+        instruction.text = packageFighterTargetName(world, fallbackFighterDef);
+        return;
+    }
+
+    auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& def) {
+        return def.name == instruction.text;
+    });
+    if (found == world.fighterDefs.end()) {
+        instruction.text = packageFighterTargetName(world, fallbackFighterDef);
+        return;
+    }
+    size_t index = static_cast<size_t>(std::distance(world.fighterDefs.begin(), found));
+    index = (index + 1) % world.fighterDefs.size();
+    instruction.text = world.fighterDefs[index].name;
+}
+
 static std::string packageInstructionLabel(const pf::PackageScriptInstruction& instruction) {
     std::string label = packageScriptOpName(instruction.op);
     switch (instruction.op) {
@@ -1186,6 +1221,7 @@ static void normalizePackageInstruction(
     pf::PackageScriptInstruction& instruction,
     const pf::FighterDefinition& def,
     const pf::World& world,
+    int currentFighterDef,
     int selectedState,
     int selectedObjectDef)
 {
@@ -1218,10 +1254,10 @@ static void normalizePackageInstruction(
         instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
     }
     if (instruction.op == pf::PackageScriptOp::SwitchFighterDefinition && instruction.text.empty() && !world.fighterDefs.empty()) {
-        instruction.text = world.fighterDefs[0].name;
+        instruction.text = packageFighterTargetName(world, currentFighterDef);
     }
     if (instruction.op == pf::PackageScriptOp::SpawnFighter && instruction.text.empty() && !world.fighterDefs.empty()) {
-        instruction.text = world.fighterDefs[0].name;
+        instruction.text = packageFighterTargetName(world, currentFighterDef);
     }
 }
 
@@ -2137,16 +2173,32 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
     if (uiButton({290.0f, 682.0f, 68.0f, 24.0f}, "+ Fighter")) {
         if (script && !world.fighterDefs.empty()) {
-            script->instructions.push_back({pf::PackageScriptOp::SwitchFighterDefinition, -1, -1, -1, 0, 0, world.fighterDefs[0].name});
+            script->instructions.push_back({
+                pf::PackageScriptOp::SwitchFighterDefinition,
+                -1,
+                -1,
+                -1,
+                0,
+                0,
+                packageFighterTargetName(world, fighter.fighterDef),
+            });
             editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
-            editor.status = "Editor: appended fighter switch to " + script->name;
+            editor.status = "Editor: appended fighter switch to " + script->name + " targeting " + script->instructions.back().text;
         }
     }
     if (uiButton({215.0f, 682.0f, 68.0f, 24.0f}, "+ Ally")) {
         if (script && !world.fighterDefs.empty()) {
-            script->instructions.push_back({pf::PackageScriptOp::SpawnFighter, -1, -1, -1, 0, pf::fxFromFloat(1.0f), world.fighterDefs[0].name});
+            script->instructions.push_back({
+                pf::PackageScriptOp::SpawnFighter,
+                -1,
+                -1,
+                -1,
+                0,
+                pf::fxFromFloat(1.0f),
+                packageFighterTargetName(world, fighter.fighterDef),
+            });
             editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
-            editor.status = "Editor: appended companion spawn to " + script->name;
+            editor.status = "Editor: appended companion spawn to " + script->name + " targeting " + script->instructions.back().text;
         }
     }
     if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind In")) {
@@ -2168,10 +2220,10 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     if (script && !script->instructions.empty()) {
         editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, static_cast<int>(script->instructions.size()) - 1);
         pf::PackageScriptInstruction& instruction = script->instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
-        normalizePackageInstruction(instruction, def, world, editor.selectedState, editor.selectedObjectDef);
+        normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
         if (uiButton({440.0f, 502.0f, 68.0f, 24.0f}, "Op")) {
             instruction.op = nextPackageScriptOp(instruction.op);
-            normalizePackageInstruction(instruction, def, world, editor.selectedState, editor.selectedObjectDef);
+            normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
             editor.status = "Editor: cycled selected script block op";
         }
         if (uiButton({365.0f, 532.0f, 68.0f, 24.0f}, "Dst")) {
@@ -2226,16 +2278,14 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
         }
         if (uiButton({290.0f, 622.0f, 68.0f, 24.0f}, "Fighter")) {
             if (!world.fighterDefs.empty()) {
-                instruction.text = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].name;
-                instruction.op = pf::PackageScriptOp::SwitchFighterDefinition;
-                editor.status = "Editor: targeted current fighter from script block";
+                cyclePackageFighterTarget(instruction, pf::PackageScriptOp::SwitchFighterDefinition, world, fighter.fighterDef);
+                editor.status = "Editor: targeted fighter " + instruction.text + " from script block";
             }
         }
         if (uiButton({215.0f, 622.0f, 68.0f, 24.0f}, "Ally")) {
             if (!world.fighterDefs.empty()) {
-                instruction.text = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].name;
-                instruction.op = pf::PackageScriptOp::SpawnFighter;
-                editor.status = "Editor: targeted companion fighter from script block";
+                cyclePackageFighterTarget(instruction, pf::PackageScriptOp::SpawnFighter, world, fighter.fighterDef);
+                editor.status = "Editor: targeted companion fighter " + instruction.text + " from script block";
             }
         }
         if (uiButton({365.0f, 652.0f, 68.0f, 24.0f}, "BindLd")) {
