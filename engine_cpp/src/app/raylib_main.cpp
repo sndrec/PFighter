@@ -1200,6 +1200,43 @@ static void remapRemovedObjectStateScriptTargets(
     }
 }
 
+static bool fighterStateAliasLostByRemovingState(const pf::FighterDefinition& def, const std::string& target, const std::string& removedStateName) {
+    return target == "AppealS" &&
+        (removedStateName == "AppealSR" || removedStateName == "AppealSL") &&
+        def.stateIndex("AppealSR") < 0 &&
+        def.stateIndex("AppealSL") < 0;
+}
+
+static bool shouldRemapRemovedFighterStateTarget(const pf::FighterDefinition& def, const std::string& target, const std::string& removedStateName) {
+    return target == removedStateName || fighterStateAliasLostByRemovingState(def, target, removedStateName);
+}
+
+static void remapRemovedFighterStateTargets(
+    pf::FighterDefinition& def,
+    const std::string& removedStateName,
+    const std::string& replacementStateName)
+{
+    for (pf::FighterState& state : def.states) {
+        if (shouldRemapRemovedFighterStateTarget(def, state.onAnimationFinishedState, removedStateName)) {
+            state.onAnimationFinishedState = replacementStateName;
+        }
+        for (pf::InterruptRule& rule : state.interrupts) {
+            if (shouldRemapRemovedFighterStateTarget(def, rule.targetState, removedStateName)) {
+                rule.targetState = replacementStateName;
+            }
+        }
+    }
+    for (pf::PackageScript& script : def.packageScripts) {
+        for (pf::PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.op == pf::PackageScriptOp::ChangeState &&
+                shouldRemapRemovedFighterStateTarget(def, instruction.text, removedStateName))
+            {
+                instruction.text = replacementStateName;
+            }
+        }
+    }
+}
+
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
@@ -3249,6 +3286,8 @@ static void removeEditorState(pf::World& world, pf::FighterEditor& editor) {
     }
     editor.selectedState = std::clamp(removeIndex, 0, static_cast<int>(def.states.size()) - 1);
     editor.selectedSubaction = 0;
+    const std::string replacementName = def.states[static_cast<size_t>(std::min(fallbackState, static_cast<int>(def.states.size()) - 1))].name;
+    remapRemovedFighterStateTargets(def, removedName, replacementName);
     editor.status = "Editor: removed unsaved state " + removedName;
 }
 
