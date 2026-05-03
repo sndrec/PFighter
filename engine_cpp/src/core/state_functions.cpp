@@ -2595,6 +2595,9 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::AddVar:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) + packageVar(fighter, instruction.srcB));
             break;
+        case PackageScriptOp::ScaleVarFixed:
+            setPackageVar(fighter, instruction.dst, fxMul(packageVar(fighter, instruction.srcA), instruction.fixValue));
+            break;
         case PackageScriptOp::SetVarFrame:
             setPackageVar(fighter, instruction.dst, fighter.internalFrame);
             break;

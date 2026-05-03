@@ -4621,6 +4621,7 @@ int main(int argc, char** argv) {
         {"CStickXVar", 0},
         {"CStickYVar", 0},
         {"ShieldVar", 0},
+        {"ScaledStickXVar", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4671,7 +4672,8 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarCStickX, 9, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarCStickY, 10, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarShield, 11, -1, -1, 0, 0, {}},
-            {pf::PackageScriptOp::SetGroundVelocityFromVar, -1, 7, -1, 0, 0, {}},
+            {pf::PackageScriptOp::ScaleVarFixed, 12, 7, -1, 0, pf::fxFromFloat(2.0f), {}},
+            {pf::PackageScriptOp::SetGroundVelocityFromVar, -1, 12, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetFacingFromVar, -1, 9, -1, 0, 0, {}},
         },
     }};
@@ -4812,8 +4814,11 @@ int main(int argc, char** argv) {
     invalidInputWritePackage.fighters[0].packageScripts[5].instructions[0].intValue = 1 << 15;
     const bool invalidPackageInputWriteRejected = pf::writeFighterPackage(invalidInputWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidVarMotionWritePackage = sourcePackage;
-    invalidVarMotionWritePackage.fighters[0].packageScripts[5].instructions[7].srcA = 999;
+    invalidVarMotionWritePackage.fighters[0].packageScripts[5].instructions[8].srcA = 999;
     const bool invalidPackageVarMotionWriteRejected = pf::writeFighterPackage(invalidVarMotionWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScaleWritePackage = sourcePackage;
+    invalidScaleWritePackage.fighters[0].packageScripts[5].instructions[7].srcA = 999;
+    const bool invalidPackageScaleWriteRejected = pf::writeFighterPackage(invalidScaleWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectSwitchWritePackage = sourcePackage;
     invalidObjectSwitchWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SwitchFighterDefinition,
@@ -4871,7 +4876,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 12 &&
+        loadedPackage.fighters[0].packageVariables.size() == 13 &&
         loadedPackage.fighters[0].packageScripts.size() == 6 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
@@ -4997,7 +5002,7 @@ int main(int argc, char** argv) {
     pf::tickWorld(packageInputScriptWorld, {packagePauseInput, pf::InputFrame{}});
     pf::tickWorld(packageInputScriptWorld, {packagePauseInput, pf::InputFrame{}});
     const bool packageInputScriptOk = packageShapeOk &&
-        packageInputScriptWorld.fighters[0].packageVars.size() >= 12 &&
+        packageInputScriptWorld.fighters[0].packageVars.size() >= 13 &&
         packageInputScriptWorld.fighters[0].packageVars[5] == 1 &&
         packageInputScriptWorld.fighters[0].packageVars[6] == 0 &&
         packageInputScriptWorld.fighters[0].packageVars[7] == pf::fxFromFloat(0.25f) &&
@@ -5005,7 +5010,8 @@ int main(int argc, char** argv) {
         packageInputScriptWorld.fighters[0].packageVars[9] == pf::fxFromFloat(-0.75f) &&
         packageInputScriptWorld.fighters[0].packageVars[10] == pf::fxFromFloat(1.0f) &&
         packageInputScriptWorld.fighters[0].packageVars[11] == pf::fxFromFloat(0.3f) &&
-        packageInputScriptWorld.fighters[0].groundVelocity == pf::fxFromFloat(0.25f) &&
+        packageInputScriptWorld.fighters[0].packageVars[12] == pf::fxFromFloat(0.5f) &&
+        packageInputScriptWorld.fighters[0].groundVelocity == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].facing == -1;
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
@@ -5135,6 +5141,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_spawn_fighter_write_rejected=" << invalidPackageSpawnFighterWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected
               << " fighter_package_invalid_input_write_rejected=" << invalidPackageInputWriteRejected
+              << " fighter_package_invalid_scale_write_rejected=" << invalidPackageScaleWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected
               << " fighter_package_invalid_object_input_write_rejected=" << invalidPackageObjectInputWriteRejected

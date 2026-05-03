@@ -6813,6 +6813,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::AddVar:
                 setVar(instruction.dst, var(instruction.srcA) + var(instruction.srcB));
                 break;
+            case PackageScriptOp::ScaleVarFixed:
+                setVar(instruction.dst, fxMul(var(instruction.srcA), instruction.fixValue));
+                break;
             case PackageScriptOp::SetVarFrame:
                 setVar(instruction.dst, object.internalFrame);
                 break;

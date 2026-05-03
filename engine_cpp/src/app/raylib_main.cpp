@@ -989,6 +989,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarImmediate: return "SetVar";
     case pf::PackageScriptOp::AddVarImmediate: return "AddVar";
     case pf::PackageScriptOp::AddVar: return "AddVars";
+    case pf::PackageScriptOp::ScaleVarFixed: return "ScaleVar";
     case pf::PackageScriptOp::SetVarFrame: return "ReadFrame";
     case pf::PackageScriptOp::SetVarStateFrame: return "StateFrm";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
@@ -1100,6 +1101,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarButtonPressed:
         label += " v" + std::to_string(instruction.dst) + " " + packageInputButtonName(instruction.intValue);
         break;
+    case pf::PackageScriptOp::ScaleVarFixed:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " * " + std::to_string(pf::fxToFloat(instruction.fixValue));
+        break;
     case pf::PackageScriptOp::AddVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
         break;
@@ -1204,7 +1208,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::Nop: return pf::PackageScriptOp::SetVarImmediate;
     case pf::PackageScriptOp::SetVarImmediate: return pf::PackageScriptOp::AddVarImmediate;
     case pf::PackageScriptOp::AddVarImmediate: return pf::PackageScriptOp::AddVar;
-    case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::SetVarFrame;
+    case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::ScaleVarFixed;
+    case pf::PackageScriptOp::ScaleVarFixed: return pf::PackageScriptOp::SetVarFrame;
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
