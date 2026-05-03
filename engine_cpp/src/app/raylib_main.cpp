@@ -1473,6 +1473,29 @@ static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterR
     return pf::fxMul(def.shield.startSizeHardShield, common.minShieldScaleX264 + pf::fxMul(pf::fx(1) - common.minShieldScaleX264, scaledHealth));
 }
 
+static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const pf::HsdMeshBatch& batch, const pf::HsdMeshVertex& vertex) {
+    const int bone = batch.singleBindBone >= 0 ? batch.singleBindBone : batch.parentBone;
+    if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
+        return pf::transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], vertex.position);
+    }
+    return {fighter.position.x + vertex.position.x, fighter.position.y + vertex.position.y, vertex.position.z};
+}
+
+static void drawAuthoredMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
+    for (const pf::HsdMeshBatch& batch : def.authoredMesh.batches) {
+        const Color color{batch.materialColor[0], batch.materialColor[1], batch.materialColor[2], batch.materialColor[3]};
+        for (size_t i = 0; i + 2 < batch.vertices.size(); i += 3) {
+            const pf::Vec3 a = authoredMeshVertexWorld(fighter, batch, batch.vertices[i]);
+            const pf::Vec3 b = authoredMeshVertexWorld(fighter, batch, batch.vertices[i + 1]);
+            const pf::Vec3 c = authoredMeshVertexWorld(fighter, batch, batch.vertices[i + 2]);
+            DrawTriangle3D(toRay(a), toRay(b), toRay(c), color);
+            DrawLine3D(toRay(a), toRay(b), BLACK);
+            DrawLine3D(toRay(b), toRay(c), BLACK);
+            DrawLine3D(toRay(c), toRay(a), BLACK);
+        }
+    }
+}
+
 static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, bool boxes) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
@@ -1488,11 +1511,19 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
             drawAnimationSkeleton(def, fighter, color);
         }
     } else if (hasAnimationPose) {
-        DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
-        drawAnimationSkeleton(def, fighter, color);
+        if (!def.authoredMesh.batches.empty()) {
+            drawAuthoredMesh(def, fighter);
+        } else {
+            DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
+            drawAnimationSkeleton(def, fighter, color);
+        }
     } else {
-        DrawCube(pos, 0.55f, 1.1f, 0.35f, color);
-        DrawCubeWires(pos, 0.55f, 1.1f, 0.35f, BLACK);
+        if (!def.authoredMesh.batches.empty()) {
+            drawAuthoredMesh(def, fighter);
+        } else {
+            DrawCube(pos, 0.55f, 1.1f, 0.35f, color);
+            DrawCubeWires(pos, 0.55f, 1.1f, 0.35f, BLACK);
+        }
     }
 
     if (!def.hasHsdAsset && (!hasAnimationPose || boxes)) {
