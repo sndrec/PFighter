@@ -1474,6 +1474,20 @@ static void drawGameObjects(const pf::World& world, bool boxes) {
         for (const pf::ActiveHitbox& hit : object.activeHitboxes) {
             drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
         }
+        for (const pf::GameObjectHurtboxDefinition& hurtbox : def.hurtboxes) {
+            drawCapsule(
+                {object.position.x + hurtbox.startOffset.x, object.position.y + hurtbox.startOffset.y, hurtbox.startOffset.z},
+                {object.position.x + hurtbox.endOffset.x, object.position.y + hurtbox.endOffset.y, hurtbox.endOffset.z},
+                hurtbox.radius,
+                BLUE);
+        }
+        for (const pf::GameObjectTouchboxDefinition& touchbox : def.touchboxes) {
+            drawCapsule(
+                {object.position.x + touchbox.startOffset.x, object.position.y + touchbox.startOffset.y, touchbox.startOffset.z},
+                {object.position.x + touchbox.endOffset.x, object.position.y + touchbox.endOffset.y, touchbox.endOffset.z},
+                touchbox.radius,
+                SKYBLUE);
+        }
     }
 }
 
@@ -1528,7 +1542,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 340.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 390.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Logic", 24, 336, 16, BLACK);
@@ -1960,6 +1974,62 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 editor.selectedPackageInstruction = 0;
                 editor.status = "Editor: removed object package script";
             }
+        }
+        editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
+        editor.selectedObjectHurtbox = std::clamp(editor.selectedObjectHurtbox, 0, std::max(0, static_cast<int>(object.hurtboxes.size()) - 1));
+        editor.selectedObjectTouchbox = std::clamp(editor.selectedObjectTouchbox, 0, std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
+        DrawText(("Object boxes: hit " + std::to_string(object.hitboxes.size()) +
+                  " hurt " + std::to_string(object.hurtboxes.size()) +
+                  " touch " + std::to_string(object.touchboxes.size())).c_str(), 24, 666, 13, DARKGRAY);
+        if (uiButton({24.0f, 684.0f, 68.0f, 24.0f}, "+ Hit")) {
+            pf::HitboxDefinition hitbox;
+            hitbox.radius = pf::fxFromFloat(0.35f);
+            hitbox.damage = pf::fxFromFloat(3.0f);
+            hitbox.knockbackAngleDegrees = pf::fx(45);
+            hitbox.knockbackBase = pf::fx(20);
+            hitbox.knockbackGrowth = pf::fx(40);
+            object.hitboxes.push_back(hitbox);
+            editor.selectedObjectHitbox = static_cast<int>(object.hitboxes.size()) - 1;
+            editor.status = "Editor: added object hitbox";
+        }
+        if (uiButton({98.0f, 684.0f, 68.0f, 24.0f}, "+ Hurt")) {
+            object.hurtboxes.push_back({{}, {0, pf::fxFromFloat(0.7f), 0}, pf::fxFromFloat(0.35f), pf::HurtboxState::Normal});
+            editor.selectedObjectHurtbox = static_cast<int>(object.hurtboxes.size()) - 1;
+            editor.status = "Editor: added object hurtbox";
+        }
+        if (uiButton({172.0f, 684.0f, 68.0f, 24.0f}, "+ Touch")) {
+            object.touchboxes.push_back({{}, {0, pf::fxFromFloat(0.8f), 0}, pf::fxFromFloat(0.45f), true, true});
+            editor.selectedObjectTouchbox = static_cast<int>(object.touchboxes.size()) - 1;
+            editor.status = "Editor: added object touchbox";
+        }
+        if (!object.hitboxes.empty()) {
+            pf::HitboxDefinition& hitbox = object.hitboxes[static_cast<size_t>(editor.selectedObjectHitbox)];
+            if (uiButton({270.0f, 654.0f, 76.0f, 24.0f}, "Dmg +")) {
+                hitbox.damage += pf::fx(1);
+                editor.status = "Editor: raised object hitbox damage";
+            }
+            if (uiButton({354.0f, 654.0f, 76.0f, 24.0f}, "Dmg -")) {
+                hitbox.damage = std::max(pf::Fix{0}, hitbox.damage - pf::fx(1));
+                editor.status = "Editor: lowered object hitbox damage";
+            }
+            if (uiButton({438.0f, 654.0f, 76.0f, 24.0f}, "- Hit")) {
+                object.hitboxes.erase(object.hitboxes.begin() + editor.selectedObjectHitbox);
+                editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
+                editor.status = "Editor: removed object hitbox";
+                return;
+            }
+            if (uiButton({270.0f, 684.0f, 76.0f, 24.0f}, "Hit +")) {
+                hitbox.radius += pf::fxFromFloat(0.05f);
+                editor.status = "Editor: enlarged object hitbox";
+            }
+            if (uiButton({354.0f, 684.0f, 76.0f, 24.0f}, "Hit -")) {
+                hitbox.radius = std::max(pf::fxFromFloat(0.05f), hitbox.radius - pf::fxFromFloat(0.05f));
+                editor.status = "Editor: shrank object hitbox";
+            }
+        }
+        if (!object.hurtboxes.empty() && uiButton({438.0f, 684.0f, 76.0f, 24.0f}, "Hurt +")) {
+            object.hurtboxes[static_cast<size_t>(editor.selectedObjectHurtbox)].radius += pf::fxFromFloat(0.05f);
+            editor.status = "Editor: enlarged object hurtbox";
         }
     }
 }

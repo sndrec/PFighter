@@ -23,6 +23,9 @@ struct FighterEditor {
     int selectedPackageInstruction = 0;
     int selectedObjectDef = 0;
     int selectedObjectState = 0;
+    int selectedObjectHitbox = 0;
+    int selectedObjectHurtbox = 0;
+    int selectedObjectTouchbox = 0;
     int selectedAnimationClip = 0;
     int selectedAnimationJoint = 0;
     int selectedAnimationTrack = 0;

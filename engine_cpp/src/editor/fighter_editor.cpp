@@ -46,6 +46,18 @@ void FighterEditor::clampToWorld(const World& world) {
             selectedObjectState,
             0,
             std::max(0, static_cast<int>(object.states.size()) - 1));
+        selectedObjectHitbox = std::clamp(
+            selectedObjectHitbox,
+            0,
+            std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
+        selectedObjectHurtbox = std::clamp(
+            selectedObjectHurtbox,
+            0,
+            std::max(0, static_cast<int>(object.hurtboxes.size()) - 1));
+        selectedObjectTouchbox = std::clamp(
+            selectedObjectTouchbox,
+            0,
+            std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
     }
     const bool useImportedClips = def.hsdAsset && !def.hsdAsset->clips.empty();
     const std::vector<AnimationClip>& clips = useImportedClips ? def.hsdAsset->clips : def.authoredClips;
