@@ -1835,6 +1835,38 @@ static void bindObjectStatePackageScriptCallback(
     editor.selectedObjectStateCallback = callback + 1;
 }
 
+static void bindObjectEventPackageScriptCallback(
+    pf::GameObjectDefinition& object,
+    const std::string& scriptName,
+    pf::FighterEditor& editor)
+{
+    const int callback = (editor.selectedObjectEventCallback % 21 + 21) % 21;
+    switch (callback) {
+    case 0: bindObjectPackageScriptCallback(object.onSpawned, scriptName, "spawn", editor); break;
+    case 1: bindObjectPackageScriptCallback(object.onDestroyed, scriptName, "destroy", editor); break;
+    case 2: bindObjectPackageScriptCallback(object.onPickedUp, scriptName, "pickup", editor); break;
+    case 3: bindObjectPackageScriptCallback(object.onDropped, scriptName, "drop", editor); break;
+    case 4: bindObjectPackageScriptCallback(object.onThrown, scriptName, "throw", editor); break;
+    case 5: bindObjectPackageScriptCallback(object.onDamageDealt, scriptName, "damage dealt", editor); break;
+    case 6: bindObjectPackageScriptCallback(object.onDamageReceived, scriptName, "damage received", editor); break;
+    case 7: bindObjectPackageScriptCallback(object.onClanked, scriptName, "clank", editor); break;
+    case 8: bindObjectPackageScriptCallback(object.onReflected, scriptName, "reflect", editor); break;
+    case 9: bindObjectPackageScriptCallback(object.onAbsorbed, scriptName, "absorb", editor); break;
+    case 10: bindObjectPackageScriptCallback(object.onShieldBounced, scriptName, "shield bounce", editor); break;
+    case 11: bindObjectPackageScriptCallback(object.onHitShield, scriptName, "hit shield", editor); break;
+    case 12: bindObjectPackageScriptCallback(object.onEnteredAir, scriptName, "entered air", editor); break;
+    case 13: bindObjectPackageScriptCallback(object.onEnteredHitlag, scriptName, "entered hitlag", editor); break;
+    case 14: bindObjectPackageScriptCallback(object.onExitedHitlag, scriptName, "exited hitlag", editor); break;
+    case 15: bindObjectPackageScriptCallback(object.onAccessory, scriptName, "accessory", editor); break;
+    case 16: bindObjectPackageScriptCallback(object.onTouched, scriptName, "touch", editor); break;
+    case 17: bindObjectPackageScriptCallback(object.onJumpedOn, scriptName, "jumped on", editor); break;
+    case 18: bindObjectPackageScriptCallback(object.onGrabDealt, scriptName, "grab dealt", editor); break;
+    case 19: bindObjectPackageScriptCallback(object.onGrabbedForVictim, scriptName, "grab victim", editor); break;
+    case 20: bindObjectPackageScriptCallback(object.onInteraction, scriptName, "interaction", editor); break;
+    }
+    editor.selectedObjectEventCallback = callback + 1;
+}
+
 static void removePackageScriptCallbackRefs(std::vector<pf::FunctionCall>& calls, const std::string& scriptName) {
     const std::string callback = "script:" + scriptName;
     calls.erase(
@@ -2770,6 +2802,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 }
                 if (uiButton({438.0f, 650.0f, 76.0f, 24.0f}, "BindAcc")) {
                     bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
+                }
+                if (uiButton({606.0f, 650.0f, 58.0f, 24.0f}, "BindEvt")) {
+                    bindObjectEventPackageScriptCallback(object, script.name, editor);
                 }
                 if (!script.instructions.empty()) {
                     pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];

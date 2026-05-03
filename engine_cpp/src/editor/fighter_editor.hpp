@@ -33,6 +33,7 @@ struct FighterEditor {
     int selectedObjectHurtbox = 0;
     int selectedObjectTouchbox = 0;
     int selectedObjectStateCallback = 0;
+    int selectedObjectEventCallback = 0;
     ObjectEditorPanel objectPanel = ObjectEditorPanel::Logic;
     int selectedAnimationClip = 0;
     int selectedAnimationJoint = 0;
