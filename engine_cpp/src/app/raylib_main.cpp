@@ -2025,6 +2025,20 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended SpawnObject instruction for " + object.name;
         }
     }
+    if (uiButton({365.0f, 682.0f, 68.0f, 24.0f}, "+ If")) {
+        if (script && !def.packageVariables.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SkipIfVarLessThanImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended branch condition to " + script->name;
+        }
+    }
+    if (uiButton({440.0f, 682.0f, 68.0f, 24.0f}, "+ Jump")) {
+        if (script) {
+            script->instructions.push_back({pf::PackageScriptOp::JumpRelative, -1, -1, -1, 1, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended jump to " + script->name;
+        }
+    }
     if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind In")) {
         if (script) {
             bindPackageScriptCallback(state.onEnter, script->name, "enter", editor);
@@ -2409,6 +2423,18 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
                         editor.status = "Editor: removed object script instruction";
                     }
+                }
+                if (uiButton({522.0f, 590.0f, 76.0f, 24.0f}, "+ If")) {
+                    if (!object.packageVariables.empty()) {
+                        script.instructions.push_back({pf::PackageScriptOp::SkipIfVarLessThanImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
+                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                        editor.status = "Editor: appended object branch condition";
+                    }
+                }
+                if (uiButton({522.0f, 620.0f, 76.0f, 24.0f}, "+ Jump")) {
+                    script.instructions.push_back({pf::PackageScriptOp::JumpRelative, -1, -1, -1, 1, 0, {}});
+                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                    editor.status = "Editor: appended object jump";
                 }
                 if (uiButton({354.0f, 650.0f, 76.0f, 24.0f}, "BindSp")) {
                     bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
