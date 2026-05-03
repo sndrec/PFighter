@@ -4635,8 +4635,9 @@ int main(int argc, char** argv) {
         16,
         {
             {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 1, -1, -1, 3, 0, {}},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 1, 0, {}},
-            {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 3, 0, {}},
+            {pf::PackageScriptOp::SkipIfVarLessThanVar, -1, 0, 1, 0, 0, {}},
             {pf::PackageScriptOp::JumpRelative, -1, -1, -1, 2, 0, {}},
             {pf::PackageScriptOp::JumpRelative, -1, -1, -1, -3, 0, {}},
         },
@@ -4788,8 +4789,11 @@ int main(int argc, char** argv) {
     invalidObjectVariableNameWritePackage.objects[1].packageVariables.push_back(invalidObjectVariableNameWritePackage.objects[1].packageVariables[0]);
     const bool invalidPackageObjectVariableNameWriteRejected = pf::writeFighterPackage(invalidObjectVariableNameWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidScriptBranchWritePackage = sourcePackage;
-    invalidScriptBranchWritePackage.fighters[0].packageScripts[1].instructions[3].intValue = 99;
+    invalidScriptBranchWritePackage.fighters[0].packageScripts[1].instructions[4].intValue = 99;
     const bool invalidPackageBranchWriteRejected = pf::writeFighterPackage(invalidScriptBranchWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidVarBranchWritePackage = sourcePackage;
+    invalidVarBranchWritePackage.fighters[0].packageScripts[1].instructions[3].srcB = 999;
+    const bool invalidPackageVarBranchWriteRejected = pf::writeFighterPackage(invalidVarBranchWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidScriptDanglingBranchWritePackage = sourcePackage;
     invalidScriptDanglingBranchWritePackage.fighters[0].packageScripts[1].instructions.push_back({
         pf::PackageScriptOp::SkipIfVarLessThanImmediate,
@@ -5136,6 +5140,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
               << " fighter_package_invalid_object_variable_name_write_rejected=" << invalidPackageObjectVariableNameWriteRejected
               << " fighter_package_invalid_branch_write_rejected=" << invalidPackageBranchWriteRejected
+              << " fighter_package_invalid_var_branch_write_rejected=" << invalidPackageVarBranchWriteRejected
               << " fighter_package_invalid_dangling_branch_write_rejected=" << invalidPackageDanglingBranchWriteRejected
               << " fighter_package_invalid_switch_write_rejected=" << invalidPackageSwitchWriteRejected
               << " fighter_package_invalid_spawn_fighter_write_rejected=" << invalidPackageSpawnFighterWriteRejected

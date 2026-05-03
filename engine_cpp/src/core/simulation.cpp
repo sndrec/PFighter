@@ -6865,6 +6865,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SkipIfVarLessThanImmediate:
                 instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
                 continue;
+            case PackageScriptOp::SkipIfVarLessThanVar:
+                instructionIndex += var(instruction.srcA) < var(instruction.srcB) ? 2 : 1;
+                continue;
             case PackageScriptOp::JumpRelative: {
                 const int target = static_cast<int>(instructionIndex) + instruction.intValue;
                 if (target < 0 || target > static_cast<int>(found->instructions.size())) {

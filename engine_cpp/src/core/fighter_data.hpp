@@ -454,6 +454,7 @@ enum class PackageScriptOp : uint8_t {
     ChangeState,
     SpawnObject,
     SkipIfVarLessThanImmediate,
+    SkipIfVarLessThanVar,
     JumpRelative,
     SwitchFighterDefinition,
     SpawnFighter,

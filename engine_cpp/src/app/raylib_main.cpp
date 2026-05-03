@@ -1012,6 +1012,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
+    case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
     case pf::PackageScriptOp::JumpRelative: return "Jump";
     case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
     case pf::PackageScriptOp::SpawnFighter: return "SpawnF";
@@ -1130,6 +1131,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
         label += " v" + std::to_string(instruction.dst) + " < " + std::to_string(instruction.intValue);
         break;
+    case pf::PackageScriptOp::SkipIfVarLessThanVar:
+        label += " v" + std::to_string(instruction.srcA) + " < v" + std::to_string(instruction.srcB);
+        break;
     case pf::PackageScriptOp::JumpRelative:
         label += " " + std::to_string(instruction.intValue);
         break;
@@ -1231,7 +1235,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetFacingFromVar: return pf::PackageScriptOp::ChangeState;
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
-    case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::JumpRelative;
+    case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
+    case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::JumpRelative;
     case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::SwitchFighterDefinition;
     case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::SpawnFighter;
     case pf::PackageScriptOp::SpawnFighter: return pf::PackageScriptOp::Nop;

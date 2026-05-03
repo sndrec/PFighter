@@ -237,6 +237,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
+    case PackageScriptOp::SkipIfVarLessThanVar:
     case PackageScriptOp::JumpRelative:
     case PackageScriptOp::SwitchFighterDefinition:
     case PackageScriptOp::SpawnFighter:
@@ -1626,6 +1627,13 @@ void validatePackageScriptInstruction(
         break;
     case PackageScriptOp::SkipIfVarLessThanImmediate:
         requireVariableIndex(instruction.dst, variableCount, "condition");
+        if (instructionIndex + 2 > instructionCount) {
+            throw std::runtime_error("fighter package script branch target is invalid");
+        }
+        break;
+    case PackageScriptOp::SkipIfVarLessThanVar:
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
         if (instructionIndex + 2 > instructionCount) {
             throw std::runtime_error("fighter package script branch target is invalid");
         }

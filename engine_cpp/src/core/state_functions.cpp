@@ -2670,6 +2670,9 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SkipIfVarLessThanImmediate:
             instructionIndex += packageVar(fighter, instruction.dst) < instruction.intValue ? 2 : 1;
             continue;
+        case PackageScriptOp::SkipIfVarLessThanVar:
+            instructionIndex += packageVar(fighter, instruction.srcA) < packageVar(fighter, instruction.srcB) ? 2 : 1;
+            continue;
         case PackageScriptOp::JumpRelative: {
             const int target = static_cast<int>(instructionIndex) + instruction.intValue;
             if (target < 0 || target > static_cast<int>(found->instructions.size())) {
