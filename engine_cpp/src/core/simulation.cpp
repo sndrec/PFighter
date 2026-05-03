@@ -772,8 +772,19 @@ static std::array<Fix, 16> fighterModelMatrix(const FighterDefinition& def, cons
     };
 }
 
-static std::vector<JointWorldTransform> fighterHsdWorldTransforms(const FighterDefinition& def, const FighterRuntime& fighter) {
-    std::vector<JointWorldTransform> localTransforms = jointWorldTransforms(def.hsdAsset->skeleton, fighter.hsdPose);
+static const std::vector<AnimationJoint>* fighterAnimationSkeleton(const FighterDefinition& def) {
+    if (def.hasHsdAsset && def.hsdAsset) {
+        return &def.hsdAsset->skeleton;
+    }
+    return def.authoredSkeleton.empty() ? nullptr : &def.authoredSkeleton;
+}
+
+static std::vector<JointWorldTransform> fighterWorldTransforms(const FighterDefinition& def, const FighterRuntime& fighter) {
+    const std::vector<AnimationJoint>* skeleton = fighterAnimationSkeleton(def);
+    if (!skeleton) {
+        return {};
+    }
+    std::vector<JointWorldTransform> localTransforms = jointWorldTransforms(*skeleton, fighter.hsdPose);
     const std::array<Fix, 16> modelMatrix = fighterModelMatrix(def, fighter);
     for (JointWorldTransform& transform : localTransforms) {
         transform.matrix = multiplyMatrix4(modelMatrix, transform.matrix);
@@ -2461,21 +2472,32 @@ static int fallbackActionIndex(const std::string& animation) {
 }
 
 static const AnimationClip* clipForState(const FighterDefinition& def, const FighterState& state, int actionIndexOverride = -1) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
-        return nullptr;
-    }
     const int actionIndex = actionIndexOverride >= 0
         ? actionIndexOverride
         : (state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation));
-    if (actionIndex >= 0) {
+    if (def.hasHsdAsset && def.hsdAsset && actionIndex >= 0) {
         if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, actionIndex)) {
             return clip;
         }
     }
-    const std::string suffix = "_ACTION_" + state.animation + "_figatree";
-    for (const AnimationClip& clip : def.hsdAsset->clips) {
-        if (clip.name.size() >= suffix.size() &&
-            clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0) {
+    if (actionIndex >= 0) {
+        for (const AnimationClip& clip : def.authoredClips) {
+            if (clip.actionIndex == actionIndex) {
+                return &clip;
+            }
+        }
+    }
+    if (def.hasHsdAsset && def.hsdAsset) {
+        const std::string suffix = "_ACTION_" + state.animation + "_figatree";
+        for (const AnimationClip& clip : def.hsdAsset->clips) {
+            if (clip.name.size() >= suffix.size() &&
+                clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0) {
+                return &clip;
+            }
+        }
+    }
+    for (const AnimationClip& clip : def.authoredClips) {
+        if (clip.name == state.animation) {
             return &clip;
         }
     }
@@ -2662,13 +2684,13 @@ static void evaluateImportedHurtboxes(const FighterDefinition& def, FighterRunti
 }
 
 static void refreshHsdWorldPose(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
+    if (!fighterAnimationSkeleton(def)) {
         fighter.hsdJointWorldTransforms.clear();
         fighter.hsdJointWorldPositions.clear();
         fighter.hsdHurtboxCapsules.clear();
         return;
     }
-    fighter.hsdJointWorldTransforms = fighterHsdWorldTransforms(def, fighter);
+    fighter.hsdJointWorldTransforms = fighterWorldTransforms(def, fighter);
     fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
     evaluateImportedHurtboxes(def, fighter);
 }
@@ -2727,6 +2749,10 @@ static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntim
 static void evaluatePose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
     const AnimationClip* clip = clipForState(def, state, fighter.animationActionIndexOverride);
     if (clip) {
+        const std::vector<AnimationJoint>* skeleton = fighterAnimationSkeleton(def);
+        if (!skeleton) {
+            return;
+        }
         constexpr float kHalfPi = 1.57079632679f;
         const AnimationPose previousVisiblePose = fighter.hsdPose;
         Fix frame = fighter.animationFrame;
@@ -2736,7 +2762,7 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         } else if (fighter.stateAnimationLengthOverride > 0 && clip->frameCount > 0) {
             frame = fxMul(clip->frameCount, fxDiv(fx(frameInState(fighter)), fx(fighter.stateAnimationLengthOverride)));
         }
-        fighter.hsdPose = evaluateClip(def.hsdAsset->skeleton, *clip, frame);
+        fighter.hsdPose = evaluateClip(*skeleton, *clip, frame);
         fighter.previousHsdTransN = fighter.hsdTransN;
         fighter.hsdTransN = scaledVec3(extractMeleeAnimTranslation(def, fighter, *clip, fighter.hsdPose), def.properties.modelScale);
         if (frameInState(fighter) <= 1) {
@@ -2812,10 +2838,10 @@ bool previewFighterAnimation(World& world, size_t fighterIndex, int actionIndex,
         return false;
     }
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    if (!def.hasHsdAsset || !def.hsdAsset || !findClipByActionIndex(*def.hsdAsset, actionIndex)) {
+    if (fighter.state < 0 || fighter.state >= static_cast<int>(def.states.size())) {
         return false;
     }
-    if (fighter.state < 0 || fighter.state >= static_cast<int>(def.states.size())) {
+    if (!clipForState(def, def.states[static_cast<size_t>(fighter.state)], actionIndex)) {
         return false;
     }
     fighter.animationActionIndexOverride = actionIndex;
@@ -6179,7 +6205,7 @@ static Vec3 meleeInitialTopNFromXRotN(const FighterDefinition& def, const Fighte
     AnimationPose pose = bindPose(def.hsdAsset->skeleton);
     FighterRuntime temp = fighter;
     temp.hsdPose = pose;
-    const std::vector<JointWorldTransform> transforms = fighterHsdWorldTransforms(def, temp);
+    const std::vector<JointWorldTransform> transforms = fighterWorldTransforms(def, temp);
     const int transN = commonPartBone(def, fighter, 1);
     const int xRotN = commonPartBone(def, fighter, 2);
     if (transN < 0 || xRotN < 0 ||

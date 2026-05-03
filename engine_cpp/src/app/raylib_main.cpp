@@ -1111,6 +1111,20 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
     def.hasHsdAsset = false;
     def.authoredEcb.enabled = true;
     def.properties.common = common;
+    def.authoredSkeleton = {
+        {-1, "Root", 0, {0, 0, 0}, {0, 0, 0}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
+    };
+    pf::AnimationClip waitClip;
+    waitClip.name = "Wait";
+    waitClip.actionIndex = 0;
+    waitClip.frameCount = pf::fx(60);
+    waitClip.tracks = {
+        {0, pf::AnimationChannel::TranslateY, {
+            {0, 0, 0, pf::AnimationInterpolation::Linear},
+            {pf::fx(60), 0, 0, pf::AnimationInterpolation::Linear},
+        }},
+    };
+    def.authoredClips = {waitClip};
     def.hurtboxes = {
         {pf::BoneId::Hip, {0, pf::fxFromFloat(-0.45f), 0}, {0, pf::fxFromFloat(0.55f), 0}, pf::fxFromFloat(0.45f), pf::HurtboxState::Normal, true},
         {pf::BoneId::Head, {0, pf::fxFromFloat(-0.2f), 0}, {0, pf::fxFromFloat(0.2f), 0}, pf::fxFromFloat(0.32f), pf::HurtboxState::Normal, true},
@@ -1119,6 +1133,7 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
     pf::FighterState wait;
     wait.name = "Wait";
     wait.animation = "Wait";
+    wait.animationActionIndex = 0;
     wait.animationLengthFrames = 60;
     wait.loopAnimation = true;
     wait.allowSlideoff = true;
@@ -1578,30 +1593,49 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
         return;
     }
-    const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Animation Preview", 24, 336, 16, BLACK);
-    if (!def.hsdAsset || def.hsdAsset->clips.empty()) {
-        DrawText("No imported animation clips on this fighter", 24, 364, 13, GRAY);
+    std::vector<pf::AnimationClip>* authoredClips = &def.authoredClips;
+    const std::vector<pf::AnimationClip>* clips = def.hsdAsset && !def.hsdAsset->clips.empty()
+        ? &def.hsdAsset->clips
+        : authoredClips;
+    if (clips->empty()) {
+        DrawText("No animation clips on this fighter", 24, 364, 13, GRAY);
+        if (uiButton({352.0f, 362.0f, 72.0f, 24.0f}, "+ Clip")) {
+            pf::AnimationClip clip;
+            clip.name = "Wait";
+            clip.actionIndex = 0;
+            clip.frameCount = pf::fx(60);
+            def.authoredSkeleton = def.authoredSkeleton.empty()
+                ? std::vector<pf::AnimationJoint>{{-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}}}
+                : def.authoredSkeleton;
+            def.authoredClips.push_back(std::move(clip));
+            editor.selectedAnimationClip = 0;
+            editor.status = "Editor: created authored animation clip";
+        }
         return;
     }
 
     editor.selectedAnimationClip = std::clamp(
         editor.selectedAnimationClip,
         0,
-        static_cast<int>(def.hsdAsset->clips.size()) - 1);
-    const pf::AnimationClip& selectedClip = def.hsdAsset->clips[static_cast<size_t>(editor.selectedAnimationClip)];
+        static_cast<int>(clips->size()) - 1);
+    pf::AnimationClip* selectedAuthoredClip = def.authoredClips.empty()
+        ? nullptr
+        : &def.authoredClips[static_cast<size_t>(std::clamp(editor.selectedAnimationClip, 0, static_cast<int>(def.authoredClips.size()) - 1))];
+    const pf::AnimationClip& selectedClip = (*clips)[static_cast<size_t>(editor.selectedAnimationClip)];
     const int maxFrame = std::max(0, static_cast<int>(pf::fxToFloat(selectedClip.frameCount)) - 1);
     editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, maxFrame);
 
-    DrawText(("Clips: " + std::to_string(def.hsdAsset->clips.size())).c_str(), 24, 362, 13, DARKGRAY);
+    DrawText(("Clips: " + std::to_string(clips->size()) + (clips == authoredClips ? " authored" : " imported")).c_str(), 24, 362, 13, DARKGRAY);
     DrawText(("Selected: action " + std::to_string(selectedClip.actionIndex) +
               " frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(maxFrame)).c_str(), 24, 382, 13, DARKGRAY);
-    const int visibleClips = std::min(6, static_cast<int>(def.hsdAsset->clips.size()));
+    const int visibleClips = std::min(6, static_cast<int>(clips->size()));
     for (int row = 0; row < visibleClips; ++row) {
-        const pf::AnimationClip& clip = def.hsdAsset->clips[static_cast<size_t>(row)];
+        const pf::AnimationClip& clip = (*clips)[static_cast<size_t>(row)];
         const std::string label = std::to_string(clip.actionIndex) + " " + clip.name;
         if (uiListRow({24.0f, 410.0f + 24.0f * row, 310.0f, 22.0f}, label, row == editor.selectedAnimationClip)) {
             editor.selectedAnimationClip = row;
@@ -1626,6 +1660,32 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     if (uiButton({352.0f, 440.0f, 72.0f, 24.0f}, "Apply")) {
         editor.animationPreviewActive = true;
         editor.paused = true;
+    }
+    if (clips == authoredClips && selectedAuthoredClip && uiButton({352.0f, 470.0f, 72.0f, 24.0f}, "+ Key")) {
+        pf::AnimationClip& clip = *selectedAuthoredClip;
+        if (clip.tracks.empty()) {
+            clip.tracks.push_back({0, pf::AnimationChannel::TranslateY, {}});
+        }
+        pf::AnimationTrack& track = clip.tracks.front();
+        track.joint = 0;
+        track.channel = pf::AnimationChannel::TranslateY;
+        track.keys.push_back({pf::fx(editor.animationScrubFrame), pf::fxFromFloat(0.1f * static_cast<float>(track.keys.size() % 4)), 0, pf::AnimationInterpolation::Linear});
+        std::sort(track.keys.begin(), track.keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
+            return a.frame < b.frame;
+        });
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+        editor.status = "Editor: inserted authored animation key";
+    }
+    if (clips == authoredClips && uiButton({434.0f, 470.0f, 72.0f, 24.0f}, "+ Clip")) {
+        pf::AnimationClip clip;
+        clip.name = uniqueFighterName(world, "Clip");
+        clip.actionIndex = static_cast<int>(def.authoredClips.size());
+        clip.frameCount = pf::fx(60);
+        def.authoredClips.push_back(std::move(clip));
+        editor.selectedAnimationClip = static_cast<int>(def.authoredClips.size()) - 1;
+        editor.animationScrubFrame = 0;
+        editor.status = "Editor: added authored animation clip";
     }
     if (uiButton({434.0f, 440.0f, 72.0f, 24.0f}, "Clear")) {
         fighter.animationActionIndexOverride = -1;

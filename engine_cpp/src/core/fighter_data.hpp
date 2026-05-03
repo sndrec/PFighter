@@ -636,6 +636,8 @@ struct FighterDefinition {
     std::shared_ptr<const HsdFighterAnimationAsset> hsdAsset;
     bool hasHsdAsset = false;
     FighterEcbDefinition authoredEcb;
+    std::vector<AnimationJoint> authoredSkeleton;
+    std::vector<AnimationClip> authoredClips;
     std::vector<PackageVariableDefinition> packageVariables;
     std::vector<PackageScript> packageScripts;
     std::vector<HurtboxDefinition> hurtboxes;

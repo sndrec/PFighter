@@ -372,6 +372,32 @@ bool validBoneId(BoneId bone) {
     return false;
 }
 
+bool validAnimationChannel(AnimationChannel channel) {
+    switch (channel) {
+    case AnimationChannel::TranslateX:
+    case AnimationChannel::TranslateY:
+    case AnimationChannel::TranslateZ:
+    case AnimationChannel::RotateX:
+    case AnimationChannel::RotateY:
+    case AnimationChannel::RotateZ:
+    case AnimationChannel::ScaleX:
+    case AnimationChannel::ScaleY:
+    case AnimationChannel::ScaleZ:
+        return true;
+    }
+    return false;
+}
+
+bool validAnimationInterpolation(AnimationInterpolation interpolation) {
+    switch (interpolation) {
+    case AnimationInterpolation::Constant:
+    case AnimationInterpolation::Linear:
+    case AnimationInterpolation::Spline:
+        return true;
+    }
+    return false;
+}
+
 template <typename Enum, typename ValidFn>
 void writeEnum(PackageWriter& writer, Enum value, ValidFn valid, const char* label) {
     if (!valid(value)) {
@@ -1099,11 +1125,95 @@ FighterEcbDefinition readFighterEcbDefinition(PackageReader& reader) {
     return ecb;
 }
 
+void writeAnimationJoint(PackageWriter& writer, const AnimationJoint& joint) {
+    writer.writeI32(joint.parent);
+    writer.writeString(joint.name);
+    writer.writeU32(joint.flags);
+    writeVec3(writer, joint.translation);
+    writeVec3(writer, joint.rotation);
+    writeVec3(writer, joint.scale);
+}
+
+AnimationJoint readAnimationJoint(PackageReader& reader) {
+    AnimationJoint joint;
+    joint.parent = reader.readI32();
+    joint.name = reader.readString();
+    joint.flags = reader.readU32();
+    joint.translation = readVec3(reader);
+    joint.rotation = readVec3(reader);
+    joint.scale = readVec3(reader);
+    return joint;
+}
+
+void writeAnimationKey(PackageWriter& writer, const AnimationKey& key) {
+    writer.writeI32(key.frame);
+    writer.writeI32(key.value);
+    writer.writeI32(key.tangent);
+    writeEnum(writer, key.interpolation, validAnimationInterpolation, "animation interpolation");
+}
+
+AnimationKey readAnimationKey(PackageReader& reader) {
+    AnimationKey key;
+    key.frame = reader.readI32();
+    key.value = reader.readI32();
+    key.tangent = reader.readI32();
+    key.interpolation = readEnum<AnimationInterpolation>(reader, validAnimationInterpolation, "animation interpolation");
+    return key;
+}
+
+void writeAnimationTrack(PackageWriter& writer, const AnimationTrack& track) {
+    writer.writeI32(track.joint);
+    writeEnum(writer, track.channel, validAnimationChannel, "animation channel");
+    writeVector(writer, track.keys, [&](const AnimationKey& key) {
+        writeAnimationKey(writer, key);
+    });
+}
+
+AnimationTrack readAnimationTrack(PackageReader& reader) {
+    AnimationTrack track;
+    track.joint = reader.readI32();
+    track.channel = readEnum<AnimationChannel>(reader, validAnimationChannel, "animation channel");
+    track.keys = readVector<AnimationKey>(reader, kMaxSubactions, "animation key", [&]() {
+        return readAnimationKey(reader);
+    });
+    return track;
+}
+
+void writeAnimationClip(PackageWriter& writer, const AnimationClip& clip) {
+    writer.writeString(clip.name);
+    writer.writeI32(clip.actionIndex);
+    writer.writeU32(clip.actionFlags);
+    writer.writeI32(clip.defaultBlendFrames);
+    writer.writeI32(clip.frameCount);
+    writeVector(writer, clip.tracks, [&](const AnimationTrack& track) {
+        writeAnimationTrack(writer, track);
+    });
+}
+
+AnimationClip readAnimationClip(PackageReader& reader) {
+    AnimationClip clip;
+    clip.name = reader.readString();
+    clip.actionIndex = reader.readI32();
+    clip.actionFlags = reader.readU32();
+    clip.defaultBlendFrames = reader.readI32();
+    clip.frameCount = reader.readI32();
+    clip.tracks = readVector<AnimationTrack>(reader, kMaxSubactions, "animation track", [&]() {
+        return readAnimationTrack(reader);
+    });
+    return clip;
+}
+
 void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
     writer.writeString(fighter.name);
     writeFighterProperties(writer, fighter.properties);
     writeShieldDefinition(writer, fighter.shield);
     writeFighterEcbDefinition(writer, fighter.authoredEcb);
+    writeVector(writer, fighter.authoredSkeleton, [&](const AnimationJoint& joint) {
+        writeAnimationJoint(writer, joint);
+    });
+    writeVector(writer, fighter.authoredClips, [&](const AnimationClip& clip) {
+        writeAnimationClip(writer, clip);
+    });
     writer.writeBool(fighter.hasHsdAsset);
     const int32_t assetIndex = assetIndexFor(package, fighter.hsdAsset);
     if (fighter.hasHsdAsset && assetIndex < 0) {
@@ -1137,6 +1247,12 @@ FighterDefinition readFighterDefinition(
     fighter.properties = readFighterProperties(reader);
     fighter.shield = readShieldDefinition(reader);
     fighter.authoredEcb = readFighterEcbDefinition(reader);
+    fighter.authoredSkeleton = readVector<AnimationJoint>(reader, kMaxHurtboxes, "authored skeleton joint", [&]() {
+        return readAnimationJoint(reader);
+    });
+    fighter.authoredClips = readVector<AnimationClip>(reader, kMaxStates, "authored animation clip", [&]() {
+        return readAnimationClip(reader);
+    });
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();
