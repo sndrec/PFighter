@@ -1757,6 +1757,46 @@ static pf::HsdFighterMesh makeEditorTriangleMesh() {
     return mesh;
 }
 
+static int authoredMeshVertexCount(const pf::HsdFighterMesh& mesh) {
+    int count = 0;
+    for (const pf::HsdMeshBatch& batch : mesh.batches) {
+        count += static_cast<int>(batch.vertices.size());
+    }
+    return count;
+}
+
+static pf::Vec2 authoredMeshSize(const pf::HsdFighterMesh& mesh) {
+    bool haveVertex = false;
+    pf::Fix minX = 0;
+    pf::Fix maxX = 0;
+    pf::Fix minY = 0;
+    pf::Fix maxY = 0;
+    for (const pf::HsdMeshBatch& batch : mesh.batches) {
+        for (const pf::HsdMeshVertex& vertex : batch.vertices) {
+            if (!haveVertex) {
+                minX = maxX = vertex.position.x;
+                minY = maxY = vertex.position.y;
+                haveVertex = true;
+            } else {
+                minX = std::min(minX, vertex.position.x);
+                maxX = std::max(maxX, vertex.position.x);
+                minY = std::min(minY, vertex.position.y);
+                maxY = std::max(maxY, vertex.position.y);
+            }
+        }
+    }
+    return haveVertex ? pf::Vec2{maxX - minX, maxY - minY} : pf::Vec2{};
+}
+
+static void scaleAuthoredMesh(pf::HsdFighterMesh& mesh, pf::Fix scaleX, pf::Fix scaleY) {
+    for (pf::HsdMeshBatch& batch : mesh.batches) {
+        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+            vertex.position.x = pf::fxMul(vertex.position.x, scaleX);
+            vertex.position.y = pf::fxMul(vertex.position.y, scaleY);
+        }
+    }
+}
+
 static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
     std::sort(keys.begin(), keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
         return a.frame < b.frame;
@@ -2894,6 +2934,28 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         ensureAuthoredRootJoint(def);
         def.authoredMesh = makeEditorTriangleMesh();
         editor.status = "Editor: seeded authored mesh triangle batch";
+    }
+    if (!def.authoredMesh.batches.empty()) {
+        const pf::Vec2 meshSize = authoredMeshSize(def.authoredMesh);
+        DrawText(("Mesh verts=" + std::to_string(authoredMeshVertexCount(def.authoredMesh)) +
+                  " size " + std::to_string(pf::fxToFloat(meshSize.x)) +
+                  "," + std::to_string(pf::fxToFloat(meshSize.y))).c_str(), 270, 428, 12, DARKGRAY);
+        if (uiButton({270.0f, 398.0f, 54.0f, 22.0f}, "W+")) {
+            scaleAuthoredMesh(def.authoredMesh, pf::fxFromFloat(1.1f), pf::fx(1));
+            editor.status = "Editor: widened authored mesh";
+        }
+        if (uiButton({330.0f, 398.0f, 54.0f, 22.0f}, "W-")) {
+            scaleAuthoredMesh(def.authoredMesh, pf::fxFromFloat(0.9f), pf::fx(1));
+            editor.status = "Editor: narrowed authored mesh";
+        }
+        if (uiButton({390.0f, 398.0f, 54.0f, 22.0f}, "H+")) {
+            scaleAuthoredMesh(def.authoredMesh, pf::fx(1), pf::fxFromFloat(1.1f));
+            editor.status = "Editor: stretched authored mesh";
+        }
+        if (uiButton({450.0f, 398.0f, 54.0f, 22.0f}, "H-")) {
+            scaleAuthoredMesh(def.authoredMesh, pf::fx(1), pf::fxFromFloat(0.9f));
+            editor.status = "Editor: shortened authored mesh";
+        }
     }
 
     DrawText("Objects / Articles", 24, 436, 13, DARKGRAY);
