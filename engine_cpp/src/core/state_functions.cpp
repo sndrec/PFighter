@@ -2604,6 +2604,12 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SetVarFacing:
             setPackageVar(fighter, instruction.dst, fighter.facing);
             break;
+        case PackageScriptOp::SetVarButtonDown:
+            setPackageVar(fighter, instruction.dst, (fighter.input.frames[0].buttons & instruction.intValue) != 0 ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarButtonPressed:
+            setPackageVar(fighter, instruction.dst, fighter.input.justPressed(static_cast<uint16_t>(instruction.intValue)) ? 1 : 0);
+            break;
         case PackageScriptOp::SetGroundVelocity:
             fighter.groundVelocity = instruction.fixValue;
             break;

@@ -992,6 +992,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFrame: return "ReadFrame";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
+    case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
+    case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
     case pf::PackageScriptOp::SetGroundVelocity: return "GroundVel";
     case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
@@ -1006,6 +1008,31 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     return "Op";
 }
 
+static const char* packageInputButtonName(int mask) {
+    switch (mask) {
+    case pf::ButtonJump: return "Jump";
+    case pf::ButtonSpecial: return "Special";
+    case pf::ButtonAttack: return "Attack";
+    case pf::ButtonShield: return "Shield";
+    case pf::ButtonGrab: return "Grab";
+    case pf::ButtonTaunt: return "Taunt";
+    case pf::ButtonPause: return "Pause";
+    }
+    return "Button";
+}
+
+static int nextPackageInputButton(int mask) {
+    switch (mask) {
+    case pf::ButtonJump: return pf::ButtonSpecial;
+    case pf::ButtonSpecial: return pf::ButtonAttack;
+    case pf::ButtonAttack: return pf::ButtonShield;
+    case pf::ButtonShield: return pf::ButtonGrab;
+    case pf::ButtonGrab: return pf::ButtonTaunt;
+    case pf::ButtonTaunt: return pf::ButtonPause;
+    default: return pf::ButtonJump;
+    }
+}
+
 static std::string packageInstructionLabel(const pf::PackageScriptInstruction& instruction) {
     std::string label = packageScriptOpName(instruction.op);
     switch (instruction.op) {
@@ -1017,6 +1044,10 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
         label += " v" + std::to_string(instruction.dst);
+        break;
+    case pf::PackageScriptOp::SetVarButtonDown:
+    case pf::PackageScriptOp::SetVarButtonPressed:
+        label += " v" + std::to_string(instruction.dst) + " " + packageInputButtonName(instruction.intValue);
         break;
     case pf::PackageScriptOp::AddVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
@@ -1119,7 +1150,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::SetVarFrame;
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
-    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetGroundVelocity;
+    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarButtonDown;
+    case pf::PackageScriptOp::SetVarButtonDown: return pf::PackageScriptOp::SetVarButtonPressed;
+    case pf::PackageScriptOp::SetVarButtonPressed: return pf::PackageScriptOp::SetGroundVelocity;
     case pf::PackageScriptOp::SetGroundVelocity: return pf::PackageScriptOp::SetAirVelocityX;
     case pf::PackageScriptOp::SetAirVelocityX: return pf::PackageScriptOp::SetAirVelocityY;
     case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetFacing;
@@ -1134,12 +1167,19 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     return pf::PackageScriptOp::Nop;
 }
 
+static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
+    return op != pf::PackageScriptOp::SwitchFighterDefinition &&
+        op != pf::PackageScriptOp::SpawnFighter &&
+        op != pf::PackageScriptOp::SetVarButtonDown &&
+        op != pf::PackageScriptOp::SetVarButtonPressed;
+}
+
 static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
-    const pf::PackageScriptOp next = nextPackageScriptOp(op);
-    return next == pf::PackageScriptOp::SwitchFighterDefinition ||
-            next == pf::PackageScriptOp::SpawnFighter
-        ? pf::PackageScriptOp::Nop
-        : next;
+    pf::PackageScriptOp next = nextPackageScriptOp(op);
+    while (!packageScriptOpAllowedForObject(next)) {
+        next = nextPackageScriptOp(next);
+    }
+    return next;
 }
 
 static void normalizePackageInstruction(
@@ -1162,6 +1202,12 @@ static void normalizePackageInstruction(
 
     if (instruction.op == pf::PackageScriptOp::SetFacing && instruction.intValue == 0) {
         instruction.intValue = 1;
+    }
+    if ((instruction.op == pf::PackageScriptOp::SetVarButtonDown ||
+         instruction.op == pf::PackageScriptOp::SetVarButtonPressed) &&
+        instruction.intValue == 0)
+    {
+        instruction.intValue = pf::ButtonJump;
     }
     if (instruction.op == pf::PackageScriptOp::ChangeState && instruction.text.empty() && !def.states.empty()) {
         const int stateIndex = std::clamp(selectedState, 0, static_cast<int>(def.states.size()) - 1);
@@ -2067,6 +2113,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended SpawnObject instruction for " + object.name;
         }
     }
+    if (uiButton({515.0f, 442.0f, 68.0f, 24.0f}, "+ Btn")) {
+        if (script && !def.packageVariables.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SetVarButtonPressed, editor.selectedPackageVariable, -1, -1, pf::ButtonAttack, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended button input read to " + script->name;
+        }
+    }
     if (uiButton({365.0f, 682.0f, 68.0f, 24.0f}, "+ If")) {
         if (script && !def.packageVariables.empty()) {
             script->instructions.push_back({pf::PackageScriptOp::SkipIfVarLessThanImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
@@ -2132,6 +2185,14 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 instruction.srcA = (std::max(0, instruction.srcA) + 1) % static_cast<int>(def.packageVariables.size());
                 instruction.srcB = (std::max(0, instruction.srcB) + 1) % static_cast<int>(def.packageVariables.size());
                 editor.status = "Editor: cycled selected script source variables";
+            }
+        }
+        if (uiButton({515.0f, 532.0f, 68.0f, 24.0f}, "Btn")) {
+            if (instruction.op == pf::PackageScriptOp::SetVarButtonDown ||
+                instruction.op == pf::PackageScriptOp::SetVarButtonPressed)
+            {
+                instruction.intValue = nextPackageInputButton(instruction.intValue);
+                editor.status = "Editor: cycled selected script input button";
             }
         }
         if (uiButton({365.0f, 562.0f, 68.0f, 24.0f}, "Val -")) {

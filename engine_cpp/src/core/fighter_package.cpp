@@ -23,6 +23,8 @@ constexpr uint32_t kMaxInterrupts = 4096;
 constexpr uint32_t kMaxSubactions = 65536;
 constexpr uint32_t kMaxHitboxes = 4096;
 constexpr uint32_t kMaxHurtboxes = 4096;
+constexpr int32_t kPackageInputButtonMask =
+    ButtonJump | ButtonSpecial | ButtonAttack | ButtonShield | ButtonGrab | ButtonPause | ButtonTaunt;
 constexpr uint32_t kMaxTouchboxes = 4096;
 constexpr uint32_t kMaxAnimationJoints = 4096;
 constexpr uint32_t kMaxAnimationClips = 2048;
@@ -215,6 +217,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFrame:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
+    case PackageScriptOp::SetVarButtonDown:
+    case PackageScriptOp::SetVarButtonPressed:
     case PackageScriptOp::SetGroundVelocity:
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
@@ -1544,6 +1548,7 @@ void validatePackageScriptInstruction(
     const std::vector<std::string>& packageObjectNames,
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
+    bool allowInputReads,
     int instructionIndex,
     int instructionCount)
 {
@@ -1556,6 +1561,13 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");
+        break;
+    case PackageScriptOp::SetVarButtonDown:
+    case PackageScriptOp::SetVarButtonPressed:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowInputReads || instruction.intValue == 0 || (instruction.intValue & ~kPackageInputButtonMask) != 0) {
+            throw std::runtime_error("fighter package script input read is invalid");
+        }
         break;
     case PackageScriptOp::AddVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");
@@ -1628,7 +1640,8 @@ void validatePackageScripts(
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& packageObjectNames,
     bool allowResolvableStateTargets,
-    bool allowFighterTargets)
+    bool allowFighterTargets,
+    bool allowInputReads)
 {
     std::vector<std::string> seenNames;
     seenNames.reserve(scripts.size());
@@ -1649,6 +1662,7 @@ void validatePackageScripts(
                 packageObjectNames,
                 allowResolvableStateTargets,
                 allowFighterTargets,
+                allowInputReads,
                 instructionIndex,
                 instructionCount);
         }
@@ -1767,6 +1781,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             states,
             packageObjectNames,
             true,
+            true,
             true);
         for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
             validateHurtboxGeometry(hurtbox);
@@ -1816,6 +1831,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageFighterNames,
             states,
             packageObjectNames,
+            false,
             false,
             false);
         if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {

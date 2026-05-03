@@ -6822,6 +6822,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFacing:
                 setVar(instruction.dst, object.facing);
                 break;
+            case PackageScriptOp::SetVarButtonDown:
+            case PackageScriptOp::SetVarButtonPressed:
+                return;
             case PackageScriptOp::SetGroundVelocity:
             case PackageScriptOp::SetAirVelocityX:
                 object.velocity.x = instruction.fixValue;
