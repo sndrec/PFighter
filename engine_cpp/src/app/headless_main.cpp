@@ -4668,6 +4668,12 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidReferenceWritePackage = sourcePackage;
     invalidReferenceWritePackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     const bool invalidPackageReferenceWriteRejected = pf::writeFighterPackage(invalidReferenceWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidCallbackWritePackage = sourcePackage;
+    invalidCallbackWritePackage.fighters[0].states[0].onFrame.push_back({std::string{"script:MissingScript"}});
+    const bool invalidPackageCallbackWriteRejected = pf::writeFighterPackage(invalidCallbackWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectCallbackWritePackage = sourcePackage;
+    invalidObjectCallbackWritePackage.objects[1].onSpawned.push_back({std::string{"script:MissingObjectScript"}});
+    const bool invalidPackageObjectCallbackWriteRejected = pf::writeFighterPackage(invalidObjectCallbackWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidGeometryWritePackage = sourcePackage;
     invalidGeometryWritePackage.objects[1].hitboxes[0].radius = 0;
     const bool invalidPackageGeometryWriteRejected = pf::writeFighterPackage(invalidGeometryWritePackage, &invalidPackageError).empty();
@@ -4864,6 +4870,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
+              << " fighter_package_invalid_callback_write_rejected=" << invalidPackageCallbackWriteRejected
+              << " fighter_package_invalid_object_callback_write_rejected=" << invalidPackageObjectCallbackWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
               << " fighter_package_invalid_object_property_write_rejected=" << invalidPackageObjectPropertyWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
