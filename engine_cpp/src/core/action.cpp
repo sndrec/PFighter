@@ -97,8 +97,8 @@ static Subaction decodeCreateHitbox(const HsdActionScript& script, const HsdActi
     reader.read(1); // item hit interaction
     sub.hitbox.requiresThrownHitboxOwner = reader.read(1) != 0;
     reader.read(1); // ignore fighter scale
-    reader.read(1); // clank
-    reader.read(1); // rebound
+    sub.hitbox.canClank = reader.read(1) != 0;
+    sub.hitbox.reboundsOnClank = reader.read(1) != 0;
     sub.hitbox.knockbackBase = fx(static_cast<int>(reader.read(9)));
     sub.hitbox.element = static_cast<int>(reader.read(5));
     sub.hitbox.isGrab = sub.hitbox.element == 8;
@@ -274,6 +274,11 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             sub.type = SubactionType::SetThrowFlag;
             sub.flag = static_cast<int>(reader.read(26));
             sub.flagValue = true;
+            result.push_back(sub);
+            break;
+        case 0x1E:
+            sub.type = SubactionType::SetJabRapid;
+            sub.flagValue = reader.read(26) != 0;
             result.push_back(sub);
             break;
         case 0x17:

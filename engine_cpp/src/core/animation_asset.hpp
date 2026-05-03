@@ -57,6 +57,7 @@ struct HsdFighterAttributes {
     Fix jumpStartupLag = 0;
     Fix initialHorizontalJumpVelocity = 0;
     Fix initialVerticalJumpVelocity = 0;
+    Fix damageScrewVerticalVelocity = 0;
     Fix groundToAirJumpMomentumMultiplier = 0;
     Fix maximumShorthopHorizontalVelocity = 0;
     Fix maximumShorthopVerticalVelocity = 0;
@@ -82,10 +83,16 @@ struct HsdFighterAttributes {
     Fix bairLandingLag = 0;
     Fix uairLandingLag = 0;
     Fix dairLandingLag = 0;
+    Fix passiveWallHorizontalVelocity = 0;
     Fix wallJumpHorizontalVelocity = 0;
     Fix wallJumpVerticalVelocity = 0;
+    Fix passiveCeilHorizontalVelocity = 0;
     Fix ledgeJumpHorizontalVelocity = 0;
     Fix ledgeJumpVerticalVelocity = 0;
+    Fix damageIceJumpVelocityY = 0;
+    Fix damageIceJumpVelocityXMultiplier = 0;
+    int weightIndependentThrowsMask = 0;
+    int rapidJabWindow = 0;
 };
 
 struct HsdActionCommand {

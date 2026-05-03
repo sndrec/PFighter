@@ -14,6 +14,7 @@ enum Button : uint16_t {
     ButtonShield = 1 << 3,
     ButtonGrab = 1 << 4,
     ButtonPause = 1 << 5,
+    ButtonTaunt = 1 << 6,
 };
 
 struct InputFrame {

@@ -96,6 +96,7 @@ static pf::InputFrame readKeyboardInput(bool arrows) {
         if (IsKeyDown(KEY_RIGHT_SHIFT)) input.buttons |= pf::ButtonJump;
         if (IsKeyPressed(KEY_ENTER)) input.buttons |= pf::ButtonAttack;
         if (IsKeyDown(KEY_RIGHT_CONTROL)) input.buttons |= pf::ButtonShield;
+        if (IsKeyPressed(KEY_RIGHT_ALT)) input.buttons |= pf::ButtonTaunt;
     } else {
         if (IsKeyDown(KEY_A)) input.move.x -= pf::fx(1);
         if (IsKeyDown(KEY_D)) input.move.x += pf::fx(1);
@@ -105,6 +106,7 @@ static pf::InputFrame readKeyboardInput(bool arrows) {
         if (IsKeyPressed(KEY_F)) input.buttons |= pf::ButtonAttack;
         if (IsKeyDown(KEY_Q)) input.buttons |= pf::ButtonShield;
         if (IsKeyDown(KEY_Z)) input.buttons |= pf::ButtonGrab;
+        if (IsKeyPressed(KEY_E)) input.buttons |= pf::ButtonTaunt;
     }
     return input;
 }
@@ -147,6 +149,9 @@ static pf::InputFrame readGamepadInput(int gamepad) {
     }
     if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)) {
         input.buttons |= pf::ButtonGrab;
+    }
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_LEFT_FACE_UP)) {
+        input.buttons |= pf::ButtonTaunt;
     }
 
     const float leftTrigger = readGamepadTrigger(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER);
@@ -1072,6 +1077,9 @@ static void drawTickrateControl(const TickrateControl& tickrate) {
 int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(1280, 720, "PFighter C++ raylib prototype");
+    if (!IsWindowReady()) {
+        return 1;
+    }
     SetTargetFPS(60);
 
     Camera3D camera{};

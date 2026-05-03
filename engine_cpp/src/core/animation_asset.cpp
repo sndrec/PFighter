@@ -316,10 +316,17 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
         attr.bairLandingLag = fxFromFloat(reader.readF32());
         attr.uairLandingLag = fxFromFloat(reader.readF32());
         attr.dairLandingLag = fxFromFloat(reader.readF32());
+        attr.passiveWallHorizontalVelocity = fxFromFloat(reader.readF32());
         attr.wallJumpHorizontalVelocity = fxFromFloat(reader.readF32());
         attr.wallJumpVerticalVelocity = fxFromFloat(reader.readF32());
+        attr.passiveCeilHorizontalVelocity = fxFromFloat(reader.readF32());
         attr.ledgeJumpHorizontalVelocity = fxFromFloat(reader.readF32());
         attr.ledgeJumpVerticalVelocity = fxFromFloat(reader.readF32());
+        attr.weightIndependentThrowsMask = reader.readI32();
+        attr.damageScrewVerticalVelocity = fxFromFloat(reader.readF32());
+        attr.damageIceJumpVelocityY = fxFromFloat(reader.readF32());
+        attr.damageIceJumpVelocityXMultiplier = fxFromFloat(reader.readF32());
+        attr.rapidJabWindow = reader.readI32();
     }
 
     asset.hasEnvironmentCollision = reader.readBool();

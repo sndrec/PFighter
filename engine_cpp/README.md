@@ -20,6 +20,14 @@ cmake --build engine_cpp/build-raylib
 engine_cpp/build-raylib/pfighter_raylib.exe
 ```
 
+On Linux amd64, the raylib app auto-detects a sibling `../raylib-6.0_linux_amd64` package:
+
+```bash
+cmake -S engine_cpp -B engine_cpp/build-linux-raylib
+cmake --build engine_cpp/build-linux-raylib
+engine_cpp/build-linux-raylib/pfighter_raylib
+```
+
 If no local raylib package is available, use `-DPFIGHTER_FETCH_RAYLIB=ON` to let CMake download raylib.
 
 ## Current Controls

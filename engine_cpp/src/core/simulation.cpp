@@ -28,15 +28,34 @@ struct HsdFighterAssetSpec {
     bool shieldSizeScalesWithHealth = true;
 };
 
-static const std::array<HsdFighterAssetSpec, 7>& meleeTrainingRoster() {
-    static const std::array<HsdFighterAssetSpec, 7> roster{{
+static const std::array<HsdFighterAssetSpec, 26>& meleeTrainingRoster() {
+    static const std::array<HsdFighterAssetSpec, 26> roster{{
         {"Mario", "mario_hsd.pfighter.bin"},
         {"Donkey Kong", "donkey_kong_hsd.pfighter.bin"},
-        {"Bowser", "bowser_hsd.pfighter.bin"},
-        {"Captain Falcon", "captain_falcon_hsd.pfighter.bin"},
-        {"Peach", "peach_hsd.pfighter.bin"},
+        {"Link", "link_hsd.pfighter.bin"},
+        {"Samus", "samus_hsd.pfighter.bin"},
         {"Yoshi", "yoshi_hsd.pfighter.bin", false},
+        {"Kirby", "kirby_hsd.pfighter.bin"},
+        {"Fox", "fox_hsd.pfighter.bin"},
+        {"Pikachu", "pikachu_hsd.pfighter.bin"},
+        {"Luigi", "luigi_hsd.pfighter.bin"},
+        {"Captain Falcon", "captain_falcon_hsd.pfighter.bin"},
+        {"Ness", "ness_hsd.pfighter.bin"},
+        {"Bowser", "bowser_hsd.pfighter.bin"},
+        {"Peach", "peach_hsd.pfighter.bin"},
+        {"Zelda", "zelda_hsd.pfighter.bin"},
+        {"Sheik", "sheik_hsd.pfighter.bin"},
+        {"Ice Climbers", "ice_climbers_hsd.pfighter.bin"},
+        {"Marth", "marth_hsd.pfighter.bin"},
         {"Game & Watch", "game_and_watch_hsd.pfighter.bin"},
+        {"Falco", "falco_hsd.pfighter.bin"},
+        {"Ganondorf", "ganondorf_hsd.pfighter.bin"},
+        {"Young Link", "young_link_hsd.pfighter.bin"},
+        {"Dr. Mario", "dr_mario_hsd.pfighter.bin"},
+        {"Roy", "roy_hsd.pfighter.bin"},
+        {"Pichu", "pichu_hsd.pfighter.bin"},
+        {"Mewtwo", "mewtwo_hsd.pfighter.bin"},
+        {"Jigglypuff", "jigglypuff_hsd.pfighter.bin"},
     }};
     return roster;
 }
@@ -138,10 +157,6 @@ public:
         return readU8() != 0;
     }
 
-    bool hasRemaining(size_t count) const {
-        return position + count <= data.size();
-    }
-
     int32_t readI32() {
         require(4);
         int32_t value = 0;
@@ -202,10 +217,13 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.dashEarlyInterruptWindowX44 = reader.readI32();
     common.dashItemThrowWindowX48 = reader.readI32();
     common.dashLateInterruptWindowX4C = reader.readI32();
+    common.attackDashFrictionScaleX50 = readCommonFix(reader);
     common.dashDecayX54 = readCommonFix(reader);
     common.runInputThresholdX58 = readCommonFix(reader);
     common.runAccelScaleX5C = readCommonFix(reader);
     common.groundFrictionScaleX60 = readCommonFix(reader);
+    common.catchCutFrictionScaleX64 = readCommonFix(reader);
+    common.attackDashGrabBufferFramesX68 = reader.readI32();
     common.turnFrictionScaleAboveWalkMaxX6C = readCommonFix(reader);
     common.tapJumpThresholdX70 = readCommonFix(reader);
     common.tapJumpWindowX74 = reader.readI32();
@@ -280,6 +298,8 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.runDirectFramesX430 = reader.readI32();
     common.jumpMomentumYScaleX438 = readCommonFix(reader);
     common.animVelocityScaleX440 = readCommonFix(reader);
+    common.fallAnimationDriftThresholdX444 = readCommonFix(reader);
+    common.fallAnimationBlendRateX448 = readCommonFix(reader);
     common.sdiMinStickMagX4B0 = readCommonFix(reader);
     common.sdiStickWindowX4B4 = reader.readI32();
     common.sdiPosScaleX4B8 = readCommonFix(reader);
@@ -353,6 +373,10 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.knockbackFrameDecayX204 = readCommonFix(reader);
     common.damageFallStickThresholdX210 = readCommonFix(reader);
     common.damageFallStickWindowX214 = reader.readI32();
+    common.specialSStickThresholdX218 = readCommonFix(reader);
+    common.specialLwHiStickThresholdX21C = readCommonFix(reader);
+    common.specialSReverseThresholdX220 = readCommonFix(reader);
+    common.specialNReverseFramesX224 = readCommonFix(reader);
     common.damageFlyTopAngleMinX234 = readCommonFix(reader);
     common.damageFlyTopAngleMaxX238 = readCommonFix(reader);
     common.damageFlyRollPercentX23C = reader.readI32();
@@ -362,6 +386,63 @@ static MeleeCommonData loadMeleeCommonData(const std::filesystem::path& path) {
     common.downAttackInputWindowX24C = reader.readI32();
     common.passiveInputWindowX250 = reader.readI32();
     common.passiveStandStickThresholdX254 = readCommonFix(reader);
+    common.cliffActionPercentThresholdX488 = reader.readI32();
+    common.cliffWaitAutoReleaseFramesQuickX48C = reader.readI32();
+    common.cliffWaitAutoReleaseFramesSlowX490 = reader.readI32();
+    common.cliffCStickAttackThresholdX7F8 = readCommonFix(reader);
+    common.cliffCStickEscapeThresholdX7FC = readCommonFix(reader);
+    common.downAttackCStickThresholdX7F4 = readCommonFix(reader);
+    common.downDamageThresholdX428 = reader.readI32();
+    common.grabMashStickThresholdX308 = readCommonFix(reader);
+    common.thrownHitboxClearVelocityX1C8 = readCommonFix(reader);
+    common.damageSongBaseX624 = readCommonFix(reader);
+    common.damageSongHandicapScaleX628 = readCommonFix(reader);
+    common.damageSongHandicapBaseX62C = readCommonFix(reader);
+    common.damageSongPortScaleX630 = readCommonFix(reader);
+    common.damageSongPortBaseX634 = readCommonFix(reader);
+    common.damageSongPercentScaleX638 = readCommonFix(reader);
+    common.damageSongTimerDecrementX63C = readCommonFix(reader);
+    common.damageSongMashDecrementX640 = readCommonFix(reader);
+    common.damageSongElement7TimerMultiplierX644 = readCommonFix(reader);
+    common.damageBindBaseX658 = readCommonFix(reader);
+    common.damageBindHandicapScaleX65C = readCommonFix(reader);
+    common.damageBindHandicapBaseX660 = readCommonFix(reader);
+    common.damageBindPortScaleX664 = readCommonFix(reader);
+    common.damageBindPortBaseX668 = readCommonFix(reader);
+    common.damageBindPercentScaleX66C = readCommonFix(reader);
+    common.damageBindTimerDecrementX670 = readCommonFix(reader);
+    common.damageBindMashDecrementX674 = readCommonFix(reader);
+    common.burySubmergeFramesX5F4 = reader.readI32();
+    common.buryBaseX5F8 = readCommonFix(reader);
+    common.buryHandicapScaleX5FC = readCommonFix(reader);
+    common.buryHandicapBaseX600 = readCommonFix(reader);
+    common.buryPortScaleX604 = readCommonFix(reader);
+    common.buryPortBaseX608 = readCommonFix(reader);
+    common.buryPercentScaleX60C = readCommonFix(reader);
+    common.buryTimerDecrementX610 = readCommonFix(reader);
+    common.buryMashDecrementX614 = readCommonFix(reader);
+    common.buryJumpVelocityYx618 = readCommonFix(reader);
+    common.buryJumpGravityThresholdX61C = readCommonFix(reader);
+    common.buryJumpCollisionFramesX620 = reader.readI32();
+    common.reboundDamageScaleX3D0 = readCommonFix(reader);
+    common.reboundDamageBaseX3D4 = readCommonFix(reader);
+    common.reboundAccelScaleX3D8 = readCommonFix(reader);
+    common.reboundAccelBaseX3DC = readCommonFix(reader);
+    common.furafuraTimerBaseX2F8 = readCommonFix(reader);
+    common.furafuraTimerMinX2FC = readCommonFix(reader);
+    common.furafuraTimerDecrementX300 = readCommonFix(reader);
+    common.furafuraMashDecrementX304 = readCommonFix(reader);
+    common.furafuraShieldHealthX280 = readCommonFix(reader);
+    common.inputRepeatWindowX1C = reader.readI32();
+    common.damageGroundKnockbackClampX164 = readCommonFix(reader);
+    common.fallSpecialPlatformStickThresholdX25C = readCommonFix(reader);
+    common.itemScrewJumpMultiplierX800 = readCommonFix(reader);
+    common.damageIceGravityMultiplierX77C = readCommonFix(reader);
+    common.damageIceTimerDamageScaleX790 = readCommonFix(reader);
+    common.damageIceTimerDecrementX794 = readCommonFix(reader);
+    common.damageIceMashDecrementX798 = readCommonFix(reader);
+    common.damageIceHitDamageTimerReductionX79C = readCommonFix(reader);
+    common.damageIceJumpEscapeFramesX7A4 = readCommonFix(reader);
     return common;
 }
 
@@ -476,6 +557,9 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     attr.groundMaxHorizontalVelocity = source.groundMaxHorizontalVelocity;
     attr.jumpHInitialVelocity = source.initialHorizontalJumpVelocity;
     attr.jumpVInitialVelocity = source.initialVerticalJumpVelocity;
+    attr.damageScrewVerticalVelocity = source.damageScrewVerticalVelocity != 0
+        ? source.damageScrewVerticalVelocity
+        : source.initialVerticalJumpVelocity;
     attr.hopVInitialVelocity = source.maximumShorthopVerticalVelocity;
     attr.groundToAirJumpMomentumMultiplier = source.groundToAirJumpMomentumMultiplier;
     attr.jumpHMaxVelocity = source.maximumShorthopHorizontalVelocity;
@@ -507,6 +591,8 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     attr.dairLandingLag = roundedFrames(source.dairLandingLag);
     attr.framesToChangeDirectionOnStandingTurn = roundedFrames(source.framesToChangeDirectionOnStandingTurn);
     attr.weight = source.weight;
+    attr.weightIndependentThrowsMask = source.weightIndependentThrowsMask;
+    attr.rapidJabWindow = source.rapidJabWindow;
     attr.jumpStartupLag = roundedFrames(source.jumpStartupLag);
     attr.initialWalkSpeed = source.initialWalkSpeed;
     attr.initialDashSpeed = source.initialDashSpeed;
@@ -519,10 +605,14 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     attr.initialHorizontalJumpVelocity = source.initialHorizontalJumpVelocity;
     attr.initialVerticalJumpVelocity = source.initialVerticalJumpVelocity;
     attr.maximumShorthopVerticalVelocity = source.maximumShorthopVerticalVelocity;
+    attr.passiveWallHorizontalVelocity = source.passiveWallHorizontalVelocity;
     attr.wallJumpHorizontalVelocity = source.wallJumpHorizontalVelocity;
     attr.wallJumpVerticalVelocity = source.wallJumpVerticalVelocity;
+    attr.passiveCeilHorizontalVelocity = source.passiveCeilHorizontalVelocity;
     attr.ledgeJumpHorizontalVelocity = source.ledgeJumpHorizontalVelocity;
     attr.ledgeJumpVerticalVelocity = source.ledgeJumpVerticalVelocity;
+    attr.damageIceJumpVelocityY = source.damageIceJumpVelocityY;
+    attr.damageIceJumpVelocityXMultiplier = source.damageIceJumpVelocityXMultiplier;
     def.shield.startSizeHardShield = source.shieldSize;
     def.shield.maxHealth = attr.common.startShieldHealthX260;
 }
@@ -562,11 +652,25 @@ static void applyHsdAnimationLengths(FighterDefinition& def) {
     }
 }
 
+static void applyCommonStateTimings(FighterDefinition& def) {
+    const int captureJumpIndex = def.stateIndex("CaptureJump");
+    if (captureJumpIndex >= 0) {
+        FighterState& captureJump = def.states[static_cast<size_t>(captureJumpIndex)];
+        const int enableFrame = roundedFrames(def.properties.common.captureJumpGravityThresholdX3B8) + 1;
+        for (InterruptRule& rule : captureJump.interrupts) {
+            rule.startActive = false;
+            rule.enableFrame = enableFrame;
+            rule.disableFrame = 0;
+        }
+    }
+}
+
 static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spec, const MeleeCommonData& common) {
     FighterDefinition def = makeDebugRook();
     def.name = spec.displayName;
     def.properties.common = common;
     def.shield.maxHealth = common.startShieldHealthX260;
+    applyCommonStateTimings(def);
     def.hsdAsset = cachedHsdFighterAsset(spec.fileName);
     def.hasHsdAsset = true;
     if (def.hsdAsset->hasAttributes) {
@@ -921,9 +1025,43 @@ void unlockFighterEcb(FighterRuntime& fighter) {
     fighter.ecbLockTimer = 0;
 }
 
+static bool stateHasImportedAnimation(const FighterDefinition& def, const std::string& stateName) {
+    if (!def.hasHsdAsset || !def.hsdAsset) {
+        return true;
+    }
+    const int index = def.stateIndex(stateName);
+    if (index < 0) {
+        return false;
+    }
+    const FighterState& state = def.states[static_cast<size_t>(index)];
+    return state.animationActionIndex >= 0 &&
+        findClipByActionIndex(*def.hsdAsset, state.animationActionIndex) != nullptr;
+}
+
+static std::string resolveCliffActionState(const FighterDefinition& def, const FighterRuntime& fighter, const std::string& stateName) {
+    const bool quick = fighter.percent < fx(def.properties.common.cliffActionPercentThresholdX488);
+    const char* suffix = quick ? "Quick" : "Slow";
+    std::string resolved = stateName;
+    if (stateName == "CliffClimb") {
+        resolved = std::string("CliffClimb") + suffix;
+    } else if (stateName == "CliffAttack") {
+        resolved = std::string("CliffAttack") + suffix;
+    } else if (stateName == "CliffEscape") {
+        resolved = std::string("CliffEscape") + suffix;
+    } else if (stateName == "CliffJump") {
+        resolved = quick ? "CliffJumpQuick1" : "CliffJumpSlow1";
+    } else if (stateName == "CliffJumpAir") {
+        resolved = quick ? "CliffJumpQuick2" : "CliffJumpSlow2";
+    } else if (stateName == "AppealS") {
+        resolved = fighter.facing < 0 && stateHasImportedAnimation(def, "AppealSL") ? "AppealSL" : "AppealSR";
+    }
+    return def.stateIndex(resolved) >= 0 ? resolved : stateName;
+}
+
 void changeFighterState(World& world, FighterRuntime& fighter, const std::string& stateName, int lagFrames, int blendFrames) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const int target = def.stateIndex(stateName);
+    const std::string targetStateName = resolveCliffActionState(def, fighter, stateName);
+    const int target = def.stateIndex(targetStateName);
     if (target < 0) {
         return;
     }
@@ -934,16 +1072,27 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
                name == "CatchWait" || name == "CatchAttack" ||
                name == "CatchCut" ||
                name == "ThrowF" || name == "ThrowB" ||
-               name == "ThrowHi" || name == "ThrowLw";
+               name == "ThrowHi" || name == "ThrowLw" ||
+               name == "CaptureMewtwo" || name == "CaptureMewtwoAir" ||
+               name == "CaptureCaptain" ||
+               name == "CaptureKoopa" || name == "CaptureKoopaAir";
     };
     const auto isCapturedVictimState = [](const std::string& name) {
         return name == "CapturePulledHi" || name == "CapturePulledLw" ||
                name == "CaptureWaitHi" || name == "CaptureWaitLw" ||
                name == "CaptureDamageHi" || name == "CaptureDamageLw" ||
+               name == "CaptureYoshi" ||
+               name == "CaptureNeck" || name == "CaptureFoot" ||
                name == "ThrownF" || name == "ThrownB" ||
-               name == "ThrownHi" || name == "ThrownLw";
+               name == "ThrownHi" || name == "ThrownLw" ||
+               name == "ThrownLwWomen" ||
+               name == "ThrownFF" || name == "ThrownFB" ||
+               name == "ThrownFHi" || name == "ThrownFLw" ||
+               name == "ThrownKoopaF" || name == "ThrownKoopaB" ||
+               name == "ThrownKoopaAirF" || name == "ThrownKoopaAirB" ||
+               name == "ThrownMewtwo" || name == "ThrownMewtwoAir";
     };
-    if (ownsCapturedVictim(oldStateName) && !ownsCapturedVictim(stateName) && fighter.grabbedFighter >= 0 &&
+    if (ownsCapturedVictim(oldStateName) && !ownsCapturedVictim(targetStateName) && fighter.grabbedFighter >= 0 &&
         fighter.grabbedFighter < static_cast<int>(world.fighters.size()))
     {
         FighterRuntime& victim = world.fighters[static_cast<size_t>(fighter.grabbedFighter)];
@@ -955,7 +1104,7 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
         }
         fighter.grabbedFighter = -1;
     }
-    if (isCapturedVictimState(oldStateName) && !isCapturedVictimState(stateName) && fighter.grabberFighter >= 0 &&
+    if (isCapturedVictimState(oldStateName) && !isCapturedVictimState(targetStateName) && fighter.grabberFighter >= 0 &&
         fighter.grabberFighter < static_cast<int>(world.fighters.size()))
     {
         FighterRuntime& grabber = world.fighters[static_cast<size_t>(fighter.grabberFighter)];
@@ -994,6 +1143,7 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.floorSkipSegment = -1;
     fighter.animationFrame = 0;
     fighter.animationRate = fx(1);
+    fighter.animationActionIndexOverride = -1;
     fighter.lastActionFrameExecuted = -1;
     fighter.hsdPoseFacing = fighter.facing;
     fighter.state = target;
@@ -1114,13 +1264,34 @@ static bool hasActionClip(const FighterDefinition& def, int actionIndex) {
     return !def.hasHsdAsset || !def.hsdAsset || findClipByActionIndex(*def.hsdAsset, actionIndex) != nullptr;
 }
 
+static bool hasActionClipNamed(const FighterDefinition& def, const std::string& animation) {
+    if (!def.hasHsdAsset || !def.hsdAsset) {
+        return true;
+    }
+    const std::string suffix = "_ACTION_" + animation + "_figatree";
+    for (const AnimationClip& clip : def.hsdAsset->clips) {
+        if (clip.name.size() >= suffix.size() &&
+            clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool cStickSideSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
     return fxAbs(fighter.input.frames[1].cStick.x) < common.dashInputThresholdX3C &&
            fxAbs(fighter.input.frames[0].cStick.x) >= common.dashInputThresholdX3C;
 }
 
-static bool sideSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common, int& facing, float& angle) {
-    if (fighter.input.justPressed(ButtonAttack) &&
+static bool sideSmashInput(
+    const FighterRuntime& fighter,
+    const MeleeCommonData& common,
+    int& facing,
+    float& angle,
+    bool attackPressed)
+{
+    if (attackPressed &&
         fxAbs(fighter.input.frames[0].move.x) >= common.dashInputThresholdX3C &&
         fighter.stickXTiltTimer < common.dashStickWindowX40)
     {
@@ -1136,10 +1307,15 @@ static bool sideSmashInput(const FighterRuntime& fighter, const MeleeCommonData&
     return false;
 }
 
-static int sideSmashActionIndex(const FighterDefinition& def, const FighterRuntime& fighter, const MeleeCommonData& common) {
+static int sideSmashActionIndex(
+    const FighterDefinition& def,
+    const FighterRuntime& fighter,
+    const MeleeCommonData& common,
+    bool attackPressed)
+{
     int facing = fighter.facing;
     float angle = 0.0f;
-    if (!sideSmashInput(fighter, common, facing, angle)) {
+    if (!sideSmashInput(fighter, common, facing, angle, attackPressed)) {
         return -1;
     }
     int selected = 62;
@@ -1156,8 +1332,8 @@ static int sideSmashActionIndex(const FighterDefinition& def, const FighterRunti
     return hasActionClip(def, selected) ? selected : 62;
 }
 
-static bool sideTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common, float& angle) {
-    if (!fighter.input.justPressed(ButtonAttack) ||
+static bool sideTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed, float& angle) {
+    if (!attackPressed ||
         fighter.input.frames[0].move.x * fighter.facing < common.attackS3StickThresholdX98)
     {
         return false;
@@ -1166,9 +1342,14 @@ static bool sideTiltInput(const FighterRuntime& fighter, const MeleeCommonData& 
     return std::abs(angle) < fxToFloat(common.aerialAttackAngleTanX20);
 }
 
-static int sideTiltActionIndex(const FighterDefinition& def, const FighterRuntime& fighter, const MeleeCommonData& common) {
+static int sideTiltActionIndex(
+    const FighterDefinition& def,
+    const FighterRuntime& fighter,
+    const MeleeCommonData& common,
+    bool attackPressed)
+{
     float angle = 0.0f;
-    if (!sideTiltInput(fighter, common, angle)) {
+    if (!sideTiltInput(fighter, common, attackPressed, angle)) {
         return -1;
     }
     int selected = 55;
@@ -1185,30 +1366,30 @@ static int sideTiltActionIndex(const FighterDefinition& def, const FighterRuntim
     return hasActionClip(def, selected) ? selected : 55;
 }
 
-static bool upSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
-    return (fighter.input.justPressed(ButtonAttack) &&
+static bool upSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed) {
+    return (attackPressed &&
             fighter.input.frames[0].move.y >= common.attackHi4StickThresholdYxCC &&
             fighter.stickYTiltTimer < common.attackHi4StickWindowXD0) ||
            (fighter.input.frames[1].cStick.y < common.attackHi4StickThresholdYxCC &&
             fighter.input.frames[0].cStick.y >= common.attackHi4StickThresholdYxCC);
 }
 
-static bool downSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
-    return (fighter.input.justPressed(ButtonAttack) &&
+static bool downSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed) {
+    return (attackPressed &&
             fighter.input.frames[0].move.y <= common.attackLw4StickThresholdYxD4 &&
             fighter.stickYTiltTimer < common.attackLw4StickWindowXD8) ||
            (fighter.input.frames[1].cStick.y > common.attackLw4StickThresholdYxD4 &&
             fighter.input.frames[0].cStick.y <= common.attackLw4StickThresholdYxD4);
 }
 
-static bool upTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
-    return fighter.input.justPressed(ButtonAttack) &&
+static bool upTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed) {
+    return attackPressed &&
            fighter.input.frames[0].move.y >= common.attackHi3StickThresholdYxAC &&
            stickAngle(fighter.input.frames[0].move) > fxToFloat(common.aerialAttackAngleTanX20);
 }
 
-static bool downTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
-    return fighter.input.justPressed(ButtonAttack) &&
+static bool downTiltInput(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed) {
+    return attackPressed &&
            fighter.input.frames[0].move.y <= common.attackLw3StickThresholdYxB0 &&
            stickAngle(fighter.input.frames[0].move) < -fxToFloat(common.aerialAttackAngleTanX20);
 }
@@ -1218,12 +1399,21 @@ static bool ledgeStickActive(Vec2 stick, const MeleeCommonData& common) {
            fxAbs(stick.y) >= common.cliffOptionStickThresholdX494;
 }
 
-static bool ledgeStickChoosesClimb(const FighterRuntime& fighter, const MeleeCommonData& common) {
-    const Vec2 stick = fighter.input.frames[0].move;
+static bool ledgeStickChoosesClimb(const FighterRuntime& fighter, Vec2 stick, const MeleeCommonData& common) {
     const float angle = std::atan2(fxToFloat(stick.y), std::abs(fxToFloat(stick.x)));
     const float cliffAngle = fxToFloat(common.aerialAttackAngleTanX20);
     return angle > cliffAngle ||
            (angle > -cliffAngle && stick.x * fighter.facing >= 0);
+}
+
+static bool ledgeCStickAttackInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return fighter.input.frames[1].cStick.y < common.cliffCStickAttackThresholdX7F8 &&
+           fighter.input.frames[0].cStick.y >= common.cliffCStickAttackThresholdX7F8;
+}
+
+static bool ledgeCStickEscapeInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
+    return fighter.facing * fighter.input.frames[1].cStick.x < common.cliffCStickEscapeThresholdX7FC &&
+           fighter.facing * fighter.input.frames[0].cStick.x >= common.cliffCStickEscapeThresholdX7FC;
 }
 
 static bool isSideSmashCondition(InterruptCondition condition) {
@@ -1234,12 +1424,54 @@ static bool isSideSmashCondition(InterruptCondition condition) {
            condition == InterruptCondition::AttackS4LwPressed;
 }
 
+static bool usesPreTurnFacingForTurnInterrupt(InterruptCondition condition) {
+    switch (condition) {
+        case InterruptCondition::GrabPressed:
+        case InterruptCondition::AttackPressed:
+        case InterruptCondition::AttackDashPressed:
+        case InterruptCondition::AttackS4HiPressed:
+        case InterruptCondition::AttackS4HiSPressed:
+        case InterruptCondition::AttackS4Pressed:
+        case InterruptCondition::AttackS4LwSPressed:
+        case InterruptCondition::AttackS4LwPressed:
+        case InterruptCondition::AttackS42Pressed:
+        case InterruptCondition::AttackHi4Pressed:
+        case InterruptCondition::AttackLw4Pressed:
+        case InterruptCondition::AttackS3HiPressed:
+        case InterruptCondition::AttackS3HiSPressed:
+        case InterruptCondition::AttackS3Pressed:
+        case InterruptCondition::AttackS3LwSPressed:
+        case InterruptCondition::AttackS3LwPressed:
+        case InterruptCondition::AttackHi3Pressed:
+        case InterruptCondition::AttackLw3Pressed:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool platformDropInputActive(const World& world, const FighterRuntime& fighter, const MeleeCommonData& common) {
+    if (!fighter.grounded || fighter.groundSegment < 0 ||
+        fighter.groundSegment >= static_cast<int>(world.stage.segments.size()))
+    {
+        return false;
+    }
+    return world.stage.segments[static_cast<size_t>(fighter.groundSegment)].type == SegmentType::Semisolid &&
+           fighter.input.frames[0].move.y <= -common.platformDropStickThresholdX464 &&
+           fighter.stickYTiltTimer < common.platformDropStickWindowX468;
+}
+
 static bool conditionMet(const World& world, InterruptCondition condition, const FighterRuntime& fighter) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const FighterProperties& attr = def.properties;
     const MeleeCommonData& common = attr.common;
     const Fix x = fighter.input.frames[0].move.x;
     const std::string& stateName = currentState(world, fighter).name;
+    const bool attackPressed =
+        fighter.input.justPressed(ButtonAttack) ||
+        (stateName == "Turn" &&
+         fighter.turnJustTurned &&
+         (fighter.turnBufferedButtons & ButtonAttack) != 0);
     if (stateName == "Run" &&
         fighter.runDirectTimer > 1 &&
         (condition == InterruptCondition::TurnRunInput ||
@@ -1283,39 +1515,97 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
         case InterruptCondition::SquatReleaseInput:
             return fighter.grounded && fighter.input.frames[0].move.y > -common.squatReleaseThresholdX94;
         case InterruptCondition::AttackPressed:
-            return fighter.input.justPressed(ButtonAttack);
+            return attackPressed;
         case InterruptCondition::JabFollowupPressed:
-            return fighter.input.justPressed(ButtonAttack) && fighterCommandFlag(fighter, 2);
+            return attackPressed && fighterCommandFlag(fighter, 2);
+        case InterruptCondition::RapidJabReady:
+            return stateName.rfind("Attack1", 0) == 0 &&
+                   fighterCommandFlag(fighter, 5) &&
+                   fighter.attackRapidInputCount >= attr.rapidJabWindow &&
+                   hasActionClip(def, 49) &&
+                   hasActionClip(def, 50) &&
+                   hasActionClip(def, 51);
+        case InterruptCondition::SpecialSInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fxAbs(fighter.input.frames[0].move.x) >= common.specialSStickThresholdX218 &&
+                   hasActionClipNamed(def, "SpecialS");
+        case InterruptCondition::SpecialHiInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fighter.input.frames[0].move.y >= common.specialLwHiStickThresholdX21C &&
+                   hasActionClipNamed(def, "SpecialHi");
+        case InterruptCondition::SpecialNInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fxAbs(fighter.input.frames[0].move.x) < common.specialSStickThresholdX218 &&
+                   fxAbs(fighter.input.frames[0].move.y) < common.specialLwHiStickThresholdX21C &&
+                   hasActionClipNamed(def, "SpecialN");
+        case InterruptCondition::SpecialLwInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fighter.input.frames[0].move.y < -common.specialLwHiStickThresholdX21C &&
+                   hasActionClipNamed(def, "SpecialLw");
+        case InterruptCondition::SpecialAirHiInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fighter.input.frames[0].move.y >= common.specialLwHiStickThresholdX21C &&
+                   hasActionClipNamed(def, "SpecialAirHi");
+        case InterruptCondition::SpecialAirLwInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fighter.input.frames[0].move.y <= -common.specialLwHiStickThresholdX21C &&
+                   hasActionClipNamed(def, "SpecialAirLw");
+        case InterruptCondition::SpecialAirSInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fxAbs(fighter.input.frames[0].move.x) >= common.specialSStickThresholdX218 &&
+                   hasActionClipNamed(def, "SpecialSAir");
+        case InterruptCondition::SpecialAirNInput:
+            return fighter.input.justPressed(ButtonSpecial) &&
+                   fxAbs(fighter.input.frames[0].move.x) < common.specialSStickThresholdX218 &&
+                   fxAbs(fighter.input.frames[0].move.y) < common.specialLwHiStickThresholdX21C &&
+                   hasActionClipNamed(def, "SpecialAirN");
         case InterruptCondition::AttackDashPressed:
-            return fighter.input.justPressed(ButtonAttack);
+            return attackPressed;
+        case InterruptCondition::AttackDashGrabBuffer:
+            return stateName == "AttackDash" &&
+                   fighter.attackDashGrabBufferTimer > 0 &&
+                   fighter.grounded &&
+                   fighter.shieldHealth > 0 &&
+                   fighter.input.down(ButtonShield);
         case InterruptCondition::AttackS4HiPressed:
-            return sideSmashActionIndex(def, fighter, common) == 60;
+            return sideSmashActionIndex(def, fighter, common, attackPressed) == 60;
         case InterruptCondition::AttackS4HiSPressed:
-            return sideSmashActionIndex(def, fighter, common) == 61;
+            return sideSmashActionIndex(def, fighter, common, attackPressed) == 61;
         case InterruptCondition::AttackS4Pressed:
-            return sideSmashActionIndex(def, fighter, common) == 62;
+            return sideSmashActionIndex(def, fighter, common, attackPressed) == 62;
         case InterruptCondition::AttackS4LwSPressed:
-            return sideSmashActionIndex(def, fighter, common) == 63;
+            return sideSmashActionIndex(def, fighter, common, attackPressed) == 63;
         case InterruptCondition::AttackS4LwPressed:
-            return sideSmashActionIndex(def, fighter, common) == 64;
+            return sideSmashActionIndex(def, fighter, common, attackPressed) == 64;
+        case InterruptCondition::AttackS42Pressed:
+            return stateName.rfind("AttackS4", 0) == 0 &&
+                   fighterCommandFlag(fighter, 0) &&
+                   attackPressed &&
+                   (def.name == "Link" || def.name == "Young Link") &&
+                   def.hasHsdAsset &&
+                   hasActionClip(def, 295);
         case InterruptCondition::AttackHi4Pressed:
-            return upSmashInput(fighter, common);
+            return upSmashInput(fighter, common, attackPressed);
         case InterruptCondition::AttackLw4Pressed:
-            return downSmashInput(fighter, common);
+            return downSmashInput(fighter, common, attackPressed);
         case InterruptCondition::AttackS3HiPressed:
-            return sideTiltActionIndex(def, fighter, common) == 53;
+            return sideTiltActionIndex(def, fighter, common, attackPressed) == 53;
         case InterruptCondition::AttackS3HiSPressed:
-            return sideTiltActionIndex(def, fighter, common) == 54;
+            return sideTiltActionIndex(def, fighter, common, attackPressed) == 54;
         case InterruptCondition::AttackS3Pressed:
-            return sideTiltActionIndex(def, fighter, common) == 55;
+            return sideTiltActionIndex(def, fighter, common, attackPressed) == 55;
         case InterruptCondition::AttackS3LwSPressed:
-            return sideTiltActionIndex(def, fighter, common) == 56;
+            return sideTiltActionIndex(def, fighter, common, attackPressed) == 56;
         case InterruptCondition::AttackS3LwPressed:
-            return sideTiltActionIndex(def, fighter, common) == 57;
+            return sideTiltActionIndex(def, fighter, common, attackPressed) == 57;
         case InterruptCondition::AttackHi3Pressed:
-            return upTiltInput(fighter, common);
+            return upTiltInput(fighter, common, attackPressed);
         case InterruptCondition::AttackLw3Pressed:
-            return downTiltInput(fighter, common);
+            return downTiltInput(fighter, common, attackPressed);
+        case InterruptCondition::AttackLw3Repeat:
+            return stateName == "AttackLw3" &&
+                   fighterCommandFlag(fighter, 0) &&
+                   (fighter.attackLw3RepeatQueued || attackPressed);
         case InterruptCondition::AerialAttackNPressed:
             return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::Neutral;
@@ -1332,6 +1622,11 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
             return aerialAttackInput &&
                    aerialAttackDirection(fighter, common) == AerialAttackDirection::Low;
         case InterruptCondition::DashInput:
+            if (stateName == "SquatWait" &&
+                (fighter.platformDropTimer > 0 || platformDropInputActive(world, fighter, common)))
+            {
+                return false;
+            }
             return x * fighter.facing >= common.dashInputThresholdX3C &&
                    fighter.stickXTiltTimer < common.dashStickWindowX40;
         case InterruptCondition::ReverseDashInput:
@@ -1356,6 +1651,9 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
             return x * fighter.facing <= common.turnInputThresholdX34;
         case InterruptCondition::TurnRunInput:
             return x * fighter.facing <= common.turnRunInputThresholdX38;
+        case InterruptCondition::RunBrakeTurnRunInput:
+            return fighterCommandFlag(fighter, 0) &&
+                   x * fighter.facing <= common.turnRunInputThresholdX38;
         case InterruptCondition::RunBrakeInput:
             return fxAbs(x) < common.runInputThresholdX58;
         case InterruptCondition::WaitInput:
@@ -1399,16 +1697,28 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
             return fighter.grabbedLedge >= 0 &&
                    fighter.ledgeActionReady &&
                    ledgeStickActive(fighter.input.frames[0].move, common) &&
-                   ledgeStickChoosesClimb(fighter, common);
+                   ledgeStickChoosesClimb(fighter, fighter.input.frames[0].move, common);
         case InterruptCondition::LedgeDropInput:
             return fighter.grabbedLedge >= 0 &&
                    fighter.ledgeActionReady &&
-                   ledgeStickActive(fighter.input.frames[0].move, common) &&
-                   !ledgeStickChoosesClimb(fighter, common);
+                   ((ledgeStickActive(fighter.input.frames[0].move, common) &&
+                     !ledgeStickChoosesClimb(fighter, fighter.input.frames[0].move, common)) ||
+                    (ledgeStickActive(fighter.input.frames[0].cStick, common) &&
+                     !ledgeStickChoosesClimb(fighter, fighter.input.frames[0].cStick, common)));
+        case InterruptCondition::LedgeAttackInput:
+            return fighter.grabbedLedge >= 0 &&
+                   (fighter.input.justPressed(ButtonAttack | ButtonSpecial) ||
+                    ledgeCStickAttackInput(fighter, common));
+        case InterruptCondition::LedgeEscapeInput:
+            return fighter.grabbedLedge >= 0 &&
+                   (fighter.input.justPressed(ButtonShield) ||
+                    ledgeCStickEscapeInput(fighter, common));
         case InterruptCondition::GrabPressed:
             return fighter.grounded &&
                    (fighter.input.justPressed(ButtonGrab) ||
                     (fighter.input.down(ButtonShield) && fighter.input.justPressed(ButtonAttack)));
+        case InterruptCondition::TauntPressed:
+            return fighter.grounded && fighter.input.justPressed(ButtonTaunt);
     }
     return false;
 }
@@ -1429,7 +1739,14 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "JumpAerialF") return 18;
     if (animation == "JumpAerialB") return 19;
     if (animation == "Fall") return 20;
+    if (animation == "FallF") return 21;
+    if (animation == "FallB") return 22;
+    if (animation == "FallAerial") return 23;
+    if (animation == "FallAerialF") return 24;
+    if (animation == "FallAerialB") return 25;
     if (animation == "FallSpecial") return 26;
+    if (animation == "FallSpecialF") return 27;
+    if (animation == "FallSpecialB") return 28;
     if (animation == "Landing") return 35;
     if (animation == "LandingFallSpecial") return 36;
     if (animation == "GuardOn" || animation == "GuardReflect") return 37;
@@ -1440,9 +1757,16 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "EscapeF") return 42;
     if (animation == "EscapeB") return 43;
     if (animation == "EscapeAir") return 44;
+    if (animation == "ItemScrew") return 145;
+    if (animation == "ItemScrewAir") return 146;
+    if (animation == "ItemScrewDamage") return 147;
+    if (animation == "ItemScrewDamageAir") return 148;
     if (animation == "Jab" || animation == "Attack11") return 46;
     if (animation == "Attack12") return 47;
     if (animation == "Attack13") return 48;
+    if (animation == "Attack100Start") return 49;
+    if (animation == "Attack100Loop") return 50;
+    if (animation == "Attack100End") return 51;
     if (animation == "AttackDash") return 52;
     if (animation == "AttackS3Hi") return 53;
     if (animation == "AttackS3HiS") return 54;
@@ -1456,6 +1780,7 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "AttackS4") return 62;
     if (animation == "AttackS4LwS") return 63;
     if (animation == "AttackS4Lw") return 64;
+    if (animation == "AttackS42") return 295;
     if (animation == "AttackHi4") return 66;
     if (animation == "AttackLw4") return 67;
     if (animation == "AirAttackN") return 68;
@@ -1491,6 +1816,7 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "DownBoundD") return 191;
     if (animation == "DownWaitD") return 192;
     if (animation == "DownDamageD") return 193;
+    if (animation == "DownReflect") return 335;
     if (animation == "Passive") return 199;
     if (animation == "PassiveStandF") return 200;
     if (animation == "PassiveStandB") return 201;
@@ -1499,9 +1825,15 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "PassiveCeil") return 204;
     if (animation == "ShieldBreakFly") return 205;
     if (animation == "ShieldBreakFall") return 206;
-    if (animation == "ShieldBreakDown") return 207;
-    if (animation == "ShieldBreakStand") return 209;
+    if (animation == "ShieldBreakDown" || animation == "ShieldBreakDownU") return 207;
+    if (animation == "ShieldBreakDownD") return 208;
+    if (animation == "ShieldBreakStand" || animation == "ShieldBreakStandU") return 209;
+    if (animation == "ShieldBreakStandD") return 210;
     if (animation == "Furafura") return 205;
+    if (animation == "FuraSleepStart") return 206;
+    if (animation == "FuraSleepLoop") return 207;
+    if (animation == "FuraSleepEnd") return 208;
+    if (animation == "BuryJump") return 16;
     if (animation == "Catch") return 242;
     if (animation == "CatchPull") return 242;
     if (animation == "CatchDash") return 243;
@@ -1521,11 +1853,25 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "CaptureDamageLw") return 256;
     if (animation == "CaptureCut") return 257;
     if (animation == "CaptureJump") return 258;
+    if (animation == "CaptureNeck") return 259;
+    if (animation == "CaptureFoot") return 260;
+    if (animation == "Rebound") return 261;
     if (animation == "ThrownF") return 262;
     if (animation == "ThrownB") return 263;
     if (animation == "ThrownHi") return 264;
     if (animation == "ThrownLw") return 265;
     if (animation == "ThrownLwWomen") return 266;
+    if (animation == "ThrownFF") return 272;
+    if (animation == "ThrownFB") return 273;
+    if (animation == "ThrownFHi") return 274;
+    if (animation == "ThrownFLw") return 275;
+    if (animation == "CaptureCaptain") return 276;
+    if (animation == "ThrownKoopaF") return 279;
+    if (animation == "ThrownKoopaB") return 280;
+    if (animation == "ThrownKoopaAirF") return 282;
+    if (animation == "ThrownKoopaAirB") return 283;
+    if (animation == "ThrownMewtwo") return 292;
+    if (animation == "ThrownMewtwoAir") return 293;
     if (animation == "Squat") return 30;
     if (animation == "SquatWait") return 31;
     if (animation == "SquatRv") return 34;
@@ -1539,19 +1885,26 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "MissFoot") return 215;
     if (animation == "CliffCatch") return 216;
     if (animation == "CliffWait") return 217;
+    if (animation == "CliffClimbSlow") return 219;
     if (animation == "CliffClimbQuick") return 220;
+    if (animation == "CliffAttackSlow") return 221;
     if (animation == "CliffAttackQuick") return 222;
+    if (animation == "CliffEscapeSlow") return 223;
     if (animation == "CliffEscapeQuick") return 224;
+    if (animation == "CliffJumpSlow1") return 225;
+    if (animation == "CliffJumpSlow2") return 226;
     if (animation == "CliffJumpQuick1") return 227;
     if (animation == "CliffJumpQuick2") return 228;
     return -1;
 }
 
-static const AnimationClip* clipForState(const FighterDefinition& def, const FighterState& state) {
+static const AnimationClip* clipForState(const FighterDefinition& def, const FighterState& state, int actionIndexOverride = -1) {
     if (!def.hasHsdAsset || !def.hsdAsset) {
         return nullptr;
     }
-    const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
+    const int actionIndex = actionIndexOverride >= 0
+        ? actionIndexOverride
+        : (state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation));
     if (actionIndex >= 0) {
         if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, actionIndex)) {
             return clip;
@@ -1747,6 +2100,12 @@ static void evaluateImportedHurtboxes(const FighterDefinition& def, FighterRunti
 }
 
 static void refreshHsdWorldPose(const FighterDefinition& def, FighterRuntime& fighter) {
+    if (!def.hasHsdAsset || !def.hsdAsset) {
+        fighter.hsdJointWorldTransforms.clear();
+        fighter.hsdJointWorldPositions.clear();
+        fighter.hsdHurtboxCapsules.clear();
+        return;
+    }
     fighter.hsdJointWorldTransforms = fighterHsdWorldTransforms(def, fighter);
     fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
     evaluateImportedHurtboxes(def, fighter);
@@ -1804,7 +2163,7 @@ static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntim
 }
 
 static void evaluatePose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
-    const AnimationClip* clip = clipForState(def, state);
+    const AnimationClip* clip = clipForState(def, state, fighter.animationActionIndexOverride);
     if (clip) {
         constexpr float kHalfPi = 1.57079632679f;
         const AnimationPose previousVisiblePose = fighter.hsdPose;
@@ -1893,7 +2252,7 @@ static void applyAnimationGroundVelocity(const FighterState& state, FighterRunti
 
 static void advanceAnimationFrame(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
     fighter.animationFrame += fighter.animationRate;
-    const AnimationClip* clip = clipForState(def, state);
+    const AnimationClip* clip = clipForState(def, state, fighter.animationActionIndexOverride);
     if (!state.loopAnimation || !clip || clip->frameCount <= 0) {
         return;
     }
@@ -2165,13 +2524,21 @@ static void updateFloorSkip(const World& world, FighterRuntime& fighter) {
     }
 }
 
-static bool canStandOnSegment(const FighterRuntime& fighter, const FighterProperties& attr, const StageSegment& segment, int segmentIndex) {
-    (void) attr;
+static bool canStandOnSegment(const World& world, const FighterRuntime& fighter, const StageSegment& segment, int segmentIndex) {
     if (!isFloorLine(segment)) {
         return false;
     }
     if (fighter.floorSkipSegment == segmentIndex) {
         return false;
+    }
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const FighterState& state = def.states[static_cast<size_t>(fighter.state)];
+    if ((state.name == "FallSpecial" ||
+         state.name == "ItemScrew" ||
+         state.name == "ItemScrewAir") &&
+        segment.type == SegmentType::Semisolid)
+    {
+        return fighter.input.frames[0].move.y > def.properties.common.fallSpecialPlatformStickThresholdX25C;
     }
     return true;
 }
@@ -2765,7 +3132,7 @@ static bool meleeCheckCeilingLine(const World& world, int segmentIndex, Vec2 swe
             return false;
         }
     } else {
-        if (sweepStart.y > sweepEnd.y || !meleeLineIntersectionH(a0, a1.x, sweepStart, sweepEnd, contact)) {
+        if (sweepStart.y > sweepEnd.y || !meleeLineIntersectionH(a0, a1.x, sweepEnd, sweepStart, contact)) {
             return false;
         }
     }
@@ -2832,13 +3199,12 @@ static Fix distanceSquared(Vec2 a, Vec2 b) {
 
 static MeleeLineHit meleeCheckFloor(const World& world, const FighterRuntime& fighter, Vec2 sweepStart, Vec2 sweepEnd, int lineIdSkip) {
     MeleeLineHit best;
-    const FighterProperties& attr = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties;
     for (size_t i = 0; i < world.stage.segments.size(); ++i) {
         if (static_cast<int>(i) == lineIdSkip) {
             continue;
         }
         const StageSegment& segment = world.stage.segments[i];
-        if (!canStandOnSegment(fighter, attr, segment, static_cast<int>(i))) {
+        if (!canStandOnSegment(world, fighter, segment, static_cast<int>(i))) {
             continue;
         }
 
@@ -3335,6 +3701,15 @@ static bool positionAtLedgeFromCurrentAnimation(const FighterDefinition& def, Fi
     return true;
 }
 
+static bool ledgeOccupiedByOtherFighter(const World& world, size_t fighterIndex, int ledgeIndex) {
+    for (size_t i = 0; i < world.fighters.size(); ++i) {
+        if (i != fighterIndex && world.fighters[i].grabbedLedge == ledgeIndex) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool tryGrabLedge(World& world, size_t fighterIndex) {
     FighterRuntime& fighter = world.fighters[fighterIndex];
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
@@ -3358,6 +3733,9 @@ static bool tryGrabLedge(World& world, size_t fighterIndex) {
             continue;
         }
         if (!ledgePathClear(world, fighter, ledge)) {
+            continue;
+        }
+        if (ledgeOccupiedByOtherFighter(world, fighterIndex, static_cast<int>(i))) {
             continue;
         }
 
@@ -3417,6 +3795,24 @@ static bool meleeMaintainCurrentFloor(const World& world, FighterRuntime& fighte
     }
 
     const Vec2 bottom = fighter.position + fighter.ecb.points[3];
+    const bool pastLeftEdge = fighter.position.x < segmentMinX(floor);
+    const bool pastRightEdge = fighter.position.x > segmentMaxX(floor);
+    if (pastLeftEdge || pastRightEdge) {
+        // Mirrors mpColl_8004B4B0/mpColl_8004A678: once the origin passes an
+        // unlinked floor end, leave current-ground handling so the state's
+        // collision callback can choose Ottotto or Fall from facing/stick.
+        const int side = pastLeftEdge ? -1 : 1;
+        const Vec2 edge = side < 0 ? segmentLeftEndpoint(floor) : segmentRightEndpoint(floor);
+        const int linkedFloor = linkedSameKindLineAtEndpoint(world, floorSegmentIndex, edge, SegmentLineKind::Floor);
+        const int linkedNonFloor = linkedNonFloorLineAtEndpoint(world, floorSegmentIndex, edge);
+        const bool blockedByWall = validStageSegmentIndex(world, linkedNonFloor) &&
+            (side < 0
+                ? effectiveLineKind(world.stage.segments[static_cast<size_t>(linkedNonFloor)]) == SegmentLineKind::RightWall
+                : effectiveLineKind(world.stage.segments[static_cast<size_t>(linkedNonFloor)]) == SegmentLineKind::LeftWall);
+        if (linkedFloor < 0 && !blockedByWall) {
+            return false;
+        }
+    }
     if (snapToGroundSegment(world, fighter, floorSegmentIndex, bottom)) {
         return true;
     }
@@ -3568,6 +3964,24 @@ static void processSmashCharge(FighterRuntime& fighter) {
     }
 }
 
+static const HsdActionScript* actionScriptForState(const HsdFighterAnimationAsset& asset, const FighterState& state) {
+    const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
+    if (actionIndex >= 0) {
+        if (const HsdActionScript* script = findActionScriptByActionIndex(asset, actionIndex)) {
+            return script;
+        }
+    }
+    const std::string suffix = "_ACTION_" + state.animation + "_figatree";
+    for (const HsdActionScript& script : asset.actionScripts) {
+        if (script.name.size() >= suffix.size() &&
+            script.name.compare(script.name.size() - suffix.size(), suffix.size(), suffix) == 0)
+        {
+            return &script;
+        }
+    }
+    return nullptr;
+}
+
 static void executeSubaction(const FighterDefinition& def, FighterRuntime& fighter, const Subaction& sub) {
     if (sub.type == SubactionType::ClearHitboxes) {
         fighter.activeHitboxes.clear();
@@ -3617,6 +4031,10 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         if (sub.flag == 0 || sub.flag == 1) {
             setFighterCommandFlag(fighter, sub.flag + 3, true);
         }
+        return;
+    }
+    if (sub.type == SubactionType::SetJabRapid) {
+        setFighterCommandFlag(fighter, 5, sub.flagValue);
         return;
     }
     if (sub.type == SubactionType::StartSmashCharge) {
@@ -3686,8 +4104,7 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
 static void executeActionFrame(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter, int actionFrame) {
     std::vector<Subaction> actionSource = state.action;
     if (def.hasHsdAsset && def.hsdAsset) {
-        const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
-        if (const HsdActionScript* script = actionIndex >= 0 ? findActionScriptByActionIndex(*def.hsdAsset, actionIndex) : nullptr) {
+        if (const HsdActionScript* script = actionScriptForState(*def.hsdAsset, state)) {
             actionSource = decodeHsdActionScript(*def.hsdAsset, *script);
         }
     }
@@ -3725,18 +4142,41 @@ static void executePendingActionFrames(const FighterDefinition& def, const Fight
 static void processInterrupts(World& world, FighterRuntime& fighter) {
     const FighterState& state = currentState(world, fighter);
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (state.name.rfind("Attack1", 0) == 0 &&
+        (fighter.input.justPressed(ButtonAttack) || fighter.input.down(ButtonAttack)))
+    {
+        ++fighter.attackRapidInputCount;
+    }
     for (const InterruptRule& rule : state.interrupts) {
         if (!ruleActive(rule, fighter) || !groundAllowed(rule.ground, fighter)) {
             continue;
+        }
+        const bool useTurnFacing = state.name == "Turn" &&
+            !fighter.turnHasTurned &&
+            usesPreTurnFacingForTurnInterrupt(rule.condition);
+        const int originalFacing = fighter.facing;
+        if (useTurnFacing) {
+            fighter.facing = fighter.turnFacingAfter == 0 ? -fighter.facing : fighter.turnFacingAfter;
         }
         if (conditionMet(world, rule.condition, fighter)) {
             if (rule.condition == InterruptCondition::DashInput && signOf(fighter.input.frames[0].move.x) != fighter.facing) {
                 fighter.facing *= -1;
             }
+            if ((rule.condition == InterruptCondition::SpecialSInput ||
+                 rule.condition == InterruptCondition::SpecialAirSInput) &&
+                fighter.input.frames[0].move.x * fighter.facing < -def.properties.common.specialSReverseThresholdX220)
+            {
+                fighter.facing *= -1;
+            }
             if (isSideSmashCondition(rule.condition)) {
                 int desiredFacing = fighter.facing;
                 float unusedAngle = 0.0f;
-                if (sideSmashInput(fighter, def.properties.common, desiredFacing, unusedAngle)) {
+                const bool attackPressed =
+                    fighter.input.justPressed(ButtonAttack) ||
+                    (state.name == "Turn" &&
+                     fighter.turnJustTurned &&
+                     (fighter.turnBufferedButtons & ButtonAttack) != 0);
+                if (sideSmashInput(fighter, def.properties.common, desiredFacing, unusedAngle, attackPressed)) {
                     fighter.facing = desiredFacing;
                 }
             }
@@ -3753,6 +4193,9 @@ static void processInterrupts(World& world, FighterRuntime& fighter) {
             changeFighterState(world, fighter, rule.targetState, rule.lagFrames, rule.blendFrames);
             return;
         }
+        if (useTurnFacing) {
+            fighter.facing = originalFacing;
+        }
     }
 }
 
@@ -3765,7 +4208,12 @@ static bool blocksShieldRegen(const FighterState& state) {
         state.name == "ShieldBreakFly" ||
         state.name == "ShieldBreakFall" ||
         state.name == "ShieldBreakDown" ||
-        state.name == "ShieldBreakStand";
+        state.name == "ShieldBreakDownU" ||
+        state.name == "ShieldBreakDownD" ||
+        state.name == "ShieldBreakStand" ||
+        state.name == "ShieldBreakStandU" ||
+        state.name == "ShieldBreakStandD" ||
+        state.name == "Furafura";
 }
 
 static void regenerateShield(const World& world, FighterRuntime& fighter) {
@@ -3850,7 +4298,17 @@ static bool isDamageFlyStateName(const std::string& name) {
 }
 
 static bool isDamageSurfaceStateName(const std::string& name) {
-    return name == "WallDamage" || name == "StopCeil";
+    return name == "WallDamage" ||
+           name == "FlyReflectWall" ||
+           name == "FlyReflectCeil";
+}
+
+static bool isDownDamageStateName(const std::string& name) {
+    return name == "DownDamageU" || name == "DownDamageD";
+}
+
+static const char* damageWallReflectStateFor(const std::string& stateName) {
+    return isDownDamageStateName(stateName) ? "DownReflect" : "FlyReflectWall";
 }
 
 static bool damageFlyHitboxIgnoresVictim(const World& world, const FighterRuntime& attacker, size_t victimIndex) {
@@ -3869,15 +4327,28 @@ static bool fightersAreInActiveCaptureLink(const FighterRuntime& attacker, size_
         victim.grabbedFighter == static_cast<int>(attackerIndex);
 }
 
+static bool techPressAtAge(const InputBuffer& input, int age) {
+    const InputFrame& current = input.frames[static_cast<size_t>(age)];
+    const InputFrame& previous = input.frames[static_cast<size_t>(age + 1)];
+    const bool currentPress = (current.buttons & (ButtonShield | ButtonGrab)) != 0 || current.shieldAnalog > 0;
+    const bool previousPress = (previous.buttons & (ButtonShield | ButtonGrab)) != 0 || previous.shieldAnalog > 0;
+    return currentPress && !previousPress;
+}
+
+static bool techPressHasMeleeRepeatGap(const InputBuffer& input, int age, int minGap) {
+    for (int previousAge = age + 1; previousAge < InputBuffer::kSize - 1; ++previousAge) {
+        if (techPressAtAge(input, previousAge)) {
+            return previousAge - age - 1 >= minGap;
+        }
+    }
+    return true;
+}
+
 static bool recentTechInput(const FighterRuntime& fighter, const MeleeCommonData& common) {
     const int maxAge = std::min(std::max(0, common.passiveInputWindowX250 - 1), InputBuffer::kSize - 2);
     for (int age = 0; age <= maxAge; ++age) {
-        const InputFrame& current = fighter.input.frames[static_cast<size_t>(age)];
-        const InputFrame& previous = fighter.input.frames[static_cast<size_t>(age + 1)];
-        const bool currentPress = (current.buttons & (ButtonShield | ButtonGrab)) != 0 || current.shieldAnalog > 0;
-        const bool previousPress = (previous.buttons & (ButtonShield | ButtonGrab)) != 0 || previous.shieldAnalog > 0;
-        if (currentPress && !previousPress) {
-            return true;
+        if (techPressAtAge(fighter.input, age)) {
+            return techPressHasMeleeRepeatGap(fighter.input, age, common.inputRepeatWindowX1C);
         }
     }
     return false;
@@ -3922,7 +4393,11 @@ static void reflectDamageVelocity(FighterRuntime& fighter, Vec2 normal, Fix damp
 
 static bool handleDamageSurfaceContact(World& world, FighterRuntime& fighter, Vec2 normal, const char* damageState, const char* techState) {
     const std::string& stateName = currentState(world, fighter).name;
-    if (!fighter.damageTumble || (!isDamageFlyStateName(stateName) && !isDamageSurfaceStateName(stateName))) {
+    const bool downDamageWallContact =
+        isDownDamageStateName(stateName) && std::strcmp(damageState, "DownReflect") == 0;
+    if ((!fighter.damageTumble && !downDamageWallContact) ||
+        (!isDamageFlyStateName(stateName) && !isDamageSurfaceStateName(stateName) && !downDamageWallContact))
+    {
         return false;
     }
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
@@ -3971,13 +4446,81 @@ static bool shouldStartTeeterFromRunoff(
     int side)
 {
     const Fix edgeX = side < 0 ? segmentMinX(previousSegment) : segmentMaxX(previousSegment);
-    const Fix bottomX = fighter.position.x + fighter.ecb.points[3].x;
-    const bool pastEdge = side < 0 ? bottomX <= edgeX : bottomX >= edgeX;
+    const bool pastEdge = side < 0 ? fighter.position.x <= edgeX : fighter.position.x >= edgeX;
     if (!pastEdge || fighter.facing != side) {
         return false;
     }
 
     return fighter.input.frames[0].move.x * side < fxFromFloat(0.75f);
+}
+
+static bool shouldEnterStopWall(const World& world, const FighterRuntime& fighter, Fix preWallGroundVelocity) {
+    if (!fighter.grounded || fighter.wallContactSide == 0 || fighter.facing != fighter.wallContactSide) {
+        return false;
+    }
+    const std::string& stateName = currentState(world, fighter).name;
+    if (stateName != "Dash" && stateName != "Run") {
+        return false;
+    }
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    return fxAbs(preWallGroundVelocity) > def.properties.walkMaxVel;
+}
+
+static void clearKineticVelocity(FighterRuntime& fighter) {
+    fighter.fighterVelocity = {};
+    fighter.knockbackVelocity = {};
+    fighter.attackerShieldKnockback = {};
+    fighter.groundVelocity = 0;
+    fighter.groundKnockbackVelocity = 0;
+    fighter.groundAttackerShieldKnockbackVelocity = 0;
+    fighter.groundAccel = 0;
+    fighter.groundAccelSecondary = 0;
+}
+
+static bool touchesCurrentFloorEdge(const World& world, const FighterRuntime& fighter) {
+    if (!validStageSegmentIndex(world, fighter.groundSegment)) {
+        return false;
+    }
+
+    const StageSegment& floor = world.stage.segments[static_cast<size_t>(fighter.groundSegment)];
+    constexpr Fix kEdgeTolerance = 32;
+    return fxAbs(fighter.position.x - segmentMinX(floor)) <= kEdgeTolerance ||
+           fxAbs(fighter.position.x - segmentMaxX(floor)) <= kEdgeTolerance;
+}
+
+static void handleGroundedEdgeContact(World& world, FighterRuntime& fighter) {
+    if (currentState(world, fighter).name == "TurnRun" && touchesCurrentFloorEdge(world, fighter)) {
+        clearKineticVelocity(fighter);
+    }
+}
+
+static void enterStopWall(World& world, FighterRuntime& fighter) {
+    clearKineticVelocity(fighter);
+    changeFighterState(world, fighter, "StopWall");
+}
+
+static bool shouldEnterStopCeil(const World& world, const FighterRuntime& fighter) {
+    const std::string& stateName = currentState(world, fighter).name;
+    return stateName == "JumpF" ||
+           stateName == "JumpB" ||
+           stateName == "JumpAerialF" ||
+           stateName == "JumpAerialB" ||
+           stateName == "CliffJumpAir" ||
+           stateName == "CliffJumpSlow2" ||
+           stateName == "CliffJumpQuick2";
+}
+
+static void enterStopCeil(World& world, FighterRuntime& fighter) {
+    if (fighter.fighterVelocity.y > 0) {
+        fighter.fighterVelocity.y = 0;
+    }
+    if (fighter.knockbackVelocity.y > 0) {
+        fighter.knockbackVelocity.y = 0;
+    }
+    if (fighter.attackerShieldKnockback.y > 0) {
+        fighter.attackerShieldKnockback.y = 0;
+    }
+    changeFighterState(world, fighter, "StopCeil");
 }
 
 static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGrounded, int previousGroundSegment, Vec2 attemptedDelta) {
@@ -3997,15 +4540,10 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
             fighter.floorSkipSegment != previousGroundSegment)
         {
             const StageSegment& previousSegment = world.stage.segments[static_cast<size_t>(previousGroundSegment)];
-            const Fix bottomX = fighter.position.x + fighter.ecb.points[3].x;
-            if (bottomX < segmentMinX(previousSegment) &&
-                shouldStartTeeterFromRunoff(fighter, previousSegment, -1))
-            {
+            if (fighter.position.x < segmentMinX(previousSegment)) {
                 fighter.runoffSegment = previousGroundSegment;
                 fighter.runoffDirection = -1;
-            } else if (bottomX > segmentMaxX(previousSegment) &&
-                       shouldStartTeeterFromRunoff(fighter, previousSegment, 1))
-            {
+            } else if (fighter.position.x > segmentMaxX(previousSegment)) {
                 fighter.runoffSegment = previousGroundSegment;
                 fighter.runoffDirection = 1;
             }
@@ -4015,13 +4553,22 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
     if (!wasGrounded && !nowGrounded) {
         hitCeilingThisStep = resolveWallAndCeiling(world, fighter, attemptedDelta);
         resolvedAirCollision = true;
+        if (hitCeilingThisStep && shouldEnterStopCeil(world, fighter)) {
+            enterStopCeil(world, fighter);
+            return true;
+        }
         if (hitCeilingThisStep &&
-            handleDamageSurfaceContact(world, fighter, {0, -fx(1)}, "StopCeil", "PassiveCeil"))
+            handleDamageSurfaceContact(world, fighter, {0, -fx(1)}, "FlyReflectCeil", "PassiveCeil"))
         {
             return true;
         }
         if (fighter.wallContactSide != 0 &&
-            handleDamageSurfaceContact(world, fighter, {-fighter.wallContactSide * fx(1), 0}, "WallDamage", "PassiveWall"))
+            handleDamageSurfaceContact(
+                world,
+                fighter,
+                {-fighter.wallContactSide * fx(1), 0},
+                damageWallReflectStateFor(currentState(world, fighter).name),
+                "PassiveWall"))
         {
             return true;
         }
@@ -4053,6 +4600,7 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
         fighter.wallContactSegment = -1;
         fighter.wallJumpsUsed = 0;
         fighter.grabbedLedge = -1;
+        handleGroundedEdgeContact(world, fighter);
         if (!wasGrounded) {
             if (!fighter.activeHitboxes.empty()) {
                 updateAndCheckHitboxes(world, fighterIndex);
@@ -4078,9 +4626,17 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
     }
 
     if (!resolvedAirCollision) {
+        const Fix preWallGroundVelocity = fighter.groundVelocity;
         resolveWallAndCeiling(world, fighter, attemptedDelta);
-        if (fighter.wallContactSide != 0) {
-            handleDamageSurfaceContact(world, fighter, {-fighter.wallContactSide * fx(1), 0}, "WallDamage", "PassiveWall");
+        if (shouldEnterStopWall(world, fighter, preWallGroundVelocity)) {
+            enterStopWall(world, fighter);
+        } else if (fighter.wallContactSide != 0) {
+            handleDamageSurfaceContact(
+                world,
+                fighter,
+                {-fighter.wallContactSide * fx(1), 0},
+                damageWallReflectStateFor(currentState(world, fighter).name),
+                "PassiveWall");
         }
     }
 
@@ -4291,6 +4847,15 @@ static const char* groundedDamageStateName(int level, int region) {
     return names[std::clamp(level, 0, 2)][std::clamp(region, 0, 2)];
 }
 
+static bool proneDamageStateName(const std::string& name) {
+    return name == "DownBoundU" || name == "DownWaitU" || name == "DownDamageU" ||
+           name == "DownBoundD" || name == "DownWaitD" || name == "DownDamageD";
+}
+
+static const char* downDamageStateNameForProneState(const std::string& name) {
+    return name == "DownWaitU" ? "DownDamageU" : "DownDamageD";
+}
+
 static const char* airDamageStateName(int level) {
     static constexpr const char* names[3] = {"DamageAir1", "DamageAir2", "DamageAir3"};
     return names[std::clamp(level, 0, 2)];
@@ -4332,9 +4897,35 @@ static Fix angleBetween(Vec2 a, Vec2 b) {
     return fxFromFloat(std::acos(dot));
 }
 
-static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox, size_t hurtboxIndex) {
+static Fix initialDamageBindTimer(const FighterRuntime& victim, const MeleeCommonData& common, size_t victimIndex) {
+    const Fix slot = fx(static_cast<int>(victimIndex) + 1);
+    const Fix handicapTerm = fxMul(common.damageBindHandicapScaleX65C, common.damageBindHandicapBaseX660 - fx(9));
+    const Fix portTerm = fxMul(common.damageBindPortScaleX664, common.damageBindPortBaseX668 - slot);
+    return fxMul(victim.percent, common.damageBindPercentScaleX66C) + common.damageBindBaseX658 + handicapTerm + portTerm;
+}
+
+static Fix initialDamageSongTimer(const FighterRuntime& victim, const MeleeCommonData& common, size_t victimIndex, bool useElement7Multiplier) {
+    const Fix slot = fx(static_cast<int>(victimIndex) + 1);
+    const Fix handicapTerm = fxMul(common.damageSongHandicapScaleX628, common.damageSongHandicapBaseX62C - fx(9));
+    const Fix portTerm = fxMul(common.damageSongPortScaleX630, common.damageSongPortBaseX634 - slot);
+    Fix timer = fxMul(victim.percent, common.damageSongPercentScaleX638) + common.damageSongBaseX624 + handicapTerm + portTerm;
+    if (useElement7Multiplier) {
+        timer = fxMul(timer, common.damageSongElement7TimerMultiplierX644);
+    }
+    return timer;
+}
+
+static Fix initialBuryTimer(const FighterRuntime& victim, const MeleeCommonData& common, size_t victimIndex) {
+    const Fix slot = fx(static_cast<int>(victimIndex) + 1);
+    const Fix handicapTerm = fxMul(common.buryHandicapScaleX5FC, common.buryHandicapBaseX600 - fx(9));
+    const Fix portTerm = fxMul(common.buryPortScaleX604, common.buryPortBaseX608 - slot);
+    return fxMul(victim.percent, common.buryPercentScaleX60C) + common.buryBaseX5F8 + handicapTerm + portTerm;
+}
+
+static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, size_t victimIndex, const HitboxDefinition& hitbox, size_t hurtboxIndex) {
     const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
     const MeleeCommonData& common = victimDef.properties.common;
+    const std::string victimStateName = currentState(world, victim).name;
     const Fix kb = calculateKnockback(hitbox, victimDef, victim);
     const bool wasGrounded = victim.grounded;
     const int side = victim.position.x >= attacker.position.x ? 1 : -1;
@@ -4369,6 +4960,10 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
     victim.groundKnockbackVelocity = 0;
     victim.groundAccel = 0;
     victim.groundAccelSecondary = 0;
+    if (victim.grabbedLedge >= 0) {
+        victim.grabbedLedge = -1;
+        victim.ledgeCooldown = common.ledgeCooldownX498;
+    }
     victim.facing = -side;
 
     const bool shouldFly = victim.damageLevel >= 3;
@@ -4403,6 +4998,111 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
         victim.knockbackDecay = {};
     }
 
+    if (hitbox.element == 5 && kb > 0) {
+        victim.grabTimer = std::max(Fix{1}, fxMul(hitbox.damage, common.damageIceTimerDamageScaleX790));
+        victim.grabMashStickX = 0;
+        victim.grabMashStickY = 0;
+        victim.captureWaitTimer = 0;
+        victim.captureMashAnimTimer = 0;
+        victim.captureJumpQueued = false;
+        if (wasGrounded && !launchOffGround) {
+            victim.grounded = true;
+            victim.groundVelocity = victim.groundKnockbackVelocity;
+            victim.fighterVelocity = {};
+        } else {
+            victim.grounded = false;
+            victim.groundSegment = -1;
+            victim.fighterVelocity = knockbackVelocity;
+            victim.groundVelocity = 0;
+            victim.groundKnockbackVelocity = 0;
+            victim.jumpsUsed = std::max(1, victim.jumpsUsed);
+        }
+        victim.knockbackVelocity = {};
+        victim.knockbackDecay = {};
+        changeFighterState(world, victim, "DamageIce");
+        return;
+    }
+
+    if (hitbox.element == 12 && kb > 0) {
+        victim.grabTimer = std::max(Fix{1}, initialDamageBindTimer(victim, common, victimIndex));
+        victim.grabMashStickX = 0;
+        victim.grabMashStickY = 0;
+        victim.captureWaitTimer = 0;
+        victim.captureMashAnimTimer = 0;
+        victim.captureJumpQueued = false;
+        if (wasGrounded) {
+            victim.grounded = true;
+            victim.fighterVelocity = {};
+            victim.knockbackVelocity = {};
+            victim.knockbackDecay = {};
+            victim.groundVelocity = 0;
+            victim.groundKnockbackVelocity = 0;
+            victim.groundAccel = 0;
+            victim.groundAccelSecondary = 0;
+            changeFighterState(world, victim, "DamageBind");
+        } else {
+            victim.grounded = false;
+            victim.groundSegment = -1;
+            changeFighterState(world, victim, "DamageFall");
+        }
+        return;
+    }
+
+    if ((hitbox.element == 6 || hitbox.element == 7) && kb > 0) {
+        victim.grabTimer = std::max(Fix{1}, initialDamageSongTimer(victim, common, victimIndex, hitbox.element == 7));
+        victim.grabMashStickX = 0;
+        victim.grabMashStickY = 0;
+        victim.captureWaitTimer = 0;
+        victim.captureMashAnimTimer = 0;
+        victim.captureJumpQueued = false;
+        victim.grounded = true;
+        victim.fighterVelocity = {};
+        victim.knockbackVelocity = {};
+        victim.knockbackDecay = {};
+        victim.groundVelocity = 0;
+        victim.groundKnockbackVelocity = 0;
+        victim.groundAccel = 0;
+        victim.groundAccelSecondary = 0;
+        changeFighterState(world, victim, "DamageSong");
+        return;
+    }
+
+    if (hitbox.element == 9 && kb > 0 && wasGrounded) {
+        victim.grabTimer = std::max(Fix{1}, initialBuryTimer(victim, common, victimIndex));
+        victim.burySubmergeTimer = std::max(1, common.burySubmergeFramesX5F4);
+        victim.grabMashStickX = 0;
+        victim.grabMashStickY = 0;
+        victim.captureWaitTimer = 0;
+        victim.captureMashAnimTimer = 0;
+        victim.captureJumpQueued = false;
+        victim.grounded = true;
+        victim.fighterVelocity = {};
+        victim.knockbackVelocity = {};
+        victim.knockbackDecay = {};
+        victim.groundVelocity = 0;
+        victim.groundKnockbackVelocity = 0;
+        victim.groundAccel = 0;
+        victim.groundAccelSecondary = 0;
+        victim.hitstun = 0;
+        changeFighterState(world, victim, "Bury");
+        return;
+    }
+
+    if (hitbox.element == 14 && kb > 0) {
+        victim.grounded = false;
+        victim.groundSegment = -1;
+        victim.fighterVelocity.x = 0;
+        victim.fighterVelocity.y = victimDef.properties.damageScrewVerticalVelocity;
+        victim.knockbackVelocity = {};
+        victim.knockbackDecay = {};
+        victim.groundVelocity = 0;
+        victim.groundKnockbackVelocity = 0;
+        victim.groundAccel = 0;
+        victim.groundAccelSecondary = 0;
+        changeFighterState(world, victim, wasGrounded ? "DamageScrew" : "DamageScrewAir");
+        return;
+    }
+
     if (wasGrounded && launchOffGround) {
         victim.jumpsUsed = std::max(1, victim.jumpsUsed);
         lockFighterEcb(victim, 10);
@@ -4418,19 +5118,23 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
         victim.grounded = false;
         victim.groundSegment = -1;
         changeFighterState(world, victim, airDamageStateName(victim.damageLevel));
+    } else if (wasGrounded && proneDamageStateName(victimStateName) && hitbox.damage < fx(common.downDamageThresholdX428)) {
+        victim.grounded = true;
+        changeFighterState(world, victim, downDamageStateNameForProneState(victimStateName));
+        victim.downWaitTimer = std::max(1, victim.hitstun);
     } else {
         victim.grounded = wasGrounded;
         changeFighterState(world, victim, groundedDamageStateName(victim.damageLevel, victim.damageHurtboxRegion));
     }
 }
 
-static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox, bool forceDamageFlyTop) {
+static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox, bool forceDamageFlyTopState) {
     const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
     const MeleeCommonData& common = victimDef.properties.common;
     const Fix kb = calculateThrowKnockback(hitbox, victimDef, victim);
     const bool wasGrounded = victim.grounded;
     const int damageFacing = -attacker.facing;
-    Fix resolvedLaunchAngle = forceDamageFlyTop ? fx(90) : throwLaunchAngleDegrees(victim, hitbox, common, kb);
+    Fix resolvedLaunchAngle = throwLaunchAngleDegrees(victim, hitbox, common, kb);
     const float angle = fxToFloat(resolvedLaunchAngle) * 3.14159265f / 180.0f;
     const Fix scaledVelocity = fxMul(kb, common.damageVelocityScaleX100);
     Vec2 knockbackVelocity{
@@ -4441,7 +5145,7 @@ static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterR
     victim.percent += hitbox.damage;
     const Fix scaledHitstun = fxMul(kb, common.hitstunMultiplierX154);
     victim.hitstun = std::max(1, static_cast<int>(fxToFloat(scaledHitstun)));
-    victim.damageLevel = forceDamageFlyTop ? 3 : damageLevelFromHitstun(scaledHitstun, common);
+    victim.damageLevel = forceDamageFlyTopState ? 3 : damageLevelFromHitstun(scaledHitstun, common);
     victim.damageHurtboxRegion = 1;
     victim.damageKnockback = kb;
     victim.damageLaunchAngle = resolvedLaunchAngle;
@@ -4460,7 +5164,7 @@ static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterR
         victim.facing = -damageFacing;
     }
 
-    bool launchOffGround = !wasGrounded || forceDamageFlyTop;
+    bool launchOffGround = !wasGrounded || forceDamageFlyTopState;
     bool groundBounce = false;
     if (wasGrounded) {
         const Vec2 floorNormal = victim.groundNormal;
@@ -4500,7 +5204,7 @@ static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterR
         lockFighterEcb(victim, 10);
     }
 
-    if (forceDamageFlyTop) {
+    if (forceDamageFlyTopState) {
         victim.grounded = false;
         victim.groundSegment = -1;
         changeFighterState(world, victim, "DamageFlyTop");
@@ -4524,8 +5228,16 @@ static bool isHeldCaptureStateName(const std::string& name) {
     return name == "CapturePulledHi" || name == "CapturePulledLw" ||
            name == "CaptureWaitHi" || name == "CaptureWaitLw" ||
            name == "CaptureDamageHi" || name == "CaptureDamageLw" ||
+           name == "CaptureYoshi" ||
+           name == "CaptureNeck" || name == "CaptureFoot" ||
            name == "ThrownF" || name == "ThrownB" ||
-           name == "ThrownHi" || name == "ThrownLw";
+           name == "ThrownHi" || name == "ThrownLw" ||
+           name == "ThrownLwWomen" ||
+           name == "ThrownFF" || name == "ThrownFB" ||
+           name == "ThrownFHi" || name == "ThrownFLw" ||
+           name == "ThrownKoopaF" || name == "ThrownKoopaB" ||
+           name == "ThrownKoopaAirF" || name == "ThrownKoopaAirB" ||
+           name == "ThrownMewtwo" || name == "ThrownMewtwoAir";
 }
 
 static bool isThrowStateNameSim(const std::string& name) {
@@ -4812,6 +5524,57 @@ static bool changeCaptureLowToHighAfterMeleeAlign(World& world, FighterRuntime& 
     }
 
     const Fix frame = fighter.animationFrame;
+    fighter.grounded = false;
+    fighter.groundSegment = -1;
+    fighter.groundVelocity = 0;
+    fighter.groundAccel = 0;
+    fighter.groundAccelSecondary = 0;
+    fighter.groundAttackerShieldKnockbackVelocity = 0;
+    fighter.jumpsUsed = std::max(1, fighter.jumpsUsed);
+    lockFighterEcb(fighter, 10);
+    unlockFighterEcb(fighter);
+    changeFighterState(world, fighter, target, 0, kDisableAnimationBlendFrames);
+    fighter.animationFrame = frame;
+    return true;
+}
+
+static bool changeCaptureHighToLowAfterMeleeFloor(World& world, FighterRuntime& fighter) {
+    const std::string stateName = currentState(world, fighter).name;
+    const char* target = nullptr;
+    if (stateName == "CapturePulledHi") {
+        target = "CapturePulledLw";
+    } else if (stateName == "CaptureWaitHi") {
+        target = "CaptureWaitLw";
+    } else if (stateName == "CaptureDamageHi") {
+        target = "CaptureDamageLw";
+    }
+    if (!target) {
+        return false;
+    }
+
+    const Vec2 previousBottom = fighter.previousPosition + fighter.previousEcb.points[3];
+    const Vec2 currentBottom = fighter.position + fighter.ecb.points[3];
+    if (currentBottom.y > previousBottom.y) {
+        return false;
+    }
+    Vec2 contact{};
+    Fix fraction = fx(1);
+    const int landedSegment = findLandingSegment(world, fighter, previousBottom, currentBottom, contact, fraction);
+    if (landedSegment < 0) {
+        return false;
+    }
+
+    const Fix frame = fighter.animationFrame;
+    fighter.position.x = contact.x - fighter.ecb.points[3].x;
+    fighter.position.y = contact.y - fighter.ecb.points[3].y;
+    fighter.grounded = true;
+    fighter.groundSegment = landedSegment;
+    fighter.groundNormal = segmentNormal(world.stage.segments[static_cast<size_t>(landedSegment)]);
+    fighter.groundVelocity = velocityAlongGround(fighter.fighterVelocity, fighter.groundNormal);
+    projectGroundVelocity(fighter);
+    fighter.jumpsUsed = 0;
+    fighter.wallJumpsUsed = 0;
+    unlockFighterEcb(fighter);
     changeFighterState(world, fighter, target, 0, kDisableAnimationBlendFrames);
     fighter.animationFrame = frame;
     return true;
@@ -4829,6 +5592,7 @@ static void maintainCapturedFighterAfterPose(World& world, size_t victimIndex) {
     if (high) {
         changeCaptureLowToHighAfterMeleeAlign(world, fighter);
     }
+    changeCaptureHighToLowAfterMeleeFloor(world, fighter);
 }
 
 static void captureVictim(World& world, size_t attackerIndex, size_t victimIndex) {
@@ -4974,10 +5738,10 @@ static void applyShieldHit(World& world, FighterRuntime& attacker, FighterRuntim
     defender.guardReleaseQueued = false;
 }
 
-static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
-    FighterRuntime& attacker = world.fighters[attackerIndex];
-    for (ActiveHitbox& hitbox : attacker.activeHitboxes) {
-        const Vec3 worldPos = hitboxWorld(attacker, hitbox.def);
+static void updateActiveHitboxPositions(World& world, size_t fighterIndex) {
+    FighterRuntime& fighter = world.fighters[fighterIndex];
+    for (ActiveHitbox& hitbox : fighter.activeHitboxes) {
+        const Vec3 worldPos = hitboxWorld(fighter, hitbox.def);
         if (hitbox.firstFrame) {
             hitbox.firstFrame = false;
             hitbox.current = worldPos;
@@ -4986,6 +5750,69 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
             hitbox.previous = hitbox.current;
             hitbox.current = worldPos;
         }
+    }
+}
+
+static int clankDamageValue(const HitboxDefinition& hitbox) {
+    const int damage = static_cast<int>(fxToFloat(hitbox.damage));
+    return hitbox.damage > 0 ? std::max(1, damage) : 0;
+}
+
+static void enterReboundFromClank(World& world, size_t fighterIndex, size_t otherIndex, int damageValue) {
+    FighterRuntime& fighter = world.fighters[fighterIndex];
+    if (!fighter.grounded || damageValue <= 0 || currentState(world, fighter).name == "ReboundStop" ||
+        currentState(world, fighter).name == "Rebound")
+    {
+        return;
+    }
+    const MeleeCommonData& common = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties.common;
+    fighter.reboundDamageVelocity =
+        fxMul(fx(damageValue), common.reboundDamageScaleX3D0) + common.reboundDamageBaseX3D4;
+    fighter.reboundFacingDir = world.fighters[otherIndex].position.x > fighter.position.x ? 1 : -1;
+    changeFighterState(world, fighter, "ReboundStop");
+}
+
+static void resolveHitboxClanks(World& world) {
+    for (size_t aIndex = 0; aIndex < world.fighters.size(); ++aIndex) {
+        FighterRuntime& a = world.fighters[aIndex];
+        for (size_t bIndex = aIndex + 1; bIndex < world.fighters.size(); ++bIndex) {
+            FighterRuntime& b = world.fighters[bIndex];
+            bool aRebound = false;
+            bool bRebound = false;
+            int aDamage = 0;
+            int bDamage = 0;
+            for (const ActiveHitbox& aHitbox : a.activeHitboxes) {
+                if (aHitbox.def.isGrab || (!aHitbox.def.canClank && !aHitbox.def.reboundsOnClank)) {
+                    continue;
+                }
+                const Capsule aCapsule{aHitbox.previous, aHitbox.current, aHitbox.def.radius};
+                for (const ActiveHitbox& bHitbox : b.activeHitboxes) {
+                    if (bHitbox.def.isGrab || (!bHitbox.def.canClank && !bHitbox.def.reboundsOnClank)) {
+                        continue;
+                    }
+                    const Capsule bCapsule{bHitbox.previous, bHitbox.current, bHitbox.def.radius};
+                    if (!capsuleCapsule(aCapsule, bCapsule)) {
+                        continue;
+                    }
+                    aDamage = std::max(aDamage, clankDamageValue(bHitbox.def));
+                    bDamage = std::max(bDamage, clankDamageValue(aHitbox.def));
+                    aRebound = aRebound || aHitbox.def.reboundsOnClank;
+                    bRebound = bRebound || bHitbox.def.reboundsOnClank;
+                }
+            }
+            if (aRebound) {
+                enterReboundFromClank(world, aIndex, bIndex, aDamage);
+            }
+            if (bRebound) {
+                enterReboundFromClank(world, bIndex, aIndex, bDamage);
+            }
+        }
+    }
+}
+
+static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
+    FighterRuntime& attacker = world.fighters[attackerIndex];
+    for (ActiveHitbox& hitbox : attacker.activeHitboxes) {
         for (size_t victimIndex = 0; victimIndex < world.fighters.size(); ++victimIndex) {
             if (victimIndex == attackerIndex) {
                 continue;
@@ -5057,7 +5884,7 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                         } else if (state == HurtboxState::Invincible) {
                             applyInvincibleHit(attacker, victim, hitbox.def);
                         } else {
-                            applyHit(world, attackerIndex, attacker, victim, hitbox.def, hurtboxIndex);
+                            applyHit(world, attackerIndex, attacker, victim, victimIndex, hitbox.def, hurtboxIndex);
                         }
                         break;
                     }
@@ -5082,7 +5909,7 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                     } else if (state == HurtboxState::Invincible) {
                         applyInvincibleHit(attacker, victim, hitbox.def);
                     } else {
-                        applyHit(world, attackerIndex, attacker, victim, hitbox.def, hurtboxIndex);
+                        applyHit(world, attackerIndex, attacker, victim, victimIndex, hitbox.def, hurtboxIndex);
                     }
                     break;
                 }
@@ -5141,6 +5968,10 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
     }
 
     for (size_t i = 0; i < world.fighters.size(); ++i) {
+        updateActiveHitboxPositions(world, i);
+    }
+    resolveHitboxClanks(world);
+    for (size_t i = 0; i < world.fighters.size(); ++i) {
         updateAndCheckHitboxes(world, i);
     }
 
@@ -5161,6 +5992,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.stateAnimationLengthOverride = fighter.stateAnimationLengthOverride;
         item.animationFrame = fighter.animationFrame;
         item.animationRate = fighter.animationRate;
+        item.animationActionIndexOverride = fighter.animationActionIndexOverride;
         item.lastActionFrameExecuted = fighter.lastActionFrameExecuted;
         item.runAnimationVelocity = fighter.runAnimationVelocity;
         item.facing = fighter.facing;
@@ -5189,6 +6021,10 @@ WorldSnapshot saveWorld(const World& world) {
         item.damageKnockback = fighter.damageKnockback;
         item.damageLaunchAngle = fighter.damageLaunchAngle;
         item.damageTumble = fighter.damageTumble;
+        item.reboundDamageVelocity = fighter.reboundDamageVelocity;
+        item.reboundAccel = fighter.reboundAccel;
+        item.reboundAnimationRate = fighter.reboundAnimationRate;
+        item.reboundFacingDir = fighter.reboundFacingDir;
         item.damageSurfaceTimer = fighter.damageSurfaceTimer;
         item.downWaitTimer = fighter.downWaitTimer;
         item.damageHitboxOwner = fighter.damageHitboxOwner;
@@ -5198,6 +6034,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.grabTimer = fighter.grabTimer;
         item.captureWaitTimer = fighter.captureWaitTimer;
         item.captureMashAnimTimer = fighter.captureMashAnimTimer;
+        item.burySubmergeTimer = fighter.burySubmergeTimer;
         item.grabMashStickX = fighter.grabMashStickX;
         item.grabMashStickY = fighter.grabMashStickY;
         item.captureJumpQueued = fighter.captureJumpQueued;
@@ -5222,6 +6059,21 @@ WorldSnapshot saveWorld(const World& world) {
         item.grabbedLedge = fighter.grabbedLedge;
         item.ledgeCooldown = fighter.ledgeCooldown;
         item.ledgeActionReady = fighter.ledgeActionReady;
+        item.ledgeWaitTimer = fighter.ledgeWaitTimer;
+        item.runoffSegment = fighter.runoffSegment;
+        item.runoffDirection = fighter.runoffDirection;
+        item.pendingFallSpecialLandingLag = fighter.pendingFallSpecialLandingLag;
+        item.pendingFallSpecialLandingInterruptible = fighter.pendingFallSpecialLandingInterruptible;
+        item.pendingFallSpecialForceLanding = fighter.pendingFallSpecialForceLanding;
+        item.pendingFallSpecialLimitDrift = fighter.pendingFallSpecialLimitDrift;
+        item.pendingFallSpecialUseFastFallTerminal = fighter.pendingFallSpecialUseFastFallTerminal;
+        item.pendingFallSpecialDriftMax = fighter.pendingFallSpecialDriftMax;
+        item.fallSpecialLandingLag = fighter.fallSpecialLandingLag;
+        item.fallSpecialLandingInterruptible = fighter.fallSpecialLandingInterruptible;
+        item.fallSpecialForceLanding = fighter.fallSpecialForceLanding;
+        item.fallSpecialLimitDrift = fighter.fallSpecialLimitDrift;
+        item.fallSpecialUseFastFallTerminal = fighter.fallSpecialUseFastFallTerminal;
+        item.fallSpecialDriftMax = fighter.fallSpecialDriftMax;
         item.wallContactSide = fighter.wallContactSide;
         item.wallContactSegment = fighter.wallContactSegment;
         item.wallContactTimer = fighter.wallContactTimer;
@@ -5232,9 +6084,15 @@ WorldSnapshot saveWorld(const World& world) {
         item.turnHasTurned = fighter.turnHasTurned;
         item.turnJustTurned = fighter.turnJustTurned;
         item.turnDashBuffered = fighter.turnDashBuffered;
+        item.turnBufferedButtons = fighter.turnBufferedButtons;
         item.runDirectTimer = fighter.runDirectTimer;
         item.runBrakeTimer = fighter.runBrakeTimer;
         item.runBrakeAnimationFrozen = fighter.runBrakeAnimationFrozen;
+        item.attackDashGrabBufferTimer = fighter.attackDashGrabBufferTimer;
+        item.attackLw3RepeatQueued = fighter.attackLw3RepeatQueued;
+        item.attackRapidInputCount = fighter.attackRapidInputCount;
+        item.attack100CanEnd = fighter.attack100CanEnd;
+        item.attack100ContinuePressed = fighter.attack100ContinuePressed;
         item.guardMinHoldTimer = fighter.guardMinHoldTimer;
         item.guardSetoffTimer = fighter.guardSetoffTimer;
         item.guardReleaseQueued = fighter.guardReleaseQueued;
@@ -5282,6 +6140,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.stateAnimationLengthOverride = item.stateAnimationLengthOverride;
         fighter.animationFrame = item.animationFrame;
         fighter.animationRate = item.animationRate;
+        fighter.animationActionIndexOverride = item.animationActionIndexOverride;
         fighter.lastActionFrameExecuted = item.lastActionFrameExecuted;
         fighter.runAnimationVelocity = item.runAnimationVelocity;
         fighter.facing = item.facing;
@@ -5310,6 +6169,10 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.damageKnockback = item.damageKnockback;
         fighter.damageLaunchAngle = item.damageLaunchAngle;
         fighter.damageTumble = item.damageTumble;
+        fighter.reboundDamageVelocity = item.reboundDamageVelocity;
+        fighter.reboundAccel = item.reboundAccel;
+        fighter.reboundAnimationRate = item.reboundAnimationRate;
+        fighter.reboundFacingDir = item.reboundFacingDir;
         fighter.damageSurfaceTimer = item.damageSurfaceTimer;
         fighter.downWaitTimer = item.downWaitTimer;
         fighter.damageHitboxOwner = item.damageHitboxOwner;
@@ -5319,6 +6182,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.grabTimer = item.grabTimer;
         fighter.captureWaitTimer = item.captureWaitTimer;
         fighter.captureMashAnimTimer = item.captureMashAnimTimer;
+        fighter.burySubmergeTimer = item.burySubmergeTimer;
         fighter.grabMashStickX = item.grabMashStickX;
         fighter.grabMashStickY = item.grabMashStickY;
         fighter.captureJumpQueued = item.captureJumpQueued;
@@ -5343,6 +6207,21 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.grabbedLedge = item.grabbedLedge;
         fighter.ledgeCooldown = item.ledgeCooldown;
         fighter.ledgeActionReady = item.ledgeActionReady;
+        fighter.ledgeWaitTimer = item.ledgeWaitTimer;
+        fighter.runoffSegment = item.runoffSegment;
+        fighter.runoffDirection = item.runoffDirection;
+        fighter.pendingFallSpecialLandingLag = item.pendingFallSpecialLandingLag;
+        fighter.pendingFallSpecialLandingInterruptible = item.pendingFallSpecialLandingInterruptible;
+        fighter.pendingFallSpecialForceLanding = item.pendingFallSpecialForceLanding;
+        fighter.pendingFallSpecialLimitDrift = item.pendingFallSpecialLimitDrift;
+        fighter.pendingFallSpecialUseFastFallTerminal = item.pendingFallSpecialUseFastFallTerminal;
+        fighter.pendingFallSpecialDriftMax = item.pendingFallSpecialDriftMax;
+        fighter.fallSpecialLandingLag = item.fallSpecialLandingLag;
+        fighter.fallSpecialLandingInterruptible = item.fallSpecialLandingInterruptible;
+        fighter.fallSpecialForceLanding = item.fallSpecialForceLanding;
+        fighter.fallSpecialLimitDrift = item.fallSpecialLimitDrift;
+        fighter.fallSpecialUseFastFallTerminal = item.fallSpecialUseFastFallTerminal;
+        fighter.fallSpecialDriftMax = item.fallSpecialDriftMax;
         fighter.wallContactSide = item.wallContactSide;
         fighter.wallContactSegment = item.wallContactSegment;
         fighter.wallContactTimer = item.wallContactTimer;
@@ -5353,9 +6232,15 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.turnHasTurned = item.turnHasTurned;
         fighter.turnJustTurned = item.turnJustTurned;
         fighter.turnDashBuffered = item.turnDashBuffered;
+        fighter.turnBufferedButtons = item.turnBufferedButtons;
         fighter.runDirectTimer = item.runDirectTimer;
         fighter.runBrakeTimer = item.runBrakeTimer;
         fighter.runBrakeAnimationFrozen = item.runBrakeAnimationFrozen;
+        fighter.attackDashGrabBufferTimer = item.attackDashGrabBufferTimer;
+        fighter.attackLw3RepeatQueued = item.attackLw3RepeatQueued;
+        fighter.attackRapidInputCount = item.attackRapidInputCount;
+        fighter.attack100CanEnd = item.attack100CanEnd;
+        fighter.attack100ContinuePressed = item.attack100ContinuePressed;
         fighter.guardMinHoldTimer = item.guardMinHoldTimer;
         fighter.guardSetoffTimer = item.guardSetoffTimer;
         fighter.guardReleaseQueued = item.guardReleaseQueued;

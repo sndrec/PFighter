@@ -32,6 +32,7 @@ struct MeleeCommonData {
     // (PlCo.dat). Defaults are seeded from vanilla PlCo.dat.
     Fix stickXTiltThresholdX8 = fxFromFloat(0.25f);
     Fix stickYTiltThresholdXC = fxFromFloat(0.25f);
+    int inputRepeatWindowX1C = 40;
     Fix aerialAttackAngleTanX20 = fx(1); // Melee x20_radians; name kept for binary/source compatibility.
     Fix walkInputThresholdX24 = fxFromFloat(0.18f);
     Fix walkMiddleThresholdX28 = fxFromFloat(0.4f);
@@ -44,10 +45,13 @@ struct MeleeCommonData {
     int dashEarlyInterruptWindowX44 = 4;
     int dashItemThrowWindowX48 = 3;
     int dashLateInterruptWindowX4C = 20;
+    Fix attackDashFrictionScaleX50 = fxFromFloat(1.0f);
     Fix dashDecayX54 = fxFromFloat(0.75f);
     Fix runInputThresholdX58 = fxFromFloat(0.625f);
     Fix runAccelScaleX5C = fxFromFloat(0.4f);
     Fix groundFrictionScaleX60 = fxFromFloat(1.0f);
+    Fix catchCutFrictionScaleX64 = fxFromFloat(1.0f);
+    int attackDashGrabBufferFramesX68 = 0;
     Fix turnFrictionScaleAboveWalkMaxX6C = fxFromFloat(2.0f);
     Fix tapJumpThresholdX70 = fxFromFloat(0.6625f);
     int tapJumpWindowX74 = 4;
@@ -93,10 +97,12 @@ struct MeleeCommonData {
     Fix damageLevelThresholdX158 = fxFromFloat(8.0f);
     Fix damageLevelThresholdX15C = fxFromFloat(14.0f);
     Fix damageLevelThresholdX160 = fxFromFloat(20.0f);
+    Fix damageGroundKnockbackClampX164 = fx(3);
     Fix damageAirVelocityScaleX190 = fx(1);
     Fix damageWallBounceMinVelocityX1B0 = fxFromFloat(2.4f);
     Fix damageWallBounceDampingX1BC = fxFromFloat(0.8f);
     int damageSurfaceLockoutX1C0 = 6;
+    Fix thrownHitboxClearVelocityX1C8 = fxFromFloat(0.5f);
     Fix damageWallBounceMinVelocityX1E0 = fxFromFloat(2.4f);
     Fix damageLandingMinVelocityX1E4 = fxFromFloat(1.0f);
     Fix damageGroundBounceAngleX1E8 = fxFromFloat(0.7853982f);
@@ -105,6 +111,10 @@ struct MeleeCommonData {
     Fix knockbackFrameDecayX204 = fxFromFloat(0.051f);
     Fix damageFallStickThresholdX210 = fxFromFloat(0.7f);
     int damageFallStickWindowX214 = 3;
+    Fix specialSStickThresholdX218 = fxFromFloat(0.2875f);
+    Fix specialLwHiStickThresholdX21C = fxFromFloat(0.2875f);
+    Fix specialSReverseThresholdX220 = fxFromFloat(0.2875f);
+    Fix specialNReverseFramesX224 = fx(6);
     Fix damageFlyTopAngleMinX234 = fxFromFloat(1.2217305f);
     Fix damageFlyTopAngleMaxX238 = fxFromFloat(1.9198622f);
     int damageFlyRollPercentX23C = 100;
@@ -114,6 +124,7 @@ struct MeleeCommonData {
     int downAttackInputWindowX24C = 8;
     int passiveInputWindowX250 = 20;
     Fix passiveStandStickThresholdX254 = fxFromFloat(0.5f);
+    Fix downAttackCStickThresholdX7F4 = fxFromFloat(0.8f);
     Fix startShieldHealthX260 = fx(60);
     Fix minShieldScaleX264 = fxFromFloat(0.15f);
     int guardMinHoldFramesX268 = 8;
@@ -136,10 +147,16 @@ struct MeleeCommonData {
     Fix hardShieldDrainScaleX2EC = fxFromFloat(0.1f);
     Fix lightShieldDrainScaleX2F0 = fx(2);
     Fix shieldAlphaMinX2F4 = fx(64);
+    Fix furafuraTimerBaseX2F8 = fxFromFloat(300.0f);
+    Fix furafuraTimerMinX2FC = fxFromFloat(90.0f);
+    Fix furafuraTimerDecrementX300 = fx(1);
+    Fix furafuraMashDecrementX304 = fxFromFloat(6.0f);
+    Fix furafuraShieldHealthX280 = fxFromFloat(30.0f);
     Fix attackerShieldPushbackScaleX3E0 = fxFromFloat(0.07f);
     Fix attackerShieldPushbackBaseX3E4 = fxFromFloat(0.02f);
     Fix shieldKnockbackFrameDecayX3E8 = fxFromFloat(0.05f);
     Fix shieldGroundFrictionMultiplierX3EC = fxFromFloat(1.1f);
+    Fix grabMashStickThresholdX308 = fxFromFloat(0.8f);
     Fix grabTimerBaseX354 = fxFromFloat(76.0f);
     Fix grabTimerHandicapScaleX358 = fxFromFloat(1.0f);
     Fix grabTimerHandicapBaseX35C = fxFromFloat(9.0f);
@@ -160,6 +177,39 @@ struct MeleeCommonData {
     Fix captureFloorSnapMaxX3BC = fxFromFloat(2.0f);
     Fix captureHighThresholdX3C4 = fxFromFloat(0.0f);
     Fix thrownMashDecrementX3C8 = fxFromFloat(6.0f);
+    Fix reboundDamageScaleX3D0 = fx(1);
+    Fix reboundDamageBaseX3D4 = 0;
+    Fix reboundAccelScaleX3D8 = fxFromFloat(0.03f);
+    Fix reboundAccelBaseX3DC = fxFromFloat(0.02f);
+    Fix damageSongBaseX624 = fxFromFloat(120.0f);
+    Fix damageSongHandicapScaleX628 = fxFromFloat(1.0f);
+    Fix damageSongHandicapBaseX62C = fxFromFloat(9.0f);
+    Fix damageSongPortScaleX630 = fxFromFloat(0.0f);
+    Fix damageSongPortBaseX634 = fxFromFloat(0.0f);
+    Fix damageSongPercentScaleX638 = fxFromFloat(1.0f);
+    Fix damageSongTimerDecrementX63C = fx(1);
+    Fix damageSongMashDecrementX640 = fxFromFloat(6.0f);
+    Fix damageSongElement7TimerMultiplierX644 = fx(1);
+    Fix damageBindBaseX658 = fxFromFloat(120.0f);
+    Fix damageBindHandicapScaleX65C = fxFromFloat(1.0f);
+    Fix damageBindHandicapBaseX660 = fxFromFloat(9.0f);
+    Fix damageBindPortScaleX664 = fxFromFloat(0.0f);
+    Fix damageBindPortBaseX668 = fxFromFloat(0.0f);
+    Fix damageBindPercentScaleX66C = fxFromFloat(1.0f);
+    Fix damageBindTimerDecrementX670 = fx(1);
+    Fix damageBindMashDecrementX674 = fxFromFloat(6.0f);
+    int burySubmergeFramesX5F4 = 30;
+    Fix buryBaseX5F8 = fxFromFloat(90.0f);
+    Fix buryHandicapScaleX5FC = fxFromFloat(1.0f);
+    Fix buryHandicapBaseX600 = fxFromFloat(9.0f);
+    Fix buryPortScaleX604 = fxFromFloat(0.0f);
+    Fix buryPortBaseX608 = fxFromFloat(0.0f);
+    Fix buryPercentScaleX60C = fxFromFloat(1.0f);
+    Fix buryTimerDecrementX610 = fx(1);
+    Fix buryMashDecrementX614 = fxFromFloat(6.0f);
+    Fix buryJumpVelocityYx618 = fxFromFloat(3.0f);
+    Fix buryJumpGravityThresholdX61C = fx(0);
+    int buryJumpCollisionFramesX620 = 10;
     Fix spotDodgeStickThresholdX314 = -fxFromFloat(0.7f);
     int spotDodgeStickWindowX318 = 4;
     Fix rollStickThresholdX31C = fxFromFloat(0.7f);
@@ -171,12 +221,17 @@ struct MeleeCommonData {
     Fix escapeAirDecayX33C = fxFromFloat(0.9f);
     Fix fallSpecialDriftX340 = fxFromFloat(0.6f);
     int landingFallSpecialLagX344 = 10;
+    Fix fallSpecialPlatformStickThresholdX25C = -fxFromFloat(0.5f);
+    Fix itemScrewJumpMultiplierX800 = fx(1);
     int runStopTurnLagX410 = 6;
     int downWaitAutoStandFramesX424 = 60;
+    int downDamageThresholdX428 = 10;
     Fix runBrakeAnimFreezeVelocityX42C = 0;
     int runDirectFramesX430 = 10;
     Fix jumpMomentumYScaleX438 = fxFromFloat(0.3f);
     Fix animVelocityScaleX440 = fxFromFloat(1.3f);
+    Fix fallAnimationDriftThresholdX444 = fxFromFloat(0.25f);
+    Fix fallAnimationBlendRateX448 = fxFromFloat(0.25f);
     Fix shieldStickSmoothingX44C = fxFromFloat(0.15f);
     Fix sdiMinStickMagX4B0 = fxFromFloat(0.7f);
     int sdiStickWindowX4B4 = 4;
@@ -191,8 +246,19 @@ struct MeleeCommonData {
     Fix teeterForwardDistanceX478 = fxFromFloat(1.33f);
     Fix teeterBackwardDistanceX47C = fxFromFloat(0.66f);
     Fix ledgeNoGrabDownThresholdX480 = fxFromFloat(0.66f);
+    int cliffActionPercentThresholdX488 = 100;
+    int cliffWaitAutoReleaseFramesQuickX48C = 300;
+    int cliffWaitAutoReleaseFramesSlowX490 = 300;
     Fix cliffOptionStickThresholdX494 = fxFromFloat(0.25f);
+    Fix cliffCStickAttackThresholdX7F8 = fxFromFloat(0.8f);
+    Fix cliffCStickEscapeThresholdX7FC = fxFromFloat(0.8f);
     int ledgeCooldownX498 = 30;
+    Fix damageIceGravityMultiplierX77C = fxFromFloat(0.25f);
+    Fix damageIceTimerDamageScaleX790 = fxFromFloat(20.0f);
+    Fix damageIceTimerDecrementX794 = fx(1);
+    Fix damageIceMashDecrementX798 = fxFromFloat(6.0f);
+    Fix damageIceHitDamageTimerReductionX79C = fx(1);
+    Fix damageIceJumpEscapeFramesX7A4 = fxFromFloat(30.0f);
     int passiveWallTimerX760 = 5;
     int passiveWallIntangibilityX764 = 14;
     int wallJumpInputWindowX768 = 130;
@@ -223,6 +289,7 @@ struct FighterProperties {
     int maxRunBrakeFrames = 30;
     Fix jumpHInitialVelocity = fxFromFloat(1.0f);
     Fix jumpVInitialVelocity = fxFromFloat(2.3f);
+    Fix damageScrewVerticalVelocity = fxFromFloat(2.3f);
     Fix hopVInitialVelocity = fxFromFloat(1.4f);
     Fix groundToAirJumpMomentumMultiplier = fxFromFloat(0.8f);
     Fix jumpHMaxVelocity = fxFromFloat(1.5f);
@@ -246,8 +313,12 @@ struct FighterProperties {
     Fix ledgeJumpVerticalVelocity = fxFromFloat(2.3f);
     Fix ledgeDropHorizontalVelocity = fxFromFloat(0.35f);
     Fix ledgeDropVerticalVelocity = fxFromFloat(-0.45f);
+    Fix passiveWallHorizontalVelocity = fxFromFloat(1.3f);
     Fix wallJumpHorizontalVelocity = fxFromFloat(1.3f);
     Fix wallJumpVerticalVelocity = fxFromFloat(2.3f);
+    Fix passiveCeilHorizontalVelocity = fxFromFloat(1.0f);
+    Fix damageIceJumpVelocityY = fxFromFloat(2.3f);
+    Fix damageIceJumpVelocityXMultiplier = fxFromFloat(1.0f);
     Fix initialShieldSize = fxFromFloat(1.35f);
     bool shieldSizeScalesWithHealth = true;
     Fix shieldBreakInitialVelocity = fxFromFloat(2.5f);
@@ -263,6 +334,8 @@ struct FighterProperties {
     int dairLandingLag = 23;
     int framesToChangeDirectionOnStandingTurn = 4;
     Fix weight = fx(100);
+    int weightIndependentThrowsMask = 0;
+    int rapidJabWindow = 5;
     int maxJumps = 2;
     bool canWallJump = true;
     int jumpStartupLag = 4;
@@ -321,6 +394,8 @@ struct HitboxDefinition {
     Fix knockbackWeightSet = 0;
     int element = 0;
     bool isGrab = false;
+    bool canClank = false;
+    bool reboundsOnClank = false;
     bool onlyHitGrabbed = false;
     bool requiresThrownHitboxOwner = false;
     bool hitGrounded = true;
@@ -349,6 +424,7 @@ enum class SubactionType : uint8_t {
     SetInterruptible,
     SetFlag,
     SetThrowFlag,
+    SetJabRapid,
     ReverseDirection,
     StartSmashCharge,
     SetModelPartAnimation,
@@ -390,12 +466,23 @@ enum class InterruptCondition : uint8_t {
     SquatReleaseInput,
     AttackPressed,
     JabFollowupPressed,
+    RapidJabReady,
+    SpecialNInput,
+    SpecialSInput,
+    SpecialHiInput,
+    SpecialLwInput,
+    SpecialAirNInput,
+    SpecialAirSInput,
+    SpecialAirHiInput,
+    SpecialAirLwInput,
     AttackDashPressed,
+    AttackDashGrabBuffer,
     AttackS4HiPressed,
     AttackS4HiSPressed,
     AttackS4Pressed,
     AttackS4LwSPressed,
     AttackS4LwPressed,
+    AttackS42Pressed,
     AttackHi4Pressed,
     AttackLw4Pressed,
     AttackS3HiPressed,
@@ -405,6 +492,7 @@ enum class InterruptCondition : uint8_t {
     AttackS3LwPressed,
     AttackHi3Pressed,
     AttackLw3Pressed,
+    AttackLw3Repeat,
     AerialAttackNPressed,
     AerialAttackFPressed,
     AerialAttackBPressed,
@@ -420,6 +508,7 @@ enum class InterruptCondition : uint8_t {
     HorizontalWalkFast,
     TurnInput,
     TurnRunInput,
+    RunBrakeTurnRunInput,
     RunBrakeInput,
     WaitInput,
     BecameAirborne,
@@ -432,7 +521,10 @@ enum class InterruptCondition : uint8_t {
     RollBackwardInput,
     LedgeClimbInput,
     LedgeDropInput,
+    LedgeAttackInput,
+    LedgeEscapeInput,
     GrabPressed,
+    TauntPressed,
 };
 
 struct InterruptRule {
