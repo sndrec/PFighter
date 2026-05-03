@@ -3843,6 +3843,86 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
                 subaction.spawnOffset.y -= pf::fxFromFloat(0.1f);
                 editor.status = "Editor: lowered spawn offset";
             }
+        } else if (subaction.type == pf::SubactionType::CreateHitbox ||
+                   subaction.type == pf::SubactionType::CreateThrowHitbox)
+        {
+            pf::HitboxDefinition& hitbox = subaction.hitbox;
+            DrawText(("Hitbox #" + std::to_string(hitbox.hitboxId) +
+                      " dmg " + std::to_string(pf::fxToFloat(hitbox.damage)) +
+                      " r " + std::to_string(pf::fxToFloat(hitbox.radius))).c_str(), 516, 554, 12, DARKGRAY);
+            if (uiButton({516.0f, 570.0f, 44.0f, 22.0f}, "D+")) {
+                hitbox.damage += pf::fx(1);
+                editor.status = "Editor: increased selected hitbox damage";
+            }
+            if (uiButton({566.0f, 570.0f, 44.0f, 22.0f}, "D-")) {
+                hitbox.damage = std::max(pf::Fix{0}, hitbox.damage - pf::fx(1));
+                editor.status = "Editor: decreased selected hitbox damage";
+            }
+            if (uiButton({616.0f, 570.0f, 44.0f, 22.0f}, "R+")) {
+                hitbox.radius += pf::fxFromFloat(0.05f);
+                editor.status = "Editor: increased selected hitbox radius";
+            }
+            if (uiButton({666.0f, 570.0f, 44.0f, 22.0f}, "R-")) {
+                hitbox.radius = std::max(pf::fxFromFloat(0.05f), hitbox.radius - pf::fxFromFloat(0.05f));
+                editor.status = "Editor: decreased selected hitbox radius";
+            }
+            DrawText(("ang " + std::to_string(pf::fxToFloat(hitbox.knockbackAngleDegrees)) +
+                      " bkb " + std::to_string(pf::fxToFloat(hitbox.knockbackBase)) +
+                      " kbg " + std::to_string(pf::fxToFloat(hitbox.knockbackGrowth))).c_str(), 516, 596, 12, DARKGRAY);
+            if (uiButton({516.0f, 592.0f, 44.0f, 22.0f}, "A+")) {
+                hitbox.knockbackAngleDegrees += pf::fx(5);
+                editor.status = "Editor: raised selected hitbox angle";
+            }
+            if (uiButton({566.0f, 592.0f, 44.0f, 22.0f}, "A-")) {
+                hitbox.knockbackAngleDegrees -= pf::fx(5);
+                editor.status = "Editor: lowered selected hitbox angle";
+            }
+            if (uiButton({616.0f, 592.0f, 44.0f, 22.0f}, "BKB+")) {
+                hitbox.knockbackBase += pf::fx(5);
+                editor.status = "Editor: increased selected hitbox base knockback";
+            }
+            if (uiButton({666.0f, 592.0f, 44.0f, 22.0f}, "KBG+")) {
+                hitbox.knockbackGrowth += pf::fx(5);
+                editor.status = "Editor: increased selected hitbox growth";
+            }
+            DrawText(("off " + std::to_string(pf::fxToFloat(hitbox.offset.x)) +
+                      "," + std::to_string(pf::fxToFloat(hitbox.offset.y))).c_str(), 516, 620, 12, DARKGRAY);
+            if (uiButton({516.0f, 616.0f, 44.0f, 22.0f}, "X+")) {
+                hitbox.offset.x += pf::fxFromFloat(0.1f);
+                editor.status = "Editor: moved selected hitbox forward";
+            }
+            if (uiButton({566.0f, 616.0f, 44.0f, 22.0f}, "X-")) {
+                hitbox.offset.x -= pf::fxFromFloat(0.1f);
+                editor.status = "Editor: moved selected hitbox backward";
+            }
+            if (uiButton({616.0f, 616.0f, 44.0f, 22.0f}, "Y+")) {
+                hitbox.offset.y += pf::fxFromFloat(0.1f);
+                editor.status = "Editor: raised selected hitbox";
+            }
+            if (uiButton({666.0f, 616.0f, 44.0f, 22.0f}, "Y-")) {
+                hitbox.offset.y -= pf::fxFromFloat(0.1f);
+                editor.status = "Editor: lowered selected hitbox";
+            }
+            if (uiButton({516.0f, 638.0f, 44.0f, 22.0f}, "BKB-")) {
+                hitbox.knockbackBase = std::max(pf::Fix{0}, hitbox.knockbackBase - pf::fx(5));
+                editor.status = "Editor: decreased selected hitbox base knockback";
+            }
+            if (uiButton({566.0f, 638.0f, 44.0f, 22.0f}, "KBG-")) {
+                hitbox.knockbackGrowth = std::max(pf::Fix{0}, hitbox.knockbackGrowth - pf::fx(5));
+                editor.status = "Editor: decreased selected hitbox growth";
+            }
+            if (uiButton({616.0f, 638.0f, 44.0f, 22.0f}, "Gnd", hitbox.hitGrounded)) {
+                hitbox.hitGrounded = !hitbox.hitGrounded;
+                editor.status = "Editor: toggled selected hitbox grounded target flag";
+            }
+            if (uiButton({666.0f, 638.0f, 44.0f, 22.0f}, "Air", hitbox.hitAirborne)) {
+                hitbox.hitAirborne = !hitbox.hitAirborne;
+                editor.status = "Editor: toggled selected hitbox airborne target flag";
+            }
+            if (uiButton({616.0f, 660.0f, 44.0f, 22.0f}, "Grab", hitbox.isGrab)) {
+                hitbox.isGrab = !hitbox.isGrab;
+                editor.status = "Editor: toggled selected hitbox grab flag";
+            }
         }
     }
 
