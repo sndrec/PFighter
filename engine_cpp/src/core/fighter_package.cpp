@@ -715,7 +715,14 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
     writeNativeStruct(writer, fighter.properties);
     writeNativeStruct(writer, fighter.shield);
     writer.writeBool(fighter.hasHsdAsset);
-    writer.writeI32(assetIndexFor(package, fighter.hsdAsset));
+    const int32_t assetIndex = assetIndexFor(package, fighter.hsdAsset);
+    if (fighter.hasHsdAsset && assetIndex < 0) {
+        throw std::runtime_error("fighter package hsd asset reference is missing");
+    }
+    if (fighter.hasHsdAsset && (!fighter.hsdAsset || fighter.hsdAsset->sourceBytes.empty())) {
+        throw std::runtime_error("fighter package hsd asset bytes are missing");
+    }
+    writer.writeI32(assetIndex);
     writer.writeString(fighter.hsdAsset ? fighter.hsdAsset->name : std::string{});
     writeVector(writer, fighter.packageVariables, [&](const PackageVariableDefinition& variable) {
         writePackageVariable(writer, variable);
@@ -742,11 +749,16 @@ FighterDefinition readFighterDefinition(
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();
-    (void) assetName;
-    if (fighter.hasHsdAsset && assetIndex >= 0 && assetIndex < static_cast<int32_t>(hsdAssetPool.size())) {
+    if (fighter.hasHsdAsset && (assetIndex < 0 || assetIndex >= static_cast<int32_t>(hsdAssetPool.size()) ||
+        !hsdAssetPool[static_cast<size_t>(assetIndex)]))
+    {
+        throw std::runtime_error("fighter package hsd asset reference is invalid");
+    }
+    if (fighter.hasHsdAsset) {
         fighter.hsdAsset = hsdAssetPool[static_cast<size_t>(assetIndex)];
-    } else {
-        fighter.hasHsdAsset = false;
+        if (!assetName.empty() && fighter.hsdAsset->name != assetName) {
+            throw std::runtime_error("fighter package fighter asset name mismatch");
+        }
     }
     fighter.packageVariables = readVector<PackageVariableDefinition>(reader, kMaxCallbacks, "package variable", [&]() {
         return readPackageVariable(reader);
@@ -952,6 +964,9 @@ std::shared_ptr<const HsdFighterAnimationAsset> readHsdAsset(
         return std::make_shared<const HsdFighterAnimationAsset>(std::move(asset));
     }
     if (index < hsdAssetPool.size()) {
+        if (!assetName.empty() && hsdAssetPool[index] && hsdAssetPool[index]->name != assetName) {
+            throw std::runtime_error("fighter package pooled asset name mismatch");
+        }
         return hsdAssetPool[index];
     }
     return nullptr;
