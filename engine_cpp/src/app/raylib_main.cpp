@@ -1089,7 +1089,9 @@ static void drawPackageScriptBlockGraph(
         return;
     }
 
-    const int visible = std::min(6, static_cast<int>(script.instructions.size()));
+    const int visible = std::min(
+        std::max(1, static_cast<int>((rect.width - 8.0f) / 50.0f)),
+        static_cast<int>(script.instructions.size()));
     for (int i = 0; i < visible; ++i) {
         const float x = rect.x + 8.0f + static_cast<float>(i) * 50.0f;
         const Rectangle node{x, rect.y + 32.0f, 42.0f, 38.0f};
@@ -1198,6 +1200,32 @@ static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
         }
     }
     return "ScriptX";
+}
+
+static std::string uniqueObjectPackageVariableName(const pf::GameObjectDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = "objVar" + std::to_string(index);
+        const bool exists = std::any_of(def.packageVariables.begin(), def.packageVariables.end(), [&](const pf::PackageVariableDefinition& variable) {
+            return variable.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return "objVarX";
+}
+
+static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = "ObjectScript" + std::to_string(index);
+        const bool exists = std::any_of(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
+            return script.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return "ObjectScriptX";
 }
 
 static std::string uniqueObjectName(const pf::World& world, const std::string& prefix) {
@@ -1326,6 +1354,19 @@ static void bindPackageScriptCallback(
         calls.push_back({callback});
     }
     editor.status = std::string("Editor: bound ") + scriptName + " to selected state " + label;
+}
+
+static void bindObjectPackageScriptCallback(
+    std::vector<pf::FunctionCall>& calls,
+    const std::string& scriptName,
+    const char* label,
+    pf::FighterEditor& editor)
+{
+    const std::string callback = "script:" + scriptName;
+    if (!hasFunctionCall(calls, callback)) {
+        calls.push_back({callback});
+    }
+    editor.status = std::string("Editor: bound ") + scriptName + " to selected object " + label;
 }
 
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
@@ -1669,7 +1710,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         return;
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 330.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Assets", 24, 336, 16, BLACK);
@@ -1748,7 +1789,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     }
 
     DrawText("Objects / Articles", 24, 436, 13, DARKGRAY);
-    const int visibleObjects = std::min(5, static_cast<int>(world.objectDefs.size()));
+    const int visibleObjects = std::min(3, static_cast<int>(world.objectDefs.size()));
     for (int row = 0; row < visibleObjects; ++row) {
         const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(row)];
         const std::string kind = object.kind == pf::GameObjectKind::Projectile ? "Proj" : "Item";
@@ -1784,6 +1825,83 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             state.action.push_back(std::move(spawn));
             editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
             editor.status = "Editor: added SpawnObject subaction for " + object.name;
+        }
+    }
+    if (!world.objectDefs.empty()) {
+        editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
+        editor.selectedPackageVariable = std::clamp(
+            editor.selectedPackageVariable,
+            0,
+            std::max(0, static_cast<int>(object.packageVariables.size()) - 1));
+        editor.selectedPackageScript = std::clamp(
+            editor.selectedPackageScript,
+            0,
+            std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
+
+        DrawText(("Object logic: " + object.name + " vars " + std::to_string(object.packageVariables.size()) +
+                  " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 532, 13, DARKGRAY);
+        if (!object.packageScripts.empty()) {
+            pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+            editor.selectedPackageInstruction = std::clamp(
+                editor.selectedPackageInstruction,
+                0,
+                std::max(0, static_cast<int>(script.instructions.size()) - 1));
+            drawPackageScriptBlockGraph(script, editor, {24.0f, 548.0f, 246.0f, 96.0f});
+            if (uiButton({354.0f, 546.0f, 76.0f, 24.0f}, "+ Add")) {
+                if (!object.packageVariables.empty()) {
+                    script.instructions.push_back({pf::PackageScriptOp::AddVarImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
+                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                    editor.status = "Editor: appended object AddVar instruction";
+                }
+            }
+            if (uiButton({438.0f, 546.0f, 76.0f, 24.0f}, "+ VelX")) {
+                script.instructions.push_back({pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}});
+                editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                editor.status = "Editor: appended object AirVelX instruction";
+            }
+            if (uiButton({354.0f, 576.0f, 76.0f, 24.0f}, "+ Spawn")) {
+                script.instructions.push_back({pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(1.0f), object.name});
+                editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                editor.status = "Editor: appended object SpawnObject instruction";
+            }
+            if (uiButton({438.0f, 576.0f, 76.0f, 24.0f}, "- Instr")) {
+                if (!script.instructions.empty()) {
+                    script.instructions.erase(script.instructions.begin() + editor.selectedPackageInstruction);
+                    editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
+                    editor.status = "Editor: removed object script instruction";
+                }
+            }
+            if (uiButton({354.0f, 606.0f, 76.0f, 24.0f}, "BindSp")) {
+                bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
+            }
+            if (uiButton({438.0f, 606.0f, 76.0f, 24.0f}, "BindAcc")) {
+                bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
+            }
+        } else {
+            DrawText("No object script selected", 31, 568, 13, GRAY);
+        }
+        if (uiButton({270.0f, 486.0f, 76.0f, 24.0f}, "+ OVar")) {
+            object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});
+            editor.selectedPackageVariable = static_cast<int>(object.packageVariables.size()) - 1;
+            editor.status = "Editor: added object package variable";
+        }
+        if (uiButton({354.0f, 486.0f, 76.0f, 24.0f}, "+ OScr")) {
+            pf::PackageScript script;
+            script.name = uniqueObjectPackageScriptName(object);
+            script.instructionBudget = 64;
+            object.packageScripts.push_back(std::move(script));
+            editor.selectedPackageScript = static_cast<int>(object.packageScripts.size()) - 1;
+            editor.selectedPackageInstruction = 0;
+            editor.status = "Editor: added object package script";
+        }
+        if (uiButton({438.0f, 486.0f, 76.0f, 24.0f}, "- OScr")) {
+            if (!object.packageScripts.empty()) {
+                object.packageScripts.erase(object.packageScripts.begin() + editor.selectedPackageScript);
+                editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
+                editor.selectedPackageInstruction = 0;
+                editor.status = "Editor: removed object package script";
+            }
         }
     }
 }
