@@ -1235,6 +1235,27 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     return label;
 }
 
+static bool moveEditorPackageInstruction(pf::PackageScript& script, pf::FighterEditor& editor, int delta) {
+    if (script.instructions.empty() || delta == 0) {
+        return false;
+    }
+    editor.selectedPackageInstruction = std::clamp(
+        editor.selectedPackageInstruction,
+        0,
+        static_cast<int>(script.instructions.size()) - 1);
+    const int target = editor.selectedPackageInstruction + delta;
+    if (target < 0 || target >= static_cast<int>(script.instructions.size())) {
+        return false;
+    }
+    std::swap(script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)],
+              script.instructions[static_cast<size_t>(target)]);
+    editor.selectedPackageInstruction = target;
+    editor.status = delta < 0
+        ? "Editor: moved selected script block earlier"
+        : "Editor: moved selected script block later";
+    return true;
+}
+
 static const char* groundRequirementName(pf::GroundRequirement ground) {
     switch (ground) {
     case pf::GroundRequirement::Any: return "Any";
@@ -2694,10 +2715,11 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
             editor.status = "Editor: cycled selected script block op";
         }
-        if (uiButton({590.0f, 502.0f, 58.0f, 24.0f}, "CtxOp")) {
-            instruction.op = nextFighterContextReadOp(instruction.op);
-            normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
-            editor.status = "Editor: cycled selected fighter context read";
+        if (uiButton({515.0f, 502.0f, 68.0f, 24.0f}, "Blk<")) {
+            moveEditorPackageInstruction(*script, editor, -1);
+        }
+        if (uiButton({590.0f, 502.0f, 58.0f, 24.0f}, "Blk>")) {
+            moveEditorPackageInstruction(*script, editor, 1);
         }
         if (uiButton({365.0f, 532.0f, 68.0f, 24.0f}, "Dst")) {
             if (!def.packageVariables.empty()) {
@@ -2719,6 +2741,11 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 instruction.intValue = nextPackageInputButton(instruction.intValue);
                 editor.status = "Editor: cycled selected script input button";
             }
+        }
+        if (uiButton({590.0f, 532.0f, 58.0f, 24.0f}, "CtxOp")) {
+            instruction.op = nextFighterContextReadOp(instruction.op);
+            normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
+            editor.status = "Editor: cycled selected fighter context read";
         }
         if (uiButton({365.0f, 562.0f, 68.0f, 24.0f}, "Val -")) {
             instruction.intValue -= 1;
@@ -3299,6 +3326,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                     editor.status = "Editor: appended object destroy instruction";
                 }
+                if (uiButton({666.0f, 620.0f, 58.0f, 24.0f}, "Blk<")) {
+                    moveEditorPackageInstruction(script, editor, -1);
+                }
                 if (uiButton({438.0f, 620.0f, 76.0f, 24.0f}, "- Instr")) {
                     if (!script.instructions.empty()) {
                         script.instructions.erase(script.instructions.begin() + editor.selectedPackageInstruction);
@@ -3353,6 +3383,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 }
                 if (uiButton({606.0f, 650.0f, 58.0f, 24.0f}, "BindEvt")) {
                     bindObjectEventPackageScriptCallback(object, script.name, editor);
+                }
+                if (uiButton({666.0f, 650.0f, 58.0f, 24.0f}, "Blk>")) {
+                    moveEditorPackageInstruction(script, editor, 1);
                 }
                 if (!script.instructions.empty()) {
                     pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
