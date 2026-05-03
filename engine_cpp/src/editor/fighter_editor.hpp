@@ -26,6 +26,7 @@ struct FighterEditor {
     bool sideView = false;
     bool testMode = false;
     EditorWorkspace workspace = EditorWorkspace::Moveset;
+    std::string packagePath = "editor_last.pfpkg";
     std::string status = "Editor: T or Test launches current in-memory fighter on Battlefield";
 
     void clampToWorld(const World& world);

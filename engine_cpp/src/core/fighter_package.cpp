@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -677,6 +678,22 @@ std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::str
     }
 }
 
+bool saveFighterPackage(const std::string& path, const FighterPackage& package, std::string* error) {
+    const std::vector<uint8_t> bytes = writeFighterPackage(package, error);
+    if (bytes.empty()) {
+        return false;
+    }
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        return fail(error, "failed to open fighter package for writing");
+    }
+    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    if (!file) {
+        return fail(error, "failed to write fighter package");
+    }
+    return true;
+}
+
 bool readFighterPackage(
     const std::vector<uint8_t>& bytes,
     FighterPackage& package,
@@ -711,6 +728,32 @@ bool readFighterPackage(
     } catch (const std::exception& ex) {
         return fail(error, ex.what());
     }
+}
+
+bool loadFighterPackage(
+    const std::string& path,
+    FighterPackage& package,
+    std::string* error,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        return fail(error, "failed to open fighter package for reading");
+    }
+    file.seekg(0, std::ios::end);
+    const std::streamsize size = file.tellg();
+    if (size < 0) {
+        return fail(error, "failed to measure fighter package");
+    }
+    file.seekg(0, std::ios::beg);
+    std::vector<uint8_t> bytes(static_cast<size_t>(size));
+    if (!bytes.empty()) {
+        file.read(reinterpret_cast<char*>(bytes.data()), size);
+        if (!file) {
+            return fail(error, "failed to read fighter package");
+        }
+    }
+    return readFighterPackage(bytes, package, error, hsdAssetPool);
 }
 
 uint32_t fighterPackageChecksum(const std::vector<uint8_t>& bytes) {

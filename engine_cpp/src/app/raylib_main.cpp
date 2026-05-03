@@ -1,4 +1,5 @@
 #if PFIGHTER_WITH_RAYLIB
+#include "core/fighter_package.hpp"
 #include "core/replay.hpp"
 #include "core/simulation.hpp"
 #include "editor/fighter_editor.hpp"
@@ -1332,6 +1333,64 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
 }
 
+static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        return;
+    }
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 178.0f};
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText("Package Assets", 24, 336, 16, BLACK);
+    DrawText(("File: " + editor.packagePath).c_str(), 24, 360, 13, DARKGRAY);
+    const size_t assetBytes = def.hsdAsset ? def.hsdAsset->sourceBytes.size() : 0;
+    DrawText(("Embedded HSD bytes: " + std::to_string(assetBytes)).c_str(), 24, 382, 13, DARKGRAY);
+    DrawText(("Objects/articles in package: " + std::to_string(world.objectDefs.size())).c_str(), 24, 404, 13, DARKGRAY);
+
+    if (uiButton({338.0f, 338.0f, 82.0f, 26.0f}, "Save Pkg")) {
+        pf::FighterPackage package;
+        package.name = def.name + "_editor";
+        if (def.hsdAsset) {
+            package.hsdAssets = {def.hsdAsset};
+        }
+        package.fighters = {def};
+        package.objects = world.objectDefs;
+        std::string error;
+        if (pf::saveFighterPackage(editor.packagePath, package, &error)) {
+            const std::vector<uint8_t> bytes = pf::writeFighterPackage(package, &error);
+            editor.status = "Editor: saved " + editor.packagePath + " bytes=" + std::to_string(bytes.size());
+        } else {
+            editor.status = "Editor package save failed: " + error;
+        }
+    }
+    if (uiButton({430.0f, 338.0f, 82.0f, 26.0f}, "Load Pkg")) {
+        pf::FighterPackage package;
+        std::string error;
+        if (!pf::loadFighterPackage(editor.packagePath, package, &error)) {
+            editor.status = "Editor package load failed: " + error;
+        } else if (package.fighters.empty()) {
+            editor.status = "Editor package load failed: no fighters in package";
+        } else {
+            const int fighterDef = fighter.fighterDef;
+            world.fighterDefs[static_cast<size_t>(fighterDef)] = package.fighters.front();
+            if (!package.objects.empty()) {
+                world.objectDefs = package.objects;
+            }
+            editor.selectedState = 0;
+            editor.selectedSubaction = 0;
+            editor.selectedPackageVariable = 0;
+            editor.selectedPackageScript = 0;
+            editor.selectedPackageInstruction = 0;
+            editor.status = "Editor: loaded package fighter " + world.fighterDefs[static_cast<size_t>(fighterDef)].name;
+        }
+    }
+}
+
 static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
@@ -1408,6 +1467,8 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     drawEditorWorkspaceTabs(editor);
     if (editor.workspace == pf::EditorWorkspace::Logic) {
         drawEditorLogicWorkspace(world, editor);
+    } else if (editor.workspace == pf::EditorWorkspace::Assets) {
+        drawEditorAssetsWorkspace(world, editor);
     } else if (editor.workspace != pf::EditorWorkspace::Moveset) {
         DrawText((std::string(workspaceName(editor.workspace)) + " workspace shell").c_str(), 24, 324, 14, DARKGRAY);
     }
