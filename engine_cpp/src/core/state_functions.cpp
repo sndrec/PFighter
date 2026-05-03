@@ -763,22 +763,7 @@ static void processShieldBreakAir(World& world, FighterRuntime& fighter) {
     fighter.fighterVelocity.y = std::max(fighter.fighterVelocity.y - attr.grav, -attr.terminalVel);
 }
 
-static bool shieldBreakFaceUp(const World& world, const FighterRuntime& fighter) {
-    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    if (!def.hasHsdAsset || !def.hsdAsset) {
-        return true;
-    }
-    constexpr int kFtPartHipN = 4;
-    int hipBone = -1;
-    if (kFtPartHipN < static_cast<int>(def.hsdAsset->commonBoneLookup.size())) {
-        hipBone = def.hsdAsset->commonBoneLookup[static_cast<size_t>(kFtPartHipN)];
-    }
-    if (hipBone < 0 || hipBone >= static_cast<int>(fighter.hsdJointWorldTransforms.size())) {
-        return true;
-    }
-    const auto& matrix = fighter.hsdJointWorldTransforms[static_cast<size_t>(hipBone)].matrix;
-    return matrix[5] > 0;
-}
+static bool meleeDownBoundFaceUpPose(const World& world, const FighterRuntime& fighter);
 
 static void shieldBreakLanding(World& world, FighterRuntime& fighter) {
     fighter.fighterVelocity.y = 0;
@@ -787,7 +772,7 @@ static void shieldBreakLanding(World& world, FighterRuntime& fighter) {
     fighter.groundVelocity = 0;
     fighter.groundKnockbackVelocity = 0;
     fighter.groundAttackerShieldKnockbackVelocity = 0;
-    changeFighterState(world, fighter, shieldBreakFaceUp(world, fighter) ? "ShieldBreakDownU" : "ShieldBreakDownD");
+    changeFighterState(world, fighter, meleeDownBoundFaceUpPose(world, fighter) ? "ShieldBreakDownU" : "ShieldBreakDownD");
 }
 
 static void enterDash(World& world, FighterRuntime& fighter) {
@@ -1475,6 +1460,15 @@ static void regularAirborne(World& world, FighterRuntime& fighter) {
     changeFighterState(world, fighter, "Fall");
 }
 
+static void damageGroundToAir(World&, FighterRuntime& fighter) {
+    fighter.groundVelocity = 0;
+    fighter.groundAccel = 0;
+    fighter.groundAccelSecondary = 0;
+    fighter.groundAttackerShieldKnockbackVelocity = 0;
+    fighter.jumpsUsed = 1;
+    lockFighterEcb(fighter, 10);
+}
+
 static void teeterOrAirborne(World& world, FighterRuntime& fighter) {
     if (fighter.runoffSegment < 0 ||
         fighter.runoffSegment >= static_cast<int>(world.stage.segments.size()) ||
@@ -2107,11 +2101,7 @@ static void enterDownBound(World& world, FighterRuntime& fighter) {
 static void damageLanding(World& world, FighterRuntime& fighter) {
     FighterProperties& attr = props(world, fighter);
     fighter.fighterVelocity.y = 0;
-    const Vec2 combined{
-        fighter.fighterVelocity.x + fighter.knockbackVelocity.x,
-        fighter.fighterVelocity.y + fighter.knockbackVelocity.y,
-    };
-    const Fix speed = vecMagnitude(combined);
+    const Fix speed = vecMagnitude(fighter.knockbackVelocity);
     if (fighter.damageTumble || speed >= attr.common.damageWallBounceMinVelocityX1E0) {
         enterDownBoundFromDamagePose(world, fighter);
         return;
@@ -2630,6 +2620,7 @@ void runStateFunction(World& world, size_t fighterIndex, const FunctionCall& cal
     if (call.name == "process_run_brake") return processRunBrake(world, fighter);
     if (call.name == "process_turn_run") return processTurnRun(world, fighter);
     if (call.name == "regular_airborne") return regularAirborne(world, fighter);
+    if (call.name == "damage_airborne") return damageGroundToAir(world, fighter);
     if (call.name == "teeter_or_airborne") return teeterOrAirborne(world, fighter);
     if (call.name == "miss_foot_or_airborne") return missFootOrAirborne(world, fighter);
     if (call.name == "process_ottotto") return processOttotto(world, fighter);

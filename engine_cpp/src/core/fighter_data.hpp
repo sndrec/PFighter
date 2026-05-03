@@ -550,6 +550,7 @@ struct InterruptRule {
     int lagFrames = 0;
     bool startActive = true;
     bool alwaysActive = false;
+    bool requireNoHitstun = false;
     int enableFrame = 0;
     int disableFrame = 0;
 };
@@ -564,6 +565,7 @@ struct FighterState {
     bool allowBackwardsLedgeGrab = false;
     bool allowWallCollision = true;
     bool allowCeilingCollision = true;
+    bool convertFloorCollisionToGround = true;
     bool loopAnimation = false;
     std::string onAnimationFinishedState;
     int onAnimationFinishedBlendFrames = kUseDefaultAnimationBlendFrames;

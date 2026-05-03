@@ -79,6 +79,12 @@ static void delayInterrupts(std::vector<InterruptRule>& rules, int enableFrame) 
     }
 }
 
+static void requireHitstunEnded(std::vector<InterruptRule>& rules) {
+    for (InterruptRule& rule : rules) {
+        rule.requireNoHitstun = true;
+    }
+}
+
 static std::vector<InterruptRule> groundedAttackInterrupts(bool includeDashAttack = false, bool includeJab = true) {
     std::vector<InterruptRule> rules = {
         interrupt("AttackS4Hi", InterruptCondition::AttackS4HiPressed, GroundRequirement::OnlyGrounded),
@@ -412,7 +418,8 @@ static std::vector<InterruptRule> airborneActionInterrupts(bool includeWallJump 
 }
 
 static std::vector<InterruptRule> damageFallActionInterrupts() {
-    return {
+    std::vector<InterruptRule> rules = airborneSpecialInterrupts();
+    appendRules(rules, {
         interrupt("AirAttackHi", InterruptCondition::AerialAttackHiPressed, GroundRequirement::OnlyAirborne),
         interrupt("AirAttackLw", InterruptCondition::AerialAttackLwPressed, GroundRequirement::OnlyAirborne),
         interrupt("AirAttackF", InterruptCondition::AerialAttackFPressed, GroundRequirement::OnlyAirborne),
@@ -420,7 +427,15 @@ static std::vector<InterruptRule> damageFallActionInterrupts() {
         interrupt("AirAttackN", InterruptCondition::AerialAttackNPressed, GroundRequirement::OnlyAirborne),
         interrupt("JumpAerialB", InterruptCondition::AerialJumpBackwardPressed, GroundRequirement::OnlyAirborne),
         interrupt("JumpAerialF", InterruptCondition::AerialJumpForwardPressed, GroundRequirement::OnlyAirborne),
-    };
+        interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne),
+    });
+    return rules;
+}
+
+static std::vector<InterruptRule> damageActionInterrupts() {
+    std::vector<InterruptRule> rules = waitIasaInterrupts(true);
+    appendRules(rules, airborneActionInterrupts());
+    return rules;
 }
 
 static std::vector<InterruptRule> attackAirIasaInterrupts() {
@@ -511,6 +526,7 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"FallSpecial", 26},
         {"FallSpecialF", 27},
         {"FallSpecialB", 28},
+        {"DamageFall", 29},
         {"Landing", 35},
         {"LandingFallSpecial", 36},
         {"GuardOn", 37},
@@ -522,12 +538,13 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"EscapeF", 42},
         {"EscapeB", 43},
         {"EscapeAir", 44},
+        {"Rebound", 45},
         {"AppealSR", 239},
         {"AppealSL", 240},
-        {"ItemScrew", 145},
-        {"ItemScrewAir", 146},
-        {"ItemScrewDamage", 147},
-        {"ItemScrewDamageAir", 148},
+        {"ItemScrew", 144},
+        {"ItemScrewAir", 145},
+        {"ItemScrewDamage", 146},
+        {"ItemScrewDamageAir", 147},
         {"Jab", 46},
         {"Attack11", 46},
         {"Attack12", 47},
@@ -600,16 +617,16 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"PassiveWall", 202},
         {"PassiveWallJump", 203},
         {"PassiveCeil", 204},
-        {"ShieldBreakFly", 205},
-        {"ShieldBreakFall", 206},
-        {"ShieldBreakDownU", 207},
-        {"ShieldBreakDownD", 208},
-        {"ShieldBreakStandU", 209},
-        {"ShieldBreakStandD", 210},
         {"Furafura", 205},
         {"FuraSleepStart", 206},
         {"FuraSleepLoop", 207},
         {"FuraSleepEnd", 208},
+        {"ShieldBreakFly", 286},
+        {"ShieldBreakFall", 287},
+        {"ShieldBreakDownU", 288},
+        {"ShieldBreakDownD", 289},
+        {"ShieldBreakStandU", 290},
+        {"ShieldBreakStandD", 291},
         {"DamageIceJump", 20},
         {"BuryJump", 16},
         {"Catch", 242},
@@ -633,7 +650,6 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"CaptureJump", 258},
         {"CaptureNeck", 259},
         {"CaptureFoot", 260},
-        {"Rebound", 261},
         {"CaptureYoshi", 254},
         {"ThrownF", 262},
         {"ThrownB", 263},
@@ -661,6 +677,7 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"FlyReflectWall", 247},
         {"FlyReflectCeil", 248},
         {"DownReflect", 335},
+        {"WallDamage", 212},
         {"StopWall", 213},
         {"StopCeil", 214},
         {"MissFoot", 215},
@@ -678,8 +695,8 @@ static void assignMeleeActionIndices(FighterDefinition& fighter) {
         {"CliffJumpQuick2", 228},
     };
     const std::unordered_map<std::string, int> actionByState = {
-        {"ShieldBreakDown", 207},
-        {"ShieldBreakStand", 209},
+        {"ShieldBreakDown", 288},
+        {"ShieldBreakStand", 290},
         {"CliffClimb", 220},
         {"CliffAttack", 222},
         {"CliffEscape", 224},
@@ -1099,6 +1116,9 @@ FighterDefinition makeDebugRook() {
         state.onEnter = {call("common_enter")};
         state.onFrame = {call("process_damage")};
         state.onLanding = {call("damage_landing")};
+        state.onAirborne = {call("damage_airborne")};
+        state.interrupts = damageActionInterrupts();
+        requireHitstunEnded(state.interrupts);
         return state;
     };
 
@@ -1120,6 +1140,8 @@ FighterDefinition makeDebugRook() {
         state.onFrame = {call("process_damage_fly")};
         state.onLanding = {call("damage_fly_landing")};
         state.allowLedgeGrab = false;
+        state.interrupts = damageFallActionInterrupts();
+        requireHitstunEnded(state.interrupts);
         return state;
     };
     FighterState damageFlyHi = makeDamageFlyState("DamageFlyHi");
@@ -1161,6 +1183,7 @@ FighterDefinition makeDebugRook() {
     damageScrew.animation = "ItemScrewDamage";
     damageScrew.animationLengthFrames = 50;
     damageScrew.allowLedgeGrab = false;
+    damageScrew.convertFloorCollisionToGround = false;
     damageScrew.onEnter = {call("common_enter")};
     damageScrew.onFrame = {call("process_damage_screw")};
     damageScrew.onLanding.clear();
@@ -1208,6 +1231,7 @@ FighterDefinition makeDebugRook() {
     damageIce.allowLedgeGrab = false;
     damageIce.onEnter = {call("common_enter"), call("enter_damage_ice")};
     damageIce.onFrame = {call("process_damage_ice")};
+    damageIce.onAirborne = {call("damage_airborne")};
 
     FighterState damageIceJump = fallState;
     damageIceJump.name = "DamageIceJump";
@@ -1218,6 +1242,8 @@ FighterDefinition makeDebugRook() {
     damageIceJump.onFrame = {call("process_damage_ice_jump")};
     damageIceJump.onLanding = {call("regular_landing")};
     damageIceJump.interrupts.clear();
+    damageIceJump.interrupts.push_back(
+        interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne));
 
     FighterState bury;
     bury.name = "Bury";
@@ -1240,6 +1266,10 @@ FighterDefinition makeDebugRook() {
     buryJump.allowLedgeGrab = false;
     buryJump.onEnter = {call("common_enter"), call("enter_bury_jump")};
     buryJump.onFrame = {call("process_bury_jump")};
+    buryJump.interrupts = airborneActionInterrupts(false);
+    delayInterrupts(
+        buryJump.interrupts,
+        roundedFixFrames(fighter.properties.common.buryJumpGravityThresholdX61C) + 1);
     buryJump.onAnimationFinishedState = "Fall";
 
     FighterState reboundStop;
@@ -1279,6 +1309,7 @@ FighterDefinition makeDebugRook() {
     downDamageU.animationLengthFrames = 18;
     downDamageU.onEnter = {call("common_enter")};
     downDamageU.onFrame = {call("process_down_damage")};
+    downDamageU.onAirborne.clear();
     downDamageU.onAnimationFinishedState.clear();
 
     auto makeDownGetupState = [&](const std::string& name, int length) {
@@ -1320,6 +1351,7 @@ FighterDefinition makeDebugRook() {
     downDamageD.animationLengthFrames = 18;
     downDamageD.onEnter = {call("common_enter")};
     downDamageD.onFrame = {call("process_down_damage")};
+    downDamageD.onAirborne.clear();
     downDamageD.onAnimationFinishedState.clear();
 
     FighterState downStandD = downStandU;
@@ -1545,6 +1577,9 @@ FighterDefinition makeDebugRook() {
     missFoot.onFrame = {call("process_miss_foot")};
     missFoot.onLanding = {call("regular_landing")};
     missFoot.onAnimationFinishedState.clear();
+    missFoot.interrupts.clear();
+    missFoot.interrupts.push_back(
+        interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne));
 
     const std::vector<InterruptRule> guardInterrupts = {
         interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
@@ -1718,6 +1753,7 @@ FighterDefinition makeDebugRook() {
     captureJump.onEnter = {call("common_enter"), call("enter_capture_jump")};
     captureJump.onFrame = {call("process_capture_jump")};
     captureJump.onLanding = {call("capture_jump_landing")};
+    captureJump.interrupts = airborneActionInterrupts(false);
     delayInterrupts(
         captureJump.interrupts,
         roundedFixFrames(fighter.properties.common.captureJumpGravityThresholdX3B8) + 1);
@@ -1998,6 +2034,9 @@ FighterDefinition makeDebugRook() {
     cliffJumpAir.loopAnimation = false;
     cliffJumpAir.onEnter = {call("common_enter"), call("enter_cliff_jump_air")};
     cliffJumpAir.onFrame = {call("process_cliff_jump_air")};
+    cliffJumpAir.interrupts.clear();
+    cliffJumpAir.interrupts.push_back(
+        interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne));
     cliffJumpAir.onAnimationFinishedState = "Fall";
     FighterState cliffJumpSlow2 = cliffJumpAir;
     cliffJumpSlow2.name = "CliffJumpSlow2";

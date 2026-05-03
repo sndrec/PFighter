@@ -653,6 +653,17 @@ static void applyHsdAnimationLengths(FighterDefinition& def) {
 }
 
 static void applyCommonStateTimings(FighterDefinition& def) {
+    const int buryJumpIndex = def.stateIndex("BuryJump");
+    if (buryJumpIndex >= 0) {
+        FighterState& buryJump = def.states[static_cast<size_t>(buryJumpIndex)];
+        const int enableFrame = roundedFrames(def.properties.common.buryJumpGravityThresholdX61C) + 1;
+        for (InterruptRule& rule : buryJump.interrupts) {
+            rule.startActive = false;
+            rule.enableFrame = enableFrame;
+            rule.disableFrame = 0;
+        }
+    }
+
     const int captureJumpIndex = def.stateIndex("CaptureJump");
     if (captureJumpIndex >= 0) {
         FighterState& captureJump = def.states[static_cast<size_t>(captureJumpIndex)];
@@ -1226,6 +1237,9 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
 }
 
 static bool ruleActive(const InterruptRule& rule, const FighterRuntime& fighter) {
+    if (rule.requireNoHitstun && fighter.hitstun > 0) {
+        return false;
+    }
     if (rule.alwaysActive) {
         return true;
     }
@@ -1824,6 +1838,7 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "FallSpecial") return 26;
     if (animation == "FallSpecialF") return 27;
     if (animation == "FallSpecialB") return 28;
+    if (animation == "DamageFall") return 29;
     if (animation == "Landing") return 35;
     if (animation == "LandingFallSpecial") return 36;
     if (animation == "GuardOn" || animation == "GuardReflect") return 37;
@@ -1834,10 +1849,11 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "EscapeF") return 42;
     if (animation == "EscapeB") return 43;
     if (animation == "EscapeAir") return 44;
-    if (animation == "ItemScrew") return 145;
-    if (animation == "ItemScrewAir") return 146;
-    if (animation == "ItemScrewDamage") return 147;
-    if (animation == "ItemScrewDamageAir") return 148;
+    if (animation == "Rebound") return 45;
+    if (animation == "ItemScrew") return 144;
+    if (animation == "ItemScrewAir") return 145;
+    if (animation == "ItemScrewDamage") return 146;
+    if (animation == "ItemScrewDamageAir") return 147;
     if (animation == "Jab" || animation == "Attack11") return 46;
     if (animation == "Attack12") return 47;
     if (animation == "Attack13") return 48;
@@ -1900,16 +1916,16 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "PassiveWall") return 202;
     if (animation == "PassiveWallJump") return 203;
     if (animation == "PassiveCeil") return 204;
-    if (animation == "ShieldBreakFly") return 205;
-    if (animation == "ShieldBreakFall") return 206;
-    if (animation == "ShieldBreakDown" || animation == "ShieldBreakDownU") return 207;
-    if (animation == "ShieldBreakDownD") return 208;
-    if (animation == "ShieldBreakStand" || animation == "ShieldBreakStandU") return 209;
-    if (animation == "ShieldBreakStandD") return 210;
     if (animation == "Furafura") return 205;
     if (animation == "FuraSleepStart") return 206;
     if (animation == "FuraSleepLoop") return 207;
     if (animation == "FuraSleepEnd") return 208;
+    if (animation == "ShieldBreakFly") return 286;
+    if (animation == "ShieldBreakFall") return 287;
+    if (animation == "ShieldBreakDown" || animation == "ShieldBreakDownU") return 288;
+    if (animation == "ShieldBreakDownD") return 289;
+    if (animation == "ShieldBreakStand" || animation == "ShieldBreakStandU") return 290;
+    if (animation == "ShieldBreakStandD") return 291;
     if (animation == "BuryJump") return 16;
     if (animation == "Catch") return 242;
     if (animation == "CatchPull") return 242;
@@ -1932,7 +1948,6 @@ static int fallbackActionIndex(const std::string& animation) {
     if (animation == "CaptureJump") return 258;
     if (animation == "CaptureNeck") return 259;
     if (animation == "CaptureFoot") return 260;
-    if (animation == "Rebound") return 261;
     if (animation == "ThrownF") return 262;
     if (animation == "ThrownB") return 263;
     if (animation == "ThrownHi") return 264;
@@ -3842,7 +3857,8 @@ static bool tryGrabLedge(World& world, size_t fighterIndex) {
         fighter.knockbackVelocity = {};
         fighter.attackerShieldKnockback = {};
         fighter.groundAttackerShieldKnockbackVelocity = 0;
-        fighter.jumpsUsed = 0;
+        // ftCliffCommon_80081370 calls ftCommon_8007D5D4 during CliffCatch.
+        fighter.jumpsUsed = 1;
         fighter.wallJumpsUsed = 0;
         setFighterFlag(fighter, 12, false);
         fighter.position.x = ledge.position.x + ledge.direction * attr.ledgeHangX;
@@ -4772,6 +4788,7 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
     Fix landingFraction = fx(1);
     bool resolvedAirCollision = false;
     bool hitCeilingThisStep = false;
+    bool floorContactWithoutGround = false;
 
     if (wasGrounded) {
         nowGrounded = snapToCurrentGround(world, fighter);
@@ -4829,7 +4846,12 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
             fighter.position.y = landingContact.y - fighter.ecb.points[3].y;
             landedSegment = carryRemainingMovementOnGround(world, fighter, landedSegment, landingFraction, attemptedDelta);
             projectGroundVelocity(fighter);
-            nowGrounded = true;
+            if (currentState(world, fighter).convertFloorCollisionToGround) {
+                nowGrounded = true;
+            } else {
+                floorContactWithoutGround = true;
+                resolvedAirCollision = true;
+            }
         }
     }
 
@@ -4853,7 +4875,7 @@ static bool collideCurrentStep(World& world, size_t fighterIndex, bool wasGround
             runStateFunctions(world, fighterIndex, currentState(world, fighter).onLanding);
         }
     } else {
-        const bool grabbedLedge = tryGrabLedge(world, fighterIndex);
+        const bool grabbedLedge = floorContactWithoutGround ? false : tryGrabLedge(world, fighterIndex);
         fighter.grounded = false;
         fighter.groundSegment = -1;
         fighter.groundVelocity = velocityAlongGround(fighter.fighterVelocity, fighter.groundNormal);
