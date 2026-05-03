@@ -439,6 +439,7 @@ enum class SubactionType : uint8_t {
     SetModelPartAnimation,
     SetFighterVisibility,
     SelfDamage,
+    SpawnObject,
 };
 
 struct Subaction {
@@ -454,6 +455,9 @@ struct Subaction {
     Fix smashChargeHoldFrames = 0;
     Fix smashChargeDamageMultiplier = fx(1);
     Fix selfDamage = 0;
+    std::string objectName;
+    Vec2 spawnVelocity = {};
+    Vec3 spawnOffset = {};
     int modelPartIndex = -1;
     int modelPartState = -1;
     int modelPartAnimation = -1;

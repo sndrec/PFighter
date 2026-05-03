@@ -923,6 +923,24 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     }
 }
 
+static void drawGameObjects(const pf::World& world, bool boxes) {
+    for (const pf::GameObjectRuntime& object : world.objects) {
+        if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+            continue;
+        }
+        const pf::GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+        const Color color = def.kind == pf::GameObjectKind::Projectile ? MAROON : BROWN;
+        DrawSphere(toRayGround(object.position), def.kind == pf::GameObjectKind::Projectile ? 0.14f : 0.24f, color);
+        DrawSphereWires(toRayGround(object.position), def.kind == pf::GameObjectKind::Projectile ? 0.16f : 0.27f, 10, 6, BLACK);
+        if (!boxes) {
+            continue;
+        }
+        for (const pf::ActiveHitbox& hit : object.activeHitboxes) {
+            drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+        }
+    }
+}
+
 static void drawEditor(const pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
@@ -1210,6 +1228,7 @@ int main() {
         }
         drawFighter(world, world.fighters[0], ORANGE, editor.showBoxes);
         drawFighter(world, world.fighters[1], SKYBLUE, editor.showBoxes);
+        drawGameObjects(world, editor.showBoxes);
         EndMode3D();
         drawEditor(world, editor);
         drawReplayStatus(replay);

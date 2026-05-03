@@ -21,6 +21,41 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex);
 static bool segmentYAtX(const StageSegment& segment, Fix x, Fix& y);
 static int fallbackActionIndex(const std::string& animation);
 static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart);
+static Vec3 boneWorld(const FighterRuntime& fighter, BoneId bone, Vec3 offset = {});
+static Fix vectorMagnitude(Vec2 value);
+
+enum class GameObjectEvent : uint8_t {
+    Spawned,
+    Destroyed,
+    PickedUp,
+    Dropped,
+    Thrown,
+    DamageDealt,
+    DamageReceived,
+    Clanked,
+    Reflected,
+    Absorbed,
+    ShieldBounced,
+    HitShield,
+    EnteredAir,
+    EnteredHitlag,
+    ExitedHitlag,
+    Touched,
+    JumpedOn,
+    GrabDealt,
+    GrabbedForVictim,
+    Interaction,
+};
+
+static void runGameObjectEvent(World& world, size_t objectIndex, GameObjectEvent event);
+static void deactivateGameObject(World& world, size_t objectIndex);
+static bool validGameObjectIndex(const World& world, int objectIndex);
+static const GameObjectStateDefinition* currentGameObjectState(const World& world, const GameObjectRuntime& object);
+static void runGameObjectFunctions(World& world, size_t objectIndex, const std::vector<FunctionCall>& functions);
+static void setGameObjectHitlag(World& world, size_t objectIndex, int hitlagFrames);
+static int hitlagFramesForHitbox(const HitboxDefinition& hitbox);
+static void applyGameObjectGrab(World& world, size_t objectIndex, size_t victimIndex);
+static void clearGameObjectFighterReference(World& world, size_t objectIndex, int fighterIndex);
 
 struct HsdFighterAssetSpec {
     const char* displayName;
@@ -856,6 +891,160 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     return p1;
 }
 
+static std::vector<GameObjectDefinition> makeDefaultObjectDefinitions() {
+    auto objectCall = [](std::string name) {
+        FunctionCall fn;
+        fn.name = std::move(name);
+        return fn;
+    };
+
+    HitboxDefinition laserHitbox;
+    laserHitbox.hitboxId = 0;
+    laserHitbox.radius = fxFromFloat(0.28f);
+    laserHitbox.damage = fx(3);
+    laserHitbox.knockbackAngleDegrees = fx(361);
+    laserHitbox.knockbackBase = fx(8);
+    laserHitbox.knockbackGrowth = fx(20);
+    laserHitbox.canClank = true;
+
+    GameObjectDefinition trainingLaser;
+    trainingLaser.name = "TrainingLaser";
+    trainingLaser.kind = GameObjectKind::Projectile;
+    trainingLaser.states = {{
+        "Travel",
+        90,
+        false,
+        {},
+        {objectCall("object_lifetime")},
+        {objectCall("object_linear_physics")},
+        {objectCall("object_blast_destroy")},
+    }};
+    trainingLaser.lifetimeFrames = 90;
+    trainingLaser.gravity = 0;
+    trainingLaser.terminalVelocity = fx(8);
+    trainingLaser.destroyOnHit = true;
+    trainingLaser.destroyOnShield = true;
+    trainingLaser.hitOwner = false;
+    trainingLaser.onDamageDealt = {objectCall("object_destroy")};
+    trainingLaser.onClanked = {objectCall("object_destroy")};
+    trainingLaser.onAbsorbed = {objectCall("object_destroy")};
+    trainingLaser.onHitShield = {objectCall("object_destroy")};
+    trainingLaser.hitboxes = {laserHitbox};
+
+    HitboxDefinition lightItemHitbox = laserHitbox;
+    lightItemHitbox.radius = fxFromFloat(0.42f);
+    lightItemHitbox.damage = fx(6);
+    lightItemHitbox.knockbackBase = fx(18);
+    lightItemHitbox.knockbackGrowth = fx(35);
+
+    GameObjectDefinition trainingItem;
+    trainingItem.name = "TrainingItem";
+    trainingItem.kind = GameObjectKind::Item;
+    trainingItem.states = {{
+        "Fall",
+        600,
+        true,
+        {},
+        {objectCall("object_lifetime")},
+        {objectCall("object_gravity_physics")},
+        {objectCall("object_floor_stop"), objectCall("object_blast_destroy")},
+    }};
+    trainingItem.lifetimeFrames = 600;
+    trainingItem.gravity = fxFromFloat(0.08f);
+    trainingItem.terminalVelocity = fxFromFloat(2.5f);
+    trainingItem.maxDamage = fx(4);
+    trainingItem.destroyOnHit = false;
+    trainingItem.destroyOnShield = false;
+    trainingItem.hitOwner = true;
+    trainingItem.onDamageReceived = {objectCall("object_destroy")};
+    trainingItem.hitboxes = {lightItemHitbox};
+    trainingItem.hurtboxes = {{
+        {0, fxFromFloat(0.2f), 0},
+        {0, fxFromFloat(0.8f), 0},
+        fxFromFloat(0.45f),
+        HurtboxState::Normal,
+    }};
+
+    GameObjectDefinition trainingAirEventItem = trainingItem;
+    trainingAirEventItem.name = "TrainingAirEventItem";
+    trainingAirEventItem.onEnteredAir = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingStateEnterItem = trainingItem;
+    trainingStateEnterItem.name = "TrainingStateEnterItem";
+    trainingStateEnterItem.states[0].onEnter = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingHitlagEnterItem = trainingItem;
+    trainingHitlagEnterItem.name = "TrainingHitlagEnterItem";
+    trainingHitlagEnterItem.maxDamage = 0;
+    trainingHitlagEnterItem.onDamageReceived.clear();
+    trainingHitlagEnterItem.onEnteredHitlag = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingHitlagExitItem = trainingItem;
+    trainingHitlagExitItem.name = "TrainingHitlagExitItem";
+    trainingHitlagExitItem.maxDamage = 0;
+    trainingHitlagExitItem.onDamageReceived.clear();
+    trainingHitlagExitItem.onExitedHitlag = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingAccessoryItem = trainingItem;
+    trainingAccessoryItem.name = "TrainingAccessoryItem";
+    trainingAccessoryItem.onAccessory = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingTouchItem = trainingItem;
+    trainingTouchItem.name = "TrainingTouchItem";
+    trainingTouchItem.hitboxes.clear();
+    trainingTouchItem.hurtboxes.clear();
+    trainingTouchItem.touchboxes = {{
+        {0, fxFromFloat(0.1f), 0},
+        {0, fxFromFloat(0.9f), 0},
+        fxFromFloat(0.6f),
+        true,
+        true,
+    }};
+    trainingTouchItem.onTouched = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingJumpedOnItem = trainingTouchItem;
+    trainingJumpedOnItem.name = "TrainingJumpedOnItem";
+    trainingJumpedOnItem.onTouched.clear();
+    trainingJumpedOnItem.onJumpedOn = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingGrabDealtItem = trainingItem;
+    trainingGrabDealtItem.name = "TrainingGrabDealtItem";
+    trainingGrabDealtItem.hitboxes[0].isGrab = true;
+    trainingGrabDealtItem.hitboxes[0].damage = 0;
+    trainingGrabDealtItem.hitboxes[0].radius = fxFromFloat(3.0f);
+    trainingGrabDealtItem.hitboxes[0].canClank = false;
+    trainingGrabDealtItem.onGrabDealt = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingGrabVictimItem = trainingGrabDealtItem;
+    trainingGrabVictimItem.name = "TrainingGrabVictimItem";
+    trainingGrabVictimItem.onGrabDealt.clear();
+    trainingGrabVictimItem.onGrabbedForVictim = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingInteractionItem = trainingItem;
+    trainingInteractionItem.name = "TrainingInteractionItem";
+    trainingInteractionItem.onInteraction = {objectCall("object_destroy")};
+
+    GameObjectDefinition trainingClearReferenceItem = trainingItem;
+    trainingClearReferenceItem.name = "TrainingClearReferenceItem";
+    trainingClearReferenceItem.onInteraction = {objectCall("object_clear_fighter_reference")};
+
+    return {
+        trainingLaser,
+        trainingItem,
+        trainingAirEventItem,
+        trainingStateEnterItem,
+        trainingHitlagEnterItem,
+        trainingHitlagExitItem,
+        trainingAccessoryItem,
+        trainingTouchItem,
+        trainingJumpedOnItem,
+        trainingGrabDealtItem,
+        trainingGrabVictimItem,
+        trainingInteractionItem,
+        trainingClearReferenceItem,
+    };
+}
+
 World makeTrainingWorld(int p1FighterDef, int p2FighterDef) {
     World world;
     world.stage = makeBattlefieldTrainingStage();
@@ -863,6 +1052,7 @@ World makeTrainingWorld(int p1FighterDef, int p2FighterDef) {
     for (const HsdFighterAssetSpec& spec : meleeTrainingRoster()) {
         world.fighterDefs.push_back(makeHsdFighterDefinition(spec, common));
     }
+    world.objectDefs = makeDefaultObjectDefinitions();
     p1FighterDef = std::clamp(p1FighterDef, 0, static_cast<int>(world.fighterDefs.size()) - 1);
     p2FighterDef = std::clamp(p2FighterDef, 0, static_cast<int>(world.fighterDefs.size()) - 1);
     world.fighters = {
@@ -890,6 +1080,243 @@ World makeTrainingWorld(int p1FighterDef, int p2FighterDef) {
 
 World makeTrainingWorld() {
     return makeTrainingWorld(0, 0);
+}
+
+int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity) {
+    const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const GameObjectDefinition& def) {
+        return def.name == objectName;
+    });
+    if (found == world.objectDefs.end()) {
+        return -1;
+    }
+
+    GameObjectRuntime object;
+    object.objectDef = static_cast<int>(std::distance(world.objectDefs.begin(), found));
+    object.state = std::clamp(found->initialState, 0, std::max(0, static_cast<int>(found->states.size()) - 1));
+    object.lastStateChangeFrame = world.frame;
+    object.ownerFighter = ownerFighter;
+    object.facing = facing == 0 ? 1 : facing;
+    object.position = position;
+    object.previousPosition = position;
+    object.velocity = velocity;
+    object.active = true;
+    object.activeHitboxes.reserve(found->hitboxes.size());
+    for (const HitboxDefinition& hitboxDef : found->hitboxes) {
+        ActiveHitbox hitbox;
+        hitbox.def = hitboxDef;
+        hitbox.current = {position.x + hitboxDef.offset.x, position.y + hitboxDef.offset.y, hitboxDef.offset.z};
+        hitbox.previous = hitbox.current;
+        object.activeHitboxes.push_back(hitbox);
+    }
+    world.objects.push_back(std::move(object));
+    const int objectIndex = static_cast<int>(world.objects.size() - 1);
+    if (const GameObjectStateDefinition* state = currentGameObjectState(world, world.objects[static_cast<size_t>(objectIndex)])) {
+        runGameObjectFunctions(world, static_cast<size_t>(objectIndex), state->onEnter);
+    }
+    if (validGameObjectIndex(world, objectIndex)) {
+        runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Spawned);
+    }
+    return objectIndex;
+}
+
+static bool validGameObjectIndex(const World& world, int objectIndex) {
+    return objectIndex >= 0 && objectIndex < static_cast<int>(world.objects.size()) &&
+        world.objects[static_cast<size_t>(objectIndex)].active;
+}
+
+static bool validObjectOwnerFighterIndex(const World& world, int fighterIndex) {
+    return fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size());
+}
+
+static bool gameObjectIsHeld(const GameObjectRuntime& object) {
+    return object.heldByFighter >= 0;
+}
+
+static Vec2 gameObjectHoldPosition(const World& world, int fighterIndex) {
+    const FighterRuntime& fighter = world.fighters[static_cast<size_t>(fighterIndex)];
+    const Vec3 hand = boneWorld(fighter, BoneId::HandR, {});
+    return {hand.x, hand.y};
+}
+
+static void resetGameObjectHitboxSweeps(GameObjectRuntime& object) {
+    for (ActiveHitbox& hitbox : object.activeHitboxes) {
+        hitbox.firstFrame = true;
+    }
+}
+
+bool pickUpGameObject(World& world, int objectIndex, int fighterIndex) {
+    if (!validGameObjectIndex(world, objectIndex) || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return false;
+    }
+    FighterRuntime& fighter = world.fighters[static_cast<size_t>(fighterIndex)];
+    if (fighter.heldObject >= 0 && fighter.heldObject != objectIndex) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    object.ownerFighter = fighterIndex;
+    object.heldByFighter = fighterIndex;
+    fighter.heldObject = objectIndex;
+    object.velocity = {};
+    object.grounded = false;
+    object.groundSegment = -1;
+    object.previousPosition = object.position;
+    object.position = gameObjectHoldPosition(world, fighterIndex);
+    resetGameObjectHitboxSweeps(object);
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::PickedUp);
+    return true;
+}
+
+bool dropGameObject(World& world, int objectIndex, Vec2 velocity) {
+    if (!validGameObjectIndex(world, objectIndex)) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    if (validObjectOwnerFighterIndex(world, object.heldByFighter) &&
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject == objectIndex)
+    {
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject = -1;
+    }
+    object.heldByFighter = -1;
+    object.velocity = velocity;
+    object.grounded = false;
+    object.groundSegment = -1;
+    resetGameObjectHitboxSweeps(object);
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Dropped);
+    return true;
+}
+
+bool throwGameObject(World& world, int objectIndex, int fighterIndex, Vec2 velocity) {
+    if (!validGameObjectIndex(world, objectIndex) || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    if (validObjectOwnerFighterIndex(world, object.heldByFighter) &&
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject == objectIndex)
+    {
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject = -1;
+    }
+    world.fighters[static_cast<size_t>(fighterIndex)].heldObject = -1;
+    object.ownerFighter = fighterIndex;
+    object.heldByFighter = -1;
+    object.facing = world.fighters[static_cast<size_t>(fighterIndex)].facing;
+    object.velocity = velocity;
+    object.grounded = false;
+    object.groundSegment = -1;
+    resetGameObjectHitboxSweeps(object);
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Thrown);
+    return true;
+}
+
+static Vec2 reflectedVelocity(Vec2 velocity, Vec2 normal) {
+    const Fix mag = vectorMagnitude(normal);
+    if (mag <= 0) {
+        return {-velocity.x, velocity.y};
+    }
+    normal.x = fxDiv(normal.x, mag);
+    normal.y = fxDiv(normal.y, mag);
+    const Fix dot = fxMul(velocity.x, normal.x) + fxMul(velocity.y, normal.y);
+    return {
+        velocity.x - fxMul(fx(2), fxMul(dot, normal.x)),
+        velocity.y - fxMul(fx(2), fxMul(dot, normal.y)),
+    };
+}
+
+static void releaseHeldGameObjectOwner(World& world, GameObjectRuntime& object, int objectIndex) {
+    if (validObjectOwnerFighterIndex(world, object.heldByFighter) &&
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject == objectIndex)
+    {
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject = -1;
+    }
+    object.heldByFighter = -1;
+}
+
+bool reflectGameObject(World& world, int objectIndex, int fighterIndex, Vec2 normal) {
+    if (!validGameObjectIndex(world, objectIndex) || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    releaseHeldGameObjectOwner(world, object, objectIndex);
+    object.ownerFighter = fighterIndex;
+    object.velocity = reflectedVelocity(object.velocity, normal);
+    if (object.velocity.x != 0) {
+        object.facing = object.velocity.x > 0 ? 1 : -1;
+    } else {
+        object.facing = -object.facing;
+    }
+    resetGameObjectHitboxSweeps(object);
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Reflected);
+    return true;
+}
+
+bool absorbGameObject(World& world, int objectIndex, int fighterIndex) {
+    if (!validGameObjectIndex(world, objectIndex) || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    releaseHeldGameObjectOwner(world, object, objectIndex);
+    object.ownerFighter = fighterIndex;
+    object.velocity = {};
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Absorbed);
+    return true;
+}
+
+bool shieldBounceGameObject(World& world, int objectIndex, int fighterIndex, Vec2 normal) {
+    if (!validGameObjectIndex(world, objectIndex) || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    releaseHeldGameObjectOwner(world, object, objectIndex);
+    object.ownerFighter = fighterIndex;
+    object.velocity = reflectedVelocity(object.velocity, normal);
+    if (object.velocity.x != 0) {
+        object.facing = object.velocity.x > 0 ? 1 : -1;
+    }
+    resetGameObjectHitboxSweeps(object);
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::ShieldBounced);
+    return true;
+}
+
+static void clearGameObjectFighterReference(World& world, size_t objectIndex, int fighterIndex) {
+    if (objectIndex >= world.objects.size() || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (object.ownerFighter == fighterIndex) {
+        object.ownerFighter = -1;
+    }
+    if (object.grabVictimFighter == fighterIndex) {
+        object.grabVictimFighter = -1;
+    }
+    if (object.heldByFighter == fighterIndex) {
+        if (world.fighters[static_cast<size_t>(fighterIndex)].heldObject == static_cast<int>(objectIndex)) {
+            world.fighters[static_cast<size_t>(fighterIndex)].heldObject = -1;
+        }
+        object.heldByFighter = -1;
+    }
+}
+
+bool interactGameObjectWithFighter(World& world, int objectIndex, int fighterIndex) {
+    if (!validGameObjectIndex(world, objectIndex) || !validObjectOwnerFighterIndex(world, fighterIndex)) {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    object.lastInteractionFighter = fighterIndex;
+    object.lastInteractionObject = -1;
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Interaction);
+    return true;
+}
+
+bool interactGameObjects(World& world, int objectIndex, int referenceObjectIndex) {
+    if (!validGameObjectIndex(world, objectIndex) || !validGameObjectIndex(world, referenceObjectIndex) ||
+        objectIndex == referenceObjectIndex)
+    {
+        return false;
+    }
+    GameObjectRuntime& object = world.objects[static_cast<size_t>(objectIndex)];
+    object.lastInteractionFighter = -1;
+    object.lastInteractionObject = referenceObjectIndex;
+    runGameObjectEvent(world, static_cast<size_t>(objectIndex), GameObjectEvent::Interaction);
+    return true;
 }
 
 const FighterState& currentState(const World& world, const FighterRuntime& fighter) {
@@ -3993,7 +4420,7 @@ static bool snapToCurrentGround(const World& world, FighterRuntime& fighter) {
     return meleeMaintainCurrentFloor(world, fighter);
 }
 
-static Vec3 boneWorld(const FighterRuntime& fighter, BoneId bone, Vec3 offset = {}) {
+static Vec3 boneWorld(const FighterRuntime& fighter, BoneId bone, Vec3 offset) {
     Vec3 base = fighter.bones[static_cast<size_t>(bone)].position;
     const Fix facing = fighter.facing >= 0 ? fx(1) : -fx(1);
     offset.x = fxMul(offset.x, facing);
@@ -4005,6 +4432,46 @@ static Vec3 hitboxWorld(const FighterRuntime& fighter, const HitboxDefinition& h
         return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(hitbox.hsdBone)], hitbox.offset);
     }
     return boneWorld(fighter, hitbox.bone, hitbox.offset);
+}
+
+static Vec3 objectHitboxWorld(const GameObjectRuntime& object, const HitboxDefinition& hitbox) {
+    return {
+        object.position.x + object.facing * hitbox.offset.x,
+        object.position.y + hitbox.offset.y,
+        hitbox.offset.z,
+    };
+}
+
+static Capsule objectHurtboxWorld(const GameObjectRuntime& object, const GameObjectHurtboxDefinition& hurtbox) {
+    return {
+        {
+            object.position.x + object.facing * hurtbox.startOffset.x,
+            object.position.y + hurtbox.startOffset.y,
+            hurtbox.startOffset.z,
+        },
+        {
+            object.position.x + object.facing * hurtbox.endOffset.x,
+            object.position.y + hurtbox.endOffset.y,
+            hurtbox.endOffset.z,
+        },
+        hurtbox.radius,
+    };
+}
+
+static Capsule objectTouchboxWorld(const GameObjectRuntime& object, const GameObjectTouchboxDefinition& touchbox) {
+    return {
+        {
+            object.position.x + object.facing * touchbox.startOffset.x,
+            object.position.y + touchbox.startOffset.y,
+            touchbox.startOffset.z,
+        },
+        {
+            object.position.x + object.facing * touchbox.endOffset.x,
+            object.position.y + touchbox.endOffset.y,
+            touchbox.endOffset.z,
+        },
+        touchbox.radius,
+    };
 }
 
 static Vec3 shieldCenterWorld(const FighterDefinition& def, const FighterRuntime& fighter) {
@@ -4153,7 +4620,7 @@ static void applySetJumpStateSubaction(const FighterDefinition& def, FighterRunt
     }
 }
 
-static void executeSubaction(const FighterDefinition& def, FighterRuntime& fighter, const Subaction& sub) {
+static void executeSubaction(World& world, size_t fighterIndex, const FighterDefinition& def, FighterRuntime& fighter, const Subaction& sub) {
     if (sub.type == SubactionType::ClearHitboxes) {
         fighter.activeHitboxes.clear();
         fighter.fightersHitThisAction.clear();
@@ -4299,6 +4766,18 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         }
         return;
     }
+    if (sub.type == SubactionType::SpawnObject) {
+        const Vec2 position{
+            fighter.position.x + fighter.facing * sub.spawnOffset.x,
+            fighter.position.y + sub.spawnOffset.y,
+        };
+        const Vec2 velocity{
+            fighter.facing * sub.spawnVelocity.x,
+            sub.spawnVelocity.y,
+        };
+        spawnGameObject(world, sub.objectName, static_cast<int>(fighterIndex), position, fighter.facing, velocity);
+        return;
+    }
     if (sub.type == SubactionType::SetHurtboxState) {
         if (sub.hsdBone >= 0 && def.hsdAsset) {
             if (fighter.hurtboxStates.size() != def.hsdAsset->hurtboxes.size()) {
@@ -4341,7 +4820,7 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
     }
 }
 
-static void executeActionFrame(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter, int actionFrame) {
+static void executeActionFrame(World& world, size_t fighterIndex, const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter, int actionFrame) {
     std::vector<Subaction> actionSource = state.action;
     if (def.hasHsdAsset && def.hsdAsset) {
         if (const HsdActionScript* script = actionScriptForState(*def.hsdAsset, state)) {
@@ -4353,7 +4832,7 @@ static void executeActionFrame(const FighterDefinition& def, const FighterState&
         return;
     }
     for (const Subaction& sub : action[static_cast<size_t>(actionFrame)]) {
-        executeSubaction(def, fighter, sub);
+        executeSubaction(world, fighterIndex, def, fighter, sub);
     }
 }
 
@@ -4364,17 +4843,17 @@ static int actionFrameForState(const FighterDefinition& def, const FighterState&
     return frameInState(fighter);
 }
 
-static void executePendingActionFrames(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
+static void executePendingActionFrames(World& world, size_t fighterIndex, const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
     const int targetFrame = actionFrameForState(def, state, fighter);
     if (targetFrame == fighter.lastActionFrameExecuted) {
         return;
     }
     if (targetFrame > fighter.lastActionFrameExecuted) {
         for (int frame = std::max(0, fighter.lastActionFrameExecuted + 1); frame <= targetFrame; ++frame) {
-            executeActionFrame(def, state, fighter, frame);
+            executeActionFrame(world, fighterIndex, def, state, fighter, frame);
         }
     } else {
-        executeActionFrame(def, state, fighter, targetFrame);
+        executeActionFrame(world, fighterIndex, def, state, fighter, targetFrame);
     }
     fighter.lastActionFrameExecuted = targetFrame;
 }
@@ -6047,12 +6526,331 @@ static void updateActiveHitboxPositions(World& world, size_t fighterIndex) {
     }
 }
 
+static const GameObjectStateDefinition* currentGameObjectState(const World& world, const GameObjectRuntime& object) {
+    if (object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return nullptr;
+    }
+    const GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    if (object.state < 0 || object.state >= static_cast<int>(def.states.size())) {
+        return nullptr;
+    }
+    return &def.states[static_cast<size_t>(object.state)];
+}
+
+static int frameInObjectState(const World& world, const GameObjectRuntime& object) {
+    return std::max(1, world.frame - object.lastStateChangeFrame + 1);
+}
+
+static void objectLinearPhysics(GameObjectRuntime& object) {
+    object.previousPosition = object.position;
+    object.position += object.velocity;
+}
+
+static void objectGravityPhysics(const GameObjectDefinition& def, GameObjectRuntime& object) {
+    object.previousPosition = object.position;
+    object.velocity.y = std::max(object.velocity.y - def.gravity, -def.terminalVelocity);
+    object.position += object.velocity;
+}
+
+static bool objectFloorContact(const World& world, const GameObjectRuntime& object, int& floorSegment, Fix& floorY) {
+    if (object.position.y > object.previousPosition.y) {
+        return false;
+    }
+    for (size_t i = 0; i < world.stage.segments.size(); ++i) {
+        const StageSegment& segment = world.stage.segments[i];
+        if (!isFloorLine(segment) || object.position.x < segmentMinX(segment) || object.position.x > segmentMaxX(segment)) {
+            continue;
+        }
+        Fix y = 0;
+        if (!segmentYAtX(segment, object.position.x, y)) {
+            continue;
+        }
+        if (object.previousPosition.y >= y && object.position.y <= y) {
+            floorSegment = static_cast<int>(i);
+            floorY = y;
+            return true;
+        }
+    }
+    return false;
+}
+
+static void runGameObjectFunction(World& world, size_t objectIndex, const FunctionCall& fn) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    const GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    if (fn.name == "object_destroy") {
+        deactivateGameObject(world, objectIndex);
+        return;
+    }
+    if (fn.name == "object_lifetime") {
+        const GameObjectStateDefinition* state = currentGameObjectState(world, object);
+        const bool stateExpired = state && state->animationLengthFrames > 0 && !state->loopAnimation &&
+            frameInObjectState(world, object) >= state->animationLengthFrames;
+        const bool objectExpired = def.lifetimeFrames > 0 && object.internalFrame >= def.lifetimeFrames;
+        if (stateExpired || objectExpired) {
+            deactivateGameObject(world, objectIndex);
+        }
+        return;
+    }
+    if (fn.name == "object_blast_destroy") {
+        if (object.position.x < world.stage.blastMin.x || object.position.x > world.stage.blastMax.x ||
+            object.position.y < world.stage.blastMin.y || object.position.y > world.stage.blastMax.y)
+        {
+            deactivateGameObject(world, objectIndex);
+        }
+        return;
+    }
+    if (fn.name == "object_linear_physics") {
+        objectLinearPhysics(object);
+        return;
+    }
+    if (fn.name == "object_gravity_physics") {
+        objectGravityPhysics(def, object);
+        return;
+    }
+    if (fn.name == "object_floor_stop") {
+        int floorSegment = -1;
+        Fix floorY = 0;
+        if (objectFloorContact(world, object, floorSegment, floorY)) {
+            object.position.y = floorY;
+            object.velocity.y = 0;
+            object.grounded = true;
+            object.groundSegment = floorSegment;
+        } else {
+            object.grounded = false;
+            object.groundSegment = -1;
+        }
+        return;
+    }
+    if (fn.name == "object_clear_fighter_reference") {
+        clearGameObjectFighterReference(world, objectIndex, object.lastInteractionFighter);
+    }
+}
+
+static void runGameObjectFunctions(World& world, size_t objectIndex, const std::vector<FunctionCall>& functions) {
+    for (const FunctionCall& fn : functions) {
+        runGameObjectFunction(world, objectIndex, fn);
+        if (objectIndex >= world.objects.size() || !world.objects[objectIndex].active) {
+            return;
+        }
+    }
+}
+
+static const std::vector<FunctionCall>& gameObjectEventCallbacks(const GameObjectDefinition& def, GameObjectEvent event) {
+    static const std::vector<FunctionCall> empty;
+    switch (event) {
+    case GameObjectEvent::Spawned:
+        return def.onSpawned;
+    case GameObjectEvent::Destroyed:
+        return def.onDestroyed;
+    case GameObjectEvent::PickedUp:
+        return def.onPickedUp;
+    case GameObjectEvent::Dropped:
+        return def.onDropped;
+    case GameObjectEvent::Thrown:
+        return def.onThrown;
+    case GameObjectEvent::DamageDealt:
+        return def.onDamageDealt;
+    case GameObjectEvent::DamageReceived:
+        return def.onDamageReceived;
+    case GameObjectEvent::Clanked:
+        return def.onClanked;
+    case GameObjectEvent::Reflected:
+        return def.onReflected;
+    case GameObjectEvent::Absorbed:
+        return def.onAbsorbed;
+    case GameObjectEvent::ShieldBounced:
+        return def.onShieldBounced;
+    case GameObjectEvent::HitShield:
+        return def.onHitShield;
+    case GameObjectEvent::EnteredAir:
+        return def.onEnteredAir;
+    case GameObjectEvent::EnteredHitlag:
+        return def.onEnteredHitlag;
+    case GameObjectEvent::ExitedHitlag:
+        return def.onExitedHitlag;
+    case GameObjectEvent::Touched:
+        return def.onTouched;
+    case GameObjectEvent::JumpedOn:
+        return def.onJumpedOn;
+    case GameObjectEvent::GrabDealt:
+        return def.onGrabDealt;
+    case GameObjectEvent::GrabbedForVictim:
+        return def.onGrabbedForVictim;
+    case GameObjectEvent::Interaction:
+        return def.onInteraction;
+    }
+    return empty;
+}
+
+static void runGameObjectEvent(World& world, size_t objectIndex, GameObjectEvent event) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    const GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    runGameObjectFunctions(world, objectIndex, gameObjectEventCallbacks(world.objectDefs[static_cast<size_t>(object.objectDef)], event));
+}
+
+static void deactivateGameObject(World& world, size_t objectIndex) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active) {
+        return;
+    }
+    if (object.destroyEventDispatched) {
+        object.active = false;
+        return;
+    }
+    if (validObjectOwnerFighterIndex(world, object.heldByFighter) &&
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject == static_cast<int>(objectIndex))
+    {
+        world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject = -1;
+    }
+    object.heldByFighter = -1;
+    object.destroyEventDispatched = true;
+    runGameObjectEvent(world, objectIndex, GameObjectEvent::Destroyed);
+    if (objectIndex < world.objects.size()) {
+        world.objects[objectIndex].active = false;
+    }
+}
+
+static void setGameObjectHitlag(World& world, size_t objectIndex, int hitlagFrames) {
+    if (objectIndex >= world.objects.size() || hitlagFrames <= 0) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active) {
+        return;
+    }
+    const bool enteringHitlag = object.hitlag <= 0;
+    object.hitlag = std::max(object.hitlag, hitlagFrames);
+    if (enteringHitlag) {
+        runGameObjectEvent(world, objectIndex, GameObjectEvent::EnteredHitlag);
+    }
+}
+
+void changeGameObjectState(World& world, GameObjectRuntime& object, const std::string& stateName) {
+    if (object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    const GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    const auto found = std::find_if(def.states.begin(), def.states.end(), [&](const GameObjectStateDefinition& state) {
+        return state.name == stateName;
+    });
+    if (found == def.states.end()) {
+        return;
+    }
+    object.state = static_cast<int>(std::distance(def.states.begin(), found));
+    object.lastStateChangeFrame = world.frame;
+    object.animationFrame = 0;
+    object.animationRate = fx(1);
+    object.fightersHit.clear();
+    for (ActiveHitbox& hitbox : object.activeHitboxes) {
+        hitbox.firstFrame = true;
+    }
+
+    const auto objectIt = std::find_if(world.objects.begin(), world.objects.end(), [&](const GameObjectRuntime& candidate) {
+        return &candidate == &object;
+    });
+    if (objectIt != world.objects.end()) {
+        runGameObjectFunctions(world, static_cast<size_t>(std::distance(world.objects.begin(), objectIt)), found->onEnter);
+    }
+}
+
+static void tickGameObjects(World& world) {
+    for (size_t objectIndex = 0; objectIndex < world.objects.size(); ++objectIndex) {
+        GameObjectRuntime& object = world.objects[objectIndex];
+        if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+            object.active = false;
+            continue;
+        }
+        if (object.hitlag > 0) {
+            --object.hitlag;
+            if (object.active && object.hitlag == 0) {
+                runGameObjectEvent(world, objectIndex, GameObjectEvent::ExitedHitlag);
+            }
+            continue;
+        }
+        if (gameObjectIsHeld(object)) {
+            if (!validObjectOwnerFighterIndex(world, object.heldByFighter)) {
+                object.heldByFighter = -1;
+            } else if (world.fighters[static_cast<size_t>(object.heldByFighter)].heldObject != static_cast<int>(objectIndex)) {
+                object.heldByFighter = -1;
+            } else {
+                object.previousPosition = object.position;
+                object.position = gameObjectHoldPosition(world, object.heldByFighter);
+                object.velocity = {};
+                object.grounded = false;
+                object.groundSegment = -1;
+                continue;
+            }
+        }
+        const bool wasGrounded = object.grounded;
+        ++object.internalFrame;
+        object.animationFrame += object.animationRate;
+        const GameObjectStateDefinition* state = currentGameObjectState(world, object);
+        if (state) {
+            runGameObjectFunctions(world, objectIndex, state->onFrame);
+            if (!object.active) {
+                continue;
+            }
+            runGameObjectFunctions(world, objectIndex, state->onPhysics);
+            if (!object.active) {
+                continue;
+            }
+            runGameObjectFunctions(world, objectIndex, state->onCollision);
+            if (object.active && wasGrounded && !object.grounded) {
+                runGameObjectEvent(world, objectIndex, GameObjectEvent::EnteredAir);
+            }
+        } else {
+            objectGravityPhysics(world.objectDefs[static_cast<size_t>(object.objectDef)], object);
+            runGameObjectFunction(world, objectIndex, FunctionCall{"object_lifetime"});
+            if (object.active && wasGrounded && !object.grounded) {
+                runGameObjectEvent(world, objectIndex, GameObjectEvent::EnteredAir);
+            }
+        }
+        if (object.active) {
+            const GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+            runGameObjectFunctions(world, objectIndex, def.onAccessory);
+        }
+    }
+}
+
+static void updateActiveObjectHitboxPositions(World& world) {
+    for (GameObjectRuntime& object : world.objects) {
+        if (!object.active) {
+            continue;
+        }
+        for (ActiveHitbox& hitbox : object.activeHitboxes) {
+            const Vec3 worldPos = objectHitboxWorld(object, hitbox.def);
+            if (hitbox.firstFrame) {
+                hitbox.firstFrame = false;
+                hitbox.current = worldPos;
+                hitbox.previous = worldPos;
+            } else {
+                hitbox.previous = hitbox.current;
+                hitbox.current = worldPos;
+            }
+        }
+    }
+}
+
 static int clankDamageValue(const HitboxDefinition& hitbox) {
     const int damage = static_cast<int>(fxToFloat(hitbox.damage));
     return hitbox.damage > 0 ? std::max(1, damage) : 0;
 }
 
-static void enterReboundFromClank(World& world, size_t fighterIndex, size_t otherIndex, int damageValue) {
+static void enterReboundFromClankAt(World& world, size_t fighterIndex, Vec2 otherPosition, int damageValue) {
     FighterRuntime& fighter = world.fighters[fighterIndex];
     if (!fighter.grounded || damageValue <= 0 || currentState(world, fighter).name == "ReboundStop" ||
         currentState(world, fighter).name == "Rebound")
@@ -6062,8 +6860,17 @@ static void enterReboundFromClank(World& world, size_t fighterIndex, size_t othe
     const MeleeCommonData& common = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties.common;
     fighter.reboundDamageVelocity =
         fxMul(fx(damageValue), common.reboundDamageScaleX3D0) + common.reboundDamageBaseX3D4;
-    fighter.reboundFacingDir = world.fighters[otherIndex].position.x > fighter.position.x ? 1 : -1;
+    fighter.reboundFacingDir = otherPosition.x > fighter.position.x ? 1 : -1;
     changeFighterState(world, fighter, "ReboundStop");
+}
+
+static void enterReboundFromClank(World& world, size_t fighterIndex, size_t otherIndex, int damageValue) {
+    enterReboundFromClankAt(world, fighterIndex, world.fighters[otherIndex].position, damageValue);
+}
+
+static bool canClankHitbox(const ActiveHitbox& hitbox) {
+    return hitbox.def.hitFighters && !hitbox.def.isGrab &&
+        (hitbox.def.canClank || hitbox.def.reboundsOnClank);
 }
 
 static void resolveHitboxClanks(World& world) {
@@ -6076,16 +6883,12 @@ static void resolveHitboxClanks(World& world) {
             int aDamage = 0;
             int bDamage = 0;
             for (const ActiveHitbox& aHitbox : a.activeHitboxes) {
-                if (!aHitbox.def.hitFighters || aHitbox.def.isGrab ||
-                    (!aHitbox.def.canClank && !aHitbox.def.reboundsOnClank))
-                {
+                if (!canClankHitbox(aHitbox)) {
                     continue;
                 }
                 const Capsule aCapsule{aHitbox.previous, aHitbox.current, aHitbox.def.radius};
                 for (const ActiveHitbox& bHitbox : b.activeHitboxes) {
-                    if (!bHitbox.def.hitFighters || bHitbox.def.isGrab ||
-                        (!bHitbox.def.canClank && !bHitbox.def.reboundsOnClank))
-                    {
+                    if (!canClankHitbox(bHitbox)) {
                         continue;
                     }
                     const Capsule bCapsule{bHitbox.previous, bHitbox.current, bHitbox.def.radius};
@@ -6103,6 +6906,99 @@ static void resolveHitboxClanks(World& world) {
             }
             if (bRebound) {
                 enterReboundFromClank(world, bIndex, aIndex, bDamage);
+            }
+        }
+    }
+}
+
+static void resolveFighterObjectHitboxClanks(World& world) {
+    for (size_t fighterIndex = 0; fighterIndex < world.fighters.size(); ++fighterIndex) {
+        FighterRuntime& fighter = world.fighters[fighterIndex];
+        bool fighterRebound = false;
+        int fighterDamage = 0;
+        int fighterHitlag = 0;
+        Vec2 reboundPosition = fighter.position;
+        for (const ActiveHitbox& fighterHitbox : fighter.activeHitboxes) {
+            if (!canClankHitbox(fighterHitbox)) {
+                continue;
+            }
+            const Capsule fighterCapsule{fighterHitbox.previous, fighterHitbox.current, fighterHitbox.def.radius};
+            for (size_t objectIndex = 0; objectIndex < world.objects.size(); ++objectIndex) {
+                GameObjectRuntime& object = world.objects[objectIndex];
+                if (!object.active || gameObjectIsHeld(object)) {
+                    continue;
+                }
+                for (const ActiveHitbox& objectHitbox : object.activeHitboxes) {
+                    if (!canClankHitbox(objectHitbox)) {
+                        continue;
+                    }
+                    const Capsule objectCapsule{objectHitbox.previous, objectHitbox.current, objectHitbox.def.radius};
+                    if (!capsuleCapsule(fighterCapsule, objectCapsule)) {
+                        continue;
+                    }
+                    fighterDamage = std::max(fighterDamage, clankDamageValue(objectHitbox.def));
+                    fighterHitlag = std::max(fighterHitlag, hitlagFramesForHitbox(objectHitbox.def));
+                    fighterRebound = fighterRebound || fighterHitbox.def.reboundsOnClank;
+                    reboundPosition = object.position;
+                    runGameObjectEvent(world, objectIndex, GameObjectEvent::Clanked);
+                    if (object.active) {
+                        setGameObjectHitlag(world, objectIndex, hitlagFramesForHitbox(fighterHitbox.def));
+                    }
+                    break;
+                }
+            }
+        }
+        if (fighterRebound) {
+            enterReboundFromClankAt(world, fighterIndex, reboundPosition, fighterDamage);
+        }
+        if (fighterHitlag > 0) {
+            fighter.hitlag = std::max(fighter.hitlag, fighterHitlag);
+        }
+    }
+}
+
+static void resolveObjectHitboxClanks(World& world) {
+    for (size_t aIndex = 0; aIndex < world.objects.size(); ++aIndex) {
+        if (!world.objects[aIndex].active || gameObjectIsHeld(world.objects[aIndex])) {
+            continue;
+        }
+        for (size_t bIndex = aIndex + 1; bIndex < world.objects.size(); ++bIndex) {
+            if (!world.objects[bIndex].active || gameObjectIsHeld(world.objects[bIndex])) {
+                continue;
+            }
+            bool clanked = false;
+            int aHitlag = 0;
+            int bHitlag = 0;
+            for (const ActiveHitbox& aHitbox : world.objects[aIndex].activeHitboxes) {
+                if (!canClankHitbox(aHitbox)) {
+                    continue;
+                }
+                const Capsule aCapsule{aHitbox.previous, aHitbox.current, aHitbox.def.radius};
+                for (const ActiveHitbox& bHitbox : world.objects[bIndex].activeHitboxes) {
+                    if (!canClankHitbox(bHitbox)) {
+                        continue;
+                    }
+                    const Capsule bCapsule{bHitbox.previous, bHitbox.current, bHitbox.def.radius};
+                    if (capsuleCapsule(aCapsule, bCapsule)) {
+                        clanked = true;
+                        aHitlag = std::max(aHitlag, hitlagFramesForHitbox(bHitbox.def));
+                        bHitlag = std::max(bHitlag, hitlagFramesForHitbox(aHitbox.def));
+                        break;
+                    }
+                }
+                if (clanked) {
+                    break;
+                }
+            }
+            if (clanked) {
+                runGameObjectEvent(world, aIndex, GameObjectEvent::Clanked);
+                runGameObjectEvent(world, bIndex, GameObjectEvent::Clanked);
+                if (world.objects[aIndex].active) {
+                    setGameObjectHitlag(world, aIndex, aHitlag);
+                }
+                if (world.objects[bIndex].active) {
+                    setGameObjectHitlag(world, bIndex, bHitlag);
+                }
             }
         }
     }
@@ -6221,6 +7117,461 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
     }
 }
 
+static void applyObjectDamage(World& world, size_t objectIndex, const HitboxDefinition& hitbox) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    const GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    object.damageTaken = std::min(fx(999), object.damageTaken + hitbox.damage);
+    runGameObjectEvent(world, objectIndex, GameObjectEvent::DamageReceived);
+    if (object.active && def.maxDamage > 0 && object.damageTaken >= def.maxDamage) {
+        deactivateGameObject(world, objectIndex);
+    }
+}
+
+static int hitlagFramesForHitbox(const HitboxDefinition& hitbox) {
+    return std::max(3, static_cast<int>(fxToFloat(hitbox.damage) / 3.0f) + 3);
+}
+
+static bool fighterTouchesCapsule(World& world, size_t fighterIndex, const Capsule& touchCapsule) {
+    if (fighterIndex >= world.fighters.size()) {
+        return false;
+    }
+    FighterRuntime& fighter = world.fighters[fighterIndex];
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const bool useImportedHurtboxes = def.hasHsdAsset && def.hsdAsset && !fighter.hsdHurtboxCapsules.empty();
+    const size_t hurtboxCount = useImportedHurtboxes ? fighter.hsdHurtboxCapsules.size() : def.hurtboxes.size();
+    if (fighter.hurtboxStates.size() != hurtboxCount) {
+        HurtboxState fillState = HurtboxState::Normal;
+        if (!fighter.hurtboxStates.empty() &&
+            std::all_of(fighter.hurtboxStates.begin(), fighter.hurtboxStates.end(), [&](HurtboxState state) {
+                return state == fighter.hurtboxStates.front();
+            })) {
+            fillState = fighter.hurtboxStates.front();
+        }
+        fighter.hurtboxStates.assign(hurtboxCount, fillState);
+    }
+
+    if (useImportedHurtboxes) {
+        for (size_t hurtboxIndex = 0; hurtboxIndex < fighter.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
+            const HurtboxState capsuleState = hurtboxIndex < fighter.hurtboxStates.size() ? fighter.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
+            const HurtboxState state = fighter.bodyCollisionState == HurtboxState::Normal ? capsuleState : fighter.bodyCollisionState;
+            if (state == HurtboxState::Intangible) {
+                continue;
+            }
+            if (capsuleCapsule(touchCapsule, fighter.hsdHurtboxCapsules[hurtboxIndex])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    for (size_t hurtboxIndex = 0; hurtboxIndex < def.hurtboxes.size(); ++hurtboxIndex) {
+        const HurtboxDefinition& hurtbox = def.hurtboxes[hurtboxIndex];
+        const HurtboxState capsuleState = fighter.hurtboxStates[hurtboxIndex] == HurtboxState::Normal ? hurtbox.state : fighter.hurtboxStates[hurtboxIndex];
+        const HurtboxState state = fighter.bodyCollisionState == HurtboxState::Normal ? capsuleState : fighter.bodyCollisionState;
+        if (state == HurtboxState::Intangible) {
+            continue;
+        }
+        Capsule hurtCapsule{boneWorld(fighter, hurtbox.bone, hurtbox.startOffset), boneWorld(fighter, hurtbox.bone, hurtbox.endOffset), hurtbox.radius};
+        if (capsuleCapsule(touchCapsule, hurtCapsule)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void updateAndCheckHitboxesAgainstObjects(World& world, size_t attackerIndex) {
+    FighterRuntime& attacker = world.fighters[attackerIndex];
+    for (ActiveHitbox& hitbox : attacker.activeHitboxes) {
+        if (!hitbox.def.hitFighters || hitbox.def.isGrab || hitbox.def.onlyHitGrabbed) {
+            continue;
+        }
+        const Capsule hitCapsule{hitbox.previous, hitbox.current, hitbox.def.radius};
+        for (size_t objectIndex = 0; objectIndex < world.objects.size(); ++objectIndex) {
+            GameObjectRuntime& object = world.objects[objectIndex];
+            if (!object.active || gameObjectIsHeld(object) ||
+                object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+                continue;
+            }
+            if ((object.grounded && !hitbox.def.hitGrounded) || (!object.grounded && !hitbox.def.hitAirborne)) {
+                continue;
+            }
+            const GameObjectDefinition& objectDef = world.objectDefs[static_cast<size_t>(object.objectDef)];
+            for (const GameObjectHurtboxDefinition& hurtbox : objectDef.hurtboxes) {
+                if (hurtbox.state == HurtboxState::Intangible) {
+                    continue;
+                }
+                if (!capsuleCapsule(hitCapsule, objectHurtboxWorld(object, hurtbox))) {
+                    continue;
+                }
+                if (hurtbox.state != HurtboxState::Invincible) {
+                    applyObjectDamage(world, objectIndex, hitbox.def);
+                }
+                if (object.active) {
+                    const int hitlagFrames = hitlagFramesForHitbox(hitbox.def);
+                    attacker.hitlag = std::max(attacker.hitlag, hitlagFrames);
+                    setGameObjectHitlag(world, objectIndex, hitlagFrames);
+                }
+                break;
+            }
+        }
+    }
+}
+
+static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active || gameObjectIsHeld(object) ||
+        object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    const GameObjectDefinition& objectDef = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    for (ActiveHitbox& hitbox : object.activeHitboxes) {
+        if (!hitbox.def.hitFighters) {
+            continue;
+        }
+        const Capsule hitCapsule{hitbox.previous, hitbox.current, hitbox.def.radius};
+        for (size_t victimIndex = 0; victimIndex < world.fighters.size(); ++victimIndex) {
+            if (!objectDef.hitOwner && object.ownerFighter == static_cast<int>(victimIndex)) {
+                continue;
+            }
+            FighterRuntime& victim = world.fighters[victimIndex];
+            if (std::find(object.fightersHit.begin(), object.fightersHit.end(), static_cast<int>(victimIndex)) != object.fightersHit.end()) {
+                continue;
+            }
+            if ((victim.grounded && !hitbox.def.hitGrounded) || (!victim.grounded && !hitbox.def.hitAirborne)) {
+                continue;
+            }
+            const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
+            if (!hitbox.def.isGrab && isShieldActiveState(currentState(world, victim)) && victim.shieldHealth > 0) {
+                const Vec3 center = shieldCenterWorld(victimDef, victim);
+                const Fix radius = currentShieldRadius(victimDef, victim);
+                if (capsuleCapsule(hitCapsule, {center, center, radius})) {
+                    FighterRuntime objectProxy;
+                    objectProxy.position = object.position;
+                    objectProxy.previousPosition = object.previousPosition;
+                    objectProxy.facing = object.facing;
+                    object.fightersHit.push_back(static_cast<int>(victimIndex));
+                    applyShieldHit(world, objectProxy, victim, hitbox.def);
+                    runGameObjectEvent(world, objectIndex, GameObjectEvent::HitShield);
+                    if (objectDef.destroyOnShield) {
+                        deactivateGameObject(world, objectIndex);
+                    }
+                    if (object.active) {
+                        setGameObjectHitlag(world, objectIndex, hitlagFramesForHitbox(hitbox.def));
+                    }
+                    return;
+                }
+            }
+
+            const bool useImportedHurtboxes = victimDef.hasHsdAsset && victimDef.hsdAsset && !victim.hsdHurtboxCapsules.empty();
+            const size_t hurtboxCount = useImportedHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
+            if (victim.hurtboxStates.size() != hurtboxCount) {
+                HurtboxState fillState = HurtboxState::Normal;
+                if (!victim.hurtboxStates.empty() &&
+                    std::all_of(victim.hurtboxStates.begin(), victim.hurtboxStates.end(), [&](HurtboxState state) {
+                        return state == victim.hurtboxStates.front();
+                    })) {
+                    fillState = victim.hurtboxStates.front();
+                }
+                victim.hurtboxStates.assign(hurtboxCount, fillState);
+            }
+
+            if (useImportedHurtboxes) {
+                for (size_t hurtboxIndex = 0; hurtboxIndex < victim.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
+                    const HurtboxState capsuleState = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
+                    const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
+                    if (state == HurtboxState::Intangible) {
+                        continue;
+                    }
+                    if (hitbox.def.isGrab &&
+                        (hurtboxIndex >= victimDef.hsdAsset->hurtboxes.size() ||
+                         !victimDef.hsdAsset->hurtboxes[hurtboxIndex].grabbable))
+                    {
+                        continue;
+                    }
+                    if (!capsuleCapsule(hitCapsule, victim.hsdHurtboxCapsules[hurtboxIndex])) {
+                        continue;
+                    }
+                    object.fightersHit.push_back(static_cast<int>(victimIndex));
+                    if (hitbox.def.isGrab) {
+                        applyGameObjectGrab(world, objectIndex, victimIndex);
+                        return;
+                    } else if (state == HurtboxState::Invincible) {
+                        FighterRuntime objectProxy;
+                        applyInvincibleHit(objectProxy, victim, hitbox.def);
+                        if (object.active) {
+                            setGameObjectHitlag(world, objectIndex, hitlagFramesForHitbox(hitbox.def));
+                        }
+                    } else {
+                        FighterRuntime objectProxy;
+                        objectProxy.position = object.position;
+                        objectProxy.previousPosition = object.previousPosition;
+                        objectProxy.facing = object.facing;
+                        const size_t ownerIndex = object.ownerFighter >= 0 ? static_cast<size_t>(object.ownerFighter) : world.fighters.size();
+                        applyHit(world, ownerIndex, objectProxy, victim, victimIndex, hitbox.def, hurtboxIndex);
+                        runGameObjectEvent(world, objectIndex, GameObjectEvent::DamageDealt);
+                    }
+                    if (objectDef.destroyOnHit) {
+                        deactivateGameObject(world, objectIndex);
+                    }
+                    if (object.active) {
+                        setGameObjectHitlag(world, objectIndex, hitlagFramesForHitbox(hitbox.def));
+                    }
+                    return;
+                }
+                continue;
+            }
+
+            for (size_t hurtboxIndex = 0; hurtboxIndex < victimDef.hurtboxes.size(); ++hurtboxIndex) {
+                const HurtboxDefinition& hurtbox = victimDef.hurtboxes[hurtboxIndex];
+                const HurtboxState capsuleState = victim.hurtboxStates[hurtboxIndex] == HurtboxState::Normal ? hurtbox.state : victim.hurtboxStates[hurtboxIndex];
+                const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
+                if (state == HurtboxState::Intangible) {
+                    continue;
+                }
+                if (hitbox.def.isGrab && !hurtbox.grabbable) {
+                    continue;
+                }
+                Capsule hurtCapsule{boneWorld(victim, hurtbox.bone, hurtbox.startOffset), boneWorld(victim, hurtbox.bone, hurtbox.endOffset), hurtbox.radius};
+                if (!capsuleCapsule(hitCapsule, hurtCapsule)) {
+                    continue;
+                }
+                object.fightersHit.push_back(static_cast<int>(victimIndex));
+                if (hitbox.def.isGrab) {
+                    applyGameObjectGrab(world, objectIndex, victimIndex);
+                    return;
+                } else if (state == HurtboxState::Invincible) {
+                    FighterRuntime objectProxy;
+                    applyInvincibleHit(objectProxy, victim, hitbox.def);
+                    if (object.active) {
+                        setGameObjectHitlag(world, objectIndex, hitlagFramesForHitbox(hitbox.def));
+                    }
+                } else {
+                    FighterRuntime objectProxy;
+                    objectProxy.position = object.position;
+                    objectProxy.previousPosition = object.previousPosition;
+                    objectProxy.facing = object.facing;
+                    const size_t ownerIndex = object.ownerFighter >= 0 ? static_cast<size_t>(object.ownerFighter) : world.fighters.size();
+                    applyHit(world, ownerIndex, objectProxy, victim, victimIndex, hitbox.def, hurtboxIndex);
+                    runGameObjectEvent(world, objectIndex, GameObjectEvent::DamageDealt);
+                }
+                if (objectDef.destroyOnHit) {
+                    deactivateGameObject(world, objectIndex);
+                }
+                if (object.active) {
+                    setGameObjectHitlag(world, objectIndex, hitlagFramesForHitbox(hitbox.def));
+                }
+                return;
+            }
+        }
+    }
+}
+
+static void applyGameObjectGrab(World& world, size_t objectIndex, size_t victimIndex) {
+    if (objectIndex >= world.objects.size() || victimIndex >= world.fighters.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active) {
+        return;
+    }
+    object.grabVictimFighter = static_cast<int>(victimIndex);
+    runGameObjectEvent(world, objectIndex, GameObjectEvent::GrabDealt);
+    if (object.active) {
+        runGameObjectEvent(world, objectIndex, GameObjectEvent::GrabbedForVictim);
+    }
+}
+
+static bool objectTouchesObject(const GameObjectRuntime& object, const GameObjectDefinition& objectDef, const GameObjectRuntime& other, const GameObjectDefinition& otherDef) {
+    for (const GameObjectTouchboxDefinition& touchbox : objectDef.touchboxes) {
+        if (!touchbox.touchObjects) {
+            continue;
+        }
+        const Capsule touchCapsule = objectTouchboxWorld(object, touchbox);
+        for (const GameObjectHurtboxDefinition& hurtbox : otherDef.hurtboxes) {
+            if (hurtbox.state == HurtboxState::Intangible) {
+                continue;
+            }
+            if (capsuleCapsule(touchCapsule, objectHurtboxWorld(other, hurtbox))) {
+                return true;
+            }
+        }
+        for (const GameObjectTouchboxDefinition& otherTouchbox : otherDef.touchboxes) {
+            if (!otherTouchbox.touchObjects) {
+                continue;
+            }
+            if (capsuleCapsule(touchCapsule, objectTouchboxWorld(other, otherTouchbox))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static Fix gameObjectTopY(const GameObjectRuntime& object, const GameObjectDefinition& def) {
+    Fix top = object.position.y;
+    bool found = false;
+    for (const GameObjectTouchboxDefinition& touchbox : def.touchboxes) {
+        top = found ? std::max(top, object.position.y + std::max(touchbox.startOffset.y, touchbox.endOffset.y) + touchbox.radius)
+                    : object.position.y + std::max(touchbox.startOffset.y, touchbox.endOffset.y) + touchbox.radius;
+        found = true;
+    }
+    for (const GameObjectHurtboxDefinition& hurtbox : def.hurtboxes) {
+        top = found ? std::max(top, object.position.y + std::max(hurtbox.startOffset.y, hurtbox.endOffset.y) + hurtbox.radius)
+                    : object.position.y + std::max(hurtbox.startOffset.y, hurtbox.endOffset.y) + hurtbox.radius;
+        found = true;
+    }
+    return top;
+}
+
+static bool fighterCanJumpOnObject(const FighterRuntime& fighter, Fix objectTopY) {
+    if (fighter.grounded || fighter.position.y >= fighter.previousPosition.y) {
+        return false;
+    }
+    return fighter.previousPosition.y >= objectTopY && fighter.position.y <= objectTopY;
+}
+
+static void updateAndCheckObjectJumpedOn(World& world, size_t objectIndex) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active || gameObjectIsHeld(object) ||
+        object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    const GameObjectDefinition& objectDef = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    if (objectDef.touchboxes.empty() && objectDef.hurtboxes.empty()) {
+        return;
+    }
+    const Fix topY = gameObjectTopY(object, objectDef);
+    for (const GameObjectTouchboxDefinition& touchbox : objectDef.touchboxes) {
+        if (!touchbox.touchFighters) {
+            continue;
+        }
+        const Capsule touchCapsule = objectTouchboxWorld(object, touchbox);
+        for (size_t fighterIndex = 0; fighterIndex < world.fighters.size(); ++fighterIndex) {
+            if (!objectDef.hitOwner && object.ownerFighter == static_cast<int>(fighterIndex)) {
+                continue;
+            }
+            FighterRuntime& fighter = world.fighters[fighterIndex];
+            if (fighterCanJumpOnObject(fighter, topY) && fighterTouchesCapsule(world, fighterIndex, touchCapsule)) {
+                object.ownerFighter = static_cast<int>(fighterIndex);
+                runGameObjectEvent(world, objectIndex, GameObjectEvent::JumpedOn);
+                if (object.active) {
+                    setGameObjectHitlag(world, objectIndex, 1);
+                }
+                return;
+            }
+        }
+    }
+    if (!objectDef.touchboxes.empty()) {
+        return;
+    }
+    for (const GameObjectHurtboxDefinition& hurtbox : objectDef.hurtboxes) {
+        if (hurtbox.state == HurtboxState::Intangible) {
+            continue;
+        }
+        const Capsule hurtCapsule = objectHurtboxWorld(object, hurtbox);
+        for (size_t fighterIndex = 0; fighterIndex < world.fighters.size(); ++fighterIndex) {
+            if (!objectDef.hitOwner && object.ownerFighter == static_cast<int>(fighterIndex)) {
+                continue;
+            }
+            FighterRuntime& fighter = world.fighters[fighterIndex];
+            if (fighterCanJumpOnObject(fighter, topY) && fighterTouchesCapsule(world, fighterIndex, hurtCapsule)) {
+                object.ownerFighter = static_cast<int>(fighterIndex);
+                runGameObjectEvent(world, objectIndex, GameObjectEvent::JumpedOn);
+                if (object.active) {
+                    setGameObjectHitlag(world, objectIndex, 1);
+                }
+                return;
+            }
+        }
+    }
+}
+
+static void updateAndCheckObjectTouches(World& world, size_t objectIndex) {
+    if (objectIndex >= world.objects.size()) {
+        return;
+    }
+    GameObjectRuntime& object = world.objects[objectIndex];
+    if (!object.active || gameObjectIsHeld(object) ||
+        object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+        return;
+    }
+    const GameObjectDefinition& objectDef = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    if (objectDef.touchboxes.empty()) {
+        return;
+    }
+
+    for (const GameObjectTouchboxDefinition& touchbox : objectDef.touchboxes) {
+        if (!touchbox.touchFighters) {
+            continue;
+        }
+        const Capsule touchCapsule = objectTouchboxWorld(object, touchbox);
+        for (size_t fighterIndex = 0; fighterIndex < world.fighters.size(); ++fighterIndex) {
+            if (!objectDef.hitOwner && object.ownerFighter == static_cast<int>(fighterIndex)) {
+                continue;
+            }
+            if (fighterTouchesCapsule(world, fighterIndex, touchCapsule)) {
+                runGameObjectEvent(world, objectIndex, GameObjectEvent::Touched);
+                if (object.active) {
+                    setGameObjectHitlag(world, objectIndex, 1);
+                }
+                return;
+            }
+        }
+    }
+
+    for (size_t otherIndex = 0; otherIndex < world.objects.size(); ++otherIndex) {
+        if (otherIndex == objectIndex) {
+            continue;
+        }
+        GameObjectRuntime& other = world.objects[otherIndex];
+        if (!other.active || gameObjectIsHeld(other) ||
+            other.objectDef < 0 || other.objectDef >= static_cast<int>(world.objectDefs.size())) {
+            continue;
+        }
+        const GameObjectDefinition& otherDef = world.objectDefs[static_cast<size_t>(other.objectDef)];
+        if (objectTouchesObject(object, objectDef, other, otherDef)) {
+            runGameObjectEvent(world, objectIndex, GameObjectEvent::Touched);
+            if (object.active) {
+                setGameObjectHitlag(world, objectIndex, 1);
+            }
+            return;
+        }
+    }
+}
+
+static void compactGameObjects(World& world) {
+    std::vector<int> remap(world.objects.size(), -1);
+    std::vector<GameObjectRuntime> kept;
+    kept.reserve(world.objects.size());
+    for (size_t i = 0; i < world.objects.size(); ++i) {
+        if (!world.objects[i].active) {
+            continue;
+        }
+        remap[i] = static_cast<int>(kept.size());
+        kept.push_back(std::move(world.objects[i]));
+    }
+    for (FighterRuntime& fighter : world.fighters) {
+        if (fighter.heldObject < 0 || fighter.heldObject >= static_cast<int>(remap.size())) {
+            fighter.heldObject = -1;
+        } else {
+            fighter.heldObject = remap[static_cast<size_t>(fighter.heldObject)];
+        }
+    }
+    world.objects = std::move(kept);
+}
+
 void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
     for (size_t i = 0; i < world.fighters.size(); ++i) {
         world.fighters[i].input.push(i < inputs.size() ? inputs[i] : InputFrame{});
@@ -6244,7 +7595,7 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         }
 
         const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-        executePendingActionFrames(def, currentState(world, fighter), fighter);
+        executePendingActionFrames(world, fighterIndex, def, currentState(world, fighter), fighter);
         processSmashCharge(fighter);
         processInterrupts(world, fighter);
         runStateFunctions(world, fighterIndex, currentState(world, fighter).onFrame);
@@ -6270,13 +7621,31 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         regenerateShield(world, fighter);
     }
 
+    tickGameObjects(world);
+
     for (size_t i = 0; i < world.fighters.size(); ++i) {
         updateActiveHitboxPositions(world, i);
     }
+    updateActiveObjectHitboxPositions(world);
     resolveHitboxClanks(world);
+    resolveFighterObjectHitboxClanks(world);
+    resolveObjectHitboxClanks(world);
     for (size_t i = 0; i < world.fighters.size(); ++i) {
         updateAndCheckHitboxes(world, i);
     }
+    for (size_t i = 0; i < world.fighters.size(); ++i) {
+        updateAndCheckHitboxesAgainstObjects(world, i);
+    }
+    for (size_t i = 0; i < world.objects.size(); ++i) {
+        updateAndCheckObjectHitboxes(world, i);
+    }
+    for (size_t i = 0; i < world.objects.size(); ++i) {
+        updateAndCheckObjectJumpedOn(world, i);
+    }
+    for (size_t i = 0; i < world.objects.size(); ++i) {
+        updateAndCheckObjectTouches(world, i);
+    }
+    compactGameObjects(world);
 
     ++world.frame;
 }
@@ -6285,6 +7654,7 @@ WorldSnapshot saveWorld(const World& world) {
     WorldSnapshot snapshot;
     snapshot.frame = world.frame;
     snapshot.rngState = world.rngState;
+    snapshot.objectDefs = world.objectDefs;
     for (const FighterRuntime& fighter : world.fighters) {
         FighterSnapshot item;
         item.fighterDef = fighter.fighterDef;
@@ -6332,6 +7702,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.downWaitTimer = fighter.downWaitTimer;
         item.damageHitboxOwner = fighter.damageHitboxOwner;
         item.thrownHitboxOwner = fighter.thrownHitboxOwner;
+        item.heldObject = fighter.heldObject;
         item.grabbedFighter = fighter.grabbedFighter;
         item.grabberFighter = fighter.grabberFighter;
         item.grabTimer = fighter.grabTimer;
@@ -6435,12 +7806,14 @@ WorldSnapshot saveWorld(const World& world) {
         item.fightersHitThisAction = fighter.fightersHitThisAction;
         snapshot.fighters.push_back(item);
     }
+    snapshot.objects = world.objects;
     return snapshot;
 }
 
 void loadWorld(World& world, const WorldSnapshot& snapshot) {
     world.frame = snapshot.frame;
     world.rngState = snapshot.rngState;
+    world.objectDefs = snapshot.objectDefs;
     world.fighters.clear();
     for (const FighterSnapshot& item : snapshot.fighters) {
         FighterRuntime fighter;
@@ -6489,6 +7862,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.downWaitTimer = item.downWaitTimer;
         fighter.damageHitboxOwner = item.damageHitboxOwner;
         fighter.thrownHitboxOwner = item.thrownHitboxOwner;
+        fighter.heldObject = item.heldObject;
         fighter.grabbedFighter = item.grabbedFighter;
         fighter.grabberFighter = item.grabberFighter;
         fighter.grabTimer = item.grabTimer;
@@ -6592,6 +7966,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.fightersHitThisAction = item.fightersHitThisAction;
         world.fighters.push_back(fighter);
     }
+    world.objects = snapshot.objects;
 }
 
 } // namespace pf

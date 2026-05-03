@@ -62,6 +62,100 @@ struct ActiveHitbox {
     Vec3 previous;
 };
 
+enum class GameObjectKind : uint8_t {
+    Item,
+    Projectile,
+};
+
+struct GameObjectStateDefinition {
+    std::string name;
+    int animationLengthFrames = 0;
+    bool loopAnimation = false;
+    std::vector<FunctionCall> onEnter;
+    std::vector<FunctionCall> onFrame;
+    std::vector<FunctionCall> onPhysics;
+    std::vector<FunctionCall> onCollision;
+};
+
+struct GameObjectHurtboxDefinition {
+    Vec3 startOffset;
+    Vec3 endOffset;
+    Fix radius = fx(1);
+    HurtboxState state = HurtboxState::Normal;
+};
+
+struct GameObjectTouchboxDefinition {
+    Vec3 startOffset;
+    Vec3 endOffset;
+    Fix radius = fx(1);
+    bool touchFighters = true;
+    bool touchObjects = true;
+};
+
+struct GameObjectDefinition {
+    std::string name;
+    GameObjectKind kind = GameObjectKind::Projectile;
+    int initialState = 0;
+    int lifetimeFrames = 120;
+    Fix gravity = 0;
+    Fix terminalVelocity = fx(5);
+    Fix maxDamage = 0;
+    bool destroyOnHit = true;
+    bool destroyOnShield = true;
+    bool hitOwner = false;
+    std::vector<GameObjectStateDefinition> states;
+    std::vector<FunctionCall> onSpawned;
+    std::vector<FunctionCall> onDestroyed;
+    std::vector<FunctionCall> onPickedUp;
+    std::vector<FunctionCall> onDropped;
+    std::vector<FunctionCall> onThrown;
+    std::vector<FunctionCall> onDamageDealt;
+    std::vector<FunctionCall> onDamageReceived;
+    std::vector<FunctionCall> onClanked;
+    std::vector<FunctionCall> onReflected;
+    std::vector<FunctionCall> onAbsorbed;
+    std::vector<FunctionCall> onShieldBounced;
+    std::vector<FunctionCall> onHitShield;
+    std::vector<FunctionCall> onEnteredAir;
+    std::vector<FunctionCall> onEnteredHitlag;
+    std::vector<FunctionCall> onExitedHitlag;
+    std::vector<FunctionCall> onAccessory;
+    std::vector<FunctionCall> onTouched;
+    std::vector<FunctionCall> onJumpedOn;
+    std::vector<FunctionCall> onGrabDealt;
+    std::vector<FunctionCall> onGrabbedForVictim;
+    std::vector<FunctionCall> onInteraction;
+    std::vector<HitboxDefinition> hitboxes;
+    std::vector<GameObjectHurtboxDefinition> hurtboxes;
+    std::vector<GameObjectTouchboxDefinition> touchboxes;
+};
+
+struct GameObjectRuntime {
+    int objectDef = 0;
+    int state = 0;
+    int lastStateChangeFrame = 0;
+    int ownerFighter = -1;
+    int heldByFighter = -1;
+    int grabVictimFighter = -1;
+    int lastInteractionFighter = -1;
+    int lastInteractionObject = -1;
+    int internalFrame = 0;
+    int hitlag = 0;
+    Fix animationFrame = 0;
+    Fix animationRate = fx(1);
+    Fix damageTaken = 0;
+    int facing = 1;
+    bool active = true;
+    bool destroyEventDispatched = false;
+    bool grounded = false;
+    int groundSegment = -1;
+    Vec2 position;
+    Vec2 previousPosition;
+    Vec2 velocity;
+    std::vector<ActiveHitbox> activeHitboxes;
+    std::vector<int> fightersHit;
+};
+
 struct FighterRuntime {
     int fighterDef = 0;
     int state = 0;
@@ -108,6 +202,7 @@ struct FighterRuntime {
     int downWaitTimer = 0;
     int damageHitboxOwner = -1;
     int thrownHitboxOwner = -1;
+    int heldObject = -1;
     int grabbedFighter = -1;
     int grabberFighter = -1;
     Fix grabTimer = 0;
@@ -257,6 +352,7 @@ struct FighterSnapshot {
     int downWaitTimer = 0;
     int damageHitboxOwner = -1;
     int thrownHitboxOwner = -1;
+    int heldObject = -1;
     int grabbedFighter = -1;
     int grabberFighter = -1;
     Fix grabTimer = 0;
@@ -363,7 +459,9 @@ struct FighterSnapshot {
 struct WorldSnapshot {
     int frame = 0;
     uint32_t rngState = 0x4D454C45;
+    std::vector<GameObjectDefinition> objectDefs;
     std::vector<FighterSnapshot> fighters;
+    std::vector<GameObjectRuntime> objects;
 };
 
 struct World {
@@ -372,12 +470,24 @@ struct World {
     StageDefinition stage;
     std::vector<FighterDefinition> fighterDefs;
     std::vector<FighterRuntime> fighters;
+    std::vector<GameObjectDefinition> objectDefs;
+    std::vector<GameObjectRuntime> objects;
 };
 
 StageDefinition makeBattlefieldTrainingStage();
 World makeTrainingWorld();
 World makeTrainingWorld(int p1FighterDef, int p2FighterDef);
 void tickWorld(World& world, const std::vector<InputFrame>& inputs);
+int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
+bool pickUpGameObject(World& world, int objectIndex, int fighterIndex);
+bool dropGameObject(World& world, int objectIndex, Vec2 velocity = {});
+bool throwGameObject(World& world, int objectIndex, int fighterIndex, Vec2 velocity);
+bool reflectGameObject(World& world, int objectIndex, int fighterIndex, Vec2 normal);
+bool absorbGameObject(World& world, int objectIndex, int fighterIndex);
+bool shieldBounceGameObject(World& world, int objectIndex, int fighterIndex, Vec2 normal);
+bool interactGameObjectWithFighter(World& world, int objectIndex, int fighterIndex);
+bool interactGameObjects(World& world, int objectIndex, int referenceObjectIndex);
+void changeGameObjectState(World& world, GameObjectRuntime& object, const std::string& stateName);
 void changeFighterState(World& world, FighterRuntime& fighter, const std::string& stateName, int lagFrames = 0, int blendFrames = kUseDefaultAnimationBlendFrames);
 WorldSnapshot saveWorld(const World& world);
 void loadWorld(World& world, const WorldSnapshot& snapshot);

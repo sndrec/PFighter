@@ -4136,6 +4136,386 @@ int main(int argc, char** argv) {
               << " anim_rate=" << pf::fxToFloat(smashChargeWorld.fighters[0].animationRate)
               << "\n";
 
+    pf::World objectWorld = pf::makeTrainingWorld();
+    objectWorld.fighters[0].position = {-pf::fx(1), 0};
+    objectWorld.fighters[1].position = {0, 0};
+    const int objectIndex = pf::spawnGameObject(
+        objectWorld,
+        "TrainingLaser",
+        0,
+        {-pf::fxFromFloat(0.5f), pf::fxFromFloat(1.3f)},
+        1,
+        {pf::fxFromFloat(0.25f), 0});
+    pf::WorldSnapshot objectSnapshot = pf::saveWorld(objectWorld);
+    for (int frame = 0; frame < 8; ++frame) {
+        pf::tickWorld(objectWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    }
+    std::cout << "object_spawn_index=" << objectIndex
+              << " object_snapshot_defs=" << objectSnapshot.objectDefs.size()
+              << " object_snapshot_count=" << objectSnapshot.objects.size()
+              << " object_after_count=" << objectWorld.objects.size()
+              << " object_hit_percent=" << pf::fxToFloat(objectWorld.fighters[1].percent)
+              << " object_hit_state=" << pf::currentState(objectWorld, objectWorld.fighters[1]).name
+              << "\n";
+    pf::loadWorld(objectWorld, objectSnapshot);
+    std::cout << "object_restore_count=" << objectWorld.objects.size()
+              << " object_restore_x=" << pf::fxToFloat(objectWorld.objects.empty() ? 0 : objectWorld.objects[0].position.x)
+              << "\n";
+
+    pf::World objectClankWorld = pf::makeTrainingWorld();
+    objectClankWorld.fighters[0].position = {-pf::fx(20), 0};
+    objectClankWorld.fighters[1].position = {pf::fx(20), 0};
+    pf::spawnGameObject(
+        objectClankWorld,
+        "TrainingLaser",
+        -1,
+        {-pf::fxFromFloat(0.2f), pf::fxFromFloat(1.3f)},
+        1,
+        {pf::fxFromFloat(0.1f), 0});
+    pf::spawnGameObject(
+        objectClankWorld,
+        "TrainingLaser",
+        -1,
+        {pf::fxFromFloat(0.2f), pf::fxFromFloat(1.3f)},
+        -1,
+        {-pf::fxFromFloat(0.1f), 0});
+    for (int frame = 0; frame < 3; ++frame) {
+        pf::tickWorld(objectClankWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    }
+    std::cout << "object_clank_count=" << objectClankWorld.objects.size()
+              << "\n";
+
+    pf::World objectDamageWorld = pf::makeTrainingWorld();
+    objectDamageWorld.fighters[1].position = {pf::fx(20), 0};
+    const pf::Vec3 hip = objectDamageWorld.fighters[0].bones[static_cast<size_t>(pf::BoneId::Hip)].position;
+    pf::ActiveHitbox objectDamageHitbox;
+    objectDamageHitbox.def.hitboxId = 0;
+    objectDamageHitbox.def.bone = pf::BoneId::Hip;
+    objectDamageHitbox.def.radius = pf::fxFromFloat(0.5f);
+    objectDamageHitbox.def.damage = pf::fx(4);
+    objectDamageWorld.fighters[0].activeHitboxes.push_back(objectDamageHitbox);
+    pf::spawnGameObject(
+        objectDamageWorld,
+        "TrainingItem",
+        -1,
+        {objectDamageWorld.fighters[0].position.x + hip.x, objectDamageWorld.fighters[0].position.y + hip.y},
+        1,
+        {});
+    pf::tickWorld(objectDamageWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_damage_count=" << objectDamageWorld.objects.size()
+              << "\n";
+
+    pf::World objectEnteredAirWorld = pf::makeTrainingWorld();
+    objectEnteredAirWorld.fighters[1].position = {pf::fx(20), 0};
+    const int enteredAirIndex = pf::spawnGameObject(
+        objectEnteredAirWorld,
+        "TrainingAirEventItem",
+        -1,
+        {0, 0},
+        1,
+        {0, pf::fxFromFloat(0.5f)});
+    if (enteredAirIndex >= 0 && enteredAirIndex < static_cast<int>(objectEnteredAirWorld.objects.size())) {
+        objectEnteredAirWorld.objects[static_cast<size_t>(enteredAirIndex)].grounded = true;
+        objectEnteredAirWorld.objects[static_cast<size_t>(enteredAirIndex)].groundSegment = 0;
+    }
+    pf::tickWorld(objectEnteredAirWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_entered_air_count=" << objectEnteredAirWorld.objects.size()
+              << "\n";
+
+    pf::World objectStateEnterWorld = pf::makeTrainingWorld();
+    objectStateEnterWorld.fighters[1].position = {pf::fx(20), 0};
+    pf::spawnGameObject(
+        objectStateEnterWorld,
+        "TrainingStateEnterItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    pf::tickWorld(objectStateEnterWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_state_enter_count=" << objectStateEnterWorld.objects.size()
+              << "\n";
+
+    pf::World objectHitlagEnterWorld = pf::makeTrainingWorld();
+    objectHitlagEnterWorld.fighters[1].position = {pf::fx(20), 0};
+    const pf::Vec3 hitlagHip = objectHitlagEnterWorld.fighters[0].bones[static_cast<size_t>(pf::BoneId::Hip)].position;
+    pf::ActiveHitbox objectHitlagHitbox;
+    objectHitlagHitbox.def.hitboxId = 0;
+    objectHitlagHitbox.def.bone = pf::BoneId::Hip;
+    objectHitlagHitbox.def.radius = pf::fxFromFloat(0.5f);
+    objectHitlagHitbox.def.damage = pf::fx(3);
+    objectHitlagEnterWorld.fighters[0].activeHitboxes.push_back(objectHitlagHitbox);
+    pf::spawnGameObject(
+        objectHitlagEnterWorld,
+        "TrainingHitlagEnterItem",
+        -1,
+        {objectHitlagEnterWorld.fighters[0].position.x + hitlagHip.x, objectHitlagEnterWorld.fighters[0].position.y + hitlagHip.y},
+        1,
+        {});
+    pf::tickWorld(objectHitlagEnterWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_hitlag_enter_count=" << objectHitlagEnterWorld.objects.size()
+              << "\n";
+
+    pf::World objectHitlagExitWorld = pf::makeTrainingWorld();
+    objectHitlagExitWorld.fighters[1].position = {pf::fx(20), 0};
+    const int hitlagExitIndex = pf::spawnGameObject(
+        objectHitlagExitWorld,
+        "TrainingHitlagExitItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    if (hitlagExitIndex >= 0 && hitlagExitIndex < static_cast<int>(objectHitlagExitWorld.objects.size())) {
+        objectHitlagExitWorld.objects[static_cast<size_t>(hitlagExitIndex)].hitlag = 1;
+    }
+    pf::tickWorld(objectHitlagExitWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_hitlag_exit_count=" << objectHitlagExitWorld.objects.size()
+              << "\n";
+
+    pf::World objectAccessoryWorld = pf::makeTrainingWorld();
+    objectAccessoryWorld.fighters[1].position = {pf::fx(20), 0};
+    pf::spawnGameObject(
+        objectAccessoryWorld,
+        "TrainingAccessoryItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    pf::tickWorld(objectAccessoryWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_accessory_count=" << objectAccessoryWorld.objects.size()
+              << "\n";
+
+    pf::World objectTouchWorld = pf::makeTrainingWorld();
+    objectTouchWorld.fighters[1].position = {pf::fx(20), 0};
+    pf::spawnGameObject(
+        objectTouchWorld,
+        "TrainingTouchItem",
+        -1,
+        {objectTouchWorld.fighters[0].position.x, pf::fxFromFloat(1.3f)},
+        1,
+        {});
+    pf::tickWorld(objectTouchWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_touch_count=" << objectTouchWorld.objects.size()
+              << "\n";
+
+    pf::World objectJumpedOnWorld = pf::makeTrainingWorld();
+    objectJumpedOnWorld.fighters[1].position = {pf::fx(20), 0};
+    objectJumpedOnWorld.fighters[0].grounded = false;
+    objectJumpedOnWorld.fighters[0].position = {0, 0};
+    objectJumpedOnWorld.fighters[0].previousPosition = {0, pf::fxFromFloat(3.2f)};
+    objectJumpedOnWorld.fighters[0].hitlag = 1;
+    pf::spawnGameObject(
+        objectJumpedOnWorld,
+        "TrainingJumpedOnItem",
+        -1,
+        {0, pf::fxFromFloat(1.3f)},
+        1,
+        {});
+    pf::tickWorld(objectJumpedOnWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_jumped_on_count=" << objectJumpedOnWorld.objects.size()
+              << " object_jumped_on_owner=" << (objectJumpedOnWorld.objects.empty() ? -2 : objectJumpedOnWorld.objects[0].ownerFighter)
+              << "\n";
+
+    pf::World objectGrabDealtWorld = pf::makeTrainingWorld();
+    objectGrabDealtWorld.fighters[1].position = {pf::fx(20), 0};
+    objectGrabDealtWorld.fighters[0].hsdHurtboxCapsules.clear();
+    objectGrabDealtWorld.fighters[0].hurtboxStates.assign(
+        objectGrabDealtWorld.fighterDefs[static_cast<size_t>(objectGrabDealtWorld.fighters[0].fighterDef)].hurtboxes.size(),
+        pf::HurtboxState::Normal);
+    const pf::Vec3 grabDealtHip = objectGrabDealtWorld.fighters[0].bones[static_cast<size_t>(pf::BoneId::Hip)].position;
+    pf::spawnGameObject(
+        objectGrabDealtWorld,
+        "TrainingGrabDealtItem",
+        -1,
+        {objectGrabDealtWorld.fighters[0].position.x + grabDealtHip.x, objectGrabDealtWorld.fighters[0].position.y + grabDealtHip.y},
+        1,
+        {});
+    pf::tickWorld(objectGrabDealtWorld, {pf::InputFrame{}, pf::InputFrame{}});
+
+    pf::World objectGrabVictimWorld = pf::makeTrainingWorld();
+    objectGrabVictimWorld.fighters[1].position = {pf::fx(20), 0};
+    objectGrabVictimWorld.fighters[0].hsdHurtboxCapsules.clear();
+    objectGrabVictimWorld.fighters[0].hurtboxStates.assign(
+        objectGrabVictimWorld.fighterDefs[static_cast<size_t>(objectGrabVictimWorld.fighters[0].fighterDef)].hurtboxes.size(),
+        pf::HurtboxState::Normal);
+    const pf::Vec3 grabVictimHip = objectGrabVictimWorld.fighters[0].bones[static_cast<size_t>(pf::BoneId::Hip)].position;
+    pf::spawnGameObject(
+        objectGrabVictimWorld,
+        "TrainingGrabVictimItem",
+        -1,
+        {objectGrabVictimWorld.fighters[0].position.x + grabVictimHip.x, objectGrabVictimWorld.fighters[0].position.y + grabVictimHip.y},
+        1,
+        {});
+    pf::tickWorld(objectGrabVictimWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    std::cout << "object_grab_dealt_count=" << objectGrabDealtWorld.objects.size()
+              << " object_grab_victim_count=" << objectGrabVictimWorld.objects.size()
+              << "\n";
+
+    pf::World objectInteractionWorld = pf::makeTrainingWorld();
+    objectInteractionWorld.fighters[1].position = {pf::fx(20), 0};
+    const int interactionIndex = pf::spawnGameObject(
+        objectInteractionWorld,
+        "TrainingInteractionItem",
+        0,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const bool interacted = pf::interactGameObjectWithFighter(objectInteractionWorld, interactionIndex, 0);
+    pf::tickWorld(objectInteractionWorld, {pf::InputFrame{}, pf::InputFrame{}});
+
+    pf::World objectObjectInteractionWorld = pf::makeTrainingWorld();
+    objectObjectInteractionWorld.fighters[1].position = {pf::fx(20), 0};
+    const int objectInteractionIndex = pf::spawnGameObject(
+        objectObjectInteractionWorld,
+        "TrainingInteractionItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const int referenceObjectIndex = pf::spawnGameObject(
+        objectObjectInteractionWorld,
+        "TrainingItem",
+        -1,
+        {pf::fx(3), pf::fx(3)},
+        1,
+        {});
+    const bool objectInteracted = pf::interactGameObjects(objectObjectInteractionWorld, objectInteractionIndex, referenceObjectIndex);
+    pf::tickWorld(objectObjectInteractionWorld, {pf::InputFrame{}, pf::InputFrame{}});
+
+    pf::World objectClearRefWorld = pf::makeTrainingWorld();
+    objectClearRefWorld.fighters[1].position = {pf::fx(20), 0};
+    const int clearRefIndex = pf::spawnGameObject(
+        objectClearRefWorld,
+        "TrainingClearReferenceItem",
+        0,
+        {0, pf::fx(3)},
+        1,
+        {});
+    if (clearRefIndex >= 0 && clearRefIndex < static_cast<int>(objectClearRefWorld.objects.size())) {
+        objectClearRefWorld.objects[static_cast<size_t>(clearRefIndex)].grabVictimFighter = 0;
+    }
+    const bool clearRefInteracted = pf::interactGameObjectWithFighter(objectClearRefWorld, clearRefIndex, 0);
+    std::cout << "object_interaction_ok=" << interacted
+              << " object_interaction_count=" << objectInteractionWorld.objects.size()
+              << " object_object_interaction_ok=" << objectInteracted
+              << " object_object_interaction_count=" << objectObjectInteractionWorld.objects.size()
+              << " object_clear_ref_ok=" << clearRefInteracted
+              << " object_clear_ref_owner=" << (objectClearRefWorld.objects.empty() ? -2 : objectClearRefWorld.objects[0].ownerFighter)
+              << " object_clear_ref_grab_victim=" << (objectClearRefWorld.objects.empty() ? -2 : objectClearRefWorld.objects[0].grabVictimFighter)
+              << "\n";
+
+    pf::World objectRuntimeRestoreWorld = pf::makeTrainingWorld();
+    objectRuntimeRestoreWorld.fighters[1].position = {pf::fx(20), 0};
+    const int runtimeRestoreIndex = pf::spawnGameObject(
+        objectRuntimeRestoreWorld,
+        "TrainingItem",
+        0,
+        {pf::fx(0), pf::fx(3)},
+        1,
+        {});
+    if (runtimeRestoreIndex >= 0 && runtimeRestoreIndex < static_cast<int>(objectRuntimeRestoreWorld.objects.size())) {
+        pf::GameObjectRuntime& runtimeObject = objectRuntimeRestoreWorld.objects[static_cast<size_t>(runtimeRestoreIndex)];
+        runtimeObject.hitlag = 2;
+        runtimeObject.grabVictimFighter = 0;
+        runtimeObject.lastInteractionFighter = 1;
+        runtimeObject.lastInteractionObject = runtimeRestoreIndex;
+    }
+    pf::WorldSnapshot objectRuntimeSnapshot = pf::saveWorld(objectRuntimeRestoreWorld);
+    if (runtimeRestoreIndex >= 0 && runtimeRestoreIndex < static_cast<int>(objectRuntimeRestoreWorld.objects.size())) {
+        pf::GameObjectRuntime& runtimeObject = objectRuntimeRestoreWorld.objects[static_cast<size_t>(runtimeRestoreIndex)];
+        runtimeObject.hitlag = 0;
+        runtimeObject.grabVictimFighter = -1;
+        runtimeObject.lastInteractionFighter = -1;
+        runtimeObject.lastInteractionObject = -1;
+    }
+    pf::loadWorld(objectRuntimeRestoreWorld, objectRuntimeSnapshot);
+    const pf::GameObjectRuntime* restoredRuntimeObject = objectRuntimeRestoreWorld.objects.empty()
+        ? nullptr
+        : &objectRuntimeRestoreWorld.objects[0];
+    std::cout << "object_runtime_restore_hitlag=" << (restoredRuntimeObject ? restoredRuntimeObject->hitlag : -1)
+              << " object_runtime_restore_grab=" << (restoredRuntimeObject ? restoredRuntimeObject->grabVictimFighter : -1)
+              << " object_runtime_restore_fighter=" << (restoredRuntimeObject ? restoredRuntimeObject->lastInteractionFighter : -1)
+              << " object_runtime_restore_object=" << (restoredRuntimeObject ? restoredRuntimeObject->lastInteractionObject : -1)
+              << "\n";
+
+    pf::World objectHoldWorld = pf::makeTrainingWorld();
+    objectHoldWorld.fighters[1].position = {pf::fx(20), 0};
+    const int heldObjectIndex = pf::spawnGameObject(
+        objectHoldWorld,
+        "TrainingItem",
+        -1,
+        {pf::fx(0), pf::fx(3)},
+        1,
+        {});
+    const bool pickedUp = pf::pickUpGameObject(objectHoldWorld, heldObjectIndex, 0);
+    pf::tickWorld(objectHoldWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    pf::WorldSnapshot objectHoldSnapshot = pf::saveWorld(objectHoldWorld);
+    const int heldOwner = objectHoldWorld.objects.empty() ? -2 : objectHoldWorld.objects[0].ownerFighter;
+    const int heldBy = objectHoldWorld.objects.empty() ? -2 : objectHoldWorld.objects[0].heldByFighter;
+    const int fighterHeld = objectHoldWorld.fighters[0].heldObject;
+    const pf::Vec2 heldPosition = objectHoldWorld.objects.empty() ? pf::Vec2{} : objectHoldWorld.objects[0].position;
+    const bool dropped = pf::dropGameObject(objectHoldWorld, heldObjectIndex, {pf::fxFromFloat(0.25f), pf::fxFromFloat(0.5f)});
+    const bool thrown = pf::throwGameObject(objectHoldWorld, heldObjectIndex, 0, {pf::fxFromFloat(0.75f), pf::fxFromFloat(0.25f)});
+    const int throwHeld = objectHoldWorld.objects.empty() ? -2 : objectHoldWorld.objects[0].heldByFighter;
+    const pf::Vec2 throwVelocity = objectHoldWorld.objects.empty() ? pf::Vec2{} : objectHoldWorld.objects[0].velocity;
+    pf::loadWorld(objectHoldWorld, objectHoldSnapshot);
+    std::cout << "object_hold_picked=" << pickedUp
+              << " object_hold_owner=" << heldOwner
+              << " object_hold_by=" << heldBy
+              << " object_fighter_held=" << fighterHeld
+              << " object_hold_pos=" << pf::toString(heldPosition)
+              << " object_drop_ok=" << dropped
+              << " object_throw_ok=" << thrown
+              << " object_throw_held=" << throwHeld
+              << " object_throw_vel=" << pf::toString(throwVelocity)
+              << " object_restore_fighter_held=" << objectHoldWorld.fighters[0].heldObject
+              << " object_restore_held_by=" << (objectHoldWorld.objects.empty() ? -2 : objectHoldWorld.objects[0].heldByFighter)
+              << "\n";
+
+    pf::World objectEventWorld = pf::makeTrainingWorld();
+    objectEventWorld.fighters[1].position = {pf::fx(20), 0};
+    const int reflectIndex = pf::spawnGameObject(
+        objectEventWorld,
+        "TrainingLaser",
+        0,
+        {0, pf::fxFromFloat(1.3f)},
+        1,
+        {pf::fxFromFloat(0.5f), 0});
+    const bool reflected = pf::reflectGameObject(objectEventWorld, reflectIndex, 1, {pf::fx(1), 0});
+    const pf::Vec2 reflectedVelocity = objectEventWorld.objects.empty() ? pf::Vec2{} : objectEventWorld.objects[0].velocity;
+    const int reflectedOwner = objectEventWorld.objects.empty() ? -2 : objectEventWorld.objects[0].ownerFighter;
+
+    pf::World objectAbsorbWorld = pf::makeTrainingWorld();
+    objectAbsorbWorld.fighters[1].position = {pf::fx(20), 0};
+    const int absorbIndex = pf::spawnGameObject(
+        objectAbsorbWorld,
+        "TrainingLaser",
+        0,
+        {0, pf::fxFromFloat(1.3f)},
+        1,
+        {pf::fxFromFloat(0.5f), 0});
+    const bool absorbed = pf::absorbGameObject(objectAbsorbWorld, absorbIndex, 1);
+    pf::tickWorld(objectAbsorbWorld, {pf::InputFrame{}, pf::InputFrame{}});
+
+    pf::World objectShieldBounceWorld = pf::makeTrainingWorld();
+    objectShieldBounceWorld.fighters[1].position = {pf::fx(20), 0};
+    const int bounceIndex = pf::spawnGameObject(
+        objectShieldBounceWorld,
+        "TrainingItem",
+        0,
+        {0, pf::fxFromFloat(1.3f)},
+        1,
+        {-pf::fxFromFloat(0.5f), 0});
+    const bool shieldBounced = pf::shieldBounceGameObject(objectShieldBounceWorld, bounceIndex, 1, {pf::fx(1), 0});
+    const pf::Vec2 shieldBounceVelocity = objectShieldBounceWorld.objects.empty() ? pf::Vec2{} : objectShieldBounceWorld.objects[0].velocity;
+    std::cout << "object_reflect_ok=" << reflected
+              << " object_reflect_owner=" << reflectedOwner
+              << " object_reflect_vel=" << pf::toString(reflectedVelocity)
+              << " object_absorb_ok=" << absorbed
+              << " object_absorb_count=" << objectAbsorbWorld.objects.size()
+              << " object_shield_bounce_ok=" << shieldBounced
+              << " object_shield_bounce_vel=" << pf::toString(shieldBounceVelocity)
+              << "\n";
+
     pf::AnimationClip rootMotionClip;
     rootMotionClip.name = "smoke_root_motion";
     rootMotionClip.frameCount = pf::fx(10);
