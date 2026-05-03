@@ -4674,6 +4674,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidNameWritePackage = sourcePackage;
     invalidNameWritePackage.objects[1].name = invalidNameWritePackage.objects[0].name;
     const bool invalidPackageNameWriteRejected = pf::writeFighterPackage(invalidNameWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidVariableNameWritePackage = sourcePackage;
+    invalidVariableNameWritePackage.fighters[0].packageVariables.push_back(invalidVariableNameWritePackage.fighters[0].packageVariables[0]);
+    const bool invalidPackageVariableNameWriteRejected = pf::writeFighterPackage(invalidVariableNameWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4785,6 +4788,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
               << " fighter_package_invalid_mesh_write_rejected=" << invalidPackageMeshWriteRejected
               << " fighter_package_invalid_name_write_rejected=" << invalidPackageNameWriteRejected
+              << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 
