@@ -3289,6 +3289,54 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     hitbox.radius = std::max(pf::fxFromFloat(0.05f), hitbox.radius - pf::fxFromFloat(0.05f));
                     editor.status = "Editor: shrank object hitbox";
                 }
+                if (uiButton({522.0f, 592.0f, 44.0f, 22.0f}, "A+")) {
+                    hitbox.knockbackAngleDegrees += pf::fx(5);
+                    editor.status = "Editor: raised object hitbox angle";
+                }
+                if (uiButton({572.0f, 592.0f, 44.0f, 22.0f}, "A-")) {
+                    hitbox.knockbackAngleDegrees -= pf::fx(5);
+                    editor.status = "Editor: lowered object hitbox angle";
+                }
+                if (uiButton({622.0f, 592.0f, 44.0f, 22.0f}, "B+")) {
+                    hitbox.knockbackBase += pf::fx(5);
+                    editor.status = "Editor: increased object hitbox base knockback";
+                }
+                if (uiButton({672.0f, 592.0f, 44.0f, 22.0f}, "K+")) {
+                    hitbox.knockbackGrowth += pf::fx(5);
+                    editor.status = "Editor: increased object hitbox growth";
+                }
+                if (uiButton({438.0f, 622.0f, 44.0f, 22.0f}, "X+")) {
+                    hitbox.offset.x += pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: moved object hitbox forward";
+                }
+                if (uiButton({488.0f, 622.0f, 44.0f, 22.0f}, "X-")) {
+                    hitbox.offset.x -= pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: moved object hitbox backward";
+                }
+                if (uiButton({538.0f, 622.0f, 44.0f, 22.0f}, "Y+")) {
+                    hitbox.offset.y += pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: raised object hitbox";
+                }
+                if (uiButton({588.0f, 622.0f, 44.0f, 22.0f}, "Y-")) {
+                    hitbox.offset.y -= pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: lowered object hitbox";
+                }
+                if (uiButton({638.0f, 622.0f, 36.0f, 22.0f}, "B-")) {
+                    hitbox.knockbackBase = std::max(pf::Fix{0}, hitbox.knockbackBase - pf::fx(5));
+                    editor.status = "Editor: decreased object hitbox base knockback";
+                }
+                if (uiButton({680.0f, 622.0f, 36.0f, 22.0f}, "K-")) {
+                    hitbox.knockbackGrowth = std::max(pf::Fix{0}, hitbox.knockbackGrowth - pf::fx(5));
+                    editor.status = "Editor: decreased object hitbox growth";
+                }
+                if (uiButton({522.0f, 652.0f, 44.0f, 22.0f}, "Gnd", hitbox.hitGrounded)) {
+                    hitbox.hitGrounded = !hitbox.hitGrounded;
+                    editor.status = "Editor: toggled object hitbox grounded target flag";
+                }
+                if (uiButton({572.0f, 652.0f, 44.0f, 22.0f}, "Air", hitbox.hitAirborne)) {
+                    hitbox.hitAirborne = !hitbox.hitAirborne;
+                    editor.status = "Editor: toggled object hitbox airborne target flag";
+                }
             }
             if (!object.hurtboxes.empty()) {
                 pf::GameObjectHurtboxDefinition& hurtbox = object.hurtboxes[static_cast<size_t>(editor.selectedObjectHurtbox)];
