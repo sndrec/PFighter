@@ -1440,6 +1440,44 @@ bool hasName(const std::vector<std::string>& names, const std::string& name) {
     return std::find(names.begin(), names.end(), name) != names.end();
 }
 
+bool hasResolvableStateTarget(const std::vector<std::string>& names, const std::string& name) {
+    if (hasName(names, name)) {
+        return true;
+    }
+    return name == "AppealS" && (hasName(names, "AppealSR") || hasName(names, "AppealSL"));
+}
+
+void requireUniqueNonemptyNames(const std::vector<std::string>& names, const char* label) {
+    std::vector<std::string> seenNames;
+    seenNames.reserve(names.size());
+    for (const std::string& name : names) {
+        if (name.empty()) {
+            throw std::runtime_error(std::string("fighter package ") + label + " name is invalid");
+        }
+        if (hasName(seenNames, name)) {
+            throw std::runtime_error(std::string("fighter package ") + label + " name is duplicate");
+        }
+        seenNames.push_back(name);
+    }
+}
+
+void requireNonemptyNames(const std::vector<std::string>& names, const char* label) {
+    for (const std::string& name : names) {
+        if (name.empty()) {
+            throw std::runtime_error(std::string("fighter package ") + label + " name is invalid");
+        }
+    }
+}
+
+std::vector<std::string> fighterNames(const FighterPackage& package) {
+    std::vector<std::string> names;
+    names.reserve(package.fighters.size());
+    for (const FighterDefinition& fighter : package.fighters) {
+        names.push_back(fighter.name);
+    }
+    return names;
+}
+
 std::vector<std::string> fighterStateNames(const FighterDefinition& fighter) {
     std::vector<std::string> names;
     names.reserve(fighter.states.size());
@@ -1463,6 +1501,15 @@ std::vector<std::string> objectNames(const FighterPackage& package) {
     names.reserve(package.objects.size());
     for (const GameObjectDefinition& object : package.objects) {
         names.push_back(object.name);
+    }
+    return names;
+}
+
+std::vector<std::string> variableNames(const std::vector<PackageVariableDefinition>& variables) {
+    std::vector<std::string> names;
+    names.reserve(variables.size());
+    for (const PackageVariableDefinition& variable : variables) {
+        names.push_back(variable.name);
     }
     return names;
 }
@@ -1596,10 +1643,20 @@ void validateInterruptRuleTiming(const InterruptRule& rule) {
 }
 
 void validateFighterPackageReferences(const FighterPackage& package) {
+    if (package.name.empty()) {
+        throw std::runtime_error("fighter package name is invalid");
+    }
+    requireUniqueNonemptyNames(fighterNames(package), "fighter");
     const std::vector<std::string> packageObjectNames = objectNames(package);
+    requireUniqueNonemptyNames(packageObjectNames, "object");
     for (const FighterDefinition& fighter : package.fighters) {
+        if (fighter.states.empty()) {
+            throw std::runtime_error("fighter package fighter states are missing");
+        }
         const std::vector<std::string> states = fighterStateNames(fighter);
         const std::vector<std::string> scripts = scriptNames(fighter.packageScripts);
+        requireNonemptyNames(states, "fighter state");
+        requireUniqueNonemptyNames(variableNames(fighter.packageVariables), "fighter variable");
         validatePackageScripts(fighter.packageScripts, static_cast<int>(fighter.packageVariables.size()), states, packageObjectNames);
         for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
             validateHurtboxGeometry(hurtbox);
@@ -1613,8 +1670,8 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             validateFunctionCalls(state.onLanding, scripts);
             validateFunctionCalls(state.onAirborne, scripts);
             for (const InterruptRule& rule : state.interrupts) {
-                if (!hasName(states, rule.targetState)) {
-                    throw std::runtime_error("fighter package interrupt state target is invalid");
+                if (!hasResolvableStateTarget(states, rule.targetState)) {
+                    throw std::runtime_error("fighter package interrupt state target is invalid: " + state.name + " -> " + rule.targetState);
                 }
                 validateInterruptRuleTiming(rule);
             }
@@ -1632,8 +1689,13 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     }
 
     for (const GameObjectDefinition& object : package.objects) {
+        if (object.states.empty()) {
+            throw std::runtime_error("fighter package object states are missing");
+        }
         const std::vector<std::string> states = objectStateNames(object);
         const std::vector<std::string> scripts = scriptNames(object.packageScripts);
+        requireNonemptyNames(states, "object state");
+        requireUniqueNonemptyNames(variableNames(object.packageVariables), "object variable");
         validatePackageScripts(object.packageScripts, static_cast<int>(object.packageVariables.size()), states, packageObjectNames);
         if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {
             throw std::runtime_error("fighter package object initial state is invalid");
