@@ -1665,7 +1665,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         return;
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 300.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 330.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Animation Preview", 24, 336, 16, BLACK);
@@ -1837,6 +1837,15 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     }
     if (showingAuthoredClips && selectedAuthoredClip && !selectedAuthoredClip->tracks.empty()) {
         editor.selectedAnimationTrack = std::clamp(editor.selectedAnimationTrack, 0, static_cast<int>(selectedAuthoredClip->tracks.size()) - 1);
+        if (uiButton({352.0f, 626.0f, 72.0f, 24.0f}, "Del Tr")) {
+            selectedAuthoredClip->tracks.erase(selectedAuthoredClip->tracks.begin() + editor.selectedAnimationTrack);
+            editor.selectedAnimationTrack = std::clamp(editor.selectedAnimationTrack, 0, std::max(0, static_cast<int>(selectedAuthoredClip->tracks.size()) - 1));
+            editor.selectedAnimationKey = 0;
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: deleted authored animation track";
+            return;
+        }
         pf::AnimationTrack& track = selectedAuthoredClip->tracks[static_cast<size_t>(editor.selectedAnimationTrack)];
         DrawText(("Track " + std::to_string(editor.selectedAnimationTrack) + " j" + std::to_string(track.joint) + " " + animationChannelName(track.channel)).c_str(), 352, 530, 13, DARKGRAY);
         if (uiButton({434.0f, 500.0f, 72.0f, 24.0f}, "Chan")) {
@@ -1874,17 +1883,26 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         }
         if (!track.keys.empty()) {
             editor.selectedAnimationKey = std::clamp(editor.selectedAnimationKey, 0, static_cast<int>(track.keys.size()) - 1);
-            pf::AnimationKey& key = track.keys[static_cast<size_t>(editor.selectedAnimationKey)];
+            const pf::AnimationKey& key = track.keys[static_cast<size_t>(editor.selectedAnimationKey)];
             DrawText(("Key " + std::to_string(editor.selectedAnimationKey) + " f" + std::to_string(static_cast<int>(pf::fxToFloat(key.frame))) +
                       " v=" + std::to_string(pf::fxToFloat(key.value))).c_str(), 352, 578, 13, DARKGRAY);
+            if (uiButton({434.0f, 626.0f, 72.0f, 24.0f}, "Del Key")) {
+                track.keys.erase(track.keys.begin() + editor.selectedAnimationKey);
+                editor.selectedAnimationKey = std::clamp(editor.selectedAnimationKey, 0, std::max(0, static_cast<int>(track.keys.size()) - 1));
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                editor.status = "Editor: deleted authored animation key";
+                return;
+            }
+            pf::AnimationKey& mutableKey = track.keys[static_cast<size_t>(editor.selectedAnimationKey)];
             if (uiButton({352.0f, 596.0f, 72.0f, 24.0f}, "Val -")) {
-                key.value -= pf::fxFromFloat(0.05f);
+                mutableKey.value -= pf::fxFromFloat(0.05f);
                 editor.animationPreviewActive = true;
                 editor.paused = true;
                 editor.status = "Editor: lowered authored key value";
             }
             if (uiButton({434.0f, 596.0f, 72.0f, 24.0f}, "Val +")) {
-                key.value += pf::fxFromFloat(0.05f);
+                mutableKey.value += pf::fxFromFloat(0.05f);
                 editor.animationPreviewActive = true;
                 editor.paused = true;
                 editor.status = "Editor: raised authored key value";
@@ -1915,7 +1933,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             selectedClip.actionIndex,
             pf::fx(editor.animationScrubFrame));
         if (ok) {
-            DrawText("Preview pose applied to selected fighter", 24, 596, 13, DARKGRAY);
+            DrawText("Preview pose applied to selected fighter", 24, 626, 13, DARKGRAY);
         }
     }
 }
