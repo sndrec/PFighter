@@ -3066,6 +3066,23 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 editor.selectedObjectState = wrappedIndex(editor.selectedObjectState + 1, static_cast<int>(object.states.size()));
                 editor.status = "Editor: selected next object state";
             }
+            if (uiButton({154.0f, 546.0f, 52.0f, 24.0f}, "Var>")) {
+                if (!object.packageVariables.empty()) {
+                    editor.selectedPackageVariable = wrappedIndex(
+                        editor.selectedPackageVariable + 1,
+                        static_cast<int>(object.packageVariables.size()));
+                    editor.status = "Editor: selected next object package variable";
+                }
+            }
+            if (uiButton({212.0f, 546.0f, 52.0f, 24.0f}, "Scr>")) {
+                if (!object.packageScripts.empty()) {
+                    editor.selectedPackageScript = wrappedIndex(
+                        editor.selectedPackageScript + 1,
+                        static_cast<int>(object.packageScripts.size()));
+                    editor.selectedPackageInstruction = 0;
+                    editor.status = "Editor: selected next object package script";
+                }
+            }
             if (uiButton({270.0f, 546.0f, 76.0f, 24.0f}, "Loop", objectState.loopAnimation)) {
                 objectState.loopAnimation = !objectState.loopAnimation;
                 editor.status = "Editor: toggled object state loop";
