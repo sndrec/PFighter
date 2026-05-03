@@ -1770,6 +1770,13 @@ static bool uiListRow(Rectangle rect, const std::string& label, bool active) {
     return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
+static int visibleListStart(int selected, int itemCount, int visibleRows) {
+    if (itemCount <= visibleRows) {
+        return 0;
+    }
+    return std::clamp(selected - visibleRows / 2, 0, itemCount - visibleRows);
+}
+
 static std::string uniquePackageVariableName(const pf::FighterDefinition& def) {
     for (int index = 0; index < 10000; ++index) {
         const std::string candidate = "var" + std::to_string(index);
@@ -2431,11 +2438,16 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
         }
     }
     const int visibleVars = std::min(5, static_cast<int>(def.packageVariables.size()));
+    const int variableStart = visibleListStart(
+        editor.selectedPackageVariable,
+        static_cast<int>(def.packageVariables.size()),
+        visibleVars);
     for (int row = 0; row < visibleVars; ++row) {
-        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(row)];
+        const int variableIndex = variableStart + row;
+        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(variableIndex)];
         const std::string label = variable.name + " = " + std::to_string(variable.initialValue);
-        if (uiListRow({24.0f, 412.0f + 24.0f * row, 156.0f, 22.0f}, label, row == editor.selectedPackageVariable)) {
-            editor.selectedPackageVariable = row;
+        if (uiListRow({24.0f, 412.0f + 24.0f * row, 156.0f, 22.0f}, label, variableIndex == editor.selectedPackageVariable)) {
+            editor.selectedPackageVariable = variableIndex;
         }
     }
     if (def.packageVariables.empty()) {
@@ -2444,11 +2456,16 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
 
     DrawText("Scripts", 196, 392, 13, DARKGRAY);
     const int visibleScripts = std::min(5, static_cast<int>(def.packageScripts.size()));
+    const int scriptStart = visibleListStart(
+        editor.selectedPackageScript,
+        static_cast<int>(def.packageScripts.size()),
+        visibleScripts);
     for (int row = 0; row < visibleScripts; ++row) {
-        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(row)];
+        const int scriptIndex = scriptStart + row;
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(scriptIndex)];
         const std::string label = script.name + " (" + std::to_string(script.instructions.size()) + ")";
-        if (uiListRow({196.0f, 412.0f + 24.0f * row, 156.0f, 22.0f}, label, row == editor.selectedPackageScript)) {
-            editor.selectedPackageScript = row;
+        if (uiListRow({196.0f, 412.0f + 24.0f * row, 156.0f, 22.0f}, label, scriptIndex == editor.selectedPackageScript)) {
+            editor.selectedPackageScript = scriptIndex;
             editor.selectedPackageInstruction = 0;
         }
     }
@@ -2463,10 +2480,15 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     DrawText("Instructions", 24, 506, 13, DARKGRAY);
     if (script) {
         const int visibleInstructions = std::min(2, static_cast<int>(script->instructions.size()));
+        const int instructionStart = visibleListStart(
+            editor.selectedPackageInstruction,
+            static_cast<int>(script->instructions.size()),
+            visibleInstructions);
         for (int row = 0; row < visibleInstructions; ++row) {
-            const pf::PackageScriptInstruction& instruction = script->instructions[static_cast<size_t>(row)];
-            if (uiListRow({106.0f, 500.0f + 24.0f * row, 246.0f, 22.0f}, packageInstructionLabel(instruction), row == editor.selectedPackageInstruction)) {
-                editor.selectedPackageInstruction = row;
+            const int instructionIndex = instructionStart + row;
+            const pf::PackageScriptInstruction& instruction = script->instructions[static_cast<size_t>(instructionIndex)];
+            if (uiListRow({106.0f, 500.0f + 24.0f * row, 246.0f, 22.0f}, packageInstructionLabel(instruction), instructionIndex == editor.selectedPackageInstruction)) {
+                editor.selectedPackageInstruction = instructionIndex;
             }
         }
         if (script->instructions.empty()) {
