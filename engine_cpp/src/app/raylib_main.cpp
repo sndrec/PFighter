@@ -1949,9 +1949,9 @@ static std::string uniquePackageVariableName(const pf::FighterDefinition& def) {
     return "varX";
 }
 
-static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
+static std::string uniquePackageScriptName(const pf::FighterDefinition& def, const std::string& prefix) {
     for (int index = 0; index < 10000; ++index) {
-        const std::string candidate = "Script" + std::to_string(index);
+        const std::string candidate = prefix + std::to_string(index);
         const bool exists = std::any_of(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
             return script.name == candidate;
         });
@@ -1959,7 +1959,11 @@ static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
             return candidate;
         }
     }
-    return "ScriptX";
+    return prefix + "X";
+}
+
+static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
+    return uniquePackageScriptName(def, "Script");
 }
 
 static std::string uniqueObjectPackageVariableName(const pf::GameObjectDefinition& def) {
@@ -1975,9 +1979,9 @@ static std::string uniqueObjectPackageVariableName(const pf::GameObjectDefinitio
     return "objVarX";
 }
 
-static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition& def) {
+static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition& def, const std::string& prefix) {
     for (int index = 0; index < 10000; ++index) {
-        const std::string candidate = "ObjectScript" + std::to_string(index);
+        const std::string candidate = prefix + std::to_string(index);
         const bool exists = std::any_of(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
             return script.name == candidate;
         });
@@ -1985,7 +1989,11 @@ static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition&
             return candidate;
         }
     }
-    return "ObjectScriptX";
+    return prefix + "X";
+}
+
+static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition& def) {
+    return uniqueObjectPackageScriptName(def, "ObjectScript");
 }
 
 static std::string uniqueObjectName(const pf::World& world, const std::string& prefix) {
@@ -2587,6 +2595,17 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(def.packageScripts.size()) - 1));
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: removed package script " + removed;
+        }
+    }
+    if (uiButton({584.0f, 364.0f, 58.0f, 24.0f}, "Clone")) {
+        if (!def.packageScripts.empty()) {
+            editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+            pf::PackageScript clone = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+            clone.name = uniquePackageScriptName(def, clone.name + "Copy");
+            def.packageScripts.push_back(std::move(clone));
+            editor.selectedPackageScript = static_cast<int>(def.packageScripts.size()) - 1;
+            editor.selectedPackageInstruction = 0;
+            editor.status = "Editor: cloned package script " + def.packageScripts.back().name;
         }
     }
     if (uiButton({466.0f, 334.0f, 50.0f, 24.0f}, "-In")) {
@@ -3697,6 +3716,17 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
                     editor.selectedPackageInstruction = 0;
                     editor.status = "Editor: removed object package script " + removed;
+                }
+            }
+            if (uiButton({708.0f, 486.0f, 58.0f, 24.0f}, "ClnS")) {
+                if (!object.packageScripts.empty()) {
+                    editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+                    pf::PackageScript clone = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+                    clone.name = uniqueObjectPackageScriptName(object, clone.name + "Copy");
+                    object.packageScripts.push_back(std::move(clone));
+                    editor.selectedPackageScript = static_cast<int>(object.packageScripts.size()) - 1;
+                    editor.selectedPackageInstruction = 0;
+                    editor.status = "Editor: cloned object package script " + object.packageScripts.back().name;
                 }
             }
         }
