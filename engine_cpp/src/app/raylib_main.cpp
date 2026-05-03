@@ -1637,6 +1637,13 @@ static void remapRemovedPackageObjectTargets(
     }
 }
 
+static int visibleListStart(int selected, int itemCount, int visibleRows) {
+    if (itemCount <= visibleRows) {
+        return 0;
+    }
+    return std::clamp(selected - visibleRows / 2, 0, itemCount - visibleRows);
+}
+
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
@@ -1653,21 +1660,26 @@ static void drawPackageScriptBlockGraph(
     const int visible = std::min(
         std::max(1, static_cast<int>((rect.width - 8.0f) / 50.0f)),
         static_cast<int>(script.instructions.size()));
+    const int start = visibleListStart(
+        editor.selectedPackageInstruction,
+        static_cast<int>(script.instructions.size()),
+        visible);
     for (int i = 0; i < visible; ++i) {
+        const int instructionIndex = start + i;
         const float x = rect.x + 8.0f + static_cast<float>(i) * 50.0f;
         const Rectangle node{x, rect.y + 32.0f, 42.0f, 38.0f};
         const Vector2 mouse = GetMousePosition();
         const bool hovered = CheckCollisionPointRec(mouse, node);
-        const bool selected = i == editor.selectedPackageInstruction;
+        const bool selected = instructionIndex == editor.selectedPackageInstruction;
         DrawRectangleRec(node, selected ? Fade(GREEN, 0.72f) : (hovered ? Fade(ORANGE, 0.5f) : Fade(RAYWHITE, 0.75f)));
         DrawRectangleLinesEx(node, 1.0f, DARKGRAY);
-        DrawText(packageScriptOpName(script.instructions[static_cast<size_t>(i)].op), static_cast<int>(node.x + 4.0f), static_cast<int>(node.y + 6.0f), 10, BLACK);
-        DrawText(std::to_string(i).c_str(), static_cast<int>(node.x + 17.0f), static_cast<int>(node.y + 21.0f), 10, DARKGRAY);
+        DrawText(packageScriptOpName(script.instructions[static_cast<size_t>(instructionIndex)].op), static_cast<int>(node.x + 4.0f), static_cast<int>(node.y + 6.0f), 10, BLACK);
+        DrawText(std::to_string(instructionIndex).c_str(), static_cast<int>(node.x + 17.0f), static_cast<int>(node.y + 21.0f), 10, DARKGRAY);
         if (i + 1 < visible) {
             DrawLine(static_cast<int>(node.x + node.width), static_cast<int>(node.y + 19.0f), static_cast<int>(node.x + node.width + 8.0f), static_cast<int>(node.y + 19.0f), DARKGRAY);
         }
         if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            editor.selectedPackageInstruction = i;
+            editor.selectedPackageInstruction = instructionIndex;
         }
     }
 }
@@ -1768,13 +1780,6 @@ static bool uiListRow(Rectangle rect, const std::string& label, bool active) {
     DrawRectangleLinesEx(rect, 1.0f, Fade(DARKGRAY, 0.75f));
     DrawText(fittedLabel.c_str(), static_cast<int>(rect.x + 7.0f), static_cast<int>(rect.y + 5.0f), fontSize, BLACK);
     return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-}
-
-static int visibleListStart(int selected, int itemCount, int visibleRows) {
-    if (itemCount <= visibleRows) {
-        return 0;
-    }
-    return std::clamp(selected - visibleRows / 2, 0, itemCount - visibleRows);
 }
 
 static std::string uniquePackageVariableName(const pf::FighterDefinition& def) {
