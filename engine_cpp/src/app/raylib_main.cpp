@@ -2161,6 +2161,18 @@ static void ensureAuthoredRootJoint(pf::FighterDefinition& def) {
     def.authoredSkeleton.push_back({-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}});
 }
 
+static bool authoredJointNameAvailable(const pf::FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.authoredSkeleton.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.authoredSkeleton[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static pf::HsdFighterMesh makeEditorTriangleMesh() {
     pf::HsdFighterMesh mesh;
     pf::HsdMeshBatch batch;
@@ -4815,6 +4827,29 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             if (uiListRow({184.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, jointIndex == editor.selectedAnimationJoint)) {
                 editor.selectedAnimationJoint = jointIndex;
                 editor.status = "Editor: selected authored joint " + joint.name;
+            }
+        }
+        if (!def.authoredSkeleton.empty()) {
+            editor.selectedAnimationJoint = std::clamp(
+                editor.selectedAnimationJoint,
+                0,
+                static_cast<int>(def.authoredSkeleton.size()) - 1);
+            pf::AnimationJoint& selectedJoint = def.authoredSkeleton[static_cast<size_t>(editor.selectedAnimationJoint)];
+            std::string renamedJoint;
+            if (uiTextField(
+                    {516.0f, 470.0f, 150.0f, 22.0f},
+                    "anim-joint-" + std::to_string(editor.selectedAnimationJoint),
+                    editor,
+                    selectedJoint.name,
+                    renamedJoint))
+            {
+                if (!authoredJointNameAvailable(def, renamedJoint, editor.selectedAnimationJoint)) {
+                    editor.status = "Editor: authored joint name is empty or already used";
+                } else {
+                    const std::string oldName = selectedJoint.name;
+                    selectedJoint.name = renamedJoint;
+                    editor.status = "Editor: renamed authored joint " + oldName + " to " + selectedJoint.name;
+                }
             }
         }
     } else {
