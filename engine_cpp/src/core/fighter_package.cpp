@@ -1,6 +1,7 @@
 #include "core/fighter_package.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -1500,12 +1501,19 @@ void validateAuthoredMeshData(const HsdFighterMesh& mesh, const std::vector<Anim
             throw std::runtime_error("fighter package authored mesh batch triangle list is invalid");
         }
         for (const HsdMeshVertex& vertex : batch.vertices) {
+            float weightSum = 0.0f;
             for (const HsdMeshVertexInfluence& influence : vertex.influences) {
-                if (!validAuthoredMeshBone(influence.bone, skeleton.size()) ||
-                    influence.weight < 0.0f || influence.weight > 1.0f)
+                if (!std::isfinite(influence.weight) ||
+                    !validAuthoredMeshBone(influence.bone, skeleton.size()) ||
+                    influence.weight < 0.0f || influence.weight > 1.0f ||
+                    (influence.bone < 0 && influence.weight > 0.0f))
                 {
                     throw std::runtime_error("fighter package authored mesh vertex influence is invalid");
                 }
+                weightSum += influence.weight;
+            }
+            if (weightSum <= 0.0f || weightSum > 1.0001f) {
+                throw std::runtime_error("fighter package authored mesh vertex influence weights are invalid");
             }
         }
     }

@@ -4970,6 +4970,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidMeshWritePackage = sourcePackage;
     invalidMeshWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].bone = 99;
     const bool invalidPackageMeshWriteRejected = pf::writeFighterPackage(invalidMeshWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidMeshWeightWritePackage = sourcePackage;
+    invalidMeshWeightWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].weight = 0.0f;
+    const bool invalidPackageMeshWeightWriteRejected = pf::writeFighterPackage(invalidMeshWeightWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidMeshTriangleWritePackage = sourcePackage;
     invalidMeshTriangleWritePackage.fighters[0].authoredMesh.batches[0].vertices.pop_back();
     const bool invalidPackageMeshTriangleWriteRejected = pf::writeFighterPackage(invalidMeshTriangleWritePackage, &invalidPackageError).empty();
@@ -5588,6 +5591,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_hurtbox_ref_write_rejected=" << invalidPackageHurtboxRefWriteRejected
               << " fighter_package_invalid_mesh_write_rejected=" << invalidPackageMeshWriteRejected
+              << " fighter_package_invalid_mesh_weight_write_rejected=" << invalidPackageMeshWeightWriteRejected
               << " fighter_package_invalid_mesh_triangle_write_rejected=" << invalidPackageMeshTriangleWriteRejected
               << " fighter_package_invalid_name_write_rejected=" << invalidPackageNameWriteRejected
               << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
