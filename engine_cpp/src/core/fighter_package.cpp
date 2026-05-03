@@ -300,6 +300,7 @@ bool validSubactionType(SubactionType type) {
     case SubactionType::SelfDamage:
     case SubactionType::SpawnObject:
     case SubactionType::SpawnProjectile:
+    case SubactionType::CallScript:
         return true;
     }
     return false;
@@ -2057,6 +2058,9 @@ void validateFighterPackageReferences(const FighterPackage& package) {
                     !objectHasKind(package.objects, subaction.objectName, GameObjectKind::Projectile))
                 {
                     throw std::runtime_error("fighter package subaction projectile target is invalid");
+                }
+                if (subaction.type == SubactionType::CallScript && !hasName(scripts, subaction.objectName)) {
+                    throw std::runtime_error("fighter package subaction script target is invalid");
                 }
                 if (subaction.type == SubactionType::CreateHitbox ||
                     subaction.type == SubactionType::CreateThrowHitbox)

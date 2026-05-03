@@ -4832,6 +4832,10 @@ static void applySetJumpStateSubaction(const FighterDefinition& def, FighterRunt
 }
 
 static void executeSubaction(World& world, size_t fighterIndex, const FighterDefinition& def, FighterRuntime& fighter, const Subaction& sub) {
+    if (sub.type == SubactionType::CallScript) {
+        runPackageScript(world, fighter, sub.objectName);
+        return;
+    }
     if (sub.type == SubactionType::ClearHitboxes) {
         fighter.activeHitboxes.clear();
         fighter.fightersHitThisAction.clear();
@@ -5035,7 +5039,7 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
     }
 }
 
-static void executeActionFrame(World& world, size_t fighterIndex, const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter, int actionFrame) {
+static void executeActionFrame(World& world, size_t fighterIndex, const FighterDefinition& def, const FighterState& state, int actionFrame) {
     std::vector<Subaction> actionSource = state.action;
     if (def.hasHsdAsset && def.hsdAsset) {
         if (const HsdActionScript* script = actionScriptForState(*def.hsdAsset, state)) {
@@ -5046,7 +5050,19 @@ static void executeActionFrame(World& world, size_t fighterIndex, const FighterD
     if (actionFrame < 0 || actionFrame >= static_cast<int>(action.size())) {
         return;
     }
+    if (fighterIndex >= world.fighters.size()) {
+        return;
+    }
+    const int sourceDef = world.fighters[fighterIndex].fighterDef;
+    const int sourceState = world.fighters[fighterIndex].state;
     for (const Subaction& sub : action[static_cast<size_t>(actionFrame)]) {
+        if (fighterIndex >= world.fighters.size()) {
+            return;
+        }
+        FighterRuntime& fighter = world.fighters[fighterIndex];
+        if (fighter.fighterDef != sourceDef || fighter.state != sourceState) {
+            return;
+        }
         executeSubaction(world, fighterIndex, def, fighter, sub);
     }
 }
@@ -5063,14 +5079,28 @@ static void executePendingActionFrames(World& world, size_t fighterIndex, const 
     if (targetFrame == fighter.lastActionFrameExecuted) {
         return;
     }
+    const int sourceDef = fighter.fighterDef;
+    const int sourceState = fighter.state;
     if (targetFrame > fighter.lastActionFrameExecuted) {
         for (int frame = std::max(0, fighter.lastActionFrameExecuted + 1); frame <= targetFrame; ++frame) {
-            executeActionFrame(world, fighterIndex, def, state, fighter, frame);
+            executeActionFrame(world, fighterIndex, def, state, frame);
+            if (fighterIndex >= world.fighters.size() ||
+                world.fighters[fighterIndex].fighterDef != sourceDef ||
+                world.fighters[fighterIndex].state != sourceState)
+            {
+                return;
+            }
         }
     } else {
-        executeActionFrame(world, fighterIndex, def, state, fighter, targetFrame);
+        executeActionFrame(world, fighterIndex, def, state, targetFrame);
+        if (fighterIndex >= world.fighters.size() ||
+            world.fighters[fighterIndex].fighterDef != sourceDef ||
+            world.fighters[fighterIndex].state != sourceState)
+        {
+            return;
+        }
     }
-    fighter.lastActionFrameExecuted = targetFrame;
+    world.fighters[fighterIndex].lastActionFrameExecuted = targetFrame;
 }
 
 static void processInterrupts(World& world, FighterRuntime& fighter) {
@@ -8034,9 +8064,13 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
 
         const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
         executePendingActionFrames(world, fighterIndex, def, currentState(world, fighter), fighter);
-        processSmashCharge(fighter);
-        processInterrupts(world, fighter);
-        runStateFunctions(world, fighterIndex, currentState(world, fighter).onFrame);
+        if (fighterIndex >= world.fighters.size()) {
+            continue;
+        }
+        FighterRuntime& fighterAfterActions = world.fighters[fighterIndex];
+        processSmashCharge(fighterAfterActions);
+        processInterrupts(world, fighterAfterActions);
+        runStateFunctions(world, fighterIndex, currentState(world, fighterAfterActions).onFrame);
         if (fighterIndex >= world.fighters.size()) {
             continue;
         }

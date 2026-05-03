@@ -528,6 +528,7 @@ enum class SubactionType : uint8_t {
     SelfDamage,
     SpawnObject,
     SpawnProjectile,
+    CallScript,
 };
 
 struct Subaction {

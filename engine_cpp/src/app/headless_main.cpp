@@ -4861,6 +4861,21 @@ int main(int argc, char** argv) {
     pf::FighterPackage loadedSubactionProjectilePackage;
     const bool packageSubactionProjectileLoaded = !subactionProjectilePackageBytes.empty() &&
         pf::readFighterPackage(subactionProjectilePackageBytes, loadedSubactionProjectilePackage, &packageError);
+    pf::FighterPackage subactionScriptPackage = sourcePackage;
+    const int subactionScriptStateIndex = subactionScriptPackage.fighters[0].stateIndex("Wait");
+    if (subactionScriptStateIndex >= 0) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::CallScript;
+        subaction.frames = 1;
+        subaction.objectName = "CallScript";
+        subactionScriptPackage.fighters[0].states[static_cast<size_t>(subactionScriptStateIndex)].action.push_back(subaction);
+    }
+    const std::vector<uint8_t> subactionScriptPackageBytes = subactionScriptStateIndex >= 0
+        ? pf::writeFighterPackage(subactionScriptPackage, &packageError)
+        : std::vector<uint8_t>{};
+    pf::FighterPackage loadedSubactionScriptPackage;
+    const bool packageSubactionScriptLoaded = !subactionScriptPackageBytes.empty() &&
+        pf::readFighterPackage(subactionScriptPackageBytes, loadedSubactionScriptPackage, &packageError);
     const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
     pf::FighterPackage loadedPackage;
     const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
@@ -5040,6 +5055,17 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidCallScriptWritePackage = sourcePackage;
     invalidCallScriptWritePackage.fighters[0].packageScripts.back().instructions[0].text = "MissingScript";
     const bool invalidPackageCallScriptWriteRejected = pf::writeFighterPackage(invalidCallScriptWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidSubactionCallScriptWritePackage = sourcePackage;
+    const int invalidSubactionCallScriptState = invalidSubactionCallScriptWritePackage.fighters[0].stateIndex("Wait");
+    if (invalidSubactionCallScriptState >= 0) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::CallScript;
+        subaction.frames = 1;
+        subaction.objectName = "MissingScript";
+        invalidSubactionCallScriptWritePackage.fighters[0].states[static_cast<size_t>(invalidSubactionCallScriptState)].action.push_back(subaction);
+    }
+    const bool invalidPackageSubactionCallScriptWriteRejected = invalidSubactionCallScriptState >= 0 &&
+        pf::writeFighterPackage(invalidSubactionCallScriptWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidFighterDestroyWritePackage = sourcePackage;
     invalidFighterDestroyWritePackage.fighters[0].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::DestroyObject,
@@ -5430,6 +5456,23 @@ int main(int argc, char** argv) {
     const bool packageProjectileSubactionOk = packageSubactionProjectileLoaded &&
         packageProjectileSubactionCount >= 1 &&
         packageProjectileSubactionVelocityOk;
+    pf::World packageSubactionScriptWorld = pf::makeTrainingWorld();
+    if (packageSubactionScriptLoaded) {
+        packageSubactionScriptWorld.fighterDefs[0] = loadedSubactionScriptPackage.fighters[0];
+        packageSubactionScriptWorld.fighterDefs[0].hasHsdAsset = false;
+        packageSubactionScriptWorld.fighterDefs[0].hsdAsset.reset();
+        packageSubactionScriptWorld.fighterDefs.push_back(loadedSubactionScriptPackage.fighters[1]);
+        const int waitIndex = packageSubactionScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            packageSubactionScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].interrupts.clear();
+            packageSubactionScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].animationActionIndex = -1;
+        }
+        packageSubactionScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageSubactionScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const int packageSubactionScriptVar = packageSubactionScriptWorld.fighters[0].packageVars.empty()
+        ? -1
+        : packageSubactionScriptWorld.fighters[0].packageVars[0];
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageSwitchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5618,6 +5661,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_projectile_def_kind=" << packageProjectileDefKindOk
               << " fighter_package_subaction_projectile_ok=" << packageProjectileSubactionOk
               << " fighter_package_subaction_projectile_count=" << packageProjectileSubactionCount
+              << " fighter_package_subaction_script_var=" << packageSubactionScriptVar
               << " fighter_package_script_switch_ok=" << packageSwitchScriptOk
               << " fighter_package_script_switch_var=" << packageSwitchScriptVar
               << " fighter_package_script_spawn_fighter_ok=" << packageSpawnFighterScriptOk
@@ -5670,6 +5714,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_switch_write_rejected=" << invalidPackageSwitchWriteRejected
               << " fighter_package_invalid_spawn_fighter_write_rejected=" << invalidPackageSpawnFighterWriteRejected
               << " fighter_package_invalid_call_script_write_rejected=" << invalidPackageCallScriptWriteRejected
+              << " fighter_package_invalid_subaction_call_script_write_rejected=" << invalidPackageSubactionCallScriptWriteRejected
               << " fighter_package_invalid_fighter_destroy_write_rejected=" << invalidPackageFighterDestroyWriteRejected
               << " fighter_package_invalid_fighter_object_context_write_rejected=" << invalidPackageFighterObjectContextWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected

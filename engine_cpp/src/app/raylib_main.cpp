@@ -901,6 +901,7 @@ static const char* subactionTypeName(pf::SubactionType type) {
     case pf::SubactionType::SelfDamage: return "SelfDamage";
     case pf::SubactionType::SpawnObject: return "SpawnObject";
     case pf::SubactionType::SpawnProjectile: return "SpawnProjectile";
+    case pf::SubactionType::CallScript: return "CallScript";
     }
     return "Unknown";
 }
@@ -917,6 +918,7 @@ static Color subactionMarkerColor(const pf::Subaction& subaction) {
         return GREEN;
     case pf::SubactionType::SpawnObject:
     case pf::SubactionType::SpawnProjectile:
+    case pf::SubactionType::CallScript:
         return PURPLE;
     case pf::SubactionType::SetHurtboxState:
     case pf::SubactionType::SetBodyCollisionState:
@@ -1327,6 +1329,33 @@ static void cyclePackageScriptTarget(
     size_t index = static_cast<size_t>(std::distance(scripts.begin(), found));
     index = (index + 1) % scripts.size();
     instruction.text = scripts[index].name;
+}
+
+static void cyclePackageScriptSubactionTarget(
+    pf::Subaction& subaction,
+    const std::vector<pf::PackageScript>& scripts,
+    int fallbackScript)
+{
+    subaction.type = pf::SubactionType::CallScript;
+    if (scripts.empty()) {
+        subaction.objectName.clear();
+        return;
+    }
+    if (subaction.objectName.empty()) {
+        subaction.objectName = packageScriptTargetName(scripts, fallbackScript);
+        return;
+    }
+
+    auto found = std::find_if(scripts.begin(), scripts.end(), [&](const pf::PackageScript& script) {
+        return script.name == subaction.objectName;
+    });
+    if (found == scripts.end()) {
+        subaction.objectName = packageScriptTargetName(scripts, fallbackScript);
+        return;
+    }
+    size_t index = static_cast<size_t>(std::distance(scripts.begin(), found));
+    index = (index + 1) % scripts.size();
+    subaction.objectName = scripts[index].name;
 }
 
 static std::string packageInstructionLabel(const pf::PackageScriptInstruction& instruction) {
@@ -2495,8 +2524,21 @@ static void removePackageScriptInstructionRefs(std::vector<pf::PackageScript>& s
     }
 }
 
+static void removePackageScriptSubactionRefs(std::vector<pf::FighterState>& states, const std::string& scriptName) {
+    for (pf::FighterState& state : states) {
+        for (pf::Subaction& subaction : state.action) {
+            if (subaction.type == pf::SubactionType::CallScript && subaction.objectName == scriptName) {
+                subaction.type = pf::SubactionType::SyncTimer;
+                subaction.objectName.clear();
+                subaction.frames = std::max(1, subaction.frames);
+            }
+        }
+    }
+}
+
 static void removeFighterPackageScriptRefs(pf::FighterDefinition& def, const std::string& scriptName) {
     removePackageScriptInstructionRefs(def.packageScripts, scriptName);
+    removePackageScriptSubactionRefs(def.states, scriptName);
     for (pf::FighterState& state : def.states) {
         removePackageScriptCallbackRefs(state.onEnter, scriptName);
         removePackageScriptCallbackRefs(state.onFrame, scriptName);
@@ -4921,6 +4963,19 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             editor.status = "Editor: removed interrupt from " + state.name;
         }
     }
+    if (uiButton({516.0f, 470.0f, 90.0f, 24.0f}, "+ Script")) {
+        if (def.packageScripts.empty()) {
+            editor.status = "Editor: add a package script before adding script subactions";
+        } else {
+            pf::Subaction subaction;
+            subaction.type = pf::SubactionType::CallScript;
+            subaction.frames = 1;
+            subaction.objectName = packageScriptTargetName(def.packageScripts, editor.selectedPackageScript);
+            state.action.push_back(subaction);
+            editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+            editor.status = "Editor: added script subaction to " + state.name;
+        }
+    }
     if (!state.interrupts.empty()) {
         editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
         pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
@@ -5069,6 +5124,25 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             if (uiButton({666.0f, 638.0f, 44.0f, 22.0f}, "OY-")) {
                 subaction.spawnOffset.y -= pf::fxFromFloat(0.1f);
                 editor.status = "Editor: lowered spawn offset";
+            }
+        } else if (subaction.type == pf::SubactionType::CallScript) {
+            DrawText(("Script #" + std::to_string(editor.selectedSubaction) + " -> " + subaction.objectName +
+                      " frames " + std::to_string(subaction.frames)).c_str(), 516, 554, 12, DARKGRAY);
+            if (uiButton({516.0f, 570.0f, 44.0f, 22.0f}, "Tgt")) {
+                if (def.packageScripts.empty()) {
+                    editor.status = "Editor: add a package script before targeting script subactions";
+                } else {
+                    cyclePackageScriptSubactionTarget(subaction, def.packageScripts, editor.selectedPackageScript);
+                    editor.status = "Editor: cycled script subaction target to " + subaction.objectName;
+                }
+            }
+            if (uiButton({566.0f, 570.0f, 44.0f, 22.0f}, "Fr+")) {
+                ++subaction.frames;
+                editor.status = "Editor: lengthened selected script subaction";
+            }
+            if (uiButton({616.0f, 570.0f, 44.0f, 22.0f}, "Fr-")) {
+                subaction.frames = std::max(0, subaction.frames - 1);
+                editor.status = "Editor: shortened selected script subaction";
             }
         } else if (subaction.type == pf::SubactionType::CreateHitbox ||
                    subaction.type == pf::SubactionType::CreateThrowHitbox)

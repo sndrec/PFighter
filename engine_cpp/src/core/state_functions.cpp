@@ -2567,7 +2567,7 @@ static void setPackageVar(FighterRuntime& fighter, int index, int32_t value) {
     fighter.packageVars[static_cast<size_t>(index)] = value;
 }
 
-static void runPackageScript(World& world, FighterRuntime& fighter, const std::string& scriptName) {
+void runPackageScript(World& world, FighterRuntime& fighter, const std::string& scriptName) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const auto found = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
         return script.name == scriptName;
