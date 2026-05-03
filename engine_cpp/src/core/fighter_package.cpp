@@ -710,10 +710,28 @@ int32_t assetIndexFor(const FighterPackage& package, const std::shared_ptr<const
     return static_cast<int32_t>(std::distance(package.hsdAssets.begin(), found));
 }
 
+void writeShieldDefinition(PackageWriter& writer, const ShieldDefinition& shield) {
+    writer.writeI32(shield.startSizeHardShield);
+    writer.writeI32(shield.endSizeHardShield);
+    writer.writeI32(shield.startSizeLightShield);
+    writer.writeI32(shield.endSizeLightShield);
+    writer.writeI32(shield.maxHealth);
+}
+
+ShieldDefinition readShieldDefinition(PackageReader& reader) {
+    ShieldDefinition shield;
+    shield.startSizeHardShield = reader.readI32();
+    shield.endSizeHardShield = reader.readI32();
+    shield.startSizeLightShield = reader.readI32();
+    shield.endSizeLightShield = reader.readI32();
+    shield.maxHealth = reader.readI32();
+    return shield;
+}
+
 void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
     writer.writeString(fighter.name);
     writeNativeStruct(writer, fighter.properties);
-    writeNativeStruct(writer, fighter.shield);
+    writeShieldDefinition(writer, fighter.shield);
     writer.writeBool(fighter.hasHsdAsset);
     const int32_t assetIndex = assetIndexFor(package, fighter.hsdAsset);
     if (fighter.hasHsdAsset && assetIndex < 0) {
@@ -745,7 +763,7 @@ FighterDefinition readFighterDefinition(
     FighterDefinition fighter;
     fighter.name = reader.readString();
     fighter.properties = readNativeStruct<FighterProperties>(reader, "fighter properties");
-    fighter.shield = readNativeStruct<ShieldDefinition>(reader, "shield");
+    fighter.shield = readShieldDefinition(reader);
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();
