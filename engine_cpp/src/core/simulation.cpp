@@ -796,6 +796,33 @@ StageDefinition makeBattlefieldTrainingStage() {
     throw std::runtime_error("missing or invalid binary Battlefield stage asset: engine_cpp/data/stages/battlefield_melee.pstage.bin");
 }
 
+static size_t modelVisibilityStateCount(const HsdFighterAnimationAsset& asset) {
+    int maxIndex = -1;
+    for (const HsdMeshBatch& batch : asset.mesh.batches) {
+        if (batch.hiddenByVisibilityTable && batch.modelPartIndex >= 0) {
+            maxIndex = std::max(maxIndex, batch.modelPartIndex);
+        }
+    }
+    return static_cast<size_t>(maxIndex + 1);
+}
+
+static void ensureModelVisibilityDefaults(const FighterDefinition& def, FighterRuntime& fighter) {
+    if (!def.hsdAsset) {
+        fighter.hsdModelVisibilityDefaultStates.clear();
+        fighter.hsdModelVisibilityStates.clear();
+        return;
+    }
+    const size_t count = modelVisibilityStateCount(*def.hsdAsset);
+    if (fighter.hsdModelVisibilityDefaultStates.size() != count) {
+        // HSDLib's renderer resets high-poly visibility groups to state 0.
+        // Character-specific ftParts_80074A4C default overrides are ported separately.
+        fighter.hsdModelVisibilityDefaultStates.assign(count, 0);
+    }
+    if (fighter.hsdModelVisibilityStates.size() != count) {
+        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
+    }
+}
+
 static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec2 position, int facing) {
     FighterRuntime p1;
     p1.fighterDef = fighterDefIndex;
@@ -812,6 +839,7 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighterDefIndex)];
     p1.shieldHealth = def.shield.maxHealth;
     if (def.hsdAsset) {
+        ensureModelVisibilityDefaults(def, p1);
         p1.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
     }
     return p1;
@@ -1007,12 +1035,40 @@ bool fighterCommandFlag(const FighterRuntime& fighter, int flag) {
     return (fighter.commandFlags & (uint32_t{1} << flag)) != 0;
 }
 
+uint32_t fighterCommandVar(const FighterRuntime& fighter, int index) {
+    if (index < 0 || index >= static_cast<int>(fighter.commandVars.size())) {
+        return 0;
+    }
+    return fighter.commandVars[static_cast<size_t>(index)];
+}
+
 void setFighterCommandFlag(FighterRuntime& fighter, int flag, bool value) {
     const uint32_t mask = uint32_t{1} << flag;
     if (value) {
         fighter.commandFlags |= mask;
     } else {
         fighter.commandFlags &= ~mask;
+    }
+}
+
+void setFighterCommandVar(FighterRuntime& fighter, int index, uint32_t value) {
+    if (index < 0 || index >= static_cast<int>(fighter.commandVars.size())) {
+        return;
+    }
+    fighter.commandVars[static_cast<size_t>(index)] = value;
+    setFighterCommandFlag(fighter, index, value != 0);
+}
+
+bool fighterThrowFlag(const FighterRuntime& fighter, int flag) {
+    return (fighter.throwFlags & (uint32_t{1} << flag)) != 0;
+}
+
+void setFighterThrowFlag(FighterRuntime& fighter, int flag, bool value) {
+    const uint32_t mask = uint32_t{1} << flag;
+    if (value) {
+        fighter.throwFlags |= mask;
+    } else {
+        fighter.throwFlags &= ~mask;
     }
 }
 
@@ -1153,8 +1209,12 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
     if (def.hsdAsset) {
+        ensureModelVisibilityDefaults(def, fighter);
+        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
         fighter.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
     } else {
+        fighter.hsdModelVisibilityDefaultStates.clear();
+        fighter.hsdModelVisibilityStates.clear();
         fighter.hsdModelPartAnimations.clear();
     }
     const auto it = std::find_if(world.fighters.begin(), world.fighters.end(), [&](const FighterRuntime& item) {
@@ -1374,6 +1434,13 @@ static bool upSmashInput(const FighterRuntime& fighter, const MeleeCommonData& c
             fighter.input.frames[0].cStick.y >= common.attackHi4StickThresholdYxCC);
 }
 
+static bool upSmashInputNoStickWindow(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed) {
+    return (attackPressed &&
+            fighter.input.frames[0].move.y >= common.attackHi4StickThresholdYxCC) ||
+           (fighter.input.frames[1].cStick.y < common.attackHi4StickThresholdYxCC &&
+            fighter.input.frames[0].cStick.y >= common.attackHi4StickThresholdYxCC);
+}
+
 static bool downSmashInput(const FighterRuntime& fighter, const MeleeCommonData& common, bool attackPressed) {
     return (attackPressed &&
             fighter.input.frames[0].move.y <= common.attackLw4StickThresholdYxD4 &&
@@ -1427,6 +1494,9 @@ static bool isSideSmashCondition(InterruptCondition condition) {
 static bool usesPreTurnFacingForTurnInterrupt(InterruptCondition condition) {
     switch (condition) {
         case InterruptCondition::GrabPressed:
+        case InterruptCondition::SpecialSInput:
+        case InterruptCondition::SpecialHiInput:
+        case InterruptCondition::SpecialLwInput:
         case InterruptCondition::AttackPressed:
         case InterruptCondition::AttackDashPressed:
         case InterruptCondition::AttackS4HiPressed:
@@ -1436,6 +1506,7 @@ static bool usesPreTurnFacingForTurnInterrupt(InterruptCondition condition) {
         case InterruptCondition::AttackS4LwPressed:
         case InterruptCondition::AttackS42Pressed:
         case InterruptCondition::AttackHi4Pressed:
+        case InterruptCondition::AttackHi4NoStickWindowPressed:
         case InterruptCondition::AttackLw4Pressed:
         case InterruptCondition::AttackS3HiPressed:
         case InterruptCondition::AttackS3HiSPressed:
@@ -1517,10 +1588,10 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
         case InterruptCondition::AttackPressed:
             return attackPressed;
         case InterruptCondition::JabFollowupPressed:
-            return attackPressed && fighterCommandFlag(fighter, 2);
+            return attackPressed && fighter.jabFollowupEnabled;
         case InterruptCondition::RapidJabReady:
             return stateName.rfind("Attack1", 0) == 0 &&
-                   fighterCommandFlag(fighter, 5) &&
+                   fighter.rapidJabEnabled &&
                    fighter.attackRapidInputCount >= attr.rapidJabWindow &&
                    hasActionClip(def, 49) &&
                    hasActionClip(def, 50) &&
@@ -1586,6 +1657,8 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                    hasActionClip(def, 295);
         case InterruptCondition::AttackHi4Pressed:
             return upSmashInput(fighter, common, attackPressed);
+        case InterruptCondition::AttackHi4NoStickWindowPressed:
+            return upSmashInputNoStickWindow(fighter, common, attackPressed);
         case InterruptCondition::AttackLw4Pressed:
             return downSmashInput(fighter, common, attackPressed);
         case InterruptCondition::AttackS3HiPressed:
@@ -1674,6 +1747,10 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                     (fighter.input.frames[0].move.y >= common.tapJumpThresholdX70 &&
                      fighter.stickYTiltTimer < common.tapJumpWindowX74) ||
                     fighter.input.frames[0].cStick.y >= common.tapJumpThresholdX70);
+        case InterruptCondition::GuardCatchDashPressed:
+            return (stateName == "GuardOn" || stateName == "GuardReflect") &&
+                   fighter.guardCatchDashBufferTimer > 0 &&
+                   fighter.input.justPressed(ButtonAttack);
         case InterruptCondition::SpotDodgeInput:
             return fighter.grounded && fighter.input.down(ButtonShield) &&
                    ((fighter.input.frames[0].move.y <= common.spotDodgeStickThresholdX314 &&
@@ -2524,6 +2601,26 @@ static void updateFloorSkip(const World& world, FighterRuntime& fighter) {
     }
 }
 
+static bool usesFallSpecialPlatformLandingGate(const std::string& stateName) {
+    return stateName == "Fall" ||
+           stateName == "FallAerial" ||
+           stateName == "JumpF" ||
+           stateName == "JumpB" ||
+           stateName == "JumpAerialF" ||
+           stateName == "JumpAerialB" ||
+           stateName == "FallSpecial" ||
+           stateName == "ItemScrew" ||
+           stateName == "ItemScrewAir" ||
+           stateName == "PassiveWall" ||
+           stateName == "PassiveWallJump" ||
+           stateName == "PassiveCeil" ||
+           stateName == "StopCeil" ||
+           stateName == "DamageIceJump" ||
+           stateName == "CliffJumpAir" ||
+           stateName == "CliffJumpSlow2" ||
+           stateName == "CliffJumpQuick2";
+}
+
 static bool canStandOnSegment(const World& world, const FighterRuntime& fighter, const StageSegment& segment, int segmentIndex) {
     if (!isFloorLine(segment)) {
         return false;
@@ -2533,10 +2630,8 @@ static bool canStandOnSegment(const World& world, const FighterRuntime& fighter,
     }
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const FighterState& state = def.states[static_cast<size_t>(fighter.state)];
-    if ((state.name == "FallSpecial" ||
-         state.name == "ItemScrew" ||
-         state.name == "ItemScrewAir") &&
-        segment.type == SegmentType::Semisolid)
+    if (segment.type == SegmentType::Semisolid &&
+        usesFallSpecialPlatformLandingGate(state.name))
     {
         return fighter.input.frames[0].move.y > def.properties.common.fallSpecialPlatformStickThresholdX25C;
     }
@@ -3770,6 +3865,21 @@ static bool canMaintainGroundOnSegment(const FighterRuntime& fighter, const Stag
     return isFloorLine(segment) && fighter.floorSkipSegment != segmentIndex;
 }
 
+static bool clampToFloorEdge(const World& world, FighterRuntime& fighter, int floorSegmentIndex, int side) {
+    if (!validStageSegmentIndex(world, floorSegmentIndex)) {
+        return false;
+    }
+
+    const StageSegment& floor = world.stage.segments[static_cast<size_t>(floorSegmentIndex)];
+    const Vec2 edge = side < 0 ? segmentLeftEndpoint(floor) : segmentRightEndpoint(floor);
+    fighter.groundSegment = floorSegmentIndex;
+    fighter.groundNormal = segmentNormal(floor);
+    fighter.position.x = edge.x - fighter.ecb.points[3].x;
+    fighter.position.y = edge.y - fighter.ecb.points[3].y;
+    projectGroundVelocity(fighter);
+    return true;
+}
+
 static bool snapToGroundSegment(const World& world, FighterRuntime& fighter, int segmentIndex, Vec2 bottom) {
     MeleeSurfaceProjection projection;
     if (!meleeProjectFloorFromLine(world, fighter, segmentIndex, bottom, projection)) {
@@ -3810,6 +3920,13 @@ static bool meleeMaintainCurrentFloor(const World& world, FighterRuntime& fighte
                 ? effectiveLineKind(world.stage.segments[static_cast<size_t>(linkedNonFloor)]) == SegmentLineKind::RightWall
                 : effectiveLineKind(world.stage.segments[static_cast<size_t>(linkedNonFloor)]) == SegmentLineKind::LeftWall);
         if (linkedFloor < 0 && !blockedByWall) {
+            // ft_80084104 uses the no-slideoff ground collision helper
+            // (mpColl_8004B2DC) for common grounded attacks and escapes.
+            // Character-specific exceptions, such as Kirby dash attack, keep
+            // allowSlideoff set and use their own ground-to-air callback.
+            if (!currentState(world, fighter).allowSlideoff) {
+                return clampToFloorEdge(world, fighter, floorSegmentIndex, side);
+            }
             return false;
         }
     }
@@ -3982,6 +4099,44 @@ static const HsdActionScript* actionScriptForState(const HsdFighterAnimationAsse
     return nullptr;
 }
 
+static void applySetJumpStateSubaction(const FighterDefinition& def, FighterRuntime& fighter, uint32_t state) {
+    switch (state) {
+    case 0:
+        // ftCommon_8007D7FC returns the fighter to GA_Ground and restores jumps.
+        fighter.grounded = true;
+        fighter.groundVelocity = velocityAlongGround(fighter.fighterVelocity, fighter.groundNormal);
+        fighter.jumpsUsed = 0;
+        fighter.wallJumpsUsed = 0;
+        fighter.fighterVelocity = {};
+        unlockFighterEcb(fighter);
+        break;
+    case 1:
+        // ftCommon_8007D5D4 enters GA_Air with one jump spent and a 10-frame ECB lock.
+        fighter.grounded = false;
+        fighter.groundSegment = -1;
+        fighter.groundVelocity = 0;
+        fighter.groundAccel = 0;
+        fighter.groundAccelSecondary = 0;
+        fighter.groundAttackerShieldKnockbackVelocity = 0;
+        fighter.jumpsUsed = 1;
+        lockFighterEcb(fighter, 10);
+        break;
+    case 2:
+        // ftCommon_8007D60C enters GA_Air with every jump spent and a 5-frame ECB lock.
+        fighter.grounded = false;
+        fighter.groundSegment = -1;
+        fighter.groundVelocity = 0;
+        fighter.groundAccel = 0;
+        fighter.groundAccelSecondary = 0;
+        fighter.groundAttackerShieldKnockbackVelocity = 0;
+        fighter.jumpsUsed = def.properties.maxJumps;
+        lockFighterEcb(fighter, 5);
+        break;
+    default:
+        break;
+    }
+}
+
 static void executeSubaction(const FighterDefinition& def, FighterRuntime& fighter, const Subaction& sub) {
     if (sub.type == SubactionType::ClearHitboxes) {
         fighter.activeHitboxes.clear();
@@ -4012,6 +4167,18 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         }
         return;
     }
+    if (sub.type == SubactionType::SetHitboxInteraction) {
+        // ftAction_80071708 type 0 writes x42_b5, which fighter collision
+        // checks before a hit capsule can strike another fighter.
+        if (sub.flag == 0) {
+            for (ActiveHitbox& active : fighter.activeHitboxes) {
+                if (active.def.hitboxId == sub.hitbox.hitboxId) {
+                    active.def.hitFighters = sub.flagValue != 0;
+                }
+            }
+        }
+        return;
+    }
     if (sub.type == SubactionType::SetInterruptible) {
         fighter.interruptibleFrame = sub.interruptibleFrame < 0 ? frameInState(fighter) : sub.interruptibleFrame;
         return;
@@ -4021,7 +4188,7 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         return;
     }
     if (sub.type == SubactionType::SetFlag) {
-        setFighterCommandFlag(fighter, sub.flag, sub.flagValue);
+        setFighterCommandVar(fighter, sub.flag, sub.flagValue);
         return;
     }
     if (sub.type == SubactionType::SetThrowFlag) {
@@ -4029,12 +4196,33 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         // throw_flags_b3 and hit_idx 1 to throw_flags_b4. Keep those bit
         // numbers literal so throw code mirrors ftCo_800DD724's consumers.
         if (sub.flag == 0 || sub.flag == 1) {
-            setFighterCommandFlag(fighter, sub.flag + 3, true);
+            setFighterThrowFlag(fighter, sub.flag + 3, true);
+        }
+        return;
+    }
+    if (sub.type == SubactionType::SetThrowFlagLiteral) {
+        // ftAction_80071974/908/92C set throw_flags_b0/b1/b2 directly.
+        setFighterThrowFlag(fighter, sub.flag, sub.flagValue != 0);
+        return;
+    }
+    if (sub.type == SubactionType::EnableJabFollowup) {
+        // ftAction_80071AE8 sets x2218_b1 when disabled == 0. The bunny hood
+        // override path depends on item state this engine does not model yet.
+        if (sub.flagValue == 0) {
+            fighter.jabFollowupEnabled = true;
         }
         return;
     }
     if (sub.type == SubactionType::SetJabRapid) {
-        setFighterCommandFlag(fighter, 5, sub.flagValue);
+        fighter.rapidJabEnabled = sub.flagValue != 0;
+        return;
+    }
+    if (sub.type == SubactionType::SetJumpState) {
+        applySetJumpStateSubaction(def, fighter, sub.flagValue);
+        return;
+    }
+    if (sub.type == SubactionType::SetBodyCollisionState) {
+        fighter.bodyCollisionState = sub.hurtboxState;
         return;
     }
     if (sub.type == SubactionType::StartSmashCharge) {
@@ -4048,6 +4236,33 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
         }
         return;
     }
+    if (sub.type == SubactionType::SetModelVisibility) {
+        if (sub.modelPartIndex >= 0) {
+            ensureModelVisibilityDefaults(def, fighter);
+            if (sub.modelPartIndex >= static_cast<int>(fighter.hsdModelVisibilityStates.size())) {
+                fighter.hsdModelVisibilityStates.resize(static_cast<size_t>(sub.modelPartIndex + 1), 0);
+            }
+            fighter.hsdModelVisibilityStates[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartState;
+        }
+        return;
+    }
+    if (sub.type == SubactionType::RevertModelVisibility) {
+        // ftParts_80074A8C copies every x5F4_arr.prev into x5F4_arr.idx.
+        ensureModelVisibilityDefaults(def, fighter);
+        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
+        return;
+    }
+    if (sub.type == SubactionType::RemoveModelVisibility) {
+        // ftParts_80074ACC hides every visibility group by writing idx = -1.
+        ensureModelVisibilityDefaults(def, fighter);
+        std::fill(fighter.hsdModelVisibilityStates.begin(), fighter.hsdModelVisibilityStates.end(), -1);
+        return;
+    }
+    if (sub.type == SubactionType::SetFighterVisibility) {
+        // ftAction_80071FA0 writes x221E_b5; ftDrawCommon skips model display while set.
+        fighter.fighterInvisible = sub.flagValue != 0;
+        return;
+    }
     if (sub.type == SubactionType::SetModelPartAnimation) {
         if (sub.modelPartIndex >= 0) {
             if (def.hsdAsset && fighter.hsdModelPartAnimations.size() != def.hsdAsset->modelPartAnimations.size()) {
@@ -4056,6 +4271,15 @@ static void executeSubaction(const FighterDefinition& def, FighterRuntime& fight
             if (sub.modelPartIndex < static_cast<int>(fighter.hsdModelPartAnimations.size())) {
                 fighter.hsdModelPartAnimations[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartAnimation;
             }
+        }
+        return;
+    }
+    if (sub.type == SubactionType::SelfDamage) {
+        // ftAction_80072BF4 calls Fighter_TakeDamage_8006CC7C with this signed
+        // amount; the current runtime models the percent side of that helper.
+        fighter.percent += sub.selfDamage;
+        if (fighter.percent > fx(999)) {
+            fighter.percent = fx(999);
         }
         return;
     }
@@ -4182,15 +4406,32 @@ static void processInterrupts(World& world, FighterRuntime& fighter) {
             }
             if (state.name == "Dash" &&
                 (rule.condition == InterruptCondition::ReverseDashInput ||
+                 rule.condition == InterruptCondition::TauntPressed ||
                  rule.condition == InterruptCondition::ShieldReflectInput ||
                  rule.condition == InterruptCondition::ShieldHeld))
             {
+                // ftCo_Dash_IASA falls through to x54 decay after reverse dash
+                // and after ftCo_800DE9D8 accepts a Dash taunt.
                 fighter.groundVelocity -= fxMul(
                     fxMul(fighter.groundVelocity, def.properties.common.dashDecayX54),
                     groundFrictionMultiplier(world, fighter));
                 projectGroundVelocity(fighter);
             }
+            const bool seedGuardCatchDashBuffer =
+                (state.name == "Dash" || state.name == "Run" || state.name == "RunDirect") &&
+                (rule.targetState == "GuardOn" || rule.targetState == "GuardReflect");
+            const bool preserveGuardCatchDashBuffer =
+                state.name == "GuardOn" &&
+                rule.targetState == "GuardReflect";
+            const int previousGuardCatchDashBuffer = fighter.guardCatchDashBufferTimer;
             changeFighterState(world, fighter, rule.targetState, rule.lagFrames, rule.blendFrames);
+            if (seedGuardCatchDashBuffer) {
+                // ftCo_Dash/Run IASA call ftCo_80091B9C after entering guard,
+                // seeding mv.co.guard.x24 from common x68 for A -> CatchDash.
+                fighter.guardCatchDashBufferTimer = def.properties.common.attackDashGrabBufferFramesX68;
+            } else if (preserveGuardCatchDashBuffer) {
+                fighter.guardCatchDashBufferTimer = previousGuardCatchDashBuffer;
+            }
             return;
         }
         if (useTurnFacing) {
@@ -4853,7 +5094,28 @@ static bool proneDamageStateName(const std::string& name) {
 }
 
 static const char* downDamageStateNameForProneState(const std::string& name) {
+    // ftCo_8009F184 only checks DownWaitU; DownBoundU and DownDamageU fall
+    // through to DownDamageD despite being face-up states.
     return name == "DownWaitU" ? "DownDamageU" : "DownDamageD";
+}
+
+static bool applyWeakProneDamageState(World& world, FighterRuntime& victim, const std::string& victimStateName, Fix damage, const MeleeCommonData& common) {
+    if (!victim.grounded || !proneDamageStateName(victimStateName) || damage >= fx(common.downDamageThresholdX428)) {
+        return false;
+    }
+
+    // ftCo_8009F0F0 catches weak damage to DownBound/DownWait/DownDamage
+    // before the ordinary damage state path can launch the prone fighter.
+    victim.fighterVelocity = {};
+    victim.knockbackVelocity = {};
+    victim.knockbackDecay = {};
+    victim.groundVelocity = 0;
+    victim.groundKnockbackVelocity = 0;
+    victim.groundAccel = 0;
+    victim.groundAccelSecondary = 0;
+    changeFighterState(world, victim, downDamageStateNameForProneState(victimStateName));
+    victim.downWaitTimer = std::max(1, victim.hitstun);
+    return true;
 }
 
 static const char* airDamageStateName(int level) {
@@ -5015,7 +5277,7 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
             victim.fighterVelocity = knockbackVelocity;
             victim.groundVelocity = 0;
             victim.groundKnockbackVelocity = 0;
-            victim.jumpsUsed = std::max(1, victim.jumpsUsed);
+            victim.jumpsUsed = 1;
         }
         victim.knockbackVelocity = {};
         victim.knockbackDecay = {};
@@ -5099,12 +5361,21 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
         victim.groundKnockbackVelocity = 0;
         victim.groundAccel = 0;
         victim.groundAccelSecondary = 0;
+        if (wasGrounded) {
+            // ftCo_800D3004 calls ftCommon_8007D5D4 before grounded DamageScrew.
+            victim.jumpsUsed = 1;
+            lockFighterEcb(victim, 10);
+        }
         changeFighterState(world, victim, wasGrounded ? "DamageScrew" : "DamageScrewAir");
         return;
     }
 
+    if (applyWeakProneDamageState(world, victim, victimStateName, hitbox.damage, common)) {
+        return;
+    }
+
     if (wasGrounded && launchOffGround) {
-        victim.jumpsUsed = std::max(1, victim.jumpsUsed);
+        victim.jumpsUsed = 1;
         lockFighterEcb(victim, 10);
     }
 
@@ -5118,10 +5389,6 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
         victim.grounded = false;
         victim.groundSegment = -1;
         changeFighterState(world, victim, airDamageStateName(victim.damageLevel));
-    } else if (wasGrounded && proneDamageStateName(victimStateName) && hitbox.damage < fx(common.downDamageThresholdX428)) {
-        victim.grounded = true;
-        changeFighterState(world, victim, downDamageStateNameForProneState(victimStateName));
-        victim.downWaitTimer = std::max(1, victim.hitstun);
     } else {
         victim.grounded = wasGrounded;
         changeFighterState(world, victim, groundedDamageStateName(victim.damageLevel, victim.damageHurtboxRegion));
@@ -5131,6 +5398,7 @@ static void applyHit(World& world, size_t attackerIndex, FighterRuntime& attacke
 static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterRuntime& attacker, FighterRuntime& victim, const HitboxDefinition& hitbox, bool forceDamageFlyTopState) {
     const FighterDefinition& victimDef = world.fighterDefs[static_cast<size_t>(victim.fighterDef)];
     const MeleeCommonData& common = victimDef.properties.common;
+    const std::string victimStateName = currentState(world, victim).name;
     const Fix kb = calculateThrowKnockback(hitbox, victimDef, victim);
     const bool wasGrounded = victim.grounded;
     const int damageFacing = -attacker.facing;
@@ -5199,8 +5467,12 @@ static void applyThrowReleaseDamage(World& world, size_t attackerIndex, FighterR
         victim.knockbackDecay = {};
     }
 
+    if (!forceDamageFlyTopState && applyWeakProneDamageState(world, victim, victimStateName, hitbox.damage, common)) {
+        return;
+    }
+
     if (wasGrounded && launchOffGround) {
-        victim.jumpsUsed = std::max(1, victim.jumpsUsed);
+        victim.jumpsUsed = 1;
         lockFighterEcb(victim, 10);
     }
 
@@ -5530,7 +5802,7 @@ static bool changeCaptureLowToHighAfterMeleeAlign(World& world, FighterRuntime& 
     fighter.groundAccel = 0;
     fighter.groundAccelSecondary = 0;
     fighter.groundAttackerShieldKnockbackVelocity = 0;
-    fighter.jumpsUsed = std::max(1, fighter.jumpsUsed);
+    fighter.jumpsUsed = 1;
     lockFighterEcb(fighter, 10);
     unlockFighterEcb(fighter);
     changeFighterState(world, fighter, target, 0, kDisableAnimationBlendFrames);
@@ -5656,10 +5928,10 @@ static const HitboxDefinition* throwHitboxForRelease(FighterRuntime& attacker) {
 
 static void processThrowRelease(World& world, size_t attackerIndex) {
     FighterRuntime& attacker = world.fighters[attackerIndex];
-    if (!fighterCommandFlag(attacker, 3) || !isThrowStateNameSim(currentState(world, attacker).name)) {
+    if (!fighterThrowFlag(attacker, 3) || !isThrowStateNameSim(currentState(world, attacker).name)) {
         return;
     }
-    setFighterCommandFlag(attacker, 3, false);
+    setFighterThrowFlag(attacker, 3, false);
     const int victimIndex = attacker.grabbedFighter;
     if (!validFighterIndex(world, victimIndex)) {
         return;
@@ -5782,12 +6054,16 @@ static void resolveHitboxClanks(World& world) {
             int aDamage = 0;
             int bDamage = 0;
             for (const ActiveHitbox& aHitbox : a.activeHitboxes) {
-                if (aHitbox.def.isGrab || (!aHitbox.def.canClank && !aHitbox.def.reboundsOnClank)) {
+                if (!aHitbox.def.hitFighters || aHitbox.def.isGrab ||
+                    (!aHitbox.def.canClank && !aHitbox.def.reboundsOnClank))
+                {
                     continue;
                 }
                 const Capsule aCapsule{aHitbox.previous, aHitbox.current, aHitbox.def.radius};
                 for (const ActiveHitbox& bHitbox : b.activeHitboxes) {
-                    if (bHitbox.def.isGrab || (!bHitbox.def.canClank && !bHitbox.def.reboundsOnClank)) {
+                    if (!bHitbox.def.hitFighters || bHitbox.def.isGrab ||
+                        (!bHitbox.def.canClank && !bHitbox.def.reboundsOnClank))
+                    {
                         continue;
                     }
                     const Capsule bCapsule{bHitbox.previous, bHitbox.current, bHitbox.def.radius};
@@ -5813,6 +6089,9 @@ static void resolveHitboxClanks(World& world) {
 static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
     FighterRuntime& attacker = world.fighters[attackerIndex];
     for (ActiveHitbox& hitbox : attacker.activeHitboxes) {
+        if (!hitbox.def.hitFighters) {
+            continue;
+        }
         for (size_t victimIndex = 0; victimIndex < world.fighters.size(); ++victimIndex) {
             if (victimIndex == attackerIndex) {
                 continue;
@@ -5866,7 +6145,8 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
             }
             if (useImportedHurtboxes) {
                 for (size_t hurtboxIndex = 0; hurtboxIndex < victim.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
-                    const HurtboxState state = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
+                    const HurtboxState capsuleState = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
+                    const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
                     if (state == HurtboxState::Intangible) {
                         continue;
                     }
@@ -5893,7 +6173,8 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
             }
             for (size_t hurtboxIndex = 0; hurtboxIndex < victimDef.hurtboxes.size(); ++hurtboxIndex) {
                 const HurtboxDefinition& hurtbox = victimDef.hurtboxes[hurtboxIndex];
-                const HurtboxState state = victim.hurtboxStates[hurtboxIndex] == HurtboxState::Normal ? hurtbox.state : victim.hurtboxStates[hurtboxIndex];
+                const HurtboxState capsuleState = victim.hurtboxStates[hurtboxIndex] == HurtboxState::Normal ? hurtbox.state : victim.hurtboxStates[hurtboxIndex];
+                const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
                 if (state == HurtboxState::Intangible) {
                     continue;
                 }
@@ -6047,7 +6328,12 @@ WorldSnapshot saveWorld(const World& world) {
         item.throwHitboxes = fighter.throwHitboxes;
         item.throwHitboxActive = fighter.throwHitboxActive;
         item.stateFlags = fighter.stateFlags;
+        item.commandVars = fighter.commandVars;
         item.commandFlags = fighter.commandFlags;
+        item.throwFlags = fighter.throwFlags;
+        item.jabFollowupEnabled = fighter.jabFollowupEnabled;
+        item.rapidJabEnabled = fighter.rapidJabEnabled;
+        item.fighterInvisible = fighter.fighterInvisible;
         item.ecb = fighter.ecb;
         item.desiredEcb = fighter.desiredEcb;
         item.previousEcb = fighter.previousEcb;
@@ -6095,6 +6381,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.attack100ContinuePressed = fighter.attack100ContinuePressed;
         item.guardMinHoldTimer = fighter.guardMinHoldTimer;
         item.guardSetoffTimer = fighter.guardSetoffTimer;
+        item.guardCatchDashBufferTimer = fighter.guardCatchDashBufferTimer;
         item.guardReleaseQueued = fighter.guardReleaseQueued;
         item.guardPoseFrame = fighter.guardPoseFrame;
         item.guardPoseBlend = fighter.guardPoseBlend;
@@ -6117,8 +6404,11 @@ WorldSnapshot saveWorld(const World& world) {
         item.hsdJointWorldTransforms = fighter.hsdJointWorldTransforms;
         item.hsdJointWorldPositions = fighter.hsdJointWorldPositions;
         item.hsdHurtboxCapsules = fighter.hsdHurtboxCapsules;
+        item.hsdModelVisibilityDefaultStates = fighter.hsdModelVisibilityDefaultStates;
+        item.hsdModelVisibilityStates = fighter.hsdModelVisibilityStates;
         item.hsdModelPartAnimations = fighter.hsdModelPartAnimations;
         item.hurtboxStates = fighter.hurtboxStates;
+        item.bodyCollisionState = fighter.bodyCollisionState;
         item.activeHitboxes = fighter.activeHitboxes;
         item.fightersHitThisAction = fighter.fightersHitThisAction;
         snapshot.fighters.push_back(item);
@@ -6195,7 +6485,12 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.throwHitboxes = item.throwHitboxes;
         fighter.throwHitboxActive = item.throwHitboxActive;
         fighter.stateFlags = item.stateFlags;
+        fighter.commandVars = item.commandVars;
         fighter.commandFlags = item.commandFlags;
+        fighter.throwFlags = item.throwFlags;
+        fighter.jabFollowupEnabled = item.jabFollowupEnabled;
+        fighter.rapidJabEnabled = item.rapidJabEnabled;
+        fighter.fighterInvisible = item.fighterInvisible;
         fighter.ecb = item.ecb;
         fighter.desiredEcb = item.desiredEcb;
         fighter.previousEcb = item.previousEcb;
@@ -6243,6 +6538,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.attack100ContinuePressed = item.attack100ContinuePressed;
         fighter.guardMinHoldTimer = item.guardMinHoldTimer;
         fighter.guardSetoffTimer = item.guardSetoffTimer;
+        fighter.guardCatchDashBufferTimer = item.guardCatchDashBufferTimer;
         fighter.guardReleaseQueued = item.guardReleaseQueued;
         fighter.guardPoseFrame = item.guardPoseFrame;
         fighter.guardPoseBlend = item.guardPoseBlend;
@@ -6265,8 +6561,11 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.hsdJointWorldTransforms = item.hsdJointWorldTransforms;
         fighter.hsdJointWorldPositions = item.hsdJointWorldPositions;
         fighter.hsdHurtboxCapsules = item.hsdHurtboxCapsules;
+        fighter.hsdModelVisibilityDefaultStates = item.hsdModelVisibilityDefaultStates;
+        fighter.hsdModelVisibilityStates = item.hsdModelVisibilityStates;
         fighter.hsdModelPartAnimations = item.hsdModelPartAnimations;
         fighter.hurtboxStates = item.hurtboxStates;
+        fighter.bodyCollisionState = item.bodyCollisionState;
         fighter.activeHitboxes = item.activeHitboxes;
         fighter.fightersHitThisAction = item.fightersHitThisAction;
         world.fighters.push_back(fighter);

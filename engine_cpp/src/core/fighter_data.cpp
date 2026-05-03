@@ -179,6 +179,155 @@ static std::vector<InterruptRule> waitIasaInterrupts(bool includeTaunt = false) 
     return rules;
 }
 
+static std::vector<InterruptRule> walkIasaInterrupts(const std::string& currentWalkState) {
+    std::vector<InterruptRule> rules = {
+        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+    };
+    appendRules(rules, groundedSpecialInterrupts());
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    for (InterruptRule rule : walkInputInterrupts()) {
+        if (rule.targetState != currentWalkState) {
+            rules.push_back(rule);
+        }
+    }
+    return rules;
+}
+
+static std::vector<InterruptRule> squatIasaInterrupts() {
+    std::vector<InterruptRule> rules = groundedSpecialInterrupts();
+    appendRules(rules, {
+        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+    });
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    return rules;
+}
+
+static std::vector<InterruptRule> squatWaitIasaInterrupts() {
+    std::vector<InterruptRule> rules = {
+        interrupt("SpecialLw", InterruptCondition::SpecialLwInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialHi", InterruptCondition::SpecialHiInput, GroundRequirement::OnlyGrounded),
+    };
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("SquatRv", InterruptCondition::SquatReleaseInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    return rules;
+}
+
+static std::vector<InterruptRule> squatRvIasaInterrupts() {
+    std::vector<InterruptRule> rules = {
+        interrupt("SpecialLw", InterruptCondition::SpecialLwInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialHi", InterruptCondition::SpecialHiInput, GroundRequirement::OnlyGrounded),
+    };
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    appendRules(rules, walkInputInterrupts());
+    return rules;
+}
+
+static std::vector<InterruptRule> landingIasaInterrupts(int landingLag) {
+    std::vector<InterruptRule> rules = groundedSpecialInterrupts();
+    appendRules(rules, {
+        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+    });
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        timedInterrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded, landingLag, landingLag + 1),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    appendRules(rules, walkInputInterrupts());
+    return rules;
+}
+
+static std::vector<InterruptRule> turnIasaInterrupts() {
+    std::vector<InterruptRule> rules = {
+        interrupt("SpecialS", InterruptCondition::SpecialSInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialLw", InterruptCondition::SpecialLwInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialHi", InterruptCondition::SpecialHiInput, GroundRequirement::OnlyGrounded),
+        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+    };
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    return rules;
+}
+
+static std::vector<InterruptRule> ottottoIasaInterrupts() {
+    std::vector<InterruptRule> rules = groundedSpecialInterrupts();
+    appendRules(rules, {
+        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+    });
+    appendRules(rules, groundedAttackInterrupts(false));
+    appendRules(rules, {
+        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
+        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
+        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
+        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
+        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
+        interrupt("WalkSlow", InterruptCondition::TeeterWalkInput, GroundRequirement::OnlyGrounded),
+        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
+    });
+    return rules;
+}
+
+static std::vector<InterruptRule> guardOnIasaInterrupts(int reflectInputWindow) {
+    std::vector<InterruptRule> rules;
+    if (reflectInputWindow > 0) {
+        rules.push_back(activeUntilInterrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded, reflectInputWindow));
+    }
+    appendRules(rules, {
+        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeF", InterruptCondition::RollForwardInput, GroundRequirement::OnlyGrounded),
+        interrupt("EscapeB", InterruptCondition::RollBackwardInput, GroundRequirement::OnlyGrounded),
+        interrupt("CatchDash", InterruptCondition::GuardCatchDashPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+        interrupt("JumpSquat", InterruptCondition::ShieldJumpPressed, GroundRequirement::OnlyGrounded),
+    });
+    return rules;
+}
+
 static std::vector<InterruptRule> jabIasaInterrupts(std::string followupState) {
     std::vector<InterruptRule> rules = groundedAttackInterrupts(false, false);
     rules.push_back(alwaysInterrupt("Attack100Start", InterruptCondition::RapidJabReady, GroundRequirement::OnlyGrounded));
@@ -242,43 +391,8 @@ static std::vector<InterruptRule> downTiltIasaInterrupts() {
     return rules;
 }
 
-static bool tauntPrecedesCondition(InterruptCondition condition) {
-    switch (condition) {
-        case InterruptCondition::JumpPressed:
-        case InterruptCondition::RunJumpPressed:
-        case InterruptCondition::DashInput:
-        case InterruptCondition::RunInput:
-        case InterruptCondition::TurnRunInput:
-        case InterruptCondition::RunBrakeInput:
-        case InterruptCondition::RunBrakeTurnRunInput:
-        case InterruptCondition::SquatInput:
-        case InterruptCondition::SquatReleaseInput:
-        case InterruptCondition::TurnInput:
-        case InterruptCondition::HorizontalWalkSlow:
-        case InterruptCondition::HorizontalWalkMiddle:
-        case InterruptCondition::HorizontalWalkFast:
-        case InterruptCondition::TeeterWalkInput:
-        case InterruptCondition::WaitInput:
-        case InterruptCondition::BecameAirborne:
-            return true;
-        default:
-            return false;
-    }
-}
-
-static void insertTauntInterrupt(FighterState& state) {
-    const InterruptRule rule = tauntInterrupt();
-    auto position = std::find_if(state.interrupts.begin(), state.interrupts.end(), [](const InterruptRule& item) {
-        return tauntPrecedesCondition(item.condition);
-    });
-    state.interrupts.insert(position, rule);
-}
-
 static std::vector<InterruptRule> airborneActionInterrupts(bool includeWallJump = true) {
     std::vector<InterruptRule> rules = airborneSpecialInterrupts();
-    if (includeWallJump) {
-        rules.push_back(interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne));
-    }
     appendRules(rules, {
         interrupt("EscapeAir", InterruptCondition::AirDodgePressed, GroundRequirement::OnlyAirborne),
         interrupt("AirAttackHi", InterruptCondition::AerialAttackHiPressed, GroundRequirement::OnlyAirborne),
@@ -289,6 +403,11 @@ static std::vector<InterruptRule> airborneActionInterrupts(bool includeWallJump 
         interrupt("JumpAerialB", InterruptCondition::AerialJumpBackwardPressed, GroundRequirement::OnlyAirborne),
         interrupt("JumpAerialF", InterruptCondition::AerialJumpForwardPressed, GroundRequirement::OnlyAirborne),
     });
+    if (includeWallJump) {
+        // ftCo_Fall/Jump/JumpAerial run IASA first; ft_800831CC/835B0 checks
+        // ftWallJump_8008169C from collision afterward.
+        rules.push_back(interrupt("PassiveWallJump", InterruptCondition::WallJumpInput, GroundRequirement::OnlyAirborne));
+    }
     return rules;
 }
 
@@ -302,6 +421,17 @@ static std::vector<InterruptRule> damageFallActionInterrupts() {
         interrupt("JumpAerialB", InterruptCondition::AerialJumpBackwardPressed, GroundRequirement::OnlyAirborne),
         interrupt("JumpAerialF", InterruptCondition::AerialJumpForwardPressed, GroundRequirement::OnlyAirborne),
     };
+}
+
+static std::vector<InterruptRule> attackAirIasaInterrupts() {
+    std::vector<InterruptRule> rules = airborneSpecialInterrupts();
+    appendRules(rules, {
+        // ftCo_AttackAir*_IASA also checks item throw/pickup and tether air
+        // catch helpers here; those systems are not implemented yet.
+        interrupt("JumpAerialB", InterruptCondition::AerialJumpBackwardPressed, GroundRequirement::OnlyAirborne),
+        interrupt("JumpAerialF", InterruptCondition::AerialJumpForwardPressed, GroundRequirement::OnlyAirborne),
+    });
+    return rules;
 }
 
 static Subaction wait(int frames) {
@@ -588,71 +718,24 @@ FighterDefinition makeDebugRook() {
     waitState.onEnter = {call("common_enter")};
     waitState.onFrame = {call("process_grounded")};
     waitState.onAirborne = {call("teeter_or_airborne")};
-    waitState.interrupts = groundedSpecialInterrupts();
-    appendRules(waitState.interrupts, {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
-        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    });
-    appendRules(waitState.interrupts, walkInputInterrupts());
+    waitState.interrupts = waitIasaInterrupts(true);
+    waitState.interrupts.push_back(interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne));
 
     FighterState walkSlow = waitState;
     walkSlow.name = "WalkSlow";
     walkSlow.animation = "WalkSlow";
     walkSlow.onFrame = {call("process_grounded"), call("process_walk")};
-    walkSlow.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
-        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkFast", InterruptCondition::HorizontalWalkFast, GroundRequirement::OnlyGrounded),
-        interrupt("WalkMiddle", InterruptCondition::HorizontalWalkMiddle, GroundRequirement::OnlyGrounded),
-        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
+    walkSlow.interrupts = walkIasaInterrupts("WalkSlow");
 
     FighterState walkMiddle = walkSlow;
     walkMiddle.name = "WalkMiddle";
     walkMiddle.animation = "WalkMiddle";
-    walkMiddle.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
-        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkFast", InterruptCondition::HorizontalWalkFast, GroundRequirement::OnlyGrounded),
-        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
-        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
+    walkMiddle.interrupts = walkIasaInterrupts("WalkMiddle");
 
     FighterState walkFast = walkSlow;
     walkFast.name = "WalkFast";
     walkFast.animation = "WalkFast";
-    walkFast.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
-        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkMiddle", InterruptCondition::HorizontalWalkMiddle, GroundRequirement::OnlyGrounded),
-        interrupt("WalkSlow", InterruptCondition::HorizontalWalkSlow, GroundRequirement::OnlyGrounded),
-        interrupt("Wait", InterruptCondition::WaitInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
+    walkFast.interrupts = walkIasaInterrupts("WalkFast");
 
     FighterState dashState;
     dashState.name = "Dash";
@@ -666,11 +749,14 @@ FighterDefinition makeDebugRook() {
         setFlag(0, true),
     };
     dashState.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialS", InterruptCondition::SpecialSInput, GroundRequirement::OnlyGrounded),
+        interrupt("CatchDash", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackDash", InterruptCondition::AttackDashPressed, GroundRequirement::OnlyGrounded),
         timedInterrupt("Turn", InterruptCondition::ReverseDashInput, GroundRequirement::OnlyGrounded, fighter.properties.common.dashEarlyInterruptWindowX44 + 1),
         activeUntilInterrupt("EscapeF", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded, fighter.properties.common.dashItemThrowWindowX48 + 1),
         interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
         interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
         interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Run", InterruptCondition::RunInput, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
@@ -685,9 +771,15 @@ FighterDefinition makeDebugRook() {
     runState.onFrame = {call("process_run")};
     runState.onAirborne = {call("regular_airborne")};
     runState.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialS", InterruptCondition::SpecialSInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialHi", InterruptCondition::SpecialHiInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialN", InterruptCondition::SpecialNInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialLw", InterruptCondition::SpecialLwInput, GroundRequirement::OnlyGrounded),
+        interrupt("CatchDash", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackDash", InterruptCondition::AttackDashPressed, GroundRequirement::OnlyGrounded),
         interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
         interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
         interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("TurnRun", InterruptCondition::TurnRunInput, GroundRequirement::OnlyGrounded),
         interrupt("RunBrake", InterruptCondition::RunBrakeInput, GroundRequirement::OnlyGrounded),
@@ -700,9 +792,15 @@ FighterDefinition makeDebugRook() {
     runDirect.onEnter = {call("common_enter"), call("enter_run_direct")};
     runDirect.onFrame = {call("process_run_direct")};
     runDirect.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialS", InterruptCondition::SpecialSInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialHi", InterruptCondition::SpecialHiInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialN", InterruptCondition::SpecialNInput, GroundRequirement::OnlyGrounded),
+        interrupt("SpecialLw", InterruptCondition::SpecialLwInput, GroundRequirement::OnlyGrounded),
+        interrupt("CatchDash", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
+        interrupt("AttackDash", InterruptCondition::AttackDashPressed, GroundRequirement::OnlyGrounded),
         interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
         interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
+        tauntInterrupt(),
         interrupt("JumpSquat", InterruptCondition::RunJumpPressed, GroundRequirement::OnlyGrounded),
         interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
     };
@@ -731,14 +829,7 @@ FighterDefinition makeDebugRook() {
     turnState.onAirborne = {call("regular_airborne")};
     turnState.onAnimationFinishedState = "Wait";
     turnState.onAnimationFinishedBlendFrames = kDisableAnimationBlendFrames;
-    turnState.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
+    turnState.interrupts = turnIasaInterrupts();
 
     FighterState turnRun;
     turnRun.name = "TurnRun";
@@ -759,6 +850,11 @@ FighterDefinition makeDebugRook() {
     jumpSquat.animationLengthFrames = fighter.properties.jumpStartupLag;
     jumpSquat.onEnter = {call("common_enter")};
     jumpSquat.onFrame = {call("process_jump_squat")};
+    // ftCo_KneeBend_IASA checks catch and AttackHi4NoD0 before short-hop state.
+    jumpSquat.interrupts = {
+        activeUntilInterrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded, fighter.properties.jumpStartupLag),
+        activeUntilInterrupt("AttackHi4", InterruptCondition::AttackHi4NoStickWindowPressed, GroundRequirement::OnlyGrounded, fighter.properties.jumpStartupLag),
+    };
 
     FighterState squat;
     squat.name = "Squat";
@@ -768,13 +864,7 @@ FighterDefinition makeDebugRook() {
     squat.onFrame = {call("process_squat")};
     squat.onAirborne = {call("regular_airborne")};
     squat.onAnimationFinishedState = "SquatWait";
-    squat.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
+    squat.interrupts = squatIasaInterrupts();
 
     FighterState squatWait = squat;
     squatWait.name = "SquatWait";
@@ -782,15 +872,7 @@ FighterDefinition makeDebugRook() {
     squatWait.animationLengthFrames = 60;
     squatWait.loopAnimation = true;
     squatWait.onAnimationFinishedState = "";
-    squatWait.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("SquatRv", InterruptCondition::SquatReleaseInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
+    squatWait.interrupts = squatWaitIasaInterrupts();
 
     FighterState squatRv;
     squatRv.name = "SquatRv";
@@ -800,14 +882,7 @@ FighterDefinition makeDebugRook() {
     squatRv.onFrame = {call("process_landing")};
     squatRv.onAirborne = {call("regular_airborne")};
     squatRv.onAnimationFinishedState = "Wait";
-    squatRv.interrupts = {
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
-    appendRules(squatRv.interrupts, walkInputInterrupts());
+    squatRv.interrupts = squatRvIasaInterrupts();
 
     FighterState fallState;
     fallState.name = "Fall";
@@ -832,6 +907,9 @@ FighterDefinition makeDebugRook() {
     attack11.onAirborne = {call("regular_airborne")};
     attack11.onAnimationFinishedState = "Wait";
     attack11.useAnimPhysics = true;
+    // Common grounded attacks use ft_80084104, which keeps ground-only
+    // collision states on the floor instead of letting TransN slide off edges.
+    attack11.allowSlideoff = false;
     attack11.initialInterruptibleFrame = 1000000;
     attack11.action = {
         wait(3),
@@ -931,7 +1009,7 @@ FighterDefinition makeDebugRook() {
     airAttack.onLanding = {call("aerial_landing_attack")};
     airAttack.onAnimationFinishedState = "Fall";
     airAttack.initialInterruptibleFrame = 1000000;
-    airAttack.interrupts = fallState.interrupts;
+    airAttack.interrupts = attackAirIasaInterrupts();
     airAttack.action = {
         wait(4),
         createHitbox(0, BoneId::HandR, {fxFromFloat(0.65f), 0, 0}, fxFromFloat(0.5f), fx(7), fx(55), fx(24), fx(90)),
@@ -968,19 +1046,7 @@ FighterDefinition makeDebugRook() {
     landing.onFrame = {call("process_landing")};
     landing.onAirborne = {call("teeter_or_airborne")};
     landing.onAnimationFinishedState = "Wait";
-    landing.interrupts = {
-        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        timedInterrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded, fighter.properties.normalLandingLag, fighter.properties.normalLandingLag + 1),
-        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
-    appendRules(landing.interrupts, walkInputInterrupts());
-    expandGroundedAttackShortcut(landing);
+    landing.interrupts = landingIasaInterrupts(fighter.properties.normalLandingLag);
 
     FighterState landingAirN;
     landingAirN.name = "LandingAirN";
@@ -1172,7 +1238,7 @@ FighterDefinition makeDebugRook() {
     buryJump.animation = "BuryJump";
     buryJump.animationLengthFrames = 35;
     buryJump.allowLedgeGrab = false;
-    buryJump.onEnter = {call("common_enter")};
+    buryJump.onEnter = {call("common_enter"), call("enter_bury_jump")};
     buryJump.onFrame = {call("process_bury_jump")};
     buryJump.onAnimationFinishedState = "Fall";
 
@@ -1462,20 +1528,7 @@ FighterDefinition makeDebugRook() {
     ottotto.onFrame = {call("process_ottotto")};
     ottotto.onAirborne = {call("regular_airborne")};
     ottotto.onAnimationFinishedState = "OttottoWait";
-    ottotto.interrupts = {
-        interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
-        interrupt("JumpSquat", InterruptCondition::JumpPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
-        interrupt("GuardReflect", InterruptCondition::ShieldReflectInput, GroundRequirement::OnlyGrounded),
-        interrupt("GuardOn", InterruptCondition::ShieldHeld, GroundRequirement::OnlyGrounded),
-        interrupt("Squat", InterruptCondition::SquatInput, GroundRequirement::OnlyGrounded),
-        interrupt("Dash", InterruptCondition::DashInput, GroundRequirement::OnlyGrounded),
-        interrupt("Turn", InterruptCondition::TurnInput, GroundRequirement::OnlyGrounded),
-        interrupt("WalkSlow", InterruptCondition::TeeterWalkInput, GroundRequirement::OnlyGrounded),
-        interrupt("Fall", InterruptCondition::BecameAirborne, GroundRequirement::OnlyAirborne),
-    };
-    expandGroundedAttackShortcut(ottotto);
-    ottotto.interrupts.push_back(tauntInterrupt());
+    ottotto.interrupts = ottottoIasaInterrupts();
 
     FighterState ottottoWait = ottotto;
     ottottoWait.name = "OttottoWait";
@@ -1509,12 +1562,7 @@ FighterDefinition makeDebugRook() {
     guardOn.onFrame = {call("process_guard_on")};
     guardOn.onAirborne = {call("miss_foot_or_airborne")};
     guardOn.onAnimationFinishedState = "Guard";
-    guardOn.interrupts = guardInterrupts;
-    guardOn.interrupts.insert(guardOn.interrupts.begin(), activeUntilInterrupt(
-        "GuardReflect",
-        InterruptCondition::ShieldReflectInput,
-        GroundRequirement::OnlyGrounded,
-        fighter.properties.common.shieldReflectInputWindowX2A0));
+    guardOn.interrupts = guardOnIasaInterrupts(fighter.properties.common.shieldReflectInputWindowX2A0);
 
     FighterState guardReflect;
     guardReflect.name = "GuardReflect";
@@ -1524,7 +1572,7 @@ FighterDefinition makeDebugRook() {
     guardReflect.onFrame = {call("process_guard_reflect")};
     guardReflect.onAirborne = {call("miss_foot_or_airborne")};
     guardReflect.onAnimationFinishedState = "Guard";
-    guardReflect.interrupts = guardInterrupts;
+    guardReflect.interrupts = guardOnIasaInterrupts(0);
 
     FighterState guard;
     guard.name = "Guard";
@@ -1546,7 +1594,7 @@ FighterDefinition makeDebugRook() {
     guardOff.onAnimationFinishedState = "Wait";
     guardOff.interrupts = {
         interrupt("Catch", InterruptCondition::GrabPressed, GroundRequirement::OnlyGrounded),
-        interrupt("Jab", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
+        interrupt("Attack11", InterruptCondition::AttackPressed, GroundRequirement::OnlyGrounded),
         interrupt("EscapeN", InterruptCondition::SpotDodgeInput, GroundRequirement::OnlyGrounded),
         interrupt("JumpSquat", InterruptCondition::ShieldJumpPressed, GroundRequirement::OnlyGrounded),
     };
@@ -1744,6 +1792,9 @@ FighterDefinition makeDebugRook() {
     escapeN.onFrame = {call("process_landing")};
     escapeN.onAirborne = {call("regular_airborne")};
     escapeN.onAnimationFinishedState = "Wait";
+    // ftCo_Escape*_Coll calls ft_80084104; unlike Kirby's dash attack
+    // exception, rolls/spotdodge should not become airborne from root motion.
+    escapeN.allowSlideoff = false;
     escapeN.action = {
         wait(1),
         setHurtboxState(-1, HurtboxState::Intangible),
@@ -1957,24 +2008,9 @@ FighterDefinition makeDebugRook() {
 
     for (FighterState* state : {
         &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
-        &turnState, &squat, &ottotto, &ottottoWait,
-    }) {
-        state->interrupts.insert(state->interrupts.begin(), interrupt(
-            state == &dashState || state == &runState || state == &runDirect ? "CatchDash" : "Catch",
-            InterruptCondition::GrabPressed,
-            GroundRequirement::OnlyGrounded));
-    }
-    for (FighterState* state : {
-        &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
         &turnState, &squat, &squatWait, &squatRv, &landing, &ottotto, &ottottoWait,
     }) {
         expandGroundedAttackShortcut(*state, state == &dashState || state == &runState || state == &runDirect);
-    }
-    for (FighterState* state : {
-        &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
-        &turnState, &squat, &squatWait, &squatRv, &landing, &ottotto, &ottottoWait,
-    }) {
-        insertTauntInterrupt(*state);
     }
 
     fighter.states = {

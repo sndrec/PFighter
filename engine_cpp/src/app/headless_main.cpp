@@ -272,6 +272,8 @@ int main(int argc, char** argv) {
     dashWorld.stage.ledges.clear();
     dashWorld.fighters[0].position = {0, 0};
     dashWorld.fighters[0].previousPosition = dashWorld.fighters[0].position;
+    dashWorld.fighters[0].grounded = true;
+    dashWorld.fighters[0].groundSegment = 0;
     for (int frame = 0; frame < 60; ++frame) {
         pf::InputFrame input;
         input.move.x = pf::fx(1);
@@ -328,10 +330,10 @@ int main(int argc, char** argv) {
     pf::FighterRuntime& escapeBackTester = escapeBackWorld.fighters[0];
     escapeBackTester.facing = 1;
     pf::changeFighterState(escapeBackWorld, escapeBackTester, "EscapeB");
-    pf::setFighterCommandFlag(escapeBackTester, 3, true);
+    pf::setFighterThrowFlag(escapeBackTester, 3, true);
     pf::tickWorld(escapeBackWorld, {pf::InputFrame{}, pf::InputFrame{}});
     std::cout << "escape_flag_flip_facing=" << escapeBackTester.facing
-              << " flag_consumed=" << pf::fighterCommandFlag(escapeBackTester, 3)
+              << " flag_consumed=" << pf::fighterThrowFlag(escapeBackTester, 3)
               << "\n";
 
     pf::World escapeRollFrictionWorld = pf::makeTrainingWorld();
@@ -391,6 +393,11 @@ int main(int argc, char** argv) {
         {{-pf::fx(100), 0}, {pf::fx(100), 0}, pf::fxFromFloat(0.5f), pf::SegmentType::Solid, false, false},
     };
     lowFrictionDashWorld.stage.ledges.clear();
+    pf::FighterRuntime& lowFrictionDashMutableTester = lowFrictionDashWorld.fighters[0];
+    lowFrictionDashMutableTester.position.y = 0;
+    lowFrictionDashMutableTester.previousPosition = lowFrictionDashMutableTester.position;
+    lowFrictionDashMutableTester.grounded = true;
+    lowFrictionDashMutableTester.groundSegment = 0;
     pf::InputFrame lowFrictionDashInput;
     lowFrictionDashInput.move.x = pf::fx(1);
     pf::tickWorld(lowFrictionDashWorld, {lowFrictionDashInput, pf::InputFrame{}});
@@ -569,7 +576,7 @@ int main(int argc, char** argv) {
     pf::FighterRuntime& jabFollowupTester = jabFollowupWorld.fighters[0];
     pf::changeFighterState(jabFollowupWorld, jabFollowupTester, "Attack11");
     jabFollowupTester.interruptibleFrame = 1000000;
-    pf::setFighterCommandFlag(jabFollowupTester, 2, true);
+    jabFollowupTester.jabFollowupEnabled = true;
     pf::InputFrame jabFollowupInput;
     jabFollowupInput.buttons = pf::ButtonAttack;
     pf::tickWorld(jabFollowupWorld, {jabFollowupInput, pf::InputFrame{}});
@@ -597,7 +604,7 @@ int main(int argc, char** argv) {
         pf::FighterRuntime& fighter = world.fighters[0];
         pf::changeFighterState(world, fighter, "Attack12");
         fighter.interruptibleFrame = 1000000;
-        pf::setFighterCommandFlag(fighter, 5, true);
+        fighter.rapidJabEnabled = true;
         fighter.attackRapidInputCount = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].properties.rapidJabWindow - 1;
         pf::InputFrame input;
         input.buttons = pf::ButtonAttack;
@@ -609,7 +616,7 @@ int main(int argc, char** argv) {
         pf::FighterRuntime& fighter = world.fighters[0];
         pf::changeFighterState(world, fighter, "Attack100Loop");
         fighter.attack100CanEnd = true;
-        pf::setFighterCommandFlag(fighter, 3, true);
+        pf::setFighterThrowFlag(fighter, 3, true);
         pf::InputFrame input;
         if (continuePressed) {
             input.buttons = pf::ButtonAttack;
@@ -623,17 +630,17 @@ int main(int argc, char** argv) {
     bool rapidJabFlagSet = false;
     for (int frame = 0; frame < 20 && !rapidJabFlagSet; ++frame) {
         pf::tickWorld(rapidJabFlagWorld, {pf::InputFrame{}, pf::InputFrame{}});
-        rapidJabFlagSet = pf::fighterCommandFlag(rapidJabFlagTester, 5);
+        rapidJabFlagSet = rapidJabFlagTester.rapidJabEnabled;
     }
     pf::World rapidJabClearWorld = pf::makeTrainingWorld(2, 2);
     pf::FighterRuntime& rapidJabClearTester = rapidJabClearWorld.fighters[0];
     pf::changeFighterState(rapidJabClearWorld, rapidJabClearTester, "Attack13");
-    pf::setFighterCommandFlag(rapidJabClearTester, 5, true);
+    rapidJabClearTester.rapidJabEnabled = true;
     pf::tickWorld(rapidJabClearWorld, {pf::InputFrame{}, pf::InputFrame{}});
     std::cout << "link_rapid_jab_state=" << rapidJabStateFor(2)
               << " mario_rapid_jab_state=" << rapidJabStateFor(0)
               << " link_rapid_jab_flag_set=" << rapidJabFlagSet
-              << " link_rapid_jab_flag_clear=" << pf::fighterCommandFlag(rapidJabClearTester, 5)
+              << " link_rapid_jab_flag_clear=" << rapidJabClearTester.rapidJabEnabled
               << " attack100_loop_release_state=" << attack100LoopStateFor(false)
               << " attack100_loop_continue_state=" << attack100LoopStateFor(true)
               << "\n";
@@ -1917,9 +1924,29 @@ int main(int argc, char** argv) {
     pf::FighterRuntime& catchZPummelTester = prepareCatchWaitProbe(catchZPummelWorld);
     pf::tickWorld(catchZPummelWorld, {grabInput, pf::InputFrame{}});
 
+    pf::World catchCStickHighWorld = pf::makeTrainingWorld();
+    pf::FighterRuntime& catchCStickHighTester = prepareCatchWaitProbe(catchCStickHighWorld);
+    pf::InputFrame catchCStickHighInput;
+    catchCStickHighInput.cStick.y = pf::fx(1);
+    pf::tickWorld(catchCStickHighWorld, {catchCStickHighInput, pf::InputFrame{}});
+
+    pf::World catchCStickLowFreshWorld = pf::makeTrainingWorld();
+    pf::FighterRuntime& catchCStickLowFreshTester = prepareCatchWaitProbe(catchCStickLowFreshWorld);
+    pf::InputFrame catchCStickLowInput;
+    catchCStickLowInput.cStick.y = -pf::fx(1);
+    pf::tickWorld(catchCStickLowFreshWorld, {catchCStickLowInput, pf::InputFrame{}});
+
+    pf::World catchCStickLowHeldWorld = pf::makeTrainingWorld();
+    pf::FighterRuntime& catchCStickLowHeldTester = prepareCatchWaitProbe(catchCStickLowHeldWorld);
+    pf::tickWorld(catchCStickLowHeldWorld, {catchCStickLowInput, pf::InputFrame{}});
+    pf::tickWorld(catchCStickLowHeldWorld, {catchCStickLowInput, pf::InputFrame{}});
+
     std::cout << "catch_diagonal_forward_throw_state=" << pf::currentState(catchDiagonalForwardWorld, catchDiagonalForwardTester).name
               << " catch_diagonal_backward_throw_state=" << pf::currentState(catchDiagonalBackwardWorld, catchDiagonalBackwardTester).name
               << " catch_z_pummel_state=" << pf::currentState(catchZPummelWorld, catchZPummelTester).name
+              << " catch_cstick_high_throw_state=" << pf::currentState(catchCStickHighWorld, catchCStickHighTester).name
+              << " catch_cstick_low_fresh_state=" << pf::currentState(catchCStickLowFreshWorld, catchCStickLowFreshTester).name
+              << " catch_cstick_low_held_state=" << pf::currentState(catchCStickLowHeldWorld, catchCStickLowHeldTester).name
               << "\n";
 
     pf::World catchWaitRunoffWorld = pf::makeTrainingWorld();
@@ -2002,6 +2029,8 @@ int main(int argc, char** argv) {
             fighter.hsdJointWorldTransforms.clear();
             fighter.hsdJointWorldPositions.clear();
             fighter.hsdHurtboxCapsules.clear();
+            fighter.hsdModelVisibilityDefaultStates.clear();
+            fighter.hsdModelVisibilityStates.clear();
             fighter.hsdModelPartAnimations.clear();
             fighter.state = probeWorld.fighterDefs[0].stateIndex("Wait");
         }
@@ -2055,6 +2084,8 @@ int main(int argc, char** argv) {
             fighter.hsdJointWorldTransforms.clear();
             fighter.hsdJointWorldPositions.clear();
             fighter.hsdHurtboxCapsules.clear();
+            fighter.hsdModelVisibilityDefaultStates.clear();
+            fighter.hsdModelVisibilityStates.clear();
             fighter.hsdModelPartAnimations.clear();
             fighter.state = probeWorld.fighterDefs[0].stateIndex("Wait");
         }
@@ -2231,14 +2262,19 @@ int main(int argc, char** argv) {
               << " throw_finish_air_state=" << pf::currentState(throwFinishAirWorld, throwFinishAirTester).name
               << "\n";
 
-    pf::World bowserPeachThrowWorld = pf::makeTrainingWorld(2, 4);
+    constexpr int kMarioRosterIndex = 0;
+    constexpr int kBowserRosterIndex = 11;
+    constexpr int kPeachRosterIndex = 12;
+    constexpr int kZeldaRosterIndex = 13;
+
+    pf::World bowserPeachThrowWorld = pf::makeTrainingWorld(kBowserRosterIndex, kPeachRosterIndex);
     pf::FighterRuntime& bowserThrowTester = bowserPeachThrowWorld.fighters[0];
     pf::FighterRuntime& peachThrownTester = bowserPeachThrowWorld.fighters[1];
     bowserThrowTester.grabbedFighter = 1;
     peachThrownTester.grabberFighter = 0;
     pf::changeFighterState(bowserPeachThrowWorld, bowserThrowTester, "ThrowLw");
 
-    pf::World bowserMarioThrowWorld = pf::makeTrainingWorld(2, 0);
+    pf::World bowserMarioThrowWorld = pf::makeTrainingWorld(kBowserRosterIndex, kMarioRosterIndex);
     pf::FighterRuntime& bowserMarioThrowTester = bowserMarioThrowWorld.fighters[0];
     pf::FighterRuntime& marioThrownTester = bowserMarioThrowWorld.fighters[1];
     bowserMarioThrowTester.grabbedFighter = 1;
@@ -2248,16 +2284,15 @@ int main(int argc, char** argv) {
               << " bowser_mario_down_throw_victim_state=" << pf::currentState(bowserMarioThrowWorld, marioThrownTester).name
               << "\n";
 
-    pf::World bowserZeldaThrowWorld = pf::makeTrainingWorld(2, 0);
-    bowserZeldaThrowWorld.fighterDefs[0].name = "Zelda";
+    pf::World bowserZeldaThrowWorld = pf::makeTrainingWorld(kBowserRosterIndex, kZeldaRosterIndex);
     pf::FighterRuntime& bowserZeldaThrowTester = bowserZeldaThrowWorld.fighters[0];
     pf::FighterRuntime& zeldaThrownTester = bowserZeldaThrowWorld.fighters[1];
     bowserZeldaThrowTester.grabbedFighter = 1;
     zeldaThrownTester.grabberFighter = 0;
     pf::changeFighterState(bowserZeldaThrowWorld, bowserZeldaThrowTester, "ThrowLw");
 
-    pf::World gigaBowserPeachThrowWorld = pf::makeTrainingWorld(2, 4);
-    gigaBowserPeachThrowWorld.fighterDefs[2].name = "Giga Bowser";
+    pf::World gigaBowserPeachThrowWorld = pf::makeTrainingWorld(kBowserRosterIndex, kPeachRosterIndex);
+    gigaBowserPeachThrowWorld.fighterDefs[kBowserRosterIndex].name = "Giga Bowser";
     pf::FighterRuntime& gigaBowserThrowTester = gigaBowserPeachThrowWorld.fighters[0];
     pf::FighterRuntime& gigaPeachThrownTester = gigaBowserPeachThrowWorld.fighters[1];
     gigaBowserThrowTester.grabbedFighter = 1;
@@ -2281,7 +2316,7 @@ int main(int argc, char** argv) {
     throwLwHitbox.knockbackGrowth = 0;
     throwLwReleaseGrabber.throwHitboxes[0] = throwLwHitbox;
     throwLwReleaseGrabber.throwHitboxActive[0] = true;
-    pf::setFighterCommandFlag(throwLwReleaseGrabber, 3, true);
+    pf::setFighterThrowFlag(throwLwReleaseGrabber, 3, true);
     pf::tickWorld(throwLwReleaseAngleWorld, {pf::InputFrame{}, pf::InputFrame{}});
     std::cout << "throw_lw_release_state=" << pf::currentState(throwLwReleaseAngleWorld, throwLwReleaseVictim).name
               << " throw_lw_release_angle=" << pf::fxToFloat(throwLwReleaseVictim.damageLaunchAngle)
@@ -3341,11 +3376,17 @@ int main(int argc, char** argv) {
     const pf::FighterDefinition& appealDef = appealRightWorld.fighterDefs[static_cast<size_t>(appealRightWorld.fighters[0].fighterDef)];
     const pf::FighterState& appealSRState = appealDef.states[static_cast<size_t>(appealDef.stateIndex("AppealSR"))];
     const pf::FighterState& appealSLState = appealDef.states[static_cast<size_t>(appealDef.stateIndex("AppealSL"))];
+    const bool appealSRClipReady = appealDef.hsdAsset &&
+        pf::findClipByActionIndex(*appealDef.hsdAsset, appealSRState.animationActionIndex) != nullptr;
+    const bool appealSLClipReady = appealDef.hsdAsset &&
+        pf::findClipByActionIndex(*appealDef.hsdAsset, appealSLState.animationActionIndex) != nullptr;
     std::cout << "appeal_right_input_state=" << pf::currentState(appealRightWorld, appealRightWorld.fighters[0]).name
               << " appeal_left_input_state=" << pf::currentState(appealLeftWorld, appealLeftWorld.fighters[0]).name
               << " appeal_finish_state=" << pf::currentState(appealFinishWorld, appealFinishTester).name
               << " appeal_sr_action=" << appealSRState.animationActionIndex
               << " appeal_sl_action=" << appealSLState.animationActionIndex
+              << " appeal_sr_clip=" << appealSRClipReady
+              << " appeal_sl_clip=" << appealSLClipReady
               << " appeal_sr_frames=" << appealSRState.animationLengthFrames
               << " appeal_sl_frames=" << appealSLState.animationLengthFrames
               << "\n";
@@ -3635,7 +3676,7 @@ int main(int argc, char** argv) {
     passiveCeilTester.fighterVelocity = {};
     passiveCeilTester.position.y = pf::fx(8);
     passiveCeilTester.previousPosition = passiveCeilTester.position;
-    pf::setFighterCommandFlag(passiveCeilTester, 3, true);
+    pf::setFighterThrowFlag(passiveCeilTester, 3, true);
     pf::tickWorld(passiveCeilWorld, {passiveCeilInput, pf::InputFrame{}});
     std::cout << "passive_ceil_no_flag_vel=" << pf::toString(passiveCeilNoFlagVelocity)
               << " passive_ceil_flag_vel=" << pf::toString(passiveCeilTester.fighterVelocity)

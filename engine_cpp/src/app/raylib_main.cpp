@@ -754,11 +754,10 @@ static bool isBatchVisible(const HsdRenderBatch& batch, const pf::FighterRuntime
     if (batch.modelPartIndex < 0 || batch.modelPartState < 0) {
         return false;
     }
-    if (static_cast<size_t>(batch.modelPartIndex) >= fighter.hsdModelPartAnimations.size()) {
+    if (static_cast<size_t>(batch.modelPartIndex) >= fighter.hsdModelVisibilityStates.size()) {
         return batch.modelPartState == 0;
     }
-    const int selectedState = fighter.hsdModelPartAnimations[static_cast<size_t>(batch.modelPartIndex)];
-    return selectedState < 0 ? batch.modelPartState == 0 : selectedState == batch.modelPartState;
+    return fighter.hsdModelVisibilityStates[static_cast<size_t>(batch.modelPartIndex)] == batch.modelPartState;
 }
 
 static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
@@ -865,7 +864,9 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
     const bool hasImportedPose = def.hsdAsset && !fighter.hsdJointWorldPositions.empty();
-    if (hasImportedPose) {
+    if (fighter.fighterInvisible) {
+        // ftDrawCommon skips fighter model display when x221E_b5 is set.
+    } else if (hasImportedPose) {
         if (!def.hsdAsset->mesh.batches.empty()) {
             drawImportedMesh(def, fighter);
         } else {

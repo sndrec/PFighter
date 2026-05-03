@@ -74,7 +74,20 @@ static HurtboxState hurtboxStateFromMelee(int state) {
     return HurtboxState::Normal;
 }
 
-static Subaction decodeCreateHitbox(const HsdActionScript& script, const HsdActionCommand& command) {
+static bool buggedOnlyHitGrabbedFromNextCommand(const HsdActionCommand* nextCommand) {
+    if (!nextCommand || nextCommand->bytes.size() < 2) {
+        return false;
+    }
+    HsdCommandBitReader reader(nextCommand->bytes);
+    reader.skip(12);
+    return reader.read(1) != 0;
+}
+
+static Subaction decodeCreateHitbox(
+    const HsdActionScript& script,
+    const HsdActionCommand& command,
+    const HsdActionCommand* nextCommand)
+{
     HsdCommandBitReader reader(command.bytes);
     reader.skip(6);
 
@@ -82,7 +95,7 @@ static Subaction decodeCreateHitbox(const HsdActionScript& script, const HsdActi
     sub.type = SubactionType::CreateHitbox;
     sub.hitbox.hitboxId = static_cast<int>(reader.read(3));
     reader.read(3); // hit group
-    sub.hitbox.onlyHitGrabbed = reader.read(1) != 0;
+    reader.read(1); // HSDLib labels this "Only Hit Grabbed Fighter", but ftAction_8007121C never reads it.
     const int bone = static_cast<int>(reader.read(8));
     const bool useCommonBoneIds = reader.read(1) != 0;
     sub.hitbox.damage = fx(static_cast<int>(reader.read(10)));
@@ -108,6 +121,9 @@ static Subaction decodeCreateHitbox(const HsdActionScript& script, const HsdActi
     sub.hitbox.hitGrounded = reader.read(1) != 0;
     sub.hitbox.hitAirborne = reader.read(1) != 0;
     sub.hitbox.hsdBone = useCommonBoneIds ? mapCommonFighterPart(script, bone) : bone;
+    // Melee reads create_hitbox_5.x1_b4 after advancing past the five-word
+    // hitbox command, so this flag comes from the following command word.
+    sub.hitbox.onlyHitGrabbed = buggedOnlyHitGrabbedFromNextCommand(nextCommand);
     return sub;
 }
 
@@ -212,7 +228,9 @@ UnfoldedAction unfoldAction(const std::vector<Subaction>& action) {
 std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, const HsdActionScript& script) {
     std::vector<Subaction> result;
     result.reserve(script.commands.size());
-    for (const HsdActionCommand& command : script.commands) {
+    for (size_t commandIndex = 0; commandIndex < script.commands.size(); ++commandIndex) {
+        const HsdActionCommand& command = script.commands[commandIndex];
+        const HsdActionCommand* nextCommand = commandIndex + 1 < script.commands.size() ? &script.commands[commandIndex + 1] : nullptr;
         HsdCommandBitReader reader(command.bytes);
         reader.skip(6);
         Subaction sub;
@@ -240,7 +258,7 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             break;
         case 0x0B:
             if (command.bytes.size() >= 20) {
-                result.push_back(decodeCreateHitbox(script, command));
+                result.push_back(decodeCreateHitbox(script, command, nextCommand));
             }
             break;
         case 0x0C:
@@ -255,6 +273,13 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             sub.hitbox.radius = rawFixed256(static_cast<int>(reader.read(23)));
             result.push_back(sub);
             break;
+        case 0x0E:
+            sub.type = SubactionType::SetHitboxInteraction;
+            sub.hitbox.hitboxId = static_cast<int>(reader.read(24));
+            sub.flag = static_cast<int>(reader.read(1));
+            sub.flagValue = reader.read(1);
+            result.push_back(sub);
+            break;
         case 0x0F:
             sub.type = SubactionType::RemoveHitbox;
             sub.hitbox.hitboxId = static_cast<int>(reader.read(26));
@@ -267,12 +292,26 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
         case 0x13:
             sub.type = SubactionType::SetFlag;
             sub.flag = static_cast<int>(reader.read(2));
-            sub.flagValue = reader.read(24) != 0;
+            sub.flagValue = reader.read(24);
             result.push_back(sub);
             break;
         case 0x14:
             sub.type = SubactionType::SetThrowFlag;
             sub.flag = static_cast<int>(reader.read(26));
+            sub.flagValue = true;
+            result.push_back(sub);
+            break;
+        case 0x15:
+            reader.read(26);
+            sub.type = SubactionType::SetThrowFlagLiteral;
+            sub.flag = 1;
+            sub.flagValue = true;
+            result.push_back(sub);
+            break;
+        case 0x16:
+            reader.read(26);
+            sub.type = SubactionType::SetThrowFlagLiteral;
+            sub.flag = 2;
             sub.flagValue = true;
             result.push_back(sub);
             break;
@@ -286,17 +325,49 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             sub.interruptibleFrame = -1;
             result.push_back(sub);
             break;
+        case 0x18:
+            reader.read(26);
+            sub.type = SubactionType::SetThrowFlagLiteral;
+            sub.flag = 0;
+            sub.flagValue = true;
+            result.push_back(sub);
+            break;
+        case 0x19:
+            sub.type = SubactionType::SetJumpState;
+            sub.flagValue = reader.read(26);
+            result.push_back(sub);
+            break;
         case 0x1A:
-            reader.read(24);
+            sub.type = SubactionType::SetBodyCollisionState;
+            sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(26)));
+            result.push_back(sub);
+            break;
+        case 0x1B:
             sub.type = SubactionType::SetHurtboxState;
             sub.hurtboxIndex = -1;
-            sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(2)));
+            sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(26)));
             result.push_back(sub);
             break;
         case 0x1D:
-            sub.type = SubactionType::SetFlag;
-            sub.flag = 2;
-            sub.flagValue = reader.read(26) != 0;
+            sub.type = SubactionType::EnableJabFollowup;
+            sub.flagValue = reader.read(26);
+            result.push_back(sub);
+            break;
+        case 0x1F:
+            sub.type = SubactionType::SetModelVisibility;
+            sub.modelPartIndex = static_cast<int>(reader.read(7));
+            reader.read(1); // HSDLib's Change Model State splits this from the signed object id.
+            sub.modelPartState = static_cast<int>(reader.readSigned(18));
+            result.push_back(sub);
+            break;
+        case 0x20:
+            reader.read(26);
+            sub.type = SubactionType::RevertModelVisibility;
+            result.push_back(sub);
+            break;
+        case 0x21:
+            reader.read(26);
+            sub.type = SubactionType::RemoveModelVisibility;
             result.push_back(sub);
             break;
         case 0x22:
@@ -304,10 +375,22 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
                 result.push_back(decodeThrowHitbox(command));
             }
             break;
+        case 0x25:
+            reader.read(25);
+            sub.type = SubactionType::SetFighterVisibility;
+            sub.flagValue = reader.read(1);
+            result.push_back(sub);
+            break;
         case 0x29:
             sub.type = SubactionType::SetModelPartAnimation;
-            sub.modelPartIndex = static_cast<int>(reader.read(10));
-            sub.modelPartAnimation = static_cast<int>(reader.read(4));
+            sub.modelPartIndex = static_cast<int>(reader.read(7));
+            sub.modelPartAnimation = static_cast<int>(reader.read(7));
+            reader.skip(12);
+            result.push_back(sub);
+            break;
+        case 0x33:
+            sub.type = SubactionType::SelfDamage;
+            sub.selfDamage = fx(reader.readSigned(26));
             result.push_back(sub);
             break;
         case 0x1C:
@@ -317,11 +400,9 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(18)));
             result.push_back(sub);
             break;
-        case 0x37:
         case 0x38:
             if (command.bytes.size() >= 8) {
-                reader.read(2);
-                const int holdFramesRaw = static_cast<int>(reader.read(8));
+                const int holdFramesRaw = static_cast<int>(reader.read(10));
                 const int damageMultiplierRaw = static_cast<int>(reader.read(16));
                 sub.type = SubactionType::StartSmashCharge;
                 sub.smashChargeDamageMultiplier = rawFixed256(damageMultiplierRaw);

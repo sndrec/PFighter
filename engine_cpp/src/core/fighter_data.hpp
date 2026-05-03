@@ -396,6 +396,7 @@ struct HitboxDefinition {
     bool isGrab = false;
     bool canClank = false;
     bool reboundsOnClank = false;
+    bool hitFighters = true;
     bool onlyHitGrabbed = false;
     bool requiresThrownHitboxOwner = false;
     bool hitGrounded = true;
@@ -418,16 +419,26 @@ enum class SubactionType : uint8_t {
     RemoveHitbox,
     AdjustHitboxDamage,
     AdjustHitboxSize,
+    SetHitboxInteraction,
     CreateThrowHitbox,
     ClearHitboxes,
     SetHurtboxState,
+    SetBodyCollisionState,
     SetInterruptible,
     SetFlag,
     SetThrowFlag,
+    SetThrowFlagLiteral,
+    EnableJabFollowup,
     SetJabRapid,
+    SetJumpState,
     ReverseDirection,
     StartSmashCharge,
+    SetModelVisibility,
+    RevertModelVisibility,
+    RemoveModelVisibility,
     SetModelPartAnimation,
+    SetFighterVisibility,
+    SelfDamage,
 };
 
 struct Subaction {
@@ -439,10 +450,12 @@ struct Subaction {
     int hurtboxIndex = -1;
     int hsdBone = -1;
     HurtboxState hurtboxState = HurtboxState::Normal;
-    bool flagValue = false;
+    uint32_t flagValue = 0;
     Fix smashChargeHoldFrames = 0;
     Fix smashChargeDamageMultiplier = fx(1);
+    Fix selfDamage = 0;
     int modelPartIndex = -1;
+    int modelPartState = -1;
     int modelPartAnimation = -1;
     HitboxDefinition hitbox;
 };
@@ -484,6 +497,7 @@ enum class InterruptCondition : uint8_t {
     AttackS4LwPressed,
     AttackS42Pressed,
     AttackHi4Pressed,
+    AttackHi4NoStickWindowPressed,
     AttackLw4Pressed,
     AttackS3HiPressed,
     AttackS3HiSPressed,
@@ -516,6 +530,7 @@ enum class InterruptCondition : uint8_t {
     ShieldPressed,
     ShieldHeld,
     ShieldJumpPressed,
+    GuardCatchDashPressed,
     SpotDodgeInput,
     RollForwardInput,
     RollBackwardInput,
