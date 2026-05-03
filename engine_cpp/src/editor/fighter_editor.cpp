@@ -38,8 +38,33 @@ void FighterEditor::clampToWorld(const World& world) {
         selectedObjectDef,
         0,
         std::max(0, static_cast<int>(world.objectDefs.size()) - 1));
-    const int clipCount = def.hsdAsset ? static_cast<int>(def.hsdAsset->clips.size()) : 0;
+    const bool useImportedClips = def.hsdAsset && !def.hsdAsset->clips.empty();
+    const std::vector<AnimationClip>& clips = useImportedClips ? def.hsdAsset->clips : def.authoredClips;
+    const int clipCount = static_cast<int>(clips.size());
     selectedAnimationClip = std::clamp(selectedAnimationClip, 0, std::max(0, clipCount - 1));
+    selectedAnimationJoint = std::clamp(
+        selectedAnimationJoint,
+        0,
+        std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+    if (clipCount > 0) {
+        const AnimationClip& clip = clips[static_cast<size_t>(selectedAnimationClip)];
+        selectedAnimationTrack = std::clamp(
+            selectedAnimationTrack,
+            0,
+            std::max(0, static_cast<int>(clip.tracks.size()) - 1));
+        if (!clip.tracks.empty()) {
+            const AnimationTrack& track = clip.tracks[static_cast<size_t>(selectedAnimationTrack)];
+            selectedAnimationKey = std::clamp(
+                selectedAnimationKey,
+                0,
+                std::max(0, static_cast<int>(track.keys.size()) - 1));
+        } else {
+            selectedAnimationKey = 0;
+        }
+    } else {
+        selectedAnimationTrack = 0;
+        selectedAnimationKey = 0;
+    }
     if (clipCount == 0) {
         animationScrubFrame = 0;
     }

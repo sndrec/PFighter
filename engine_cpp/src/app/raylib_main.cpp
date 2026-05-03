@@ -1018,6 +1018,62 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     return label;
 }
 
+static const char* animationChannelName(pf::AnimationChannel channel) {
+    switch (channel) {
+    case pf::AnimationChannel::TranslateX: return "TX";
+    case pf::AnimationChannel::TranslateY: return "TY";
+    case pf::AnimationChannel::TranslateZ: return "TZ";
+    case pf::AnimationChannel::RotateX: return "RX";
+    case pf::AnimationChannel::RotateY: return "RY";
+    case pf::AnimationChannel::RotateZ: return "RZ";
+    case pf::AnimationChannel::ScaleX: return "SX";
+    case pf::AnimationChannel::ScaleY: return "SY";
+    case pf::AnimationChannel::ScaleZ: return "SZ";
+    }
+    return "??";
+}
+
+static pf::AnimationChannel nextAnimationChannel(pf::AnimationChannel channel) {
+    switch (channel) {
+    case pf::AnimationChannel::TranslateX: return pf::AnimationChannel::TranslateY;
+    case pf::AnimationChannel::TranslateY: return pf::AnimationChannel::TranslateZ;
+    case pf::AnimationChannel::TranslateZ: return pf::AnimationChannel::RotateX;
+    case pf::AnimationChannel::RotateX: return pf::AnimationChannel::RotateY;
+    case pf::AnimationChannel::RotateY: return pf::AnimationChannel::RotateZ;
+    case pf::AnimationChannel::RotateZ: return pf::AnimationChannel::ScaleX;
+    case pf::AnimationChannel::ScaleX: return pf::AnimationChannel::ScaleY;
+    case pf::AnimationChannel::ScaleY: return pf::AnimationChannel::ScaleZ;
+    case pf::AnimationChannel::ScaleZ: return pf::AnimationChannel::TranslateX;
+    }
+    return pf::AnimationChannel::TranslateX;
+}
+
+static std::string uniqueAuthoredClipName(const pf::FighterDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = "Clip" + std::to_string(index);
+        const bool exists = std::any_of(def.authoredClips.begin(), def.authoredClips.end(), [&](const pf::AnimationClip& clip) {
+            return clip.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return "ClipX";
+}
+
+static void ensureAuthoredRootJoint(pf::FighterDefinition& def) {
+    if (!def.authoredSkeleton.empty()) {
+        return;
+    }
+    def.authoredSkeleton.push_back({-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}});
+}
+
+static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
+    std::sort(keys.begin(), keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
+        return a.frame < b.frame;
+    });
+}
+
 static bool uiListRow(Rectangle rect, const std::string& label, bool active) {
     const Vector2 mouse = GetMousePosition();
     const bool hovered = CheckCollisionPointRec(mouse, rect);
@@ -1594,7 +1650,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         return;
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 300.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Animation Preview", 24, 336, 16, BLACK);
@@ -1602,6 +1658,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     const std::vector<pf::AnimationClip>* clips = def.hsdAsset && !def.hsdAsset->clips.empty()
         ? &def.hsdAsset->clips
         : authoredClips;
+    const bool showingAuthoredClips = clips == authoredClips;
     if (clips->empty()) {
         DrawText("No animation clips on this fighter", 24, 364, 13, GRAY);
         if (uiButton({352.0f, 362.0f, 72.0f, 24.0f}, "+ Clip")) {
@@ -1609,9 +1666,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             clip.name = "Wait";
             clip.actionIndex = 0;
             clip.frameCount = pf::fx(60);
-            def.authoredSkeleton = def.authoredSkeleton.empty()
-                ? std::vector<pf::AnimationJoint>{{-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}}}
-                : def.authoredSkeleton;
+            ensureAuthoredRootJoint(def);
             def.authoredClips.push_back(std::move(clip));
             editor.selectedAnimationClip = 0;
             editor.status = "Editor: created authored animation clip";
@@ -1623,7 +1678,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         editor.selectedAnimationClip,
         0,
         static_cast<int>(clips->size()) - 1);
-    pf::AnimationClip* selectedAuthoredClip = def.authoredClips.empty()
+    pf::AnimationClip* selectedAuthoredClip = (!showingAuthoredClips || def.authoredClips.empty())
         ? nullptr
         : &def.authoredClips[static_cast<size_t>(std::clamp(editor.selectedAnimationClip, 0, static_cast<int>(def.authoredClips.size()) - 1))];
     const pf::AnimationClip& selectedClip = (*clips)[static_cast<size_t>(editor.selectedAnimationClip)];
@@ -1633,18 +1688,36 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     DrawText(("Clips: " + std::to_string(clips->size()) + (clips == authoredClips ? " authored" : " imported")).c_str(), 24, 362, 13, DARKGRAY);
     DrawText(("Selected: action " + std::to_string(selectedClip.actionIndex) +
               " frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(maxFrame)).c_str(), 24, 382, 13, DARKGRAY);
-    const int visibleClips = std::min(6, static_cast<int>(clips->size()));
+    DrawText("Clips", 24, 396, 13, DARKGRAY);
+    const int visibleClips = std::min(4, static_cast<int>(clips->size()));
     for (int row = 0; row < visibleClips; ++row) {
         const pf::AnimationClip& clip = (*clips)[static_cast<size_t>(row)];
         const std::string label = std::to_string(clip.actionIndex) + " " + clip.name;
-        if (uiListRow({24.0f, 410.0f + 24.0f * row, 310.0f, 22.0f}, label, row == editor.selectedAnimationClip)) {
+        if (uiListRow({24.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, row == editor.selectedAnimationClip)) {
             editor.selectedAnimationClip = row;
             editor.animationScrubFrame = 0;
+            editor.selectedAnimationTrack = 0;
+            editor.selectedAnimationKey = 0;
             editor.animationPreviewActive = true;
             const bool ok = pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), clip.actionIndex, 0);
             editor.status = ok ? "Editor: previewing animation " + clip.name : "Editor: animation preview failed";
             editor.paused = true;
         }
+    }
+
+    if (showingAuthoredClips) {
+        DrawText(("Joints: " + std::to_string(def.authoredSkeleton.size())).c_str(), 184, 396, 13, DARKGRAY);
+        const int visibleJoints = std::min(4, static_cast<int>(def.authoredSkeleton.size()));
+        for (int row = 0; row < visibleJoints; ++row) {
+            const pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(row)];
+            const std::string label = std::to_string(row) + " " + joint.name;
+            if (uiListRow({184.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, row == editor.selectedAnimationJoint)) {
+                editor.selectedAnimationJoint = row;
+                editor.status = "Editor: selected authored joint " + joint.name;
+            }
+        }
+    } else {
+        DrawText("Imported clips are read-only here", 184, 396, 13, GRAY);
     }
 
     if (uiButton({352.0f, 410.0f, 72.0f, 24.0f}, "- Frame")) {
@@ -1661,31 +1734,145 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         editor.animationPreviewActive = true;
         editor.paused = true;
     }
-    if (clips == authoredClips && selectedAuthoredClip && uiButton({352.0f, 470.0f, 72.0f, 24.0f}, "+ Key")) {
-        pf::AnimationClip& clip = *selectedAuthoredClip;
-        if (clip.tracks.empty()) {
-            clip.tracks.push_back({0, pf::AnimationChannel::TranslateY, {}});
-        }
-        pf::AnimationTrack& track = clip.tracks.front();
-        track.joint = 0;
-        track.channel = pf::AnimationChannel::TranslateY;
-        track.keys.push_back({pf::fx(editor.animationScrubFrame), pf::fxFromFloat(0.1f * static_cast<float>(track.keys.size() % 4)), 0, pf::AnimationInterpolation::Linear});
-        std::sort(track.keys.begin(), track.keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
-            return a.frame < b.frame;
-        });
-        editor.animationPreviewActive = true;
-        editor.paused = true;
-        editor.status = "Editor: inserted authored animation key";
+    if (showingAuthoredClips && selectedAuthoredClip && !selectedAuthoredClip->tracks.empty() &&
+        uiButton({352.0f, 470.0f, 72.0f, 24.0f}, "Trk +")) {
+        editor.selectedAnimationTrack = (editor.selectedAnimationTrack + 1) % static_cast<int>(selectedAuthoredClip->tracks.size());
+        editor.selectedAnimationKey = 0;
+        editor.status = "Editor: selected next authored animation track";
     }
-    if (clips == authoredClips && uiButton({434.0f, 470.0f, 72.0f, 24.0f}, "+ Clip")) {
+    if (showingAuthoredClips && selectedAuthoredClip && !selectedAuthoredClip->tracks.empty()) {
+        const pf::AnimationTrack& track = selectedAuthoredClip->tracks[static_cast<size_t>(std::clamp(
+            editor.selectedAnimationTrack,
+            0,
+            static_cast<int>(selectedAuthoredClip->tracks.size()) - 1))];
+        if (!track.keys.empty() && uiButton({434.0f, 470.0f, 72.0f, 24.0f}, "Key +")) {
+            editor.selectedAnimationKey = (editor.selectedAnimationKey + 1) % static_cast<int>(track.keys.size());
+            editor.animationScrubFrame = static_cast<int>(pf::fxToFloat(track.keys[static_cast<size_t>(editor.selectedAnimationKey)].frame));
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: selected next authored animation key";
+        }
+    }
+    if (showingAuthoredClips && uiButton({24.0f, 516.0f, 72.0f, 24.0f}, "+ Clip")) {
         pf::AnimationClip clip;
-        clip.name = uniqueFighterName(world, "Clip");
+        clip.name = uniqueAuthoredClipName(def);
         clip.actionIndex = static_cast<int>(def.authoredClips.size());
         clip.frameCount = pf::fx(60);
         def.authoredClips.push_back(std::move(clip));
         editor.selectedAnimationClip = static_cast<int>(def.authoredClips.size()) - 1;
+        editor.selectedAnimationTrack = 0;
+        editor.selectedAnimationKey = 0;
         editor.animationScrubFrame = 0;
         editor.status = "Editor: added authored animation clip";
+        return;
+    }
+    if (showingAuthoredClips && uiButton({102.0f, 516.0f, 72.0f, 24.0f}, "+ Len")) {
+        pf::AnimationClip& clip = *selectedAuthoredClip;
+        clip.frameCount += pf::fx(5);
+        editor.status = "Editor: lengthened authored animation clip";
+    }
+    if (showingAuthoredClips && uiButton({102.0f, 546.0f, 72.0f, 24.0f}, "- Len")) {
+        pf::AnimationClip& clip = *selectedAuthoredClip;
+        clip.frameCount = std::max(pf::fx(1), clip.frameCount - pf::fx(5));
+        editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, std::max(0, static_cast<int>(pf::fxToFloat(clip.frameCount)) - 1));
+        editor.status = "Editor: shortened authored animation clip";
+    }
+    if (showingAuthoredClips && uiButton({184.0f, 516.0f, 72.0f, 24.0f}, "+ Joint")) {
+        ensureAuthoredRootJoint(def);
+        const int parent = def.authoredSkeleton.empty()
+            ? -1
+            : std::clamp(editor.selectedAnimationJoint, 0, static_cast<int>(def.authoredSkeleton.size()) - 1);
+        pf::AnimationJoint joint;
+        joint.name = "Joint" + std::to_string(def.authoredSkeleton.size());
+        joint.parent = parent;
+        joint.translation = {0, pf::fxFromFloat(0.5f), 0};
+        def.authoredSkeleton.push_back(std::move(joint));
+        editor.selectedAnimationJoint = static_cast<int>(def.authoredSkeleton.size()) - 1;
+        editor.status = "Editor: added authored skeleton joint";
+    }
+    if (showingAuthoredClips && !def.authoredSkeleton.empty()) {
+        pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(std::clamp(editor.selectedAnimationJoint, 0, static_cast<int>(def.authoredSkeleton.size()) - 1))];
+        if (uiButton({262.0f, 516.0f, 72.0f, 24.0f}, "Jnt Up")) {
+            joint.translation.y += pf::fxFromFloat(0.05f);
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: raised authored joint bind offset";
+        }
+        if (uiButton({262.0f, 546.0f, 72.0f, 24.0f}, "Jnt Dn")) {
+            joint.translation.y -= pf::fxFromFloat(0.05f);
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: lowered authored joint bind offset";
+        }
+    }
+
+    if (showingAuthoredClips && selectedAuthoredClip && uiButton({352.0f, 500.0f, 72.0f, 24.0f}, "+ Track")) {
+        ensureAuthoredRootJoint(def);
+        pf::AnimationTrack track;
+        track.joint = std::clamp(editor.selectedAnimationJoint, 0, std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+        track.channel = pf::AnimationChannel::TranslateY;
+        track.keys = {
+            {0, 0, 0, pf::AnimationInterpolation::Linear},
+            {selectedAuthoredClip->frameCount, 0, 0, pf::AnimationInterpolation::Linear},
+        };
+        selectedAuthoredClip->tracks.push_back(std::move(track));
+        editor.selectedAnimationTrack = static_cast<int>(selectedAuthoredClip->tracks.size()) - 1;
+        editor.selectedAnimationKey = 0;
+        editor.status = "Editor: added authored animation track";
+    }
+    if (showingAuthoredClips && selectedAuthoredClip && !selectedAuthoredClip->tracks.empty()) {
+        editor.selectedAnimationTrack = std::clamp(editor.selectedAnimationTrack, 0, static_cast<int>(selectedAuthoredClip->tracks.size()) - 1);
+        pf::AnimationTrack& track = selectedAuthoredClip->tracks[static_cast<size_t>(editor.selectedAnimationTrack)];
+        DrawText(("Track " + std::to_string(editor.selectedAnimationTrack) + " j" + std::to_string(track.joint) + " " + animationChannelName(track.channel)).c_str(), 352, 530, 13, DARKGRAY);
+        if (uiButton({434.0f, 500.0f, 72.0f, 24.0f}, "Chan")) {
+            track.channel = nextAnimationChannel(track.channel);
+            editor.status = "Editor: cycled authored track channel";
+        }
+        if (uiButton({352.0f, 548.0f, 72.0f, 24.0f}, "UseJnt")) {
+            track.joint = std::clamp(editor.selectedAnimationJoint, 0, std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+            editor.status = "Editor: assigned track to selected joint";
+        }
+        if (uiButton({434.0f, 548.0f, 72.0f, 24.0f}, "+ Key")) {
+            const pf::Fix frame = pf::fx(editor.animationScrubFrame);
+            track.keys.push_back({frame, pf::sampleTrack(track, frame), 0, pf::AnimationInterpolation::Linear});
+            sortAnimationKeys(track.keys);
+            for (size_t i = 0; i < track.keys.size(); ++i) {
+                if (track.keys[i].frame == frame) {
+                    editor.selectedAnimationKey = static_cast<int>(i);
+                    break;
+                }
+            }
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: inserted authored animation key";
+        }
+        if (!track.keys.empty()) {
+            editor.selectedAnimationKey = std::clamp(editor.selectedAnimationKey, 0, static_cast<int>(track.keys.size()) - 1);
+            pf::AnimationKey& key = track.keys[static_cast<size_t>(editor.selectedAnimationKey)];
+            DrawText(("Key " + std::to_string(editor.selectedAnimationKey) + " f" + std::to_string(static_cast<int>(pf::fxToFloat(key.frame))) +
+                      " v=" + std::to_string(pf::fxToFloat(key.value))).c_str(), 352, 578, 13, DARKGRAY);
+            if (uiButton({352.0f, 596.0f, 72.0f, 24.0f}, "Val -")) {
+                key.value -= pf::fxFromFloat(0.05f);
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                editor.status = "Editor: lowered authored key value";
+            }
+            if (uiButton({434.0f, 596.0f, 72.0f, 24.0f}, "Val +")) {
+                key.value += pf::fxFromFloat(0.05f);
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                editor.status = "Editor: raised authored key value";
+            }
+        }
+    } else if (showingAuthoredClips) {
+        DrawText("No authored tracks", 352, 530, 13, GRAY);
+    }
+    if (showingAuthoredClips && selectedAuthoredClip && uiButton({24.0f, 546.0f, 72.0f, 24.0f}, "Sync St")) {
+        pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+        state.animation = selectedAuthoredClip->name;
+        state.animationActionIndex = selectedAuthoredClip->actionIndex;
+        state.animationLengthFrames = std::max(1, static_cast<int>(pf::fxToFloat(selectedAuthoredClip->frameCount)));
+        editor.status = "Editor: assigned authored clip to selected state";
     }
     if (uiButton({434.0f, 440.0f, 72.0f, 24.0f}, "Clear")) {
         fighter.animationActionIndexOverride = -1;
@@ -1702,7 +1889,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             selectedClip.actionIndex,
             pf::fx(editor.animationScrubFrame));
         if (ok) {
-            DrawText("Preview pose applied to selected fighter", 352, 476, 13, DARKGRAY);
+            DrawText("Preview pose applied to selected fighter", 24, 596, 13, DARKGRAY);
         }
     }
 }
