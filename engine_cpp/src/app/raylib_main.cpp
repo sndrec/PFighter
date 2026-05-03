@@ -4388,6 +4388,102 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     }
 }
 
+static void drawEditorTestLabWorkspace(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.size() < 2) {
+        return;
+    }
+    pf::FighterRuntime& p1 = world.fighters[0];
+    pf::FighterRuntime& p2 = world.fighters[1];
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 228.0f};
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText("Test Lab", 24, 336, 16, BLACK);
+    DrawText((std::string("Mode: ") + (editor.testMode ? "live editor test" : "regular") +
+              "  Objects: " + std::to_string(world.objects.size())).c_str(), 24, 360, 13, DARKGRAY);
+    DrawText(("P1 pct " + std::to_string(pf::fxToFloat(p1.percent)) +
+              "  P2 pct " + std::to_string(pf::fxToFloat(p2.percent))).c_str(), 24, 382, 13, DARKGRAY);
+
+    if (uiButton({24.0f, 410.0f, 72.0f, 24.0f}, "Pause", editor.paused)) {
+        editor.paused = !editor.paused;
+        editor.status = editor.paused ? "Editor test: paused" : "Editor test: running";
+    }
+    if (uiButton({104.0f, 410.0f, 72.0f, 24.0f}, "Step")) {
+        pf::tickWorld(world, {pf::InputFrame{}, pf::InputFrame{}});
+        editor.paused = true;
+        editor.status = "Editor test: stepped one simulation frame";
+    }
+    if (uiButton({184.0f, 410.0f, 72.0f, 24.0f}, "Reset")) {
+        pf::resetTrainingFighter(world, 0, p1.fighterDef, {-pf::fx(2), 0}, 1);
+        pf::resetTrainingFighter(world, 1, p2.fighterDef, {pf::fx(2), 0}, -1);
+        world.objects.clear();
+        editor.status = "Editor test: reset fighters and cleared objects";
+        return;
+    }
+    if (uiButton({264.0f, 410.0f, 72.0f, 24.0f}, "P1 0%")) {
+        p1.percent = 0;
+        editor.status = "Editor test: reset P1 percent";
+    }
+    if (uiButton({344.0f, 410.0f, 72.0f, 24.0f}, "P2 0%")) {
+        p2.percent = 0;
+        editor.status = "Editor test: reset P2 percent";
+    }
+    if (uiButton({424.0f, 410.0f, 72.0f, 24.0f}, "P2 +10")) {
+        p2.percent += pf::fx(10);
+        editor.status = "Editor test: raised P2 percent";
+    }
+
+    auto moveFighter = [&](pf::FighterRuntime& fighter, pf::Fix dx, pf::Fix dy) {
+        fighter.position.x += dx;
+        fighter.position.y = std::max(pf::Fix{0}, fighter.position.y + dy);
+        fighter.previousPosition = fighter.position;
+        if (fighter.fighterDef >= 0 && fighter.fighterDef < static_cast<int>(world.fighterDefs.size())) {
+            pf::calculateEcb(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter, true);
+        }
+    };
+    if (uiButton({24.0f, 442.0f, 72.0f, 24.0f}, "P2 Left")) {
+        moveFighter(p2, -pf::fxFromFloat(0.5f), 0);
+        editor.status = "Editor test: moved P2 left";
+    }
+    if (uiButton({104.0f, 442.0f, 72.0f, 24.0f}, "P2 Right")) {
+        moveFighter(p2, pf::fxFromFloat(0.5f), 0);
+        editor.status = "Editor test: moved P2 right";
+    }
+    if (uiButton({184.0f, 442.0f, 72.0f, 24.0f}, "P2 Up")) {
+        moveFighter(p2, 0, pf::fxFromFloat(0.5f));
+        editor.status = "Editor test: moved P2 upward";
+    }
+    if (uiButton({264.0f, 442.0f, 72.0f, 24.0f}, "P2 Down")) {
+        moveFighter(p2, 0, -pf::fxFromFloat(0.5f));
+        editor.status = "Editor test: moved P2 downward";
+    }
+    if (uiButton({344.0f, 442.0f, 72.0f, 24.0f}, "ClearObj")) {
+        world.objects.clear();
+        editor.status = "Editor test: cleared active objects";
+    }
+
+    if (!world.objectDefs.empty()) {
+        editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
+        DrawText(("Selected object: " + object.name).c_str(), 24, 490, 13, DARKGRAY);
+        if (uiButton({24.0f, 510.0f, 72.0f, 24.0f}, "Obj>")) {
+            editor.selectedObjectDef = wrappedIndex(editor.selectedObjectDef + 1, static_cast<int>(world.objectDefs.size()));
+            editor.status = "Editor test: selected next object";
+        }
+        if (uiButton({104.0f, 510.0f, 72.0f, 24.0f}, "Spawn")) {
+            const pf::Vec2 position{
+                p1.position.x + p1.facing * pf::fxFromFloat(1.1f),
+                p1.position.y + pf::fxFromFloat(1.0f),
+            };
+            const pf::Vec2 velocity{p1.facing * pf::fxFromFloat(0.35f), pf::fxFromFloat(0.1f)};
+            pf::spawnGameObject(world, object.name, 0, position, p1.facing, velocity);
+            editor.status = "Editor test: spawned " + object.name;
+        }
+    } else {
+        DrawText("Selected object: none", 24, 490, 13, GRAY);
+    }
+}
+
 static void previewEditorSelectedState(pf::World& world, pf::FighterEditor& editor, const pf::FighterDefinition& def) {
     if (world.fighters.empty() || def.states.empty()) {
         editor.status = "Editor: no state available to preview";
@@ -4623,6 +4719,8 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
         drawEditorAssetsWorkspace(world, editor, selectedFighterDef);
     } else if (editor.workspace == pf::EditorWorkspace::Animation) {
         drawEditorAnimationWorkspace(world, editor);
+    } else if (editor.workspace == pf::EditorWorkspace::TestLab) {
+        drawEditorTestLabWorkspace(world, editor);
     } else if (editor.workspace != pf::EditorWorkspace::Moveset) {
         DrawText((std::string(workspaceName(editor.workspace)) + " workspace shell").c_str(), 24, 324, 14, DARKGRAY);
     }
