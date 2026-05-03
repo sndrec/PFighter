@@ -4821,6 +4821,30 @@ int main(int argc, char** argv) {
         : nullptr;
     const int packageObjectScriptVar = packageObject && !packageObject->packageVars.empty() ? packageObject->packageVars[0] : -1;
     const pf::Fix packageObjectScriptVelX = packageObject ? packageObject->velocity.x : pf::Fix{-1};
+    pf::World packageObjectStateScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectStateScriptWorld.objectDefs = loadedPackage.objects;
+        if (packageObjectStateScriptWorld.objectDefs.size() > 1 &&
+            !packageObjectStateScriptWorld.objectDefs[1].states.empty() &&
+            !packageObjectStateScriptWorld.objectDefs[1].packageScripts.empty())
+        {
+            packageObjectStateScriptWorld.objectDefs[1].onAccessory.clear();
+            packageObjectStateScriptWorld.objectDefs[1].states[0].onFrame = {{std::string{"script:ObjectSmokeScript"}}};
+        }
+    }
+    const int packageObjectStateIndex = pf::spawnGameObject(
+        packageObjectStateScriptWorld,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    pf::tickWorld(packageObjectStateScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const pf::GameObjectRuntime* packageObjectState = packageObjectStateIndex >= 0 &&
+            packageObjectStateIndex < static_cast<int>(packageObjectStateScriptWorld.objects.size())
+        ? &packageObjectStateScriptWorld.objects[static_cast<size_t>(packageObjectStateIndex)]
+        : nullptr;
+    const int packageObjectStateScriptVar = packageObjectState && !packageObjectState->packageVars.empty() ? packageObjectState->packageVars[0] : -1;
     std::cout << "fighter_package_bytes=" << packageBytes.size()
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
@@ -4833,6 +4857,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
+              << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
