@@ -2841,6 +2841,16 @@ static std::string callbackSummary(const std::vector<pf::FunctionCall>& calls) {
     return summary;
 }
 
+static std::string animationBlendLabel(int blendFrames) {
+    if (blendFrames == pf::kUseDefaultAnimationBlendFrames) {
+        return "default";
+    }
+    if (blendFrames == pf::kDisableAnimationBlendFrames) {
+        return "off";
+    }
+    return std::to_string(blendFrames);
+}
+
 static void removeLastCallback(
     std::vector<pf::FunctionCall>& calls,
     const char* label,
@@ -5792,7 +5802,9 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     DrawText(("Length: " + std::to_string(state.animationLengthFrames) +
               "  IASA: " + std::to_string(state.initialInterruptibleFrame)).c_str(), 24, 382, 13, DARKGRAY);
     const std::string finishState = state.onAnimationFinishedState.empty() ? "none" : state.onAnimationFinishedState;
-    DrawText(("Finish: " + finishState + "  Blend " + std::to_string(state.defaultAnimationBlendFrames)).c_str(), 516, 360, 12, DARKGRAY);
+    DrawText(("Finish: " + finishState +
+              "  FinBlend " + animationBlendLabel(state.onAnimationFinishedBlendFrames) +
+              "  DefBlend " + animationBlendLabel(state.defaultAnimationBlendFrames)).c_str(), 516, 360, 12, DARKGRAY);
 
     if (uiButton({24.0f, 410.0f, 90.0f, 24.0f}, "Loop", state.loopAnimation)) {
         state.loopAnimation = !state.loopAnimation;
@@ -5834,6 +5846,18 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     if (uiButton({780.0f, 382.0f, 58.0f, 24.0f}, "Blend+")) {
         ++state.defaultAnimationBlendFrames;
         editor.status = "Editor: lengthened default blend for " + state.name;
+    }
+    if (uiButton({846.0f, 382.0f, 58.0f, 24.0f}, "FinB-")) {
+        if (state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames) {
+            editor.status = "Editor: animation-finished blend is already disabled";
+        } else {
+            --state.onAnimationFinishedBlendFrames;
+            editor.status = "Editor: shortened animation-finished blend for " + state.name;
+        }
+    }
+    if (uiButton({912.0f, 382.0f, 58.0f, 24.0f}, "FinB+")) {
+        ++state.onAnimationFinishedBlendFrames;
+        editor.status = "Editor: lengthened animation-finished blend for " + state.name;
     }
     if (uiButton({516.0f, 410.0f, 90.0f, 24.0f}, "BackLed", state.allowBackwardsLedgeGrab)) {
         state.allowBackwardsLedgeGrab = !state.allowBackwardsLedgeGrab;
