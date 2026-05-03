@@ -4879,6 +4879,10 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidGeometryWritePackage = sourcePackage;
     invalidGeometryWritePackage.objects[1].hitboxes[0].radius = 0;
     const bool invalidPackageGeometryWriteRejected = pf::writeFighterPackage(invalidGeometryWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidHitboxTargetWritePackage = sourcePackage;
+    invalidHitboxTargetWritePackage.objects[1].hitboxes[0].hitGrounded = false;
+    invalidHitboxTargetWritePackage.objects[1].hitboxes[0].hitAirborne = false;
+    const bool invalidPackageHitboxTargetWriteRejected = pf::writeFighterPackage(invalidHitboxTargetWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectPropertyWritePackage = sourcePackage;
     invalidObjectPropertyWritePackage.objects[1].terminalVelocity = -1;
     const bool invalidPackageObjectPropertyWriteRejected = pf::writeFighterPackage(invalidObjectPropertyWritePackage, &invalidPackageError).empty();
@@ -5532,6 +5536,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_callback_write_rejected=" << invalidPackageCallbackWriteRejected
               << " fighter_package_invalid_object_callback_write_rejected=" << invalidPackageObjectCallbackWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
+              << " fighter_package_invalid_hitbox_target_write_rejected=" << invalidPackageHitboxTargetWriteRejected
               << " fighter_package_invalid_object_property_write_rejected=" << invalidPackageObjectPropertyWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
               << " fighter_package_invalid_interrupt_var_write_rejected=" << invalidPackageInterruptVarWriteRejected

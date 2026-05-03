@@ -1814,6 +1814,9 @@ void validateHitboxGeometry(const HitboxDefinition& hitbox) {
     {
         throw std::runtime_error("fighter package hitbox numeric value is invalid");
     }
+    if (hitbox.hitFighters && !hitbox.hitGrounded && !hitbox.hitAirborne) {
+        throw std::runtime_error("fighter package hitbox target flags are invalid");
+    }
 }
 
 void validateHurtboxGeometry(const HurtboxDefinition& hurtbox) {
