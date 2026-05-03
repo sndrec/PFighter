@@ -4131,6 +4131,39 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         state.initialInterruptibleFrame = std::max(0, state.initialInterruptibleFrame - 1);
         editor.status = "Editor: moved IASA earlier for " + state.name;
     }
+    if (uiButton({516.0f, 440.0f, 58.0f, 24.0f}, "+ Sync")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SyncTimer;
+        subaction.frames = 5;
+        state.action.push_back(subaction);
+        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+        editor.status = "Editor: added sync timer subaction to " + state.name;
+    }
+    if (uiButton({582.0f, 440.0f, 58.0f, 24.0f}, "+ Async")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::AsyncTimer;
+        subaction.frames = 5;
+        state.action.push_back(subaction);
+        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+        editor.status = "Editor: added async timer subaction to " + state.name;
+    }
+    if (uiButton({648.0f, 440.0f, 58.0f, 24.0f}, "+ Intbl")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SetInterruptible;
+        subaction.frames = 1;
+        subaction.interruptibleFrame = -1;
+        state.action.push_back(subaction);
+        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+        editor.status = "Editor: added interruptible marker to " + state.name;
+    }
+    if (uiButton({714.0f, 440.0f, 58.0f, 24.0f}, "+ Rev")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::ReverseDirection;
+        subaction.frames = 1;
+        state.action.push_back(subaction);
+        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+        editor.status = "Editor: added reverse-direction subaction to " + state.name;
+    }
     if (uiButton({122.0f, 470.0f, 90.0f, 24.0f}, "+ Hitbox")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::CreateHitbox;
@@ -4379,6 +4412,33 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             if (uiButton({616.0f, 660.0f, 44.0f, 22.0f}, "Grab", hitbox.isGrab)) {
                 hitbox.isGrab = !hitbox.isGrab;
                 editor.status = "Editor: toggled selected hitbox grab flag";
+            }
+        } else {
+            DrawText(("Subaction #" + std::to_string(editor.selectedSubaction) + " " +
+                      subactionTypeName(subaction.type) +
+                      " frames " + std::to_string(subaction.frames)).c_str(), 516, 554, 12, DARKGRAY);
+            if (uiButton({516.0f, 570.0f, 44.0f, 22.0f}, "Fr+")) {
+                ++subaction.frames;
+                editor.status = "Editor: lengthened selected subaction";
+            }
+            if (uiButton({566.0f, 570.0f, 44.0f, 22.0f}, "Fr-")) {
+                subaction.frames = std::max(0, subaction.frames - 1);
+                editor.status = "Editor: shortened selected subaction";
+            }
+            if (subaction.type == pf::SubactionType::SetInterruptible) {
+                DrawText(("IASA marker " + std::to_string(subaction.interruptibleFrame)).c_str(), 516, 596, 12, DARKGRAY);
+                if (uiButton({516.0f, 612.0f, 44.0f, 22.0f}, "Cur")) {
+                    subaction.interruptibleFrame = -1;
+                    editor.status = "Editor: selected current-frame interruptible marker";
+                }
+                if (uiButton({566.0f, 612.0f, 44.0f, 22.0f}, "IAS+")) {
+                    subaction.interruptibleFrame = std::max(0, subaction.interruptibleFrame) + 1;
+                    editor.status = "Editor: moved interruptible marker later";
+                }
+                if (uiButton({616.0f, 612.0f, 44.0f, 22.0f}, "IAS-")) {
+                    subaction.interruptibleFrame = std::max(0, subaction.interruptibleFrame) - 1;
+                    editor.status = "Editor: moved interruptible marker earlier";
+                }
             }
         }
     }
