@@ -2168,6 +2168,57 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
 }
 
+static bool packageScriptInstructionTargetsFighter(const pf::PackageScriptInstruction& instruction) {
+    return instruction.op == pf::PackageScriptOp::SwitchFighterDefinition ||
+        instruction.op == pf::PackageScriptOp::SpawnFighter;
+}
+
+static const pf::FighterDefinition* fighterDefinitionByName(const pf::World& world, const std::string& name) {
+    const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& candidate) {
+        return candidate.name == name;
+    });
+    return found == world.fighterDefs.end() ? nullptr : &*found;
+}
+
+static bool hasPackagedFighter(const std::vector<pf::FighterDefinition>& fighters, const std::string& name) {
+    return std::any_of(fighters.begin(), fighters.end(), [&](const pf::FighterDefinition& fighter) {
+        return fighter.name == name;
+    });
+}
+
+static std::vector<pf::FighterDefinition> collectEditorPackageFighters(const pf::World& world, const pf::FighterDefinition& root) {
+    std::vector<pf::FighterDefinition> fighters;
+    fighters.push_back(root);
+    for (size_t scan = 0; scan < fighters.size(); ++scan) {
+        const pf::FighterDefinition& fighter = fighters[scan];
+        for (const pf::PackageScript& script : fighter.packageScripts) {
+            for (const pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (!packageScriptInstructionTargetsFighter(instruction) ||
+                    instruction.text.empty() ||
+                    hasPackagedFighter(fighters, instruction.text))
+                {
+                    continue;
+                }
+                if (const pf::FighterDefinition* dependency = fighterDefinitionByName(world, instruction.text)) {
+                    fighters.push_back(*dependency);
+                }
+            }
+        }
+    }
+    return fighters;
+}
+
+static void collectEditorPackageAssets(const std::vector<pf::FighterDefinition>& fighters, pf::FighterPackage& package) {
+    for (const pf::FighterDefinition& fighter : fighters) {
+        if (!fighter.hsdAsset) {
+            continue;
+        }
+        if (std::find(package.hsdAssets.begin(), package.hsdAssets.end(), fighter.hsdAsset) == package.hsdAssets.end()) {
+            package.hsdAssets.push_back(fighter.hsdAsset);
+        }
+    }
+}
+
 static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     if (world.fighters.empty()) {
@@ -2200,10 +2251,8 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     if (uiButton({338.0f, 338.0f, 82.0f, 26.0f}, "Save Pkg")) {
         pf::FighterPackage package;
         package.name = def.name + "_editor";
-        if (def.hsdAsset) {
-            package.hsdAssets = {def.hsdAsset};
-        }
-        package.fighters = {def};
+        package.fighters = collectEditorPackageFighters(world, def);
+        collectEditorPackageAssets(package.fighters, package);
         package.objects = world.objectDefs;
         std::string error;
         if (pf::saveFighterPackage(editor.packagePath, package, &error)) {
@@ -2223,6 +2272,17 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         } else {
             const int fighterDef = fighter.fighterDef;
             world.fighterDefs[static_cast<size_t>(fighterDef)] = package.fighters.front();
+            for (size_t packageFighterIndex = 1; packageFighterIndex < package.fighters.size(); ++packageFighterIndex) {
+                const pf::FighterDefinition& packageFighter = package.fighters[packageFighterIndex];
+                auto existing = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& candidate) {
+                    return candidate.name == packageFighter.name;
+                });
+                if (existing == world.fighterDefs.end()) {
+                    world.fighterDefs.push_back(packageFighter);
+                } else {
+                    *existing = packageFighter;
+                }
+            }
             if (!package.objects.empty()) {
                 world.objectDefs = package.objects;
             }
