@@ -1049,6 +1049,45 @@ static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
     return "ScriptX";
 }
 
+static std::string uniqueObjectName(const pf::World& world, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        const bool exists = std::any_of(world.objectDefs.begin(), world.objectDefs.end(), [&](const pf::GameObjectDefinition& object) {
+            return object.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+static pf::GameObjectDefinition makeEditorObjectDefinition(const std::string& name, pf::GameObjectKind kind) {
+    pf::GameObjectDefinition object;
+    object.name = name;
+    object.kind = kind;
+    object.initialState = 0;
+    object.lifetimeFrames = kind == pf::GameObjectKind::Projectile ? 90 : 600;
+    object.gravity = kind == pf::GameObjectKind::Projectile ? 0 : -pf::fxFromFloat(0.08f);
+    object.terminalVelocity = pf::fxFromFloat(3.0f);
+    object.destroyOnHit = kind == pf::GameObjectKind::Projectile;
+    object.destroyOnShield = kind == pf::GameObjectKind::Projectile;
+    object.states = {{"Idle", 1, true}};
+    if (kind == pf::GameObjectKind::Projectile) {
+        pf::HitboxDefinition hitbox;
+        hitbox.radius = pf::fxFromFloat(0.45f);
+        hitbox.damage = pf::fxFromFloat(3.0f);
+        hitbox.knockbackAngleDegrees = pf::fx(45);
+        hitbox.knockbackBase = pf::fx(20);
+        hitbox.knockbackGrowth = pf::fx(60);
+        object.hitboxes = {hitbox};
+    } else {
+        object.hurtboxes = {{{}, {}, pf::fxFromFloat(0.35f), pf::HurtboxState::Normal}};
+        object.touchboxes = {{{}, {}, pf::fxFromFloat(0.45f), true, true}};
+    }
+    return object;
+}
+
 static bool hasFunctionCall(const std::vector<pf::FunctionCall>& calls, const std::string& name) {
     return std::any_of(calls.begin(), calls.end(), [&](const pf::FunctionCall& call) {
         return call.name == name;
@@ -1343,7 +1382,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         return;
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 178.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Assets", 24, 336, 16, BLACK);
@@ -1387,6 +1426,46 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedPackageScript = 0;
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: loaded package fighter " + world.fighterDefs[static_cast<size_t>(fighterDef)].name;
+        }
+    }
+
+    DrawText("Objects / Articles", 24, 436, 13, DARKGRAY);
+    const int visibleObjects = std::min(5, static_cast<int>(world.objectDefs.size()));
+    for (int row = 0; row < visibleObjects; ++row) {
+        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(row)];
+        const std::string kind = object.kind == pf::GameObjectKind::Projectile ? "Proj" : "Item";
+        const std::string label = kind + " " + object.name;
+        if (uiListRow({24.0f, 456.0f + 24.0f * row, 230.0f, 22.0f}, label, row == editor.selectedObjectDef)) {
+            editor.selectedObjectDef = row;
+        }
+    }
+    if (world.objectDefs.empty()) {
+        DrawText("No object definitions", 31, 461, 13, GRAY);
+    }
+    if (uiButton({270.0f, 456.0f, 76.0f, 24.0f}, "+ Item")) {
+        world.objectDefs.push_back(makeEditorObjectDefinition(uniqueObjectName(world, "Item"), pf::GameObjectKind::Item));
+        editor.selectedObjectDef = static_cast<int>(world.objectDefs.size()) - 1;
+        editor.status = "Editor: added package item " + world.objectDefs.back().name;
+    }
+    if (uiButton({354.0f, 456.0f, 76.0f, 24.0f}, "+ Proj")) {
+        world.objectDefs.push_back(makeEditorObjectDefinition(uniqueObjectName(world, "Projectile"), pf::GameObjectKind::Projectile));
+        editor.selectedObjectDef = static_cast<int>(world.objectDefs.size()) - 1;
+        editor.status = "Editor: added package projectile " + world.objectDefs.back().name;
+    }
+    if (uiButton({438.0f, 456.0f, 76.0f, 24.0f}, "Spawn")) {
+        if (!world.objectDefs.empty()) {
+            editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
+            pf::Subaction spawn;
+            spawn.type = pf::SubactionType::SpawnObject;
+            spawn.frames = 1;
+            spawn.objectName = object.name;
+            spawn.spawnOffset = {pf::fxFromFloat(0.75f), pf::fxFromFloat(0.7f), 0};
+            spawn.spawnVelocity = {pf::fxFromFloat(1.0f), pf::fxFromFloat(0.2f)};
+            pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+            state.action.push_back(std::move(spawn));
+            editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+            editor.status = "Editor: added SpawnObject subaction for " + object.name;
         }
     }
 }

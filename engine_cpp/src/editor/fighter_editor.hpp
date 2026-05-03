@@ -21,6 +21,7 @@ struct FighterEditor {
     int selectedPackageVariable = 0;
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;
+    int selectedObjectDef = 0;
     bool showBoxes = true;
     bool paused = false;
     bool sideView = false;

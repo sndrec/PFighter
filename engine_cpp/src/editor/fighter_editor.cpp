@@ -34,6 +34,10 @@ void FighterEditor::clampToWorld(const World& world) {
             0,
             std::max(0, static_cast<int>(script.instructions.size()) - 1));
     }
+    selectedObjectDef = std::clamp(
+        selectedObjectDef,
+        0,
+        std::max(0, static_cast<int>(world.objectDefs.size()) - 1));
 }
 
 } // namespace pf
