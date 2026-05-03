@@ -24,6 +24,7 @@ struct FighterEditor {
     int selectedObjectDef = 0;
     int selectedAnimationClip = 0;
     int animationScrubFrame = 0;
+    int selectedHurtbox = 0;
     bool showBoxes = true;
     bool paused = false;
     bool sideView = false;

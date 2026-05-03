@@ -1741,6 +1741,62 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         state.interrupts.push_back(interrupt);
         editor.status = "Editor: added Wait interrupt to " + state.name;
     }
+
+    DrawText(("Hurtboxes: " + std::to_string(def.hurtboxes.size())).c_str(), 24, 506, 13, DARKGRAY);
+    if (uiButton({122.0f, 500.0f, 72.0f, 24.0f}, "+ Hurt")) {
+        pf::HurtboxDefinition hurtbox;
+        hurtbox.bone = pf::BoneId::Hip;
+        hurtbox.startOffset = {0, pf::fxFromFloat(-0.35f), 0};
+        hurtbox.endOffset = {0, pf::fxFromFloat(0.45f), 0};
+        hurtbox.radius = pf::fxFromFloat(0.35f);
+        def.hurtboxes.push_back(hurtbox);
+        editor.selectedHurtbox = static_cast<int>(def.hurtboxes.size()) - 1;
+        editor.status = "Editor: added fighter hurtbox";
+    }
+    if (uiButton({202.0f, 500.0f, 72.0f, 24.0f}, "- Hurt")) {
+        if (!def.hurtboxes.empty()) {
+            def.hurtboxes.erase(def.hurtboxes.begin() + editor.selectedHurtbox);
+            editor.selectedHurtbox = std::clamp(editor.selectedHurtbox, 0, std::max(0, static_cast<int>(def.hurtboxes.size()) - 1));
+            editor.status = "Editor: removed fighter hurtbox";
+        }
+    }
+    if (!def.hurtboxes.empty()) {
+        editor.selectedHurtbox = std::clamp(editor.selectedHurtbox, 0, static_cast<int>(def.hurtboxes.size()) - 1);
+        pf::HurtboxDefinition& hurtbox = def.hurtboxes[static_cast<size_t>(editor.selectedHurtbox)];
+        const std::string hurtboxLabel = "#" + std::to_string(editor.selectedHurtbox) +
+            " r=" + std::to_string(pf::fxToFloat(hurtbox.radius)) +
+            " y=(" + std::to_string(pf::fxToFloat(hurtbox.startOffset.y)) +
+            "," + std::to_string(pf::fxToFloat(hurtbox.endOffset.y)) + ")";
+        DrawText(hurtboxLabel.c_str(), 24, 532, 13, DARKGRAY);
+        if (uiButton({24.0f, 554.0f, 54.0f, 24.0f}, "Prev")) {
+            --editor.selectedHurtbox;
+        }
+        if (uiButton({84.0f, 554.0f, 54.0f, 24.0f}, "Next")) {
+            ++editor.selectedHurtbox;
+        }
+        if (uiButton({150.0f, 554.0f, 54.0f, 24.0f}, "+ Rad")) {
+            hurtbox.radius += pf::fxFromFloat(0.05f);
+            editor.status = "Editor: increased hurtbox radius";
+        }
+        if (uiButton({210.0f, 554.0f, 54.0f, 24.0f}, "- Rad")) {
+            hurtbox.radius = std::max(pf::fxFromFloat(0.05f), hurtbox.radius - pf::fxFromFloat(0.05f));
+            editor.status = "Editor: decreased hurtbox radius";
+        }
+        if (uiButton({276.0f, 554.0f, 54.0f, 24.0f}, "+ Tall")) {
+            hurtbox.endOffset.y += pf::fxFromFloat(0.1f);
+            editor.status = "Editor: stretched hurtbox upward";
+        }
+        if (uiButton({336.0f, 554.0f, 54.0f, 24.0f}, "- Tall")) {
+            hurtbox.endOffset.y = std::max(hurtbox.startOffset.y + pf::fxFromFloat(0.1f), hurtbox.endOffset.y - pf::fxFromFloat(0.1f));
+            editor.status = "Editor: shortened hurtbox";
+        }
+        if (uiButton({402.0f, 554.0f, 54.0f, 24.0f}, "Grab", hurtbox.grabbable)) {
+            hurtbox.grabbable = !hurtbox.grabbable;
+            editor.status = "Editor: toggled hurtbox grabbable";
+        }
+    } else {
+        DrawText("No authored hurtboxes", 24, 532, 13, GRAY);
+    }
 }
 
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {

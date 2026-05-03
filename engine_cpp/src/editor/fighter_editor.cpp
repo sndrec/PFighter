@@ -43,6 +43,10 @@ void FighterEditor::clampToWorld(const World& world) {
     if (clipCount == 0) {
         animationScrubFrame = 0;
     }
+    selectedHurtbox = std::clamp(
+        selectedHurtbox,
+        0,
+        std::max(0, static_cast<int>(def.hurtboxes.size()) - 1));
 }
 
 } // namespace pf
