@@ -1547,7 +1547,9 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Logic", 24, 336, 16, BLACK);
     DrawText(("State hooks: enter " + std::to_string(state.onEnter.size()) +
-              "  frame " + std::to_string(state.onFrame.size())).c_str(), 24, 358, 13, DARKGRAY);
+              "  frame " + std::to_string(state.onFrame.size()) +
+              "  land " + std::to_string(state.onLanding.size()) +
+              "  air " + std::to_string(state.onAirborne.size())).c_str(), 24, 358, 13, DARKGRAY);
 
     if (uiButton({338.0f, 334.0f, 58.0f, 24.0f}, "+ Var")) {
         def.packageVariables.push_back({uniquePackageVariableName(def), 0});
@@ -1723,6 +1725,12 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 instruction.op = pf::PackageScriptOp::SpawnObject;
                 editor.status = "Editor: targeted selected object from script block";
             }
+        }
+        if (uiButton({365.0f, 652.0f, 68.0f, 24.0f}, "BindLd")) {
+            bindPackageScriptCallback(state.onLanding, script->name, "landing", editor);
+        }
+        if (uiButton({440.0f, 652.0f, 68.0f, 24.0f}, "BindAir")) {
+            bindPackageScriptCallback(state.onAirborne, script->name, "airborne", editor);
         }
     }
 }
