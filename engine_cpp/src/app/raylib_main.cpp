@@ -2996,6 +2996,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(objectIndex)];
         if (object.packageVariables.empty()) {
             DrawText(("Obj life=" + std::to_string(object.lifetimeFrames) +
+                      " grav=" + std::to_string(pf::fxToFloat(object.gravity)) +
                       " term=" + std::to_string(pf::fxToFloat(object.terminalVelocity)) +
                       " hp=" + std::to_string(pf::fxToFloat(object.maxDamage))).c_str(), 270, 402, 12, DARKGRAY);
         }
@@ -3278,6 +3279,26 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             object.maxDamage += pf::fx(1);
             editor.status = "Editor: increased object max damage";
         }
+        if (uiButton({510.0f, 424.0f, 36.0f, 22.0f}, "G-")) {
+            object.gravity -= pf::fxFromFloat(0.02f);
+            editor.status = "Editor: decreased object gravity";
+        }
+        if (uiButton({550.0f, 424.0f, 36.0f, 22.0f}, "G+")) {
+            object.gravity += pf::fxFromFloat(0.02f);
+            editor.status = "Editor: increased object gravity";
+        }
+        if (uiButton({590.0f, 424.0f, 44.0f, 22.0f}, "HitX", object.destroyOnHit)) {
+            object.destroyOnHit = !object.destroyOnHit;
+            editor.status = "Editor: toggled object destroy-on-hit";
+        }
+        if (uiButton({638.0f, 424.0f, 44.0f, 22.0f}, "ShdX", object.destroyOnShield)) {
+            object.destroyOnShield = !object.destroyOnShield;
+            editor.status = "Editor: toggled object destroy-on-shield";
+        }
+        if (uiButton({686.0f, 424.0f, 44.0f, 22.0f}, "Own", object.hitOwner)) {
+            object.hitOwner = !object.hitOwner;
+            editor.status = "Editor: toggled object owner hit permission";
+        }
         if (!object.packageVariables.empty()) {
             pf::PackageVariableDefinition& variable = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
             if (uiButton({270.0f, 398.0f, 58.0f, 22.0f}, "OInit-")) {
@@ -3297,6 +3318,14 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         if (uiButton({584.0f, 486.0f, 58.0f, 24.0f}, "Boxes", editor.objectPanel == pf::ObjectEditorPanel::Boxes)) {
             editor.objectPanel = pf::ObjectEditorPanel::Boxes;
             editor.status = "Editor: object box panel";
+        }
+        if (uiButton({646.0f, 486.0f, 58.0f, 24.0f}, "Kind")) {
+            object.kind = object.kind == pf::GameObjectKind::Projectile
+                ? pf::GameObjectKind::Item
+                : pf::GameObjectKind::Projectile;
+            editor.status = object.kind == pf::GameObjectKind::Projectile
+                ? "Editor: object is now a projectile"
+                : "Editor: object is now an item";
         }
 
         if (!object.states.empty()) {
