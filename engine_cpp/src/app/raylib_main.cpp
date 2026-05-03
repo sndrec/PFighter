@@ -1846,6 +1846,18 @@ static void remapRemovedObjectStateScriptTargets(
     }
 }
 
+static bool objectStateNameAvailable(const pf::GameObjectDefinition& object, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < object.states.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && object.states[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool fighterStateAliasLostByRemovingState(const pf::FighterDefinition& def, const std::string& target, const std::string& removedStateName) {
     return target == "AppealS" &&
         (removedStateName == "AppealSR" || removedStateName == "AppealSL") &&
@@ -1878,6 +1890,42 @@ static void remapRemovedFighterStateTargets(
                 shouldRemapRemovedFighterStateTarget(def, instruction.text, removedStateName))
             {
                 instruction.text = replacementStateName;
+            }
+        }
+    }
+}
+
+static bool fighterStateNameAvailable(const pf::FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.states.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.states[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void remapFighterStateTargets(
+    pf::FighterDefinition& def,
+    const std::string& oldStateName,
+    const std::string& newStateName)
+{
+    for (pf::FighterState& state : def.states) {
+        if (state.onAnimationFinishedState == oldStateName) {
+            state.onAnimationFinishedState = newStateName;
+        }
+        for (pf::InterruptRule& rule : state.interrupts) {
+            if (rule.targetState == oldStateName) {
+                rule.targetState = newStateName;
+            }
+        }
+    }
+    for (pf::PackageScript& script : def.packageScripts) {
+        for (pf::PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.op == pf::PackageScriptOp::ChangeState && instruction.text == oldStateName) {
+                instruction.text = newStateName;
             }
         }
     }
@@ -3916,6 +3964,23 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             DrawText(("Object state: " + std::to_string(editor.selectedObjectState + 1) + "/" +
                       std::to_string(object.states.size()) + " " + objectState.name +
                       " len " + std::to_string(objectState.animationLengthFrames)).c_str(), 24, 532, 13, DARKGRAY);
+            std::string renamedObjectState;
+            if (uiTextField(
+                    {24.0f, 546.0f, 160.0f, 24.0f},
+                    "object-state-" + std::to_string(editor.selectedObjectDef) + "-" + std::to_string(editor.selectedObjectState),
+                    editor,
+                    objectState.name,
+                    renamedObjectState))
+            {
+                if (!objectStateNameAvailable(object, renamedObjectState, editor.selectedObjectState)) {
+                    editor.status = "Editor: object state name is empty or already used";
+                } else {
+                    const std::string oldName = objectState.name;
+                    objectState.name = renamedObjectState;
+                    remapRemovedObjectStateScriptTargets(object, oldName, objectState.name);
+                    editor.status = "Editor: renamed object state " + oldName + " to " + objectState.name;
+                }
+            }
             if (uiButton({270.0f, 516.0f, 76.0f, 24.0f}, "+ State")) {
                 pf::GameObjectStateDefinition state;
                 state.name = uniqueObjectStateName(object);
@@ -5899,8 +5964,8 @@ static std::vector<int> editorSubactionFirstFrames(const std::vector<pf::Subacti
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
-    const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
     const pf::UnfoldedAction actionFrames = pf::unfoldAction(state.action);
     const std::vector<int> subactionFrames = editorSubactionFirstFrames(state.action);
     const int timelineFrameCount = std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
@@ -5930,7 +5995,24 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     DrawText("Test", static_cast<int>(testButton.x + 18.0f), static_cast<int>(testButton.y + 7.0f), 14, BLACK);
     DrawText(("Fighter: " + def.name).c_str(), 24, 54, 16, DARKGRAY);
     DrawText(("Live state: " + pf::currentState(world, fighter).name).c_str(), 24, 76, 16, DARKGRAY);
-    DrawText(("Selected state: " + state.name).c_str(), 24, 98, 16, DARKGRAY);
+    DrawText("Selected state:", 24, 98, 16, DARKGRAY);
+    std::string renamedState;
+    if (uiTextField(
+            {142.0f, 94.0f, 190.0f, 24.0f},
+            "fighter-state-" + std::to_string(fighter.fighterDef) + "-" + std::to_string(editor.selectedState),
+            editor,
+            state.name,
+            renamedState))
+    {
+        if (!fighterStateNameAvailable(def, renamedState, editor.selectedState)) {
+            editor.status = "Editor: fighter state name is empty or already used";
+        } else {
+            const std::string oldName = state.name;
+            state.name = renamedState;
+            remapFighterStateTargets(def, oldName, state.name);
+            editor.status = "Editor: renamed fighter state " + oldName + " to " + state.name;
+        }
+    }
     DrawText(("Frame in state: " + std::to_string(pf::frameInState(fighter))).c_str(), 24, 120, 16, DARKGRAY);
     DrawText(("Frames: " + std::to_string(state.animationLengthFrames) +
               "  Subactions: " + std::to_string(state.action.size()) +
