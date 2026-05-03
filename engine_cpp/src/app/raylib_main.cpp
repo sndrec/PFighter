@@ -1241,6 +1241,19 @@ static std::string uniqueObjectName(const pf::World& world, const std::string& p
     return prefix + "X";
 }
 
+static std::string uniqueObjectStateName(const pf::GameObjectDefinition& object) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = "State" + std::to_string(index);
+        const bool exists = std::any_of(object.states.begin(), object.states.end(), [&](const pf::GameObjectStateDefinition& state) {
+            return state.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return "StateX";
+}
+
 static std::string uniqueFighterName(const pf::World& world, const std::string& prefix) {
     for (int index = 0; index < 10000; ++index) {
         const std::string candidate = prefix + std::to_string(index);
@@ -1515,7 +1528,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 330.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 340.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Logic", 24, 336, 16, BLACK);
@@ -1838,48 +1851,93 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedPackageScript,
             0,
             std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
+        editor.selectedObjectState = std::clamp(
+            editor.selectedObjectState,
+            0,
+            std::max(0, static_cast<int>(object.states.size()) - 1));
+
+        if (!object.states.empty()) {
+            pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
+            DrawText(("Object state: " + objectState.name + " len " + std::to_string(objectState.animationLengthFrames)).c_str(), 24, 532, 13, DARKGRAY);
+            if (uiButton({270.0f, 516.0f, 76.0f, 24.0f}, "+ State")) {
+                pf::GameObjectStateDefinition state;
+                state.name = uniqueObjectStateName(object);
+                state.animationLengthFrames = 60;
+                state.loopAnimation = true;
+                state.onFrame = {{std::string{"object_lifetime"}}};
+                object.states.push_back(std::move(state));
+                editor.selectedObjectState = static_cast<int>(object.states.size()) - 1;
+                editor.status = "Editor: added object state";
+                return;
+            }
+            if (uiButton({354.0f, 516.0f, 76.0f, 24.0f}, "- State")) {
+                if (object.states.size() > 1) {
+                    object.states.erase(object.states.begin() + editor.selectedObjectState);
+                    editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+                    object.initialState = std::clamp(object.initialState, 0, static_cast<int>(object.states.size()) - 1);
+                    editor.status = "Editor: removed object state";
+                    return;
+                }
+            }
+            if (uiButton({438.0f, 516.0f, 76.0f, 24.0f}, "Initial")) {
+                object.initialState = editor.selectedObjectState;
+                editor.status = "Editor: selected object initial state";
+            }
+            if (uiButton({270.0f, 546.0f, 76.0f, 24.0f}, "Loop", objectState.loopAnimation)) {
+                objectState.loopAnimation = !objectState.loopAnimation;
+                editor.status = "Editor: toggled object state loop";
+            }
+            if (uiButton({354.0f, 546.0f, 76.0f, 24.0f}, "+ Len")) {
+                ++objectState.animationLengthFrames;
+                editor.status = "Editor: lengthened object state";
+            }
+            if (uiButton({438.0f, 546.0f, 76.0f, 24.0f}, "- Len")) {
+                objectState.animationLengthFrames = std::max(1, objectState.animationLengthFrames - 1);
+                editor.status = "Editor: shortened object state";
+            }
+        }
 
         DrawText(("Object logic: " + object.name + " vars " + std::to_string(object.packageVariables.size()) +
-                  " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 532, 13, DARKGRAY);
+                  " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 558, 13, DARKGRAY);
         if (!object.packageScripts.empty()) {
             pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
             editor.selectedPackageInstruction = std::clamp(
                 editor.selectedPackageInstruction,
                 0,
                 std::max(0, static_cast<int>(script.instructions.size()) - 1));
-            drawPackageScriptBlockGraph(script, editor, {24.0f, 548.0f, 246.0f, 96.0f});
-            if (uiButton({354.0f, 546.0f, 76.0f, 24.0f}, "+ Add")) {
+            drawPackageScriptBlockGraph(script, editor, {24.0f, 574.0f, 246.0f, 76.0f});
+            if (uiButton({354.0f, 576.0f, 76.0f, 24.0f}, "+ Add")) {
                 if (!object.packageVariables.empty()) {
                     script.instructions.push_back({pf::PackageScriptOp::AddVarImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
                     editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                     editor.status = "Editor: appended object AddVar instruction";
                 }
             }
-            if (uiButton({438.0f, 546.0f, 76.0f, 24.0f}, "+ VelX")) {
+            if (uiButton({438.0f, 576.0f, 76.0f, 24.0f}, "+ VelX")) {
                 script.instructions.push_back({pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}});
                 editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                 editor.status = "Editor: appended object AirVelX instruction";
             }
-            if (uiButton({354.0f, 576.0f, 76.0f, 24.0f}, "+ Spawn")) {
+            if (uiButton({354.0f, 606.0f, 76.0f, 24.0f}, "+ Spawn")) {
                 script.instructions.push_back({pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(1.0f), object.name});
                 editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                 editor.status = "Editor: appended object SpawnObject instruction";
             }
-            if (uiButton({438.0f, 576.0f, 76.0f, 24.0f}, "- Instr")) {
+            if (uiButton({438.0f, 606.0f, 76.0f, 24.0f}, "- Instr")) {
                 if (!script.instructions.empty()) {
                     script.instructions.erase(script.instructions.begin() + editor.selectedPackageInstruction);
                     editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
                     editor.status = "Editor: removed object script instruction";
                 }
             }
-            if (uiButton({354.0f, 606.0f, 76.0f, 24.0f}, "BindSp")) {
+            if (uiButton({354.0f, 636.0f, 76.0f, 24.0f}, "BindSp")) {
                 bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
             }
-            if (uiButton({438.0f, 606.0f, 76.0f, 24.0f}, "BindAcc")) {
+            if (uiButton({438.0f, 636.0f, 76.0f, 24.0f}, "BindAcc")) {
                 bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
             }
         } else {
-            DrawText("No object script selected", 31, 568, 13, GRAY);
+            DrawText("No object script selected", 31, 590, 13, GRAY);
         }
         if (uiButton({270.0f, 486.0f, 76.0f, 24.0f}, "+ OVar")) {
             object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});

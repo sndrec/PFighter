@@ -38,6 +38,15 @@ void FighterEditor::clampToWorld(const World& world) {
         selectedObjectDef,
         0,
         std::max(0, static_cast<int>(world.objectDefs.size()) - 1));
+    if (world.objectDefs.empty()) {
+        selectedObjectState = 0;
+    } else {
+        const GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(selectedObjectDef)];
+        selectedObjectState = std::clamp(
+            selectedObjectState,
+            0,
+            std::max(0, static_cast<int>(object.states.size()) - 1));
+    }
     const bool useImportedClips = def.hsdAsset && !def.hsdAsset->clips.empty();
     const std::vector<AnimationClip>& clips = useImportedClips ? def.hsdAsset->clips : def.authoredClips;
     const int clipCount = static_cast<int>(clips.size());
