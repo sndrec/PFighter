@@ -3221,6 +3221,30 @@ static void drawEditorSelectedAuthoredMeshVertex(const pf::World& world, const p
     DrawSphereWires(rayPosition, 0.12f, 10, 6, BLACK);
 }
 
+static void drawEditorSelectedAuthoredJoint(const pf::World& world, const pf::FighterEditor& editor) {
+    if (editor.workspace != pf::EditorWorkspace::Animation ||
+        editor.selectedFighter < 0 ||
+        editor.selectedFighter >= static_cast<int>(world.fighters.size()))
+    {
+        return;
+    }
+    const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (def.authoredSkeleton.empty() ||
+        editor.selectedAnimationJoint < 0 ||
+        editor.selectedAnimationJoint >= static_cast<int>(fighter.hsdJointWorldPositions.size()) ||
+        editor.selectedAnimationJoint >= static_cast<int>(def.authoredSkeleton.size()))
+    {
+        return;
+    }
+    const Vector3 jointPosition = toRay(fighter.hsdJointWorldPositions[static_cast<size_t>(editor.selectedAnimationJoint)]);
+    DrawSphere(jointPosition, 0.09f, YELLOW);
+    DrawSphereWires(jointPosition, 0.16f, 12, 8, BLACK);
+}
+
 static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, bool boxes) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
@@ -7263,6 +7287,7 @@ int main() {
             drawGameObjects(world, editor.showBoxes);
             if (appMode == AppMode::Editor) {
                 drawEditorSelectedAuthoredMeshVertex(world, editor);
+                drawEditorSelectedAuthoredJoint(world, editor);
             }
             EndMode3D();
             if (appMode == AppMode::Editor) {
