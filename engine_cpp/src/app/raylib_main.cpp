@@ -2270,6 +2270,86 @@ static void bindAuthoredMeshToJoint(pf::HsdFighterMesh& mesh, int joint) {
     }
 }
 
+static int authoredMeshMaxInfluences(const pf::HsdFighterMesh& mesh) {
+    int maxInfluences = 0;
+    for (const pf::HsdMeshBatch& batch : mesh.batches) {
+        for (const pf::HsdMeshVertex& vertex : batch.vertices) {
+            int vertexInfluences = 0;
+            for (const pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+                if (influence.weight > 0.0f && influence.bone >= 0) {
+                    ++vertexInfluences;
+                }
+            }
+            maxInfluences = std::max(maxInfluences, vertexInfluences);
+        }
+    }
+    return maxInfluences;
+}
+
+static float authoredMeshDistanceSquared(pf::Vec3 a, pf::Vec3 b) {
+    const float dx = pf::fxToFloat(a.x - b.x);
+    const float dy = pf::fxToFloat(a.y - b.y);
+    const float dz = pf::fxToFloat(a.z - b.z);
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static std::vector<pf::Vec3> authoredSkeletonBindPositions(const std::vector<pf::AnimationJoint>& skeleton) {
+    if (skeleton.empty()) {
+        return {};
+    }
+    const pf::AnimationPose pose = pf::bindPose(skeleton);
+    return pf::jointWorldTranslations(skeleton, pose);
+}
+
+static void autoWeightAuthoredMeshToSkeleton(
+    pf::HsdFighterMesh& mesh,
+    const std::vector<pf::AnimationJoint>& skeleton)
+{
+    const std::vector<pf::Vec3> joints = authoredSkeletonBindPositions(skeleton);
+    if (joints.empty()) {
+        return;
+    }
+
+    for (pf::HsdMeshBatch& batch : mesh.batches) {
+        batch.parentBone = joints.size() > 1 ? -1 : 0;
+        batch.singleBindBone = joints.size() > 1 ? -1 : 0;
+        batch.hasEnvelopes = joints.size() > 1;
+        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+            int nearest = 0;
+            int second = -1;
+            float nearestDist = authoredMeshDistanceSquared(vertex.position, joints.front());
+            float secondDist = 0.0f;
+            for (size_t jointIndex = 1; jointIndex < joints.size(); ++jointIndex) {
+                const float dist = authoredMeshDistanceSquared(vertex.position, joints[jointIndex]);
+                if (dist < nearestDist) {
+                    second = nearest;
+                    secondDist = nearestDist;
+                    nearest = static_cast<int>(jointIndex);
+                    nearestDist = dist;
+                } else if (second < 0 || dist < secondDist) {
+                    second = static_cast<int>(jointIndex);
+                    secondDist = dist;
+                }
+            }
+
+            vertex.influences = {};
+            if (second < 0) {
+                vertex.influences[0] = {nearest, 1.0f};
+                continue;
+            }
+
+            const float nearestLength = std::sqrt(nearestDist);
+            const float secondLength = std::sqrt(secondDist);
+            const float totalLength = nearestLength + secondLength;
+            const float nearestWeight = totalLength > 0.0001f
+                ? std::clamp(secondLength / totalLength, 0.0f, 1.0f)
+                : 1.0f;
+            vertex.influences[0] = {nearest, nearestWeight};
+            vertex.influences[1] = {second, 1.0f - nearestWeight};
+        }
+    }
+}
+
 static int remapRemovedAuthoredBone(int bone, int removedIndex, int fallbackBone) {
     if (bone < 0) {
         return bone;
@@ -2926,6 +3006,29 @@ static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterR
 }
 
 static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const pf::HsdMeshBatch& batch, const pf::HsdMeshVertex& vertex) {
+    float blendedX = 0.0f;
+    float blendedY = 0.0f;
+    float blendedZ = 0.0f;
+    float weightSum = 0.0f;
+    for (const pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+        if (influence.weight <= 0.0f ||
+            influence.bone < 0 ||
+            static_cast<size_t>(influence.bone) >= fighter.hsdJointWorldTransforms.size())
+        {
+            continue;
+        }
+        const pf::Vec3 weighted = pf::transformPoint(
+            fighter.hsdJointWorldTransforms[static_cast<size_t>(influence.bone)],
+            vertex.position);
+        blendedX += pf::fxToFloat(weighted.x) * influence.weight;
+        blendedY += pf::fxToFloat(weighted.y) * influence.weight;
+        blendedZ += pf::fxToFloat(weighted.z) * influence.weight;
+        weightSum += influence.weight;
+    }
+    if (weightSum > 0.0f) {
+        return {pf::fxFromFloat(blendedX), pf::fxFromFloat(blendedY), pf::fxFromFloat(blendedZ)};
+    }
+
     const int bone = batch.singleBindBone >= 0 ? batch.singleBindBone : batch.parentBone;
     if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
         return pf::transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], vertex.position);
@@ -3838,6 +3941,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         const int meshBind = def.authoredMesh.batches.front().singleBindBone;
         const int meshParent = def.authoredMesh.batches.front().parentBone;
         DrawText(("Mesh verts=" + std::to_string(authoredMeshVertexCount(def.authoredMesh)) +
+                  " inf=" + std::to_string(authoredMeshMaxInfluences(def.authoredMesh)) +
                   " size " + std::to_string(pf::fxToFloat(meshSize.x)) +
                   "," + std::to_string(pf::fxToFloat(meshSize.y)) +
                   " bind=" + std::to_string(meshBind) +
@@ -3866,6 +3970,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
             bindAuthoredMeshToJoint(def.authoredMesh, joint);
             editor.status = "Editor: bound authored mesh weights to selected joint";
+        }
+        if (uiButton({570.0f, 398.0f, 64.0f, 22.0f}, "AutoWt")) {
+            ensureAuthoredRootJoint(def);
+            autoWeightAuthoredMeshToSkeleton(def.authoredMesh, def.authoredSkeleton);
+            editor.status = "Editor: generated authored mesh skin weights from skeleton";
         }
     }
 
