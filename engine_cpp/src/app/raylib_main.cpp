@@ -2828,6 +2828,19 @@ static void collectEditorPackageAssets(const std::vector<pf::FighterDefinition>&
     }
 }
 
+static void updateEditorPackageSummary(
+    pf::FighterEditor& editor,
+    const pf::FighterPackage& package,
+    const std::vector<uint8_t>& bytes)
+{
+    editor.lastPackageName = package.name;
+    editor.lastPackageBytes = bytes.size();
+    editor.lastPackageChecksum = pf::fighterPackageChecksum(bytes);
+    editor.lastPackageFighters = static_cast<int>(package.fighters.size());
+    editor.lastPackageObjects = static_cast<int>(package.objects.size());
+    editor.lastPackageAssets = static_cast<int>(package.hsdAssets.size());
+}
+
 static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     if (world.fighters.empty()) {
@@ -2847,6 +2860,16 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     DrawText(("Embedded HSD bytes: " + std::to_string(assetBytes)).c_str(), 24, 382, 13, DARKGRAY);
     DrawText(("Objects/articles in package: " + std::to_string(world.objectDefs.size())).c_str(), 24, 404, 13, DARKGRAY);
     DrawText(("Authored mesh batches: " + std::to_string(def.authoredMesh.batches.size())).c_str(), 24, 426, 13, DARKGRAY);
+    if (editor.lastPackageBytes > 0) {
+        DrawText(("Last package: " + editor.lastPackageName +
+                  " bytes=" + std::to_string(editor.lastPackageBytes) +
+                  " checksum=" + std::to_string(editor.lastPackageChecksum)).c_str(), 24, 448, 12, DARKGRAY);
+        DrawText(("Contents: fighters=" + std::to_string(editor.lastPackageFighters) +
+                  " objects=" + std::to_string(editor.lastPackageObjects) +
+                  " assets=" + std::to_string(editor.lastPackageAssets)).c_str(), 24, 466, 12, DARKGRAY);
+    } else {
+        DrawText("Last package: none saved or loaded", 24, 448, 12, GRAY);
+    }
     if (!world.objectDefs.empty()) {
         const int objectIndex = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
         const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(objectIndex)];
@@ -2866,6 +2889,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         std::string error;
         const std::vector<uint8_t> bytes = pf::writeFighterPackage(package, &error);
         if (!bytes.empty() && pf::saveFighterPackage(editor.packagePath, package, &error)) {
+            updateEditorPackageSummary(editor, package, bytes);
             editor.status = "Editor: saved " + editor.packagePath +
                 " bytes=" + std::to_string(bytes.size()) +
                 " checksum=" + std::to_string(pf::fighterPackageChecksum(bytes));
@@ -2881,6 +2905,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         } else if (package.fighters.empty()) {
             editor.status = "Editor package load failed: no fighters in package";
         } else {
+            std::string packageSummaryError;
+            const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(package, &packageSummaryError);
+            if (!packageBytes.empty()) {
+                updateEditorPackageSummary(editor, package, packageBytes);
+            }
             const int fighterDef = fighter.fighterDef;
             const size_t fighterIndex = static_cast<size_t>(editor.selectedFighter);
             const pf::Vec2 position = fighter.position;

@@ -2,6 +2,8 @@
 
 #include "core/simulation.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace pf {
@@ -48,6 +50,12 @@ struct FighterEditor {
     bool animationPreviewActive = false;
     EditorWorkspace workspace = EditorWorkspace::Moveset;
     std::string packagePath = "editor_last.pfpkg";
+    std::string lastPackageName;
+    size_t lastPackageBytes = 0;
+    uint32_t lastPackageChecksum = 0;
+    int lastPackageFighters = 0;
+    int lastPackageObjects = 0;
+    int lastPackageAssets = 0;
     std::string status = "Editor: T or Test launches current in-memory fighter on Battlefield";
 
     void clampToWorld(const World& world);
