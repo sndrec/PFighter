@@ -926,6 +926,29 @@ static Color subactionMarkerColor(const pf::Subaction& subaction) {
     }
 }
 
+static const char* hurtboxStateName(pf::HurtboxState state) {
+    switch (state) {
+    case pf::HurtboxState::Normal: return "Normal";
+    case pf::HurtboxState::Invincible: return "Invincible";
+    case pf::HurtboxState::Intangible: return "Intangible";
+    }
+    return "?";
+}
+
+static pf::HurtboxState nextHurtboxState(pf::HurtboxState state) {
+    switch (state) {
+    case pf::HurtboxState::Normal: return pf::HurtboxState::Invincible;
+    case pf::HurtboxState::Invincible: return pf::HurtboxState::Intangible;
+    case pf::HurtboxState::Intangible: return pf::HurtboxState::Normal;
+    }
+    return pf::HurtboxState::Normal;
+}
+
+static pf::BoneId nextEditorBone(pf::BoneId bone) {
+    const int next = (static_cast<int>(bone) + 1) % pf::kBoneCount;
+    return static_cast<pf::BoneId>(next);
+}
+
 static Rectangle editorTestButtonRect() {
     return {444.0f, 22.0f, 74.0f, 28.0f};
 }
@@ -4522,7 +4545,11 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         editor.selectedHurtbox = std::clamp(editor.selectedHurtbox, 0, static_cast<int>(def.hurtboxes.size()) - 1);
         pf::HurtboxDefinition& hurtbox = def.hurtboxes[static_cast<size_t>(editor.selectedHurtbox)];
         const std::string hurtboxLabel = "#" + std::to_string(editor.selectedHurtbox) +
+            " " + pf::boneName(hurtbox.bone) +
+            " " + hurtboxStateName(hurtbox.state) +
             " r=" + std::to_string(pf::fxToFloat(hurtbox.radius)) +
+            " x=(" + std::to_string(pf::fxToFloat(hurtbox.startOffset.x)) +
+            "," + std::to_string(pf::fxToFloat(hurtbox.endOffset.x)) + ")" +
             " y=(" + std::to_string(pf::fxToFloat(hurtbox.startOffset.y)) +
             "," + std::to_string(pf::fxToFloat(hurtbox.endOffset.y)) + ")";
         DrawText(hurtboxLabel.c_str(), 24, 532, 13, DARKGRAY);
@@ -4551,6 +4578,24 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         if (uiButton({402.0f, 554.0f, 54.0f, 24.0f}, "Grab", hurtbox.grabbable)) {
             hurtbox.grabbable = !hurtbox.grabbable;
             editor.status = "Editor: toggled hurtbox grabbable";
+        }
+        if (uiButton({462.0f, 554.0f, 54.0f, 24.0f}, "Bone")) {
+            hurtbox.bone = nextEditorBone(hurtbox.bone);
+            editor.status = std::string("Editor: assigned hurtbox bone ") + pf::boneName(hurtbox.bone);
+        }
+        if (uiButton({522.0f, 554.0f, 54.0f, 24.0f}, "State")) {
+            hurtbox.state = nextHurtboxState(hurtbox.state);
+            editor.status = std::string("Editor: set hurtbox state ") + hurtboxStateName(hurtbox.state);
+        }
+        if (uiButton({582.0f, 554.0f, 54.0f, 24.0f}, "X+")) {
+            hurtbox.startOffset.x += pf::fxFromFloat(0.1f);
+            hurtbox.endOffset.x += pf::fxFromFloat(0.1f);
+            editor.status = "Editor: moved hurtbox forward";
+        }
+        if (uiButton({642.0f, 554.0f, 54.0f, 24.0f}, "X-")) {
+            hurtbox.startOffset.x -= pf::fxFromFloat(0.1f);
+            hurtbox.endOffset.x -= pf::fxFromFloat(0.1f);
+            editor.status = "Editor: moved hurtbox backward";
         }
     } else {
         DrawText("No authored hurtboxes", 24, 532, 13, GRAY);
