@@ -3655,6 +3655,31 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             editor.status = "Editor: selected next authored animation key";
         }
     }
+    if (showingAuthoredClips && selectedAuthoredClip && uiButton({24.0f, 486.0f, 72.0f, 24.0f}, "Del Clip")) {
+        if (def.authoredClips.size() > 1) {
+            const int removeIndex = std::clamp(editor.selectedAnimationClip, 0, static_cast<int>(def.authoredClips.size()) - 1);
+            const std::string removedName = def.authoredClips[static_cast<size_t>(removeIndex)].name;
+            const int removedAction = def.authoredClips[static_cast<size_t>(removeIndex)].actionIndex;
+            def.authoredClips.erase(def.authoredClips.begin() + removeIndex);
+            editor.selectedAnimationClip = std::clamp(removeIndex, 0, static_cast<int>(def.authoredClips.size()) - 1);
+            const pf::AnimationClip& fallback = def.authoredClips[static_cast<size_t>(editor.selectedAnimationClip)];
+            for (pf::FighterState& fighterState : def.states) {
+                if (fighterState.animation == removedName || fighterState.animationActionIndex == removedAction) {
+                    fighterState.animation = fallback.name;
+                    fighterState.animationActionIndex = fallback.actionIndex;
+                    fighterState.animationLengthFrames = std::max(1, static_cast<int>(pf::fxToFloat(fallback.frameCount)));
+                }
+            }
+            editor.selectedAnimationTrack = 0;
+            editor.selectedAnimationKey = 0;
+            editor.animationScrubFrame = 0;
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: deleted authored animation clip " + removedName;
+            return;
+        }
+        editor.status = "Editor: cannot delete the only authored clip";
+    }
     if (showingAuthoredClips && uiButton({24.0f, 516.0f, 72.0f, 24.0f}, "+ Clip")) {
         pf::AnimationClip clip;
         clip.name = uniqueAuthoredClipName(def);
