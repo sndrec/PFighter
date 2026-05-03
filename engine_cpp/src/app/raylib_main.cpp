@@ -971,6 +971,102 @@ static const char* workspaceName(pf::EditorWorkspace workspace) {
     return "Workspace";
 }
 
+static const char* packageScriptOpName(pf::PackageScriptOp op) {
+    switch (op) {
+    case pf::PackageScriptOp::Nop: return "Nop";
+    case pf::PackageScriptOp::SetVarImmediate: return "SetVar";
+    case pf::PackageScriptOp::AddVarImmediate: return "AddVar";
+    case pf::PackageScriptOp::AddVar: return "AddVars";
+    case pf::PackageScriptOp::SetGroundVelocity: return "GroundVel";
+    case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
+    case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
+    case pf::PackageScriptOp::SetFacing: return "Facing";
+    case pf::PackageScriptOp::ChangeState: return "State";
+    }
+    return "Op";
+}
+
+static std::string packageInstructionLabel(const pf::PackageScriptInstruction& instruction) {
+    std::string label = packageScriptOpName(instruction.op);
+    switch (instruction.op) {
+    case pf::PackageScriptOp::SetVarImmediate:
+    case pf::PackageScriptOp::AddVarImmediate:
+        label += " v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::AddVar:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetGroundVelocity:
+    case pf::PackageScriptOp::SetAirVelocityX:
+    case pf::PackageScriptOp::SetAirVelocityY:
+        label += " " + std::to_string(pf::fxToFloat(instruction.fixValue));
+        break;
+    case pf::PackageScriptOp::SetFacing:
+        label += instruction.intValue < 0 ? " left" : " right";
+        break;
+    case pf::PackageScriptOp::ChangeState:
+        label += " " + instruction.text;
+        break;
+    case pf::PackageScriptOp::Nop:
+        break;
+    }
+    return label;
+}
+
+static bool uiListRow(Rectangle rect, const std::string& label, bool active) {
+    const Vector2 mouse = GetMousePosition();
+    const bool hovered = CheckCollisionPointRec(mouse, rect);
+    DrawRectangleRec(rect, active ? Fade(GREEN, 0.72f) : (hovered ? Fade(ORANGE, 0.5f) : Fade(RAYWHITE, 0.62f)));
+    DrawRectangleLinesEx(rect, 1.0f, Fade(DARKGRAY, 0.75f));
+    DrawText(label.c_str(), static_cast<int>(rect.x + 7.0f), static_cast<int>(rect.y + 5.0f), 13, BLACK);
+    return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+
+static std::string uniquePackageVariableName(const pf::FighterDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = "var" + std::to_string(index);
+        const bool exists = std::any_of(def.packageVariables.begin(), def.packageVariables.end(), [&](const pf::PackageVariableDefinition& variable) {
+            return variable.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return "varX";
+}
+
+static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = "Script" + std::to_string(index);
+        const bool exists = std::any_of(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
+            return script.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return "ScriptX";
+}
+
+static bool hasFunctionCall(const std::vector<pf::FunctionCall>& calls, const std::string& name) {
+    return std::any_of(calls.begin(), calls.end(), [&](const pf::FunctionCall& call) {
+        return call.name == name;
+    });
+}
+
+static void bindPackageScriptCallback(
+    std::vector<pf::FunctionCall>& calls,
+    const std::string& scriptName,
+    const char* label,
+    pf::FighterEditor& editor)
+{
+    const std::string callback = "script:" + scriptName;
+    if (!hasFunctionCall(calls, callback)) {
+        calls.push_back({callback});
+    }
+    editor.status = std::string("Editor: bound ") + scriptName + " to selected state " + label;
+}
+
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     const pf::MeleeCommonData& common = def.properties.common;
     const pf::Fix healthRatio = def.shield.maxHealth > 0 ? pf::fxDiv(fighter.shieldHealth, def.shield.maxHealth) : 0;
@@ -1102,7 +1198,141 @@ static void drawEditorWorkspaceTabs(pf::FighterEditor& editor) {
     }
 }
 
-static void drawEditor(const pf::World& world, pf::FighterEditor& editor) {
+static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        return;
+    }
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText("Package Logic", 24, 336, 16, BLACK);
+    DrawText(("State hooks: enter " + std::to_string(state.onEnter.size()) +
+              "  frame " + std::to_string(state.onFrame.size())).c_str(), 24, 358, 13, DARKGRAY);
+
+    if (uiButton({338.0f, 334.0f, 58.0f, 24.0f}, "+ Var")) {
+        def.packageVariables.push_back({uniquePackageVariableName(def), 0});
+        editor.selectedPackageVariable = static_cast<int>(def.packageVariables.size()) - 1;
+        editor.status = "Editor: added package variable " + def.packageVariables.back().name;
+    }
+    if (uiButton({402.0f, 334.0f, 58.0f, 24.0f}, "- Var")) {
+        if (!def.packageVariables.empty()) {
+            const std::string removed = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)].name;
+            def.packageVariables.erase(def.packageVariables.begin() + editor.selectedPackageVariable);
+            editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(def.packageVariables.size()) - 1));
+            editor.status = "Editor: removed package variable " + removed;
+        }
+    }
+    if (uiButton({338.0f, 364.0f, 58.0f, 24.0f}, "+ Script")) {
+        pf::PackageScript script;
+        script.name = uniquePackageScriptName(def);
+        script.instructionBudget = 64;
+        def.packageScripts.push_back(std::move(script));
+        editor.selectedPackageScript = static_cast<int>(def.packageScripts.size()) - 1;
+        editor.selectedPackageInstruction = 0;
+        editor.status = "Editor: added package script " + def.packageScripts.back().name;
+    }
+    if (uiButton({402.0f, 364.0f, 58.0f, 24.0f}, "- Script")) {
+        if (!def.packageScripts.empty()) {
+            const std::string removed = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+            def.packageScripts.erase(def.packageScripts.begin() + editor.selectedPackageScript);
+            editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(def.packageScripts.size()) - 1));
+            editor.selectedPackageInstruction = 0;
+            editor.status = "Editor: removed package script " + removed;
+        }
+    }
+
+    DrawText("Vars", 24, 392, 13, DARKGRAY);
+    const int visibleVars = std::min(5, static_cast<int>(def.packageVariables.size()));
+    for (int row = 0; row < visibleVars; ++row) {
+        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(row)];
+        const std::string label = variable.name + " = " + std::to_string(variable.initialValue);
+        if (uiListRow({24.0f, 412.0f + 24.0f * row, 156.0f, 22.0f}, label, row == editor.selectedPackageVariable)) {
+            editor.selectedPackageVariable = row;
+        }
+    }
+    if (def.packageVariables.empty()) {
+        DrawText("No variables", 31, 417, 13, GRAY);
+    }
+
+    DrawText("Scripts", 196, 392, 13, DARKGRAY);
+    const int visibleScripts = std::min(5, static_cast<int>(def.packageScripts.size()));
+    for (int row = 0; row < visibleScripts; ++row) {
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(row)];
+        const std::string label = script.name + " (" + std::to_string(script.instructions.size()) + ")";
+        if (uiListRow({196.0f, 412.0f + 24.0f * row, 156.0f, 22.0f}, label, row == editor.selectedPackageScript)) {
+            editor.selectedPackageScript = row;
+            editor.selectedPackageInstruction = 0;
+        }
+    }
+    if (def.packageScripts.empty()) {
+        DrawText("No scripts", 203, 417, 13, GRAY);
+    }
+
+    pf::PackageScript* script = nullptr;
+    if (!def.packageScripts.empty()) {
+        script = &def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+    }
+    DrawText("Instructions", 24, 506, 13, DARKGRAY);
+    if (script) {
+        const int visibleInstructions = std::min(2, static_cast<int>(script->instructions.size()));
+        for (int row = 0; row < visibleInstructions; ++row) {
+            const pf::PackageScriptInstruction& instruction = script->instructions[static_cast<size_t>(row)];
+            if (uiListRow({106.0f, 500.0f + 24.0f * row, 246.0f, 22.0f}, packageInstructionLabel(instruction), row == editor.selectedPackageInstruction)) {
+                editor.selectedPackageInstruction = row;
+            }
+        }
+        if (script->instructions.empty()) {
+            DrawText("No instructions", 113, 505, 13, GRAY);
+        }
+    }
+
+    if (uiButton({365.0f, 412.0f, 68.0f, 24.0f}, "+ AddVar")) {
+        if (script && !def.packageVariables.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::AddVarImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended AddVar instruction to " + script->name;
+        }
+    }
+    if (uiButton({440.0f, 412.0f, 68.0f, 24.0f}, "+ VelX")) {
+        if (script) {
+            script->instructions.push_back({pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended AirVelX instruction to " + script->name;
+        }
+    }
+    if (uiButton({365.0f, 442.0f, 68.0f, 24.0f}, "- Instr")) {
+        if (script && !script->instructions.empty()) {
+            script->instructions.erase(script->instructions.begin() + editor.selectedPackageInstruction);
+            editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(script->instructions.size()) - 1));
+            editor.status = "Editor: removed package instruction";
+        }
+    }
+    if (uiButton({440.0f, 442.0f, 68.0f, 24.0f}, "Bind In")) {
+        if (script) {
+            bindPackageScriptCallback(state.onEnter, script->name, "enter", editor);
+        }
+    }
+    if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind Fr")) {
+        if (script) {
+            bindPackageScriptCallback(state.onFrame, script->name, "frame", editor);
+        }
+    }
+    if (uiButton({440.0f, 472.0f, 68.0f, 24.0f}, "Budget")) {
+        if (script) {
+            script->instructionBudget = script->instructionBudget == 64 ? 256 : 64;
+            editor.status = "Editor: script budget set to " + std::to_string(script->instructionBudget);
+        }
+    }
+}
+
+static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
@@ -1176,7 +1406,9 @@ static void drawEditor(const pf::World& world, pf::FighterEditor& editor) {
     DrawText(editor.status.c_str(), 24, 240, 14, DARKGRAY);
     DrawText("N/New state  Del/remove  T/Test playtest  [/] state  ,/. subaction  Space pause  R reset", 24, 258, 14, GRAY);
     drawEditorWorkspaceTabs(editor);
-    if (editor.workspace != pf::EditorWorkspace::Moveset) {
+    if (editor.workspace == pf::EditorWorkspace::Logic) {
+        drawEditorLogicWorkspace(world, editor);
+    } else if (editor.workspace != pf::EditorWorkspace::Moveset) {
         DrawText((std::string(workspaceName(editor.workspace)) + " workspace shell").c_str(), 24, 324, 14, DARKGRAY);
     }
 }

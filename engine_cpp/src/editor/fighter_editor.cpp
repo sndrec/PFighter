@@ -17,7 +17,23 @@ void FighterEditor::clampToWorld(const World& world) {
     selectedState = std::clamp(selectedState, 0, static_cast<int>(def.states.size()) - 1);
     const FighterState& state = def.states[static_cast<size_t>(selectedState)];
     selectedSubaction = std::clamp(selectedSubaction, 0, std::max(0, static_cast<int>(state.action.size()) - 1));
+    selectedPackageVariable = std::clamp(
+        selectedPackageVariable,
+        0,
+        std::max(0, static_cast<int>(def.packageVariables.size()) - 1));
+    selectedPackageScript = std::clamp(
+        selectedPackageScript,
+        0,
+        std::max(0, static_cast<int>(def.packageScripts.size()) - 1));
+    if (def.packageScripts.empty()) {
+        selectedPackageInstruction = 0;
+    } else {
+        const PackageScript& script = def.packageScripts[static_cast<size_t>(selectedPackageScript)];
+        selectedPackageInstruction = std::clamp(
+            selectedPackageInstruction,
+            0,
+            std::max(0, static_cast<int>(script.instructions.size()) - 1));
+    }
 }
 
 } // namespace pf
-
