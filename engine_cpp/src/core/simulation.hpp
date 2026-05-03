@@ -103,6 +103,8 @@ struct GameObjectDefinition {
     bool destroyOnHit = true;
     bool destroyOnShield = true;
     bool hitOwner = false;
+    std::vector<PackageVariableDefinition> packageVariables;
+    std::vector<PackageScript> packageScripts;
     std::vector<GameObjectStateDefinition> states;
     std::vector<FunctionCall> onSpawned;
     std::vector<FunctionCall> onDestroyed;
@@ -152,6 +154,7 @@ struct GameObjectRuntime {
     Vec2 position;
     Vec2 previousPosition;
     Vec2 velocity;
+    std::vector<int32_t> packageVars;
     std::vector<ActiveHitbox> activeHitboxes;
     std::vector<int> fightersHit;
 };
@@ -222,6 +225,7 @@ struct FighterRuntime {
     std::array<bool, 2> throwHitboxActive{};
     uint32_t stateFlags = 0;
     std::array<uint32_t, 4> commandVars{};
+    std::vector<int32_t> packageVars;
     uint32_t commandFlags = 0;
     uint32_t throwFlags = 0;
     bool jabFollowupEnabled = false;
@@ -372,6 +376,7 @@ struct FighterSnapshot {
     std::array<bool, 2> throwHitboxActive{};
     uint32_t stateFlags = 0;
     std::array<uint32_t, 4> commandVars{};
+    std::vector<int32_t> packageVars;
     uint32_t commandFlags = 0;
     uint32_t throwFlags = 0;
     bool jabFollowupEnabled = false;

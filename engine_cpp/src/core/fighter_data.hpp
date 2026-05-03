@@ -410,6 +410,39 @@ struct FunctionCall {
     Fix fixParam = 0;
 };
 
+struct PackageVariableDefinition {
+    std::string name;
+    int32_t initialValue = 0;
+};
+
+enum class PackageScriptOp : uint8_t {
+    Nop,
+    SetVarImmediate,
+    AddVarImmediate,
+    AddVar,
+    SetGroundVelocity,
+    SetAirVelocityX,
+    SetAirVelocityY,
+    SetFacing,
+    ChangeState,
+};
+
+struct PackageScriptInstruction {
+    PackageScriptOp op = PackageScriptOp::Nop;
+    int dst = -1;
+    int srcA = -1;
+    int srcB = -1;
+    int32_t intValue = 0;
+    Fix fixValue = 0;
+    std::string text;
+};
+
+struct PackageScript {
+    std::string name;
+    int instructionBudget = 64;
+    std::vector<PackageScriptInstruction> instructions;
+};
+
 enum class SubactionType : uint8_t {
     SyncTimer,
     AsyncTimer,
@@ -590,6 +623,8 @@ struct FighterDefinition {
     ShieldDefinition shield;
     std::shared_ptr<const HsdFighterAnimationAsset> hsdAsset;
     bool hasHsdAsset = false;
+    std::vector<PackageVariableDefinition> packageVariables;
+    std::vector<PackageScript> packageScripts;
     std::vector<HurtboxDefinition> hurtboxes;
     std::vector<FighterState> states;
 

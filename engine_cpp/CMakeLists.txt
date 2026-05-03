@@ -15,6 +15,7 @@ add_library(pfighter_core
     src/core/animation.cpp
     src/core/animation_asset.cpp
     src/core/fighter_data.cpp
+    src/core/fighter_package.cpp
     src/core/math.cpp
     src/core/replay.cpp
     src/core/simulation.cpp

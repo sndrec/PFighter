@@ -1,6 +1,7 @@
 #include "core/simulation.hpp"
 #include "core/animation.hpp"
 #include "core/animation_asset.hpp"
+#include "core/fighter_package.hpp"
 #include "core/replay.hpp"
 
 #include <algorithm>
@@ -8,6 +9,43 @@
 #include <string>
 #include <tuple>
 #include <vector>
+
+static bool sameVec2(pf::Vec2 a, pf::Vec2 b) {
+    return a.x == b.x && a.y == b.y;
+}
+
+static bool sameFighterRuntimeCore(const pf::World& aWorld, const pf::World& bWorld, size_t fighterIndex) {
+    const pf::FighterRuntime& a = aWorld.fighters[fighterIndex];
+    const pf::FighterRuntime& b = bWorld.fighters[fighterIndex];
+    return pf::currentState(aWorld, a).name == pf::currentState(bWorld, b).name &&
+        a.internalFrame == b.internalFrame &&
+        a.interruptibleFrame == b.interruptibleFrame &&
+        a.animationFrame == b.animationFrame &&
+        a.animationRate == b.animationRate &&
+        a.lastActionFrameExecuted == b.lastActionFrameExecuted &&
+        a.facing == b.facing &&
+        a.jumpsUsed == b.jumpsUsed &&
+        a.grounded == b.grounded &&
+        a.percent == b.percent &&
+        a.hitlag == b.hitlag &&
+        a.hitstun == b.hitstun &&
+        sameVec2(a.position, b.position) &&
+        sameVec2(a.fighterVelocity, b.fighterVelocity) &&
+        sameVec2(a.knockbackVelocity, b.knockbackVelocity) &&
+        a.activeHitboxes.size() == b.activeHitboxes.size();
+}
+
+static bool sameWorldGameplayCore(const pf::World& a, const pf::World& b) {
+    if (a.frame != b.frame || a.fighters.size() != b.fighters.size() || a.objects.size() != b.objects.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.fighters.size(); ++i) {
+        if (!sameFighterRuntimeCore(a, b, i)) {
+            return false;
+        }
+    }
+    return true;
+}
 
 static pf::FighterRuntime& setFighterOnLeftLedge(pf::World& world, size_t fighterIndex) {
     pf::FighterRuntime& fighter = world.fighters[fighterIndex];
@@ -4514,6 +4552,128 @@ int main(int argc, char** argv) {
               << " object_absorb_count=" << objectAbsorbWorld.objects.size()
               << " object_shield_bounce_ok=" << shieldBounced
               << " object_shield_bounce_vel=" << pf::toString(shieldBounceVelocity)
+              << "\n";
+
+    pf::World packageSourceWorld = pf::makeTrainingWorld();
+    packageSourceWorld.fighterDefs[0].packageVariables = {{"SmokeVar", 4}};
+    packageSourceWorld.fighterDefs[0].packageScripts = {{
+        "SmokeScript",
+        8,
+        {
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 3, 0, {}},
+        },
+    }};
+    packageSourceWorld.objectDefs[1].packageVariables = {{"ObjectSmokeVar", 2}};
+    packageSourceWorld.objectDefs[1].packageScripts = {{
+        "ObjectSmokeScript",
+        8,
+        {
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
+            {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
+        },
+    }};
+    packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
+    pf::FighterPackage sourcePackage;
+    sourcePackage.name = "headless_smoke_package";
+    sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
+    sourcePackage.fighters = {packageSourceWorld.fighterDefs[0]};
+    sourcePackage.objects = packageSourceWorld.objectDefs;
+    std::string packageError;
+    const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
+    pf::FighterPackage loadedPackage;
+    const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError, sourcePackage.hsdAssets);
+    const bool packageShapeOk = packageLoaded &&
+        loadedPackage.fighters.size() == 1 &&
+        loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
+        loadedPackage.fighters[0].states.size() == packageSourceWorld.fighterDefs[0].states.size() &&
+        loadedPackage.fighters[0].hurtboxes.size() == packageSourceWorld.fighterDefs[0].hurtboxes.size() &&
+        loadedPackage.fighters[0].packageVariables.size() == 1 &&
+        loadedPackage.fighters[0].packageScripts.size() == 1 &&
+        loadedPackage.objects.size() > 1 &&
+        loadedPackage.objects[1].packageVariables.size() == 1 &&
+        loadedPackage.objects[1].packageScripts.size() == 1;
+    const bool packageAssetOk = packageShapeOk &&
+        loadedPackage.fighters[0].hasHsdAsset &&
+        loadedPackage.fighters[0].hsdAsset == packageSourceWorld.fighterDefs[0].hsdAsset;
+    const bool sandbagRosterOk = std::any_of(packageSourceWorld.fighterDefs.begin(), packageSourceWorld.fighterDefs.end(), [](const pf::FighterDefinition& def) {
+        return def.name == "Sandbag" && def.hasHsdAsset && def.hsdAsset != nullptr;
+    });
+
+    pf::World packageBaselineWorld = pf::makeTrainingWorld();
+    pf::World packageLoadedWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageLoadedWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageLoadedWorld.objectDefs = loadedPackage.objects;
+    }
+    bool packageParityOk = packageShapeOk;
+    for (int frame = 0; frame < 90 && packageParityOk; ++frame) {
+        pf::InputFrame p1Input;
+        if (frame < 22) {
+            p1Input.move.x = pf::fx(1);
+        }
+        if (frame == 28 || frame == 29) {
+            p1Input.buttons |= pf::ButtonJump;
+        }
+        if (frame == 42) {
+            p1Input.buttons |= pf::ButtonAttack;
+        }
+        const std::vector<pf::InputFrame> inputs{p1Input, pf::InputFrame{}};
+        pf::tickWorld(packageBaselineWorld, inputs);
+        pf::tickWorld(packageLoadedWorld, inputs);
+        packageParityOk = sameWorldGameplayCore(packageBaselineWorld, packageLoadedWorld);
+    }
+
+    pf::World packageScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        const int waitIndex = packageScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            pf::FunctionCall scriptCall;
+            scriptCall.name = "script:SmokeScript";
+            packageScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+        }
+        packageScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    pf::WorldSnapshot packageScriptSnapshot = pf::saveWorld(packageScriptWorld);
+    const int packageScriptVar = packageScriptWorld.fighters[0].packageVars.empty()
+        ? -1
+        : packageScriptWorld.fighters[0].packageVars[0];
+    if (!packageScriptWorld.fighters[0].packageVars.empty()) {
+        packageScriptWorld.fighters[0].packageVars[0] = 0;
+    }
+    pf::loadWorld(packageScriptWorld, packageScriptSnapshot);
+    const int packageScriptRestoreVar = packageScriptWorld.fighters[0].packageVars.empty()
+        ? -1
+        : packageScriptWorld.fighters[0].packageVars[0];
+    pf::World packageObjectScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectScriptWorld.objectDefs = loadedPackage.objects;
+    }
+    const int packageObjectIndex = pf::spawnGameObject(
+        packageObjectScriptWorld,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    pf::tickWorld(packageObjectScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const pf::GameObjectRuntime* packageObject = packageObjectIndex >= 0 && packageObjectIndex < static_cast<int>(packageObjectScriptWorld.objects.size())
+        ? &packageObjectScriptWorld.objects[static_cast<size_t>(packageObjectIndex)]
+        : nullptr;
+    const int packageObjectScriptVar = packageObject && !packageObject->packageVars.empty() ? packageObject->packageVars[0] : -1;
+    const pf::Fix packageObjectScriptVelX = packageObject ? packageObject->velocity.x : pf::Fix{-1};
+    std::cout << "fighter_package_bytes=" << packageBytes.size()
+              << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
+              << " fighter_package_loaded=" << packageLoaded
+              << " fighter_package_shape_ok=" << packageShapeOk
+              << " fighter_package_asset_ok=" << packageAssetOk
+              << " fighter_package_parity_ok=" << packageParityOk
+              << " fighter_package_script_var=" << packageScriptVar
+              << " fighter_package_script_restore_var=" << packageScriptRestoreVar
+              << " fighter_package_object_script_var=" << packageObjectScriptVar
+              << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
+              << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 
     pf::AnimationClip rootMotionClip;

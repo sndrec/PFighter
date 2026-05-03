@@ -1276,6 +1276,13 @@ static void ExportFighterAssetBinary(string outputPath, string fighterDatPath, s
     for (int partIndex = 0; partIndex < modelParts.Length; ++partIndex)
     {
         SBM_ModelPart part = modelParts[partIndex];
+        if (part == null)
+        {
+            writer.Write(-1);
+            writer.Write(0);
+            writer.Write(0);
+            continue;
+        }
         byte[] entries = part.Entries ?? Array.Empty<byte>();
         writer.Write((int)part.StartingBone);
         writer.Write(entries.Length);

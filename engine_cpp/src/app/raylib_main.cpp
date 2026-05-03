@@ -16,6 +16,12 @@
 #include <unordered_map>
 #include <vector>
 
+enum class AppMode {
+    MainMenu,
+    Gameplay,
+    Editor,
+};
+
 static Vector3 toRay(pf::Vec3 v) {
     return {pf::fxToFloat(v.x), pf::fxToFloat(v.y), pf::fxToFloat(v.z)};
 }
@@ -850,6 +856,121 @@ static bool drawsShield(const pf::FighterState& state) {
     return state.name == "GuardOn" || state.name == "Guard" || state.name == "GuardSetOff" || state.name == "GuardReflect";
 }
 
+static const char* subactionTypeName(pf::SubactionType type) {
+    switch (type) {
+    case pf::SubactionType::SyncTimer: return "SyncTimer";
+    case pf::SubactionType::AsyncTimer: return "AsyncTimer";
+    case pf::SubactionType::SetLoop: return "SetLoop";
+    case pf::SubactionType::ExecuteLoop: return "ExecuteLoop";
+    case pf::SubactionType::CreateHitbox: return "CreateHitbox";
+    case pf::SubactionType::RemoveHitbox: return "RemoveHitbox";
+    case pf::SubactionType::AdjustHitboxDamage: return "AdjustHitboxDamage";
+    case pf::SubactionType::AdjustHitboxSize: return "AdjustHitboxSize";
+    case pf::SubactionType::SetHitboxInteraction: return "SetHitboxInteraction";
+    case pf::SubactionType::CreateThrowHitbox: return "CreateThrowHitbox";
+    case pf::SubactionType::ClearHitboxes: return "ClearHitboxes";
+    case pf::SubactionType::SetHurtboxState: return "SetHurtboxState";
+    case pf::SubactionType::SetBodyCollisionState: return "SetBodyCollisionState";
+    case pf::SubactionType::SetInterruptible: return "SetInterruptible";
+    case pf::SubactionType::SetFlag: return "SetFlag";
+    case pf::SubactionType::SetThrowFlag: return "SetThrowFlag";
+    case pf::SubactionType::SetThrowFlagLiteral: return "SetThrowFlagLiteral";
+    case pf::SubactionType::EnableJabFollowup: return "EnableJabFollowup";
+    case pf::SubactionType::SetJabRapid: return "SetJabRapid";
+    case pf::SubactionType::SetJumpState: return "SetJumpState";
+    case pf::SubactionType::ReverseDirection: return "ReverseDirection";
+    case pf::SubactionType::StartSmashCharge: return "StartSmashCharge";
+    case pf::SubactionType::SetModelVisibility: return "SetModelVisibility";
+    case pf::SubactionType::RevertModelVisibility: return "RevertModelVisibility";
+    case pf::SubactionType::RemoveModelVisibility: return "RemoveModelVisibility";
+    case pf::SubactionType::SetFighterVisibility: return "SetFighterVisibility";
+    case pf::SubactionType::SetModelPartAnimation: return "SetModelPartAnimation";
+    case pf::SubactionType::SelfDamage: return "SelfDamage";
+    case pf::SubactionType::SpawnObject: return "SpawnObject";
+    }
+    return "Unknown";
+}
+
+static Color subactionMarkerColor(const pf::Subaction& subaction) {
+    switch (subaction.type) {
+    case pf::SubactionType::CreateHitbox:
+    case pf::SubactionType::CreateThrowHitbox:
+        return RED;
+    case pf::SubactionType::ClearHitboxes:
+    case pf::SubactionType::RemoveHitbox:
+        return MAROON;
+    case pf::SubactionType::SetInterruptible:
+        return GREEN;
+    case pf::SubactionType::SpawnObject:
+        return PURPLE;
+    case pf::SubactionType::SetHurtboxState:
+    case pf::SubactionType::SetBodyCollisionState:
+        return BLUE;
+    default:
+        return ORANGE;
+    }
+}
+
+static Rectangle editorTestButtonRect() {
+    return {444.0f, 22.0f, 74.0f, 28.0f};
+}
+
+static Rectangle editorNewStateButtonRect() {
+    return {318.0f, 22.0f, 54.0f, 28.0f};
+}
+
+static Rectangle editorDeleteStateButtonRect() {
+    return {380.0f, 22.0f, 56.0f, 28.0f};
+}
+
+static Rectangle mainMenuButtonRect(int index) {
+    return {
+        static_cast<float>(GetScreenWidth() / 2 - 150),
+        static_cast<float>(260 + index * 54),
+        300.0f,
+        40.0f,
+    };
+}
+
+static Rectangle topNavButtonRect(int index) {
+    return {
+        static_cast<float>(GetScreenWidth() - 330 + index * 104),
+        12.0f,
+        96.0f,
+        28.0f,
+    };
+}
+
+static Rectangle editorWorkspaceTabRect(int index) {
+    return {
+        12.0f + static_cast<float>(index) * 106.0f,
+        286.0f,
+        98.0f,
+        28.0f,
+    };
+}
+
+static bool uiButton(Rectangle rect, const std::string& label, bool active = false) {
+    const Vector2 mouse = GetMousePosition();
+    const bool hovered = CheckCollisionPointRec(mouse, rect);
+    DrawRectangleRec(rect, active ? GREEN : (hovered ? Fade(ORANGE, 0.85f) : Fade(RAYWHITE, 0.82f)));
+    DrawRectangleLinesEx(rect, 1.0f, DARKGRAY);
+    const int textWidth = MeasureText(label.c_str(), 14);
+    DrawText(label.c_str(), static_cast<int>(rect.x + (rect.width - static_cast<float>(textWidth)) * 0.5f), static_cast<int>(rect.y + 7.0f), 14, BLACK);
+    return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+
+static const char* workspaceName(pf::EditorWorkspace workspace) {
+    switch (workspace) {
+    case pf::EditorWorkspace::Moveset: return "Moveset";
+    case pf::EditorWorkspace::Logic: return "Logic";
+    case pf::EditorWorkspace::Assets: return "Assets";
+    case pf::EditorWorkspace::Animation: return "Animation";
+    case pf::EditorWorkspace::TestLab: return "Test Lab";
+    }
+    return "Workspace";
+}
+
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     const pf::MeleeCommonData& common = def.properties.common;
     const pf::Fix healthRatio = def.shield.maxHealth > 0 ? pf::fxDiv(fighter.shieldHealth, def.shield.maxHealth) : 0;
@@ -941,23 +1062,123 @@ static void drawGameObjects(const pf::World& world, bool boxes) {
     }
 }
 
+static void drawMainMenu(AppMode& mode) {
+    DrawText("PFighter", GetScreenWidth() / 2 - MeasureText("PFighter", 44) / 2, 150, 44, BLACK);
+    DrawText("runtime fighter packages and Melee parity lab", GetScreenWidth() / 2 - MeasureText("runtime fighter packages and Melee parity lab", 16) / 2, 204, 16, DARKGRAY);
+    if (uiButton(mainMenuButtonRect(0), "Regular Gameplay")) {
+        mode = AppMode::Gameplay;
+    }
+    if (uiButton(mainMenuButtonRect(1), "Fighter Editor")) {
+        mode = AppMode::Editor;
+    }
+}
+
+static void drawTopNav(AppMode& mode) {
+    if (uiButton(topNavButtonRect(0), "Menu", mode == AppMode::MainMenu)) {
+        mode = AppMode::MainMenu;
+    }
+    if (uiButton(topNavButtonRect(1), "Play", mode == AppMode::Gameplay)) {
+        mode = AppMode::Gameplay;
+    }
+    if (uiButton(topNavButtonRect(2), "Editor", mode == AppMode::Editor)) {
+        mode = AppMode::Editor;
+    }
+}
+
+static void drawEditorWorkspaceTabs(pf::FighterEditor& editor) {
+    const std::array<pf::EditorWorkspace, 5> workspaces{
+        pf::EditorWorkspace::Moveset,
+        pf::EditorWorkspace::Logic,
+        pf::EditorWorkspace::Assets,
+        pf::EditorWorkspace::Animation,
+        pf::EditorWorkspace::TestLab,
+    };
+    for (size_t i = 0; i < workspaces.size(); ++i) {
+        const pf::EditorWorkspace workspace = workspaces[i];
+        if (uiButton(editorWorkspaceTabRect(static_cast<int>(i)), workspaceName(workspace), editor.workspace == workspace)) {
+            editor.workspace = workspace;
+            editor.status = std::string("Editor workspace: ") + workspaceName(workspace);
+        }
+    }
+}
+
 static void drawEditor(const pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+    const pf::UnfoldedAction actionFrames = pf::unfoldAction(state.action);
+    const int timelineFrameCount = std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
+    const int liveFrame = pf::currentState(world, fighter).name == state.name ? pf::frameInState(fighter) : 0;
+    const float timelineX = 24.0f;
+    const float timelineY = 202.0f;
+    const float timelineWidth = 500.0f;
+    const float timelineHeight = 34.0f;
+    const int selectedSubaction = state.action.empty()
+        ? -1
+        : std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
 
-    DrawRectangle(12, 12, 390, 210, Fade(RAYWHITE, 0.5f));
-    DrawRectangleLines(12, 12, 390, 210, DARKGRAY);
+    DrawRectangle(12, 12, 530, 322, Fade(RAYWHITE, 0.5f));
+    DrawRectangleLines(12, 12, 530, 322, DARKGRAY);
     DrawText("PFighter C++ prototype editor", 24, 24, 18, BLACK);
+    const Rectangle newStateButton = editorNewStateButtonRect();
+    DrawRectangleRec(newStateButton, SKYBLUE);
+    DrawRectangleLinesEx(newStateButton, 1.0f, DARKGRAY);
+    DrawText("New", static_cast<int>(newStateButton.x + 14.0f), static_cast<int>(newStateButton.y + 7.0f), 14, BLACK);
+    const Rectangle deleteStateButton = editorDeleteStateButtonRect();
+    DrawRectangleRec(deleteStateButton, Fade(RED, 0.75f));
+    DrawRectangleLinesEx(deleteStateButton, 1.0f, DARKGRAY);
+    DrawText("Del", static_cast<int>(deleteStateButton.x + 17.0f), static_cast<int>(deleteStateButton.y + 7.0f), 14, BLACK);
+    const Rectangle testButton = editorTestButtonRect();
+    DrawRectangleRec(testButton, editor.testMode ? GREEN : ORANGE);
+    DrawRectangleLinesEx(testButton, 1.0f, DARKGRAY);
+    DrawText("Test", static_cast<int>(testButton.x + 18.0f), static_cast<int>(testButton.y + 7.0f), 14, BLACK);
     DrawText(("Fighter: " + def.name).c_str(), 24, 54, 16, DARKGRAY);
     DrawText(("Live state: " + pf::currentState(world, fighter).name).c_str(), 24, 76, 16, DARKGRAY);
     DrawText(("Selected state: " + state.name).c_str(), 24, 98, 16, DARKGRAY);
     DrawText(("Frame in state: " + std::to_string(pf::frameInState(fighter))).c_str(), 24, 120, 16, DARKGRAY);
-    DrawText(("Subactions: " + std::to_string(state.action.size())).c_str(), 24, 142, 16, DARKGRAY);
+    DrawText(("Frames: " + std::to_string(state.animationLengthFrames) +
+              "  Subactions: " + std::to_string(state.action.size()) +
+              "  Interrupts: " + std::to_string(state.interrupts.size())).c_str(), 24, 142, 16, DARKGRAY);
+    if (selectedSubaction >= 0) {
+        const pf::Subaction& subaction = state.action[static_cast<size_t>(selectedSubaction)];
+        DrawText(("Selected subaction: " + std::to_string(selectedSubaction) + " " +
+                  subactionTypeName(subaction.type)).c_str(), 24, 164, 14, DARKGRAY);
+    } else {
+        DrawText("Selected subaction: none", 24, 164, 14, DARKGRAY);
+    }
     DrawText(("HSD pose: " + std::to_string(fighter.hsdJointWorldPositions.size()) + " joints, " +
-              std::to_string(fighter.hsdHurtboxCapsules.size()) + " hurtboxes").c_str(), 24, 164, 14, DARKGRAY);
-    DrawText("F1 boxes  F2 side view  [/] state  Space pause  R reset  1-7 fighter", 24, 190, 14, GRAY);
+              std::to_string(fighter.hsdHurtboxCapsules.size()) + " hurtboxes").c_str(), 24, 182, 14, DARKGRAY);
+
+    DrawRectangle(static_cast<int>(timelineX), static_cast<int>(timelineY), static_cast<int>(timelineWidth), static_cast<int>(timelineHeight), Fade(LIGHTGRAY, 0.65f));
+    DrawRectangleLines(static_cast<int>(timelineX), static_cast<int>(timelineY), static_cast<int>(timelineWidth), static_cast<int>(timelineHeight), DARKGRAY);
+    for (int frame = 0; frame < static_cast<int>(actionFrames.size()); ++frame) {
+        const std::vector<pf::Subaction>& frameActions = actionFrames[static_cast<size_t>(frame)];
+        if (frameActions.empty()) {
+            continue;
+        }
+        const float x = timelineX + timelineWidth * static_cast<float>(frame) / static_cast<float>(timelineFrameCount);
+        Color color = ORANGE;
+        for (const pf::Subaction& subaction : frameActions) {
+            color = subactionMarkerColor(subaction);
+            if (subaction.type == pf::SubactionType::CreateHitbox || subaction.type == pf::SubactionType::CreateThrowHitbox) {
+                break;
+            }
+        }
+        DrawRectangle(static_cast<int>(x), static_cast<int>(timelineY + 4.0f), 2, static_cast<int>(timelineHeight - 8.0f), color);
+    }
+    if (state.initialInterruptibleFrame > 0 && state.initialInterruptibleFrame <= timelineFrameCount) {
+        const float x = timelineX + timelineWidth * static_cast<float>(state.initialInterruptibleFrame) / static_cast<float>(timelineFrameCount);
+        DrawRectangle(static_cast<int>(x), static_cast<int>(timelineY), 2, static_cast<int>(timelineHeight), GREEN);
+    }
+    const float liveX = timelineX + timelineWidth * static_cast<float>(std::clamp(liveFrame, 0, timelineFrameCount)) / static_cast<float>(timelineFrameCount);
+    DrawRectangle(static_cast<int>(liveX), static_cast<int>(timelineY - 3.0f), 3, static_cast<int>(timelineHeight + 6.0f), BLACK);
+    DrawText(editor.status.c_str(), 24, 240, 14, DARKGRAY);
+    DrawText("N/New state  Del/remove  T/Test playtest  [/] state  ,/. subaction  Space pause  R reset", 24, 258, 14, GRAY);
+    drawEditorWorkspaceTabs(editor);
+    if (editor.workspace != pf::EditorWorkspace::Moveset) {
+        DrawText((std::string(workspaceName(editor.workspace)) + " workspace shell").c_str(), 24, 324, 14, DARKGRAY);
+    }
 }
 
 struct ReplayHarness {
@@ -979,6 +1200,15 @@ struct TickrateControl {
 
 static pf::World makeReplayStartWorld(int p1FighterDef, int p2FighterDef) {
     return pf::makeTrainingWorld(p1FighterDef, p2FighterDef);
+}
+
+static int fighterDefByName(const pf::World& world, const std::string& name, int fallback) {
+    for (size_t i = 0; i < world.fighterDefs.size(); ++i) {
+        if (world.fighterDefs[i].name == name) {
+            return static_cast<int>(i);
+        }
+    }
+    return fallback;
 }
 
 static void beginReplayRecording(ReplayHarness& replay, pf::World& world, int p1FighterDef, int p2FighterDef) {
@@ -1093,6 +1323,135 @@ static void drawTickrateControl(const TickrateControl& tickrate) {
     DrawCircleLines(static_cast<int>(std::round(knobX)), static_cast<int>(track.y + track.height * 0.5f), 8.0f, BROWN);
 }
 
+static std::string uniqueStateName(const pf::FighterDefinition& def, const std::string& baseName) {
+    auto hasName = [&](const std::string& name) {
+        return std::any_of(def.states.begin(), def.states.end(), [&](const pf::FighterState& state) {
+            return state.name == name;
+        });
+    };
+    if (!hasName(baseName)) {
+        return baseName;
+    }
+    for (int index = 1; index < 10000; ++index) {
+        const std::string candidate = baseName + std::to_string(index);
+        if (!hasName(candidate)) {
+            return candidate;
+        }
+    }
+    return baseName + "X";
+}
+
+static void createEditorState(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        editor.status = "Editor: cannot create a state without a fighter";
+        return;
+    }
+    const pf::FighterRuntime& selectedRuntime = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (selectedRuntime.fighterDef < 0 || selectedRuntime.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        editor.status = "Editor: cannot create a state for an invalid fighter definition";
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(selectedRuntime.fighterDef)];
+    pf::FighterState state;
+    state.name = uniqueStateName(def, "NewState");
+    state.animation = "Wait";
+    state.animationLengthFrames = 60;
+    state.loopAnimation = true;
+    if (editor.selectedState >= 0 && editor.selectedState < static_cast<int>(def.states.size())) {
+        const pf::FighterState& source = def.states[static_cast<size_t>(editor.selectedState)];
+        state.animation = source.animation;
+        state.animationActionIndex = source.animationActionIndex;
+        state.animationLengthFrames = source.animationLengthFrames;
+        state.loopAnimation = source.loopAnimation;
+        state.defaultAnimationBlendFrames = source.defaultAnimationBlendFrames;
+    }
+    const int insertIndex = std::clamp(editor.selectedState + 1, 0, static_cast<int>(def.states.size()));
+    def.states.insert(def.states.begin() + insertIndex, std::move(state));
+    for (pf::FighterRuntime& runtime : world.fighters) {
+        if (runtime.fighterDef == selectedRuntime.fighterDef && runtime.state >= insertIndex) {
+            ++runtime.state;
+        }
+    }
+    editor.selectedState = insertIndex;
+    editor.selectedSubaction = 0;
+    editor.status = "Editor: created unsaved state " + def.states[static_cast<size_t>(insertIndex)].name;
+}
+
+static void removeEditorState(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        editor.status = "Editor: cannot remove a state without a fighter";
+        return;
+    }
+    const pf::FighterRuntime& selectedRuntime = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (selectedRuntime.fighterDef < 0 || selectedRuntime.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        editor.status = "Editor: cannot remove a state from an invalid fighter definition";
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(selectedRuntime.fighterDef)];
+    if (def.states.size() <= 1) {
+        editor.status = "Editor: cannot remove the only state";
+        return;
+    }
+    const int removeIndex = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    const std::string removedName = def.states[static_cast<size_t>(removeIndex)].name;
+    def.states.erase(def.states.begin() + removeIndex);
+    const int fallbackState = std::max(0, def.stateIndex("Wait"));
+    for (pf::FighterRuntime& runtime : world.fighters) {
+        if (runtime.fighterDef != selectedRuntime.fighterDef) {
+            continue;
+        }
+        if (runtime.state == removeIndex) {
+            runtime.state = std::min(fallbackState, static_cast<int>(def.states.size()) - 1);
+            runtime.lastStateChangeFrame = world.frame;
+            runtime.internalFrame = 0;
+            runtime.animationFrame = 0;
+            runtime.lastActionFrameExecuted = -1;
+        } else if (runtime.state > removeIndex) {
+            --runtime.state;
+        }
+    }
+    editor.selectedState = std::clamp(removeIndex, 0, static_cast<int>(def.states.size()) - 1);
+    editor.selectedSubaction = 0;
+    editor.status = "Editor: removed unsaved state " + removedName;
+}
+
+static void launchEditorTestWorld(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    ReplayHarness& replay,
+    int& selectedFighterDef)
+{
+    editor.clampToWorld(world);
+    const pf::FighterRuntime& selectedRuntime = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (selectedRuntime.fighterDef < 0 || selectedRuntime.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        editor.status = "Editor test failed: selected fighter definition is invalid";
+        return;
+    }
+
+    const int editedFighterDef = selectedRuntime.fighterDef;
+    const pf::FighterDefinition editedFighter = world.fighterDefs[static_cast<size_t>(editedFighterDef)];
+    const std::vector<pf::GameObjectDefinition> editedObjects = world.objectDefs;
+    const int sandbagFighterDef = fighterDefByName(world, "Sandbag", 0);
+    world = pf::makeTrainingWorld(editedFighterDef, sandbagFighterDef);
+    if (editedFighterDef >= 0 && editedFighterDef < static_cast<int>(world.fighterDefs.size())) {
+        world.fighterDefs[static_cast<size_t>(editedFighterDef)] = editedFighter;
+    }
+    world.objectDefs = editedObjects;
+    selectedFighterDef = editedFighterDef;
+    editor.selectedFighter = 0;
+    editor.testMode = true;
+    editor.paused = false;
+    replay.playbackLoaded = false;
+    replay.realtimePlayback = false;
+    replay.recordingActive = false;
+    replay.playbackFrame = 0;
+    editor.status = world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)].name == "Sandbag"
+        ? "Editor test: live unsaved fighter data loaded on Battlefield with Sandbag"
+        : "Editor test: live unsaved fighter data loaded on Battlefield; player 2 is inert";
+}
+
 int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(1280, 720, "PFighter C++ raylib prototype");
@@ -1108,6 +1467,7 @@ int main() {
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
 
+    AppMode appMode = AppMode::MainMenu;
     int testFighterDef = 0;
     pf::World world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
     pf::FighterEditor editor;
@@ -1126,59 +1486,87 @@ int main() {
         replay.playbackLoaded = false;
         replay.realtimePlayback = false;
         replay.recordingActive = false;
+        editor.testMode = false;
+        editor.status = "Editor: selected " + world.fighterDefs[static_cast<size_t>(testFighterDef)].name;
         editor.selectedState = 0;
         editor.selectedSubaction = 0;
     };
 
     while (!WindowShouldClose()) {
-        updateTickrateControl(tickrate);
-        if (IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
-        if (IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
-        if (IsKeyPressed(KEY_SPACE)) {
+        if (appMode != AppMode::MainMenu) {
+            updateTickrateControl(tickrate);
+        }
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            appMode = AppMode::MainMenu;
+            replay.realtimePlayback = false;
+            editor.paused = true;
+        }
+        const bool testClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(GetMousePosition(), editorTestButtonRect());
+        const bool newStateClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(GetMousePosition(), editorNewStateButtonRect());
+        const bool deleteStateClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(GetMousePosition(), editorDeleteStateButtonRect());
+        if (appMode == AppMode::Editor && (IsKeyPressed(KEY_N) || newStateClicked)) {
+            createEditorState(world, editor);
+        }
+        if (appMode == AppMode::Editor && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
+            removeEditorState(world, editor);
+        }
+        if (appMode == AppMode::Editor && (IsKeyPressed(KEY_T) || testClicked)) {
+            launchEditorTestWorld(world, editor, replay, testFighterDef);
+        }
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_SPACE)) {
             editor.paused = !editor.paused;
             if (editor.paused) {
                 replay.realtimePlayback = false;
             }
         }
-        if (IsKeyPressed(KEY_R)) {
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_R)) {
             world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
             replay.playbackFrame = 0;
             replay.playbackLoaded = false;
             replay.realtimePlayback = false;
             replay.recordingActive = false;
+            editor.testMode = false;
+            editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
-        if (IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
-        if (IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
-        if (IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
-        if (IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
+        if (appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
+        if (appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
+        if (appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) --editor.selectedSubaction;
+        if (appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) ++editor.selectedSubaction;
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
         for (size_t i = 0; i < fighterKeys.size(); ++i) {
-            if (IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
+            if (appMode != AppMode::MainMenu && IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
                 selectFighterDef(static_cast<int>(i));
             }
         }
 
-        if (IsKeyPressed(KEY_F5)) {
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F5)) {
             beginReplayRecording(replay, world, testFighterDef, testFighterDef);
             editor.paused = false;
         }
-        if (IsKeyPressed(KEY_F6)) {
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F6)) {
             saveReplayRecording(replay);
         }
-        if (IsKeyPressed(KEY_F7)) {
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F7)) {
             loadReplayPlayback(replay, world, testFighterDef);
             editor.paused = true;
         }
-        if (IsKeyPressed(KEY_F8)) {
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F8)) {
             stepReplayPlayback(replay, world);
         }
-        if (IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
+        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
             replay.realtimePlayback = !replay.realtimePlayback;
             editor.paused = !replay.realtimePlayback;
         }
 
         const pf::InputFrame p1Input = readPlayerInput(0, false);
-        const pf::InputFrame p2Input = readPlayerInput(1, true);
-        const bool simRunning = (replay.playbackLoaded && replay.realtimePlayback) || !editor.paused;
+        const pf::InputFrame p2Input = editor.testMode ? pf::InputFrame{} : readPlayerInput(1, true);
+        const bool simRunning = appMode != AppMode::MainMenu && ((replay.playbackLoaded && replay.realtimePlayback) || !editor.paused);
         if (simRunning) {
             tickrate.accumulator += GetFrameTime();
             const float tickStep = 1.0f / static_cast<float>(tickrate.ticksPerSecond);
@@ -1212,27 +1600,34 @@ int main() {
 
         BeginDrawing();
         ClearBackground({205, 214, 222, 255});
-        BeginMode3D(camera);
-        DrawGrid(40, 10.0f);
-        for (const pf::StageSegment& segment : world.stage.segments) {
-            DrawLine3D(toRayGround(segment.start), toRayGround(segment.end), segment.type == pf::SegmentType::Solid ? BLACK : DARKGREEN);
-        }
-        if (editor.showBoxes) {
-            for (const pf::StageLedge& ledge : world.stage.ledges) {
-                const Vector3 ledgePos = toRayGround(ledge.position);
-                DrawSphere(ledgePos, 0.12f, PURPLE);
-                DrawLine3D(ledgePos, {ledgePos.x + 0.45f * static_cast<float>(ledge.direction), ledgePos.y, ledgePos.z}, PURPLE);
-                drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[0].fighterDef)], world.fighters[0], ledge, Fade(ORANGE, 0.45f));
-                drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)], world.fighters[1], ledge, Fade(SKYBLUE, 0.45f));
+        if (appMode == AppMode::MainMenu) {
+            drawMainMenu(appMode);
+        } else {
+            BeginMode3D(camera);
+            DrawGrid(40, 10.0f);
+            for (const pf::StageSegment& segment : world.stage.segments) {
+                DrawLine3D(toRayGround(segment.start), toRayGround(segment.end), segment.type == pf::SegmentType::Solid ? BLACK : DARKGREEN);
             }
+            if (editor.showBoxes) {
+                for (const pf::StageLedge& ledge : world.stage.ledges) {
+                    const Vector3 ledgePos = toRayGround(ledge.position);
+                    DrawSphere(ledgePos, 0.12f, PURPLE);
+                    DrawLine3D(ledgePos, {ledgePos.x + 0.45f * static_cast<float>(ledge.direction), ledgePos.y, ledgePos.z}, PURPLE);
+                    drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[0].fighterDef)], world.fighters[0], ledge, Fade(ORANGE, 0.45f));
+                    drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)], world.fighters[1], ledge, Fade(SKYBLUE, 0.45f));
+                }
+            }
+            drawFighter(world, world.fighters[0], ORANGE, editor.showBoxes);
+            drawFighter(world, world.fighters[1], SKYBLUE, editor.showBoxes);
+            drawGameObjects(world, editor.showBoxes);
+            EndMode3D();
+            if (appMode == AppMode::Editor) {
+                drawEditor(world, editor);
+            }
+            drawReplayStatus(replay);
+            drawTickrateControl(tickrate);
         }
-        drawFighter(world, world.fighters[0], ORANGE, editor.showBoxes);
-        drawFighter(world, world.fighters[1], SKYBLUE, editor.showBoxes);
-        drawGameObjects(world, editor.showBoxes);
-        EndMode3D();
-        drawEditor(world, editor);
-        drawReplayStatus(replay);
-        drawTickrateControl(tickrate);
+        drawTopNav(appMode);
         EndDrawing();
     }
 

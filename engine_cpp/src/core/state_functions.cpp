@@ -2542,8 +2542,79 @@ static void enterCliffJumpAir(World& world, FighterRuntime& fighter) {
     setFighterFlag(fighter, 12, false);
 }
 
+static void ensurePackageVars(const FighterDefinition& def, FighterRuntime& fighter) {
+    if (fighter.packageVars.size() == def.packageVariables.size()) {
+        return;
+    }
+    const size_t oldSize = fighter.packageVars.size();
+    fighter.packageVars.resize(def.packageVariables.size());
+    for (size_t i = oldSize; i < def.packageVariables.size(); ++i) {
+        fighter.packageVars[i] = def.packageVariables[i].initialValue;
+    }
+}
+
+static int32_t packageVar(const FighterRuntime& fighter, int index) {
+    if (index < 0 || index >= static_cast<int>(fighter.packageVars.size())) {
+        return 0;
+    }
+    return fighter.packageVars[static_cast<size_t>(index)];
+}
+
+static void setPackageVar(FighterRuntime& fighter, int index, int32_t value) {
+    if (index < 0 || index >= static_cast<int>(fighter.packageVars.size())) {
+        return;
+    }
+    fighter.packageVars[static_cast<size_t>(index)] = value;
+}
+
+static void runPackageScript(World& world, FighterRuntime& fighter, const std::string& scriptName) {
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const auto found = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
+        return script.name == scriptName;
+    });
+    if (found == def.packageScripts.end()) {
+        return;
+    }
+    ensurePackageVars(def, fighter);
+    int budget = std::clamp(found->instructionBudget, 0, 1024);
+    for (const PackageScriptInstruction& instruction : found->instructions) {
+        if (budget-- <= 0) {
+            return;
+        }
+        switch (instruction.op) {
+        case PackageScriptOp::Nop:
+            break;
+        case PackageScriptOp::SetVarImmediate:
+            setPackageVar(fighter, instruction.dst, instruction.intValue);
+            break;
+        case PackageScriptOp::AddVarImmediate:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.dst) + instruction.intValue);
+            break;
+        case PackageScriptOp::AddVar:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) + packageVar(fighter, instruction.srcB));
+            break;
+        case PackageScriptOp::SetGroundVelocity:
+            fighter.groundVelocity = instruction.fixValue;
+            break;
+        case PackageScriptOp::SetAirVelocityX:
+            fighter.fighterVelocity.x = instruction.fixValue;
+            break;
+        case PackageScriptOp::SetAirVelocityY:
+            fighter.fighterVelocity.y = instruction.fixValue;
+            break;
+        case PackageScriptOp::SetFacing:
+            fighter.facing = instruction.intValue < 0 ? -1 : 1;
+            break;
+        case PackageScriptOp::ChangeState:
+            changeFighterState(world, fighter, instruction.text);
+            break;
+        }
+    }
+}
+
 void runStateFunction(World& world, size_t fighterIndex, const FunctionCall& call) {
     FighterRuntime& fighter = world.fighters[fighterIndex];
+    if (call.name.starts_with("script:")) return runPackageScript(world, fighter, call.name.substr(7));
     if (call.name == "common_enter") return commonEnter(world, fighter);
     if (call.name == "enter_guard_on") return enterGuardOn(world, fighter);
     if (call.name == "process_guard_on") return processGuardOn(world, fighter);

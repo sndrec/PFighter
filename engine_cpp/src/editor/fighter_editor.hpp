@@ -2,7 +2,17 @@
 
 #include "core/simulation.hpp"
 
+#include <string>
+
 namespace pf {
+
+enum class EditorWorkspace : uint8_t {
+    Moveset,
+    Logic,
+    Assets,
+    Animation,
+    TestLab,
+};
 
 struct FighterEditor {
     int selectedFighter = 0;
@@ -11,6 +21,9 @@ struct FighterEditor {
     bool showBoxes = true;
     bool paused = false;
     bool sideView = false;
+    bool testMode = false;
+    EditorWorkspace workspace = EditorWorkspace::Moveset;
+    std::string status = "Editor: T or Test launches current in-memory fighter on Battlefield";
 
     void clampToWorld(const World& world);
 };

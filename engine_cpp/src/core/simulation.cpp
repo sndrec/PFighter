@@ -63,8 +63,8 @@ struct HsdFighterAssetSpec {
     bool shieldSizeScalesWithHealth = true;
 };
 
-static const std::array<HsdFighterAssetSpec, 26>& meleeTrainingRoster() {
-    static const std::array<HsdFighterAssetSpec, 26> roster{{
+static const std::array<HsdFighterAssetSpec, 27>& meleeTrainingRoster() {
+    static const std::array<HsdFighterAssetSpec, 27> roster{{
         {"Mario", "mario_hsd.pfighter.bin"},
         {"Donkey Kong", "donkey_kong_hsd.pfighter.bin"},
         {"Link", "link_hsd.pfighter.bin"},
@@ -91,6 +91,7 @@ static const std::array<HsdFighterAssetSpec, 26>& meleeTrainingRoster() {
         {"Pichu", "pichu_hsd.pfighter.bin"},
         {"Mewtwo", "mewtwo_hsd.pfighter.bin"},
         {"Jigglypuff", "jigglypuff_hsd.pfighter.bin"},
+        {"Sandbag", "sandbag_hsd.pfighter.bin"},
     }};
     return roster;
 }
@@ -869,6 +870,20 @@ static void ensureModelVisibilityDefaults(const FighterDefinition& def, FighterR
     }
 }
 
+static void initializePackageVars(const FighterDefinition& def, FighterRuntime& fighter) {
+    fighter.packageVars.resize(def.packageVariables.size());
+    for (size_t i = 0; i < def.packageVariables.size(); ++i) {
+        fighter.packageVars[i] = def.packageVariables[i].initialValue;
+    }
+}
+
+static void initializeGameObjectPackageVars(const GameObjectDefinition& def, GameObjectRuntime& object) {
+    object.packageVars.resize(def.packageVariables.size());
+    for (size_t i = 0; i < def.packageVariables.size(); ++i) {
+        object.packageVars[i] = def.packageVariables[i].initialValue;
+    }
+}
+
 static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec2 position, int facing) {
     FighterRuntime p1;
     p1.fighterDef = fighterDefIndex;
@@ -884,6 +899,7 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     p1.previousPosition = p1.position;
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighterDefIndex)];
     p1.shieldHealth = def.shield.maxHealth;
+    initializePackageVars(def, p1);
     if (def.hsdAsset) {
         ensureModelVisibilityDefaults(def, p1);
         p1.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
@@ -1100,6 +1116,7 @@ int spawnGameObject(World& world, const std::string& objectName, int ownerFighte
     object.previousPosition = position;
     object.velocity = velocity;
     object.active = true;
+    initializeGameObjectPackageVars(*found, object);
     object.activeHitboxes.reserve(found->hitboxes.size());
     for (const HitboxDefinition& hitboxDef : found->hitboxes) {
         ActiveHitbox hitbox;
@@ -6583,6 +6600,67 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
         return;
     }
     const GameObjectDefinition& def = world.objectDefs[static_cast<size_t>(object.objectDef)];
+    if (fn.name.starts_with("script:")) {
+        const std::string scriptName = fn.name.substr(7);
+        const auto found = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
+            return script.name == scriptName;
+        });
+        if (found == def.packageScripts.end()) {
+            return;
+        }
+        if (object.packageVars.size() != def.packageVariables.size()) {
+            const size_t oldSize = object.packageVars.size();
+            object.packageVars.resize(def.packageVariables.size());
+            for (size_t i = oldSize; i < def.packageVariables.size(); ++i) {
+                object.packageVars[i] = def.packageVariables[i].initialValue;
+            }
+        }
+        auto var = [&](int index) -> int32_t {
+            if (index < 0 || index >= static_cast<int>(object.packageVars.size())) {
+                return 0;
+            }
+            return object.packageVars[static_cast<size_t>(index)];
+        };
+        auto setVar = [&](int index, int32_t value) {
+            if (index < 0 || index >= static_cast<int>(object.packageVars.size())) {
+                return;
+            }
+            object.packageVars[static_cast<size_t>(index)] = value;
+        };
+        int budget = std::clamp(found->instructionBudget, 0, 1024);
+        for (const PackageScriptInstruction& instruction : found->instructions) {
+            if (budget-- <= 0) {
+                return;
+            }
+            switch (instruction.op) {
+            case PackageScriptOp::Nop:
+                break;
+            case PackageScriptOp::SetVarImmediate:
+                setVar(instruction.dst, instruction.intValue);
+                break;
+            case PackageScriptOp::AddVarImmediate:
+                setVar(instruction.dst, var(instruction.dst) + instruction.intValue);
+                break;
+            case PackageScriptOp::AddVar:
+                setVar(instruction.dst, var(instruction.srcA) + var(instruction.srcB));
+                break;
+            case PackageScriptOp::SetGroundVelocity:
+            case PackageScriptOp::SetAirVelocityX:
+                object.velocity.x = instruction.fixValue;
+                break;
+            case PackageScriptOp::SetAirVelocityY:
+                object.velocity.y = instruction.fixValue;
+                break;
+            case PackageScriptOp::SetFacing:
+                object.facing = instruction.intValue < 0 ? -1 : 1;
+                break;
+            case PackageScriptOp::ChangeState:
+                changeGameObjectState(world, object, instruction.text);
+                return;
+            }
+        }
+        return;
+    }
     if (fn.name == "object_destroy") {
         deactivateGameObject(world, objectIndex);
         return;
@@ -7722,6 +7800,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.throwHitboxActive = fighter.throwHitboxActive;
         item.stateFlags = fighter.stateFlags;
         item.commandVars = fighter.commandVars;
+        item.packageVars = fighter.packageVars;
         item.commandFlags = fighter.commandFlags;
         item.throwFlags = fighter.throwFlags;
         item.jabFollowupEnabled = fighter.jabFollowupEnabled;
@@ -7882,6 +7961,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.throwHitboxActive = item.throwHitboxActive;
         fighter.stateFlags = item.stateFlags;
         fighter.commandVars = item.commandVars;
+        fighter.packageVars = item.packageVars;
         fighter.commandFlags = item.commandFlags;
         fighter.throwFlags = item.throwFlags;
         fighter.jabFollowupEnabled = item.jabFollowupEnabled;
