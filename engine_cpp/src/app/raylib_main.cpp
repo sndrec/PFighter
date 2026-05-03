@@ -899,6 +899,7 @@ static const char* subactionTypeName(pf::SubactionType type) {
     case pf::SubactionType::SetModelPartAnimation: return "SetModelPartAnimation";
     case pf::SubactionType::SelfDamage: return "SelfDamage";
     case pf::SubactionType::SpawnObject: return "SpawnObject";
+    case pf::SubactionType::SpawnProjectile: return "SpawnProjectile";
     }
     return "Unknown";
 }
@@ -914,6 +915,7 @@ static Color subactionMarkerColor(const pf::Subaction& subaction) {
     case pf::SubactionType::SetInterruptible:
         return GREEN;
     case pf::SubactionType::SpawnObject:
+    case pf::SubactionType::SpawnProjectile:
         return PURPLE;
     case pf::SubactionType::SetHurtboxState:
     case pf::SubactionType::SetBodyCollisionState:
@@ -1569,7 +1571,10 @@ static void remapRemovedPackageObjectTargets(
     for (pf::FighterDefinition& fighter : world.fighterDefs) {
         for (pf::FighterState& state : fighter.states) {
             for (pf::Subaction& subaction : state.action) {
-                if (subaction.type != pf::SubactionType::SpawnObject || subaction.objectName != removedObjectName) {
+                if ((subaction.type != pf::SubactionType::SpawnObject &&
+                     subaction.type != pf::SubactionType::SpawnProjectile) ||
+                    subaction.objectName != removedObjectName)
+                {
                     continue;
                 }
                 if (replacementObjectName.empty()) {
@@ -2764,7 +2769,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
             const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
             pf::Subaction spawn;
-            spawn.type = pf::SubactionType::SpawnObject;
+            spawn.type = object.kind == pf::GameObjectKind::Projectile
+                ? pf::SubactionType::SpawnProjectile
+                : pf::SubactionType::SpawnObject;
             spawn.frames = 1;
             spawn.objectName = object.name;
             spawn.spawnOffset = {pf::fxFromFloat(0.75f), pf::fxFromFloat(0.7f), 0};
@@ -2772,7 +2779,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
             state.action.push_back(std::move(spawn));
             editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
-            editor.status = "Editor: added SpawnObject subaction for " + object.name;
+            editor.status = object.kind == pf::GameObjectKind::Projectile
+                ? "Editor: added SpawnProjectile subaction for " + object.name
+                : "Editor: added SpawnObject subaction for " + object.name;
         }
     }
     if (!world.objectDefs.empty()) {

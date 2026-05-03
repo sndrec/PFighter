@@ -526,6 +526,7 @@ enum class SubactionType : uint8_t {
     SetFighterVisibility,
     SelfDamage,
     SpawnObject,
+    SpawnProjectile,
 };
 
 struct Subaction {

@@ -4977,7 +4977,7 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
         }
         return;
     }
-    if (sub.type == SubactionType::SpawnObject) {
+    if (sub.type == SubactionType::SpawnObject || sub.type == SubactionType::SpawnProjectile) {
         const Vec2 position{
             fighter.position.x + fighter.facing * sub.spawnOffset.x,
             fighter.position.y + sub.spawnOffset.y,
@@ -4986,7 +4986,11 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
             fighter.facing * sub.spawnVelocity.x,
             sub.spawnVelocity.y,
         };
-        spawnGameObject(world, sub.objectName, static_cast<int>(fighterIndex), position, fighter.facing, velocity);
+        if (sub.type == SubactionType::SpawnProjectile) {
+            spawnGameObjectOfKind(world, sub.objectName, GameObjectKind::Projectile, static_cast<int>(fighterIndex), position, fighter.facing, velocity);
+        } else {
+            spawnGameObject(world, sub.objectName, static_cast<int>(fighterIndex), position, fighter.facing, velocity);
+        }
         return;
     }
     if (sub.type == SubactionType::SetHurtboxState) {

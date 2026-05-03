@@ -4791,6 +4791,23 @@ int main(int argc, char** argv) {
     sourcePackage.fighters = {packageSourceWorld.fighterDefs[0], packageAltFighter};
     sourcePackage.objects = packageSourceWorld.objectDefs;
     std::string packageError;
+    pf::FighterPackage subactionProjectilePackage = sourcePackage;
+    const int subactionProjectileStateIndex = subactionProjectilePackage.fighters[0].stateIndex("Wait");
+    if (subactionProjectileStateIndex >= 0) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SpawnProjectile;
+        subaction.frames = 1;
+        subaction.objectName = "PackageProjectileObject";
+        subaction.spawnOffset = {pf::fxFromFloat(0.75f), pf::fxFromFloat(0.7f), 0};
+        subaction.spawnVelocity = {pf::fxFromFloat(0.4f), pf::fxFromFloat(0.1f)};
+        subactionProjectilePackage.fighters[0].states[static_cast<size_t>(subactionProjectileStateIndex)].action.push_back(subaction);
+    }
+    const std::vector<uint8_t> subactionProjectilePackageBytes = subactionProjectileStateIndex >= 0
+        ? pf::writeFighterPackage(subactionProjectilePackage, &packageError)
+        : std::vector<uint8_t>{};
+    pf::FighterPackage loadedSubactionProjectilePackage;
+    const bool packageSubactionProjectileLoaded = !subactionProjectilePackageBytes.empty() &&
+        pf::readFighterPackage(subactionProjectilePackageBytes, loadedSubactionProjectilePackage, &packageError);
     const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
     pf::FighterPackage loadedPackage;
     const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
@@ -4860,6 +4877,17 @@ int main(int argc, char** argv) {
         "TrainingItem",
     });
     const bool invalidPackageProjectileTargetWriteRejected = pf::writeFighterPackage(invalidProjectileTargetWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidProjectileSubactionTargetWritePackage = sourcePackage;
+    const int invalidProjectileSubactionState = invalidProjectileSubactionTargetWritePackage.fighters[0].stateIndex("Wait");
+    if (invalidProjectileSubactionState >= 0) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SpawnProjectile;
+        subaction.frames = 1;
+        subaction.objectName = "TrainingItem";
+        invalidProjectileSubactionTargetWritePackage.fighters[0].states[static_cast<size_t>(invalidProjectileSubactionState)].action.push_back(subaction);
+    }
+    const bool invalidPackageProjectileSubactionTargetWriteRejected = invalidProjectileSubactionState >= 0 &&
+        pf::writeFighterPackage(invalidProjectileSubactionTargetWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidSubactionWritePackage = sourcePackage;
     const int invalidSubactionState = invalidSubactionWritePackage.fighters[0].stateIndex("Attack11");
     if (invalidSubactionState >= 0 && !invalidSubactionWritePackage.fighters[0].states[static_cast<size_t>(invalidSubactionState)].action.empty()) {
@@ -5252,6 +5280,37 @@ int main(int argc, char** argv) {
         packageProjectileDefKindOk &&
         packageProjectileSpawnCount >= 2 &&
         packageProjectileVarSpawnOk;
+    pf::World packageProjectileSubactionWorld = pf::makeTrainingWorld();
+    if (packageSubactionProjectileLoaded) {
+        packageProjectileSubactionWorld.fighterDefs[0] = loadedSubactionProjectilePackage.fighters[0];
+        packageProjectileSubactionWorld.fighterDefs[0].hasHsdAsset = false;
+        packageProjectileSubactionWorld.fighterDefs[0].hsdAsset.reset();
+        packageProjectileSubactionWorld.fighterDefs.push_back(loadedSubactionProjectilePackage.fighters[1]);
+        packageProjectileSubactionWorld.objectDefs = loadedSubactionProjectilePackage.objects;
+        const int waitIndex = packageProjectileSubactionWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            packageProjectileSubactionWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].interrupts.clear();
+            packageProjectileSubactionWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].animationActionIndex = -1;
+        }
+    }
+    pf::tickWorld(packageProjectileSubactionWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    int packageProjectileSubactionCount = 0;
+    bool packageProjectileSubactionVelocityOk = false;
+    for (const pf::GameObjectRuntime& object : packageProjectileSubactionWorld.objects) {
+        if (object.objectDef >= 0 &&
+            object.objectDef < static_cast<int>(packageProjectileSubactionWorld.objectDefs.size()) &&
+            packageProjectileSubactionWorld.objectDefs[static_cast<size_t>(object.objectDef)].kind == pf::GameObjectKind::Projectile &&
+            packageProjectileSubactionWorld.objectDefs[static_cast<size_t>(object.objectDef)].name == "PackageProjectileObject")
+        {
+            ++packageProjectileSubactionCount;
+            packageProjectileSubactionVelocityOk =
+                (object.velocity.x == pf::fxFromFloat(0.4f) || object.velocity.x == -pf::fxFromFloat(0.4f)) &&
+                object.velocity.y == pf::fxFromFloat(0.1f);
+        }
+    }
+    const bool packageProjectileSubactionOk = packageSubactionProjectileLoaded &&
+        packageProjectileSubactionCount >= 1 &&
+        packageProjectileSubactionVelocityOk;
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageSwitchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5391,6 +5450,8 @@ int main(int argc, char** argv) {
               << " fighter_package_script_projectile_var_spawn=" << packageProjectileVarSpawnOk
               << " fighter_package_script_projectile_ran=" << packageProjectileScriptRan
               << " fighter_package_script_projectile_def_kind=" << packageProjectileDefKindOk
+              << " fighter_package_subaction_projectile_ok=" << packageProjectileSubactionOk
+              << " fighter_package_subaction_projectile_count=" << packageProjectileSubactionCount
               << " fighter_package_script_switch_ok=" << packageSwitchScriptOk
               << " fighter_package_script_switch_var=" << packageSwitchScriptVar
               << " fighter_package_script_spawn_fighter_ok=" << packageSpawnFighterScriptOk
@@ -5418,6 +5479,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
               << " fighter_package_invalid_interrupt_var_write_rejected=" << invalidPackageInterruptVarWriteRejected
               << " fighter_package_invalid_projectile_target_write_rejected=" << invalidPackageProjectileTargetWriteRejected
+              << " fighter_package_invalid_projectile_subaction_target_write_rejected=" << invalidPackageProjectileSubactionTargetWriteRejected
               << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_hurtbox_ref_write_rejected=" << invalidPackageHurtboxRefWriteRejected
               << " fighter_package_invalid_mesh_write_rejected=" << invalidPackageMeshWriteRejected
