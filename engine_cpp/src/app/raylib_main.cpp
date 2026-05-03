@@ -1934,6 +1934,22 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
     return def;
 }
 
+static void normalizeEditorAuthoredEcb(pf::FighterDefinition& def) {
+    pf::FighterEcbDefinition& ecb = def.authoredEcb;
+    ecb.points[0].x = std::min(ecb.points[0].x, -pf::fxFromFloat(0.1f));
+    ecb.points[2].x = std::max(ecb.points[2].x, pf::fxFromFloat(0.1f));
+    ecb.points[1].y = std::max(ecb.points[1].y, ecb.points[3].y + pf::fxFromFloat(0.5f));
+
+    const pf::Fix minSide = ecb.points[3].y + pf::fxFromFloat(0.05f);
+    const pf::Fix maxSide = ecb.points[1].y - pf::fxFromFloat(0.05f);
+    const pf::Fix sideY = std::clamp(
+        (ecb.points[0].y + ecb.points[2].y) / 2,
+        minSide,
+        maxSide);
+    ecb.points[0].y = sideY;
+    ecb.points[2].y = sideY;
+}
+
 static bool hasFunctionCall(const std::vector<pf::FunctionCall>& calls, const std::string& name) {
     return std::any_of(calls.begin(), calls.end(), [&](const pf::FunctionCall& call) {
         return call.name == name;
@@ -3889,42 +3905,71 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     DrawText(("Authored ECB: " + std::string(def.authoredEcb.enabled ? "on" : "off")).c_str(), 24, 590, 13, DARKGRAY);
     if (uiButton({122.0f, 584.0f, 72.0f, 24.0f}, "ECB", def.authoredEcb.enabled)) {
         def.authoredEcb.enabled = !def.authoredEcb.enabled;
+        normalizeEditorAuthoredEcb(def);
         editor.status = def.authoredEcb.enabled ? "Editor: enabled authored ECB" : "Editor: disabled authored ECB";
         pf::calculateEcb(def, fighter, true);
     }
     if (def.authoredEcb.enabled) {
+        normalizeEditorAuthoredEcb(def);
         const float halfWidth = pf::fxToFloat(def.authoredEcb.points[2].x);
         const float top = pf::fxToFloat(def.authoredEcb.points[1].y);
+        const float side = pf::fxToFloat(def.authoredEcb.points[0].y);
         const float bottom = pf::fxToFloat(def.authoredEcb.points[3].y);
         DrawText(("w=" + std::to_string(halfWidth * 2.0f) +
                   " top=" + std::to_string(top) +
+                  " side=" + std::to_string(side) +
                   " bot=" + std::to_string(bottom)).c_str(), 24, 620, 13, DARKGRAY);
         if (uiButton({202.0f, 584.0f, 54.0f, 24.0f}, "+ W")) {
             def.authoredEcb.points[0].x -= pf::fxFromFloat(0.05f);
             def.authoredEcb.points[2].x += pf::fxFromFloat(0.05f);
+            normalizeEditorAuthoredEcb(def);
             pf::calculateEcb(def, fighter, true);
             editor.status = "Editor: widened authored ECB";
         }
         if (uiButton({262.0f, 584.0f, 54.0f, 24.0f}, "- W")) {
             def.authoredEcb.points[0].x = std::min(def.authoredEcb.points[0].x + pf::fxFromFloat(0.05f), -pf::fxFromFloat(0.1f));
             def.authoredEcb.points[2].x = std::max(def.authoredEcb.points[2].x - pf::fxFromFloat(0.05f), pf::fxFromFloat(0.1f));
+            normalizeEditorAuthoredEcb(def);
             pf::calculateEcb(def, fighter, true);
             editor.status = "Editor: narrowed authored ECB";
         }
         if (uiButton({322.0f, 584.0f, 54.0f, 24.0f}, "+ Top")) {
             def.authoredEcb.points[1].y += pf::fxFromFloat(0.1f);
+            normalizeEditorAuthoredEcb(def);
             pf::calculateEcb(def, fighter, true);
             editor.status = "Editor: raised authored ECB top";
         }
         if (uiButton({382.0f, 584.0f, 54.0f, 24.0f}, "- Top")) {
             def.authoredEcb.points[1].y = std::max(def.authoredEcb.points[3].y + pf::fxFromFloat(0.5f), def.authoredEcb.points[1].y - pf::fxFromFloat(0.1f));
+            normalizeEditorAuthoredEcb(def);
             pf::calculateEcb(def, fighter, true);
             editor.status = "Editor: lowered authored ECB top";
         }
         if (uiButton({442.0f, 584.0f, 54.0f, 24.0f}, "Up")) {
             def.authoredEcb.points[3].y += pf::fxFromFloat(0.05f);
+            normalizeEditorAuthoredEcb(def);
             pf::calculateEcb(def, fighter, true);
             editor.status = "Editor: raised authored ECB bottom";
+        }
+        if (uiButton({502.0f, 584.0f, 54.0f, 24.0f}, "Down")) {
+            def.authoredEcb.points[3].y -= pf::fxFromFloat(0.05f);
+            normalizeEditorAuthoredEcb(def);
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: lowered authored ECB bottom";
+        }
+        if (uiButton({202.0f, 642.0f, 54.0f, 24.0f}, "+ Side")) {
+            def.authoredEcb.points[0].y += pf::fxFromFloat(0.05f);
+            def.authoredEcb.points[2].y += pf::fxFromFloat(0.05f);
+            normalizeEditorAuthoredEcb(def);
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: raised authored ECB side points";
+        }
+        if (uiButton({262.0f, 642.0f, 54.0f, 24.0f}, "- Side")) {
+            def.authoredEcb.points[0].y -= pf::fxFromFloat(0.05f);
+            def.authoredEcb.points[2].y -= pf::fxFromFloat(0.05f);
+            normalizeEditorAuthoredEcb(def);
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: lowered authored ECB side points";
         }
     }
 }
