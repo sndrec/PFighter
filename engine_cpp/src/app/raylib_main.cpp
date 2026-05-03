@@ -2544,14 +2544,28 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     if (uiButton({338.0f, 334.0f, 58.0f, 24.0f}, "+ Var")) {
         def.packageVariables.push_back({uniquePackageVariableName(def), 0});
         editor.selectedPackageVariable = static_cast<int>(def.packageVariables.size()) - 1;
+        for (pf::FighterRuntime& runtime : world.fighters) {
+            if (runtime.fighterDef == fighter.fighterDef) {
+                runtime.packageVars.push_back(def.packageVariables.back().initialValue);
+            }
+        }
         editor.status = "Editor: added package variable " + def.packageVariables.back().name;
     }
     if (uiButton({402.0f, 334.0f, 58.0f, 24.0f}, "- Var")) {
         if (!def.packageVariables.empty()) {
-            const int removedIndex = editor.selectedPackageVariable;
+            const int removedIndex = std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
             const std::string removed = def.packageVariables[static_cast<size_t>(removedIndex)].name;
             def.packageVariables.erase(def.packageVariables.begin() + removedIndex);
             remapRemovedPackageVariable(def.packageScripts, removedIndex, static_cast<int>(def.packageVariables.size()));
+            for (pf::FighterRuntime& runtime : world.fighters) {
+                if (runtime.fighterDef != fighter.fighterDef) {
+                    continue;
+                }
+                if (removedIndex < static_cast<int>(runtime.packageVars.size())) {
+                    runtime.packageVars.erase(runtime.packageVars.begin() + removedIndex);
+                }
+                runtime.packageVars.resize(def.packageVariables.size());
+            }
             editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(def.packageVariables.size()) - 1));
             editor.status = "Editor: removed package variable " + removed;
         }
@@ -3640,14 +3654,28 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             if (uiButton({270.0f, 486.0f, 58.0f, 24.0f}, "+ OVar")) {
                 object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});
                 editor.selectedPackageVariable = static_cast<int>(object.packageVariables.size()) - 1;
+                for (pf::GameObjectRuntime& runtime : world.objects) {
+                    if (runtime.objectDef == editor.selectedObjectDef) {
+                        runtime.packageVars.push_back(object.packageVariables.back().initialValue);
+                    }
+                }
                 editor.status = "Editor: added object package variable";
             }
             if (uiButton({332.0f, 486.0f, 58.0f, 24.0f}, "- OVar")) {
                 if (!object.packageVariables.empty()) {
-                    const int removedIndex = editor.selectedPackageVariable;
+                    const int removedIndex = std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(object.packageVariables.size()) - 1);
                     const std::string removed = object.packageVariables[static_cast<size_t>(removedIndex)].name;
                     object.packageVariables.erase(object.packageVariables.begin() + removedIndex);
                     remapRemovedPackageVariable(object.packageScripts, removedIndex, static_cast<int>(object.packageVariables.size()));
+                    for (pf::GameObjectRuntime& runtime : world.objects) {
+                        if (runtime.objectDef != editor.selectedObjectDef) {
+                            continue;
+                        }
+                        if (removedIndex < static_cast<int>(runtime.packageVars.size())) {
+                            runtime.packageVars.erase(runtime.packageVars.begin() + removedIndex);
+                        }
+                        runtime.packageVars.resize(object.packageVariables.size());
+                    }
                     editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(object.packageVariables.size()) - 1));
                     editor.status = "Editor: removed object package variable " + removed;
                 }
