@@ -1989,6 +1989,9 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     if (package.name.empty()) {
         throw std::runtime_error("fighter package name is invalid");
     }
+    if (package.version != kPackageVersion) {
+        throw std::runtime_error("fighter package version is invalid");
+    }
     const std::vector<std::string> packageFighterNames = fighterNames(package);
     requireUniqueNonemptyNames(packageFighterNames, "fighter");
     const std::vector<std::string> packageObjectNames = objectNames(package);

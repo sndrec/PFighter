@@ -4847,6 +4847,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidWritePackage = sourcePackage;
     invalidWritePackage.fighters[0].packageScripts[0].instructions[0].op = static_cast<pf::PackageScriptOp>(255);
     const bool invalidPackageWriteRejected = pf::writeFighterPackage(invalidWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidVersionWritePackage = sourcePackage;
+    invalidVersionWritePackage.version = 2;
+    const bool invalidPackageVersionWriteRejected = pf::writeFighterPackage(invalidVersionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidAnimationWritePackage = sourcePackage;
     invalidAnimationWritePackage.fighters[0].authoredSkeleton = {
         {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
@@ -5569,6 +5572,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
+              << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
               << " fighter_package_invalid_animation_action_write_rejected=" << invalidPackageAnimationActionWriteRejected
               << " fighter_package_authored_state_animation_write_ok=" << packageAuthoredStateAnimationWriteOk
