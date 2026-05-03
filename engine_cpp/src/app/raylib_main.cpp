@@ -3346,12 +3346,34 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             }
             if (uiButton({354.0f, 516.0f, 76.0f, 24.0f}, "- State")) {
                 if (object.states.size() > 1) {
-                    const std::string removedStateName = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
-                    object.states.erase(object.states.begin() + editor.selectedObjectState);
-                    editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+                    const int removeIndex = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+                    const int oldInitialState = object.initialState;
+                    const std::string removedStateName = object.states[static_cast<size_t>(removeIndex)].name;
+                    object.states.erase(object.states.begin() + removeIndex);
+                    editor.selectedObjectState = std::clamp(removeIndex, 0, static_cast<int>(object.states.size()) - 1);
+                    if (oldInitialState == removeIndex) {
+                        object.initialState = editor.selectedObjectState;
+                    } else if (oldInitialState > removeIndex) {
+                        object.initialState = oldInitialState - 1;
+                    } else {
+                        object.initialState = oldInitialState;
+                    }
                     object.initialState = std::clamp(object.initialState, 0, static_cast<int>(object.states.size()) - 1);
                     const std::string& replacementStateName = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
                     remapRemovedObjectStateScriptTargets(object, removedStateName, replacementStateName);
+                    for (pf::GameObjectRuntime& runtime : world.objects) {
+                        if (runtime.objectDef != editor.selectedObjectDef) {
+                            continue;
+                        }
+                        if (runtime.state == removeIndex) {
+                            runtime.state = editor.selectedObjectState;
+                            runtime.lastStateChangeFrame = world.frame;
+                            runtime.internalFrame = 0;
+                            runtime.animationFrame = 0;
+                        } else if (runtime.state > removeIndex) {
+                            --runtime.state;
+                        }
+                    }
                     editor.status = "Editor: removed object state";
                     return;
                 }
