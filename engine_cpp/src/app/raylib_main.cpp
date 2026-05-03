@@ -2484,7 +2484,19 @@ static void removePackageScriptCallbackRefs(std::vector<pf::FunctionCall>& calls
         calls.end());
 }
 
+static void removePackageScriptInstructionRefs(std::vector<pf::PackageScript>& scripts, const std::string& scriptName) {
+    for (pf::PackageScript& script : scripts) {
+        for (pf::PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.op == pf::PackageScriptOp::CallScript && instruction.text == scriptName) {
+                instruction.op = pf::PackageScriptOp::Nop;
+                instruction.text.clear();
+            }
+        }
+    }
+}
+
 static void removeFighterPackageScriptRefs(pf::FighterDefinition& def, const std::string& scriptName) {
+    removePackageScriptInstructionRefs(def.packageScripts, scriptName);
     for (pf::FighterState& state : def.states) {
         removePackageScriptCallbackRefs(state.onEnter, scriptName);
         removePackageScriptCallbackRefs(state.onFrame, scriptName);
@@ -2494,6 +2506,7 @@ static void removeFighterPackageScriptRefs(pf::FighterDefinition& def, const std
 }
 
 static void removeObjectPackageScriptRefs(pf::GameObjectDefinition& object, const std::string& scriptName) {
+    removePackageScriptInstructionRefs(object.packageScripts, scriptName);
     for (pf::GameObjectStateDefinition& state : object.states) {
         removePackageScriptCallbackRefs(state.onEnter, scriptName);
         removePackageScriptCallbackRefs(state.onFrame, scriptName);
