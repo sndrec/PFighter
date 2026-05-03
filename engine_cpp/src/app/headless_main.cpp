@@ -4873,9 +4873,15 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidStateTimingWritePackage = sourcePackage;
     invalidStateTimingWritePackage.fighters[0].states[0].animationLengthFrames = 0;
     const bool invalidPackageStateTimingWriteRejected = pf::writeFighterPackage(invalidStateTimingWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidDuplicateStateWritePackage = sourcePackage;
+    invalidDuplicateStateWritePackage.fighters[0].states.push_back(invalidDuplicateStateWritePackage.fighters[0].states[0]);
+    const bool invalidPackageDuplicateStateWriteRejected = pf::writeFighterPackage(invalidDuplicateStateWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectStateTimingWritePackage = sourcePackage;
     invalidObjectStateTimingWritePackage.objects[1].states[0].animationLengthFrames = -1;
     const bool invalidPackageObjectStateTimingWriteRejected = pf::writeFighterPackage(invalidObjectStateTimingWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidDuplicateObjectStateWritePackage = sourcePackage;
+    invalidDuplicateObjectStateWritePackage.objects[1].states.push_back(invalidDuplicateObjectStateWritePackage.objects[1].states[0]);
+    const bool invalidPackageDuplicateObjectStateWriteRejected = pf::writeFighterPackage(invalidDuplicateObjectStateWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidReferenceWritePackage = sourcePackage;
     invalidReferenceWritePackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     const bool invalidPackageReferenceWriteRejected = pf::writeFighterPackage(invalidReferenceWritePackage, &invalidPackageError).empty();
@@ -5544,7 +5550,9 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
               << " fighter_package_invalid_animation_action_write_rejected=" << invalidPackageAnimationActionWriteRejected
               << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
+              << " fighter_package_invalid_duplicate_state_write_rejected=" << invalidPackageDuplicateStateWriteRejected
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected
+              << " fighter_package_invalid_duplicate_object_state_write_rejected=" << invalidPackageDuplicateObjectStateWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
               << " fighter_package_invalid_callback_write_rejected=" << invalidPackageCallbackWriteRejected
               << " fighter_package_invalid_object_callback_write_rejected=" << invalidPackageObjectCallbackWriteRejected

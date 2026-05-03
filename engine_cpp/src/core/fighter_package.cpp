@@ -1956,7 +1956,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         }
         const std::vector<std::string> states = fighterStateNames(fighter);
         const std::vector<std::string> scripts = scriptNames(fighter.packageScripts);
-        requireNonemptyNames(states, "fighter state");
+        requireUniqueNonemptyNames(states, "fighter state");
         requireUniqueNonemptyNames(variableNames(fighter.packageVariables), "fighter variable");
         validateFighterEcbGeometry(fighter.authoredEcb);
         validatePackageScripts(
@@ -2018,7 +2018,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         validateObjectProperties(object);
         const std::vector<std::string> states = objectStateNames(object);
         const std::vector<std::string> scripts = scriptNames(object.packageScripts);
-        requireNonemptyNames(states, "object state");
+        requireUniqueNonemptyNames(states, "object state");
         requireUniqueNonemptyNames(variableNames(object.packageVariables), "object variable");
         validatePackageScripts(
             object.packageScripts,
