@@ -3028,7 +3028,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
 
         if (!object.states.empty()) {
             pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
-            DrawText(("Object state: " + objectState.name + " len " + std::to_string(objectState.animationLengthFrames)).c_str(), 24, 532, 13, DARKGRAY);
+            DrawText(("Object state: " + std::to_string(editor.selectedObjectState + 1) + "/" +
+                      std::to_string(object.states.size()) + " " + objectState.name +
+                      " len " + std::to_string(objectState.animationLengthFrames)).c_str(), 24, 532, 13, DARKGRAY);
             if (uiButton({270.0f, 516.0f, 76.0f, 24.0f}, "+ State")) {
                 pf::GameObjectStateDefinition state;
                 state.name = uniqueObjectStateName(object);
@@ -3055,6 +3057,14 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             if (uiButton({438.0f, 516.0f, 76.0f, 24.0f}, "Initial")) {
                 object.initialState = editor.selectedObjectState;
                 editor.status = "Editor: selected object initial state";
+            }
+            if (uiButton({24.0f, 546.0f, 58.0f, 24.0f}, "Prev")) {
+                editor.selectedObjectState = wrappedIndex(editor.selectedObjectState - 1, static_cast<int>(object.states.size()));
+                editor.status = "Editor: selected previous object state";
+            }
+            if (uiButton({88.0f, 546.0f, 58.0f, 24.0f}, "Next")) {
+                editor.selectedObjectState = wrappedIndex(editor.selectedObjectState + 1, static_cast<int>(object.states.size()));
+                editor.status = "Editor: selected next object state";
             }
             if (uiButton({270.0f, 546.0f, 76.0f, 24.0f}, "Loop", objectState.loopAnimation)) {
                 objectState.loopAnimation = !objectState.loopAnimation;
