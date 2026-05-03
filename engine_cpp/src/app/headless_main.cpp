@@ -4884,6 +4884,11 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidAuthoredStateAnimationWritePackage = authoredStateAnimationWritePackage;
     invalidAuthoredStateAnimationWritePackage.fighters[0].states[0].animationActionIndex = 99;
     const bool invalidPackageAuthoredStateAnimationWriteRejected = pf::writeFighterPackage(invalidAuthoredStateAnimationWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidSkeletonNameWritePackage = authoredStateAnimationWritePackage;
+    invalidSkeletonNameWritePackage.fighters[0].authoredSkeleton.push_back(
+        invalidSkeletonNameWritePackage.fighters[0].authoredSkeleton[0]);
+    invalidSkeletonNameWritePackage.fighters[0].authoredSkeleton.back().parent = 0;
+    const bool invalidPackageSkeletonNameWriteRejected = pf::writeFighterPackage(invalidSkeletonNameWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidStateTimingWritePackage = sourcePackage;
     invalidStateTimingWritePackage.fighters[0].states[0].animationLengthFrames = 0;
     const bool invalidPackageStateTimingWriteRejected = pf::writeFighterPackage(invalidStateTimingWritePackage, &invalidPackageError).empty();
@@ -5565,6 +5570,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_animation_action_write_rejected=" << invalidPackageAnimationActionWriteRejected
               << " fighter_package_authored_state_animation_write_ok=" << packageAuthoredStateAnimationWriteOk
               << " fighter_package_invalid_authored_state_animation_write_rejected=" << invalidPackageAuthoredStateAnimationWriteRejected
+              << " fighter_package_invalid_skeleton_name_write_rejected=" << invalidPackageSkeletonNameWriteRejected
               << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
               << " fighter_package_invalid_duplicate_state_write_rejected=" << invalidPackageDuplicateStateWriteRejected
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected

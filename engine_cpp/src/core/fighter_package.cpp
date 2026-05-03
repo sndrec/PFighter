@@ -1416,9 +1416,17 @@ void validateAuthoredAnimationData(
     const std::vector<AnimationClip>& clips)
 {
     for (size_t i = 0; i < skeleton.size(); ++i) {
+        if (skeleton[i].name.empty()) {
+            throw std::runtime_error("fighter package authored skeleton joint name is invalid");
+        }
         const int parent = skeleton[i].parent;
         if (parent < -1 || parent >= static_cast<int>(i)) {
             throw std::runtime_error("fighter package authored skeleton parent is invalid");
+        }
+        for (size_t otherIndex = 0; otherIndex < i; ++otherIndex) {
+            if (skeleton[otherIndex].name == skeleton[i].name) {
+                throw std::runtime_error("fighter package authored skeleton joint name is duplicate");
+            }
         }
     }
 
