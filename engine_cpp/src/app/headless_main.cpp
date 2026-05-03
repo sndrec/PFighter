@@ -4726,6 +4726,17 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidScriptBranchWritePackage = sourcePackage;
     invalidScriptBranchWritePackage.fighters[0].packageScripts[1].instructions[3].intValue = 99;
     const bool invalidPackageBranchWriteRejected = pf::writeFighterPackage(invalidScriptBranchWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScriptDanglingBranchWritePackage = sourcePackage;
+    invalidScriptDanglingBranchWritePackage.fighters[0].packageScripts[1].instructions.push_back({
+        pf::PackageScriptOp::SkipIfVarLessThanImmediate,
+        0,
+        -1,
+        -1,
+        1,
+        0,
+        {},
+    });
+    const bool invalidPackageDanglingBranchWriteRejected = pf::writeFighterPackage(invalidScriptDanglingBranchWritePackage, &invalidPackageError).empty();
     pf::FighterPackage aliasStateWritePackage = sourcePackage;
     aliasStateWritePackage.fighters[0].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::ChangeState,
@@ -4915,6 +4926,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
               << " fighter_package_invalid_object_variable_name_write_rejected=" << invalidPackageObjectVariableNameWriteRejected
               << " fighter_package_invalid_branch_write_rejected=" << invalidPackageBranchWriteRejected
+              << " fighter_package_invalid_dangling_branch_write_rejected=" << invalidPackageDanglingBranchWriteRejected
               << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk
               << " fighter_package_invalid_object_state_alias_write_rejected=" << invalidPackageObjectStateAliasWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk

@@ -2028,7 +2028,8 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     if (uiButton({365.0f, 682.0f, 68.0f, 24.0f}, "+ If")) {
         if (script && !def.packageVariables.empty()) {
             script->instructions.push_back({pf::PackageScriptOp::SkipIfVarLessThanImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
-            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            script->instructions.push_back({pf::PackageScriptOp::Nop, -1, -1, -1, 0, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 2;
             editor.status = "Editor: appended branch condition to " + script->name;
         }
     }
@@ -2427,7 +2428,8 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 if (uiButton({522.0f, 590.0f, 76.0f, 24.0f}, "+ If")) {
                     if (!object.packageVariables.empty()) {
                         script.instructions.push_back({pf::PackageScriptOp::SkipIfVarLessThanImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
-                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                        script.instructions.push_back({pf::PackageScriptOp::Nop, -1, -1, -1, 0, 0, {}});
+                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 2;
                         editor.status = "Editor: appended object branch condition";
                     }
                 }

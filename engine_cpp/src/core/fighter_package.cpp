@@ -1572,6 +1572,9 @@ void validatePackageScriptInstruction(
         break;
     case PackageScriptOp::SkipIfVarLessThanImmediate:
         requireVariableIndex(instruction.dst, variableCount, "condition");
+        if (instructionIndex + 2 > instructionCount) {
+            throw std::runtime_error("fighter package script branch target is invalid");
+        }
         break;
     case PackageScriptOp::JumpRelative: {
         const int target = instructionIndex + instruction.intValue;
