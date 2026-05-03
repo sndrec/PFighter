@@ -6813,6 +6813,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::AddVar:
                 setVar(instruction.dst, var(instruction.srcA) + var(instruction.srcB));
                 break;
+            case PackageScriptOp::SetVarFrame:
+                setVar(instruction.dst, object.internalFrame);
+                break;
+            case PackageScriptOp::SetVarGrounded:
+                setVar(instruction.dst, object.grounded ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarFacing:
+                setVar(instruction.dst, object.facing);
+                break;
             case PackageScriptOp::SetGroundVelocity:
             case PackageScriptOp::SetAirVelocityX:
                 object.velocity.x = instruction.fixValue;

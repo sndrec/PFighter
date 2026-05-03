@@ -2595,6 +2595,15 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::AddVar:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) + packageVar(fighter, instruction.srcB));
             break;
+        case PackageScriptOp::SetVarFrame:
+            setPackageVar(fighter, instruction.dst, fighter.internalFrame);
+            break;
+        case PackageScriptOp::SetVarGrounded:
+            setPackageVar(fighter, instruction.dst, fighter.grounded ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarFacing:
+            setPackageVar(fighter, instruction.dst, fighter.facing);
+            break;
         case PackageScriptOp::SetGroundVelocity:
             fighter.groundVelocity = instruction.fixValue;
             break;

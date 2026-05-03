@@ -212,6 +212,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarImmediate:
     case PackageScriptOp::AddVarImmediate:
     case PackageScriptOp::AddVar:
+    case PackageScriptOp::SetVarFrame:
+    case PackageScriptOp::SetVarGrounded:
+    case PackageScriptOp::SetVarFacing:
     case PackageScriptOp::SetGroundVelocity:
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
@@ -1549,6 +1552,9 @@ void validatePackageScriptInstruction(
         break;
     case PackageScriptOp::SetVarImmediate:
     case PackageScriptOp::AddVarImmediate:
+    case PackageScriptOp::SetVarFrame:
+    case PackageScriptOp::SetVarGrounded:
+    case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         break;
     case PackageScriptOp::AddVar:

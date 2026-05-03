@@ -989,6 +989,9 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarImmediate: return "SetVar";
     case pf::PackageScriptOp::AddVarImmediate: return "AddVar";
     case pf::PackageScriptOp::AddVar: return "AddVars";
+    case pf::PackageScriptOp::SetVarFrame: return "ReadFrame";
+    case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
+    case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
     case pf::PackageScriptOp::SetGroundVelocity: return "GroundVel";
     case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
@@ -1009,6 +1012,11 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarImmediate:
     case pf::PackageScriptOp::AddVarImmediate:
         label += " v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetVarFrame:
+    case pf::PackageScriptOp::SetVarGrounded:
+    case pf::PackageScriptOp::SetVarFacing:
+        label += " v" + std::to_string(instruction.dst);
         break;
     case pf::PackageScriptOp::AddVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
@@ -1108,7 +1116,10 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::Nop: return pf::PackageScriptOp::SetVarImmediate;
     case pf::PackageScriptOp::SetVarImmediate: return pf::PackageScriptOp::AddVarImmediate;
     case pf::PackageScriptOp::AddVarImmediate: return pf::PackageScriptOp::AddVar;
-    case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::SetGroundVelocity;
+    case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::SetVarFrame;
+    case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarGrounded;
+    case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
+    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetGroundVelocity;
     case pf::PackageScriptOp::SetGroundVelocity: return pf::PackageScriptOp::SetAirVelocityX;
     case pf::PackageScriptOp::SetAirVelocityX: return pf::PackageScriptOp::SetAirVelocityY;
     case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetFacing;
@@ -2033,6 +2044,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended AirVelX instruction to " + script->name;
         }
     }
+    if (uiButton({515.0f, 412.0f, 68.0f, 24.0f}, "+ Fact")) {
+        if (script && !def.packageVariables.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SetVarFrame, editor.selectedPackageVariable, -1, -1, 0, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended runtime fact read to " + script->name;
+        }
+    }
     if (uiButton({365.0f, 442.0f, 68.0f, 24.0f}, "- Instr")) {
         if (script && !script->instructions.empty()) {
             script->instructions.erase(script->instructions.begin() + editor.selectedPackageInstruction);
@@ -2549,6 +2567,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     script.instructions.push_back({pf::PackageScriptOp::JumpRelative, -1, -1, -1, 1, 0, {}});
                     editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                     editor.status = "Editor: appended object jump";
+                }
+                if (uiButton({522.0f, 650.0f, 76.0f, 24.0f}, "+ Fact")) {
+                    if (!object.packageVariables.empty()) {
+                        script.instructions.push_back({pf::PackageScriptOp::SetVarFrame, editor.selectedPackageVariable, -1, -1, 0, 0, {}});
+                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                        editor.status = "Editor: appended object runtime fact read";
+                    }
                 }
                 if (uiButton({354.0f, 650.0f, 76.0f, 24.0f}, "BindSp")) {
                     bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
