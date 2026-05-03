@@ -1186,6 +1186,20 @@ static void remapRemovedPackageVariable(std::vector<pf::PackageScript>& scripts,
     }
 }
 
+static void remapRemovedObjectStateScriptTargets(
+    pf::GameObjectDefinition& object,
+    const std::string& removedStateName,
+    const std::string& replacementStateName)
+{
+    for (pf::PackageScript& script : object.packageScripts) {
+        for (pf::PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.op == pf::PackageScriptOp::ChangeState && instruction.text == removedStateName) {
+                instruction.text = replacementStateName;
+            }
+        }
+    }
+}
+
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
@@ -2198,9 +2212,12 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             }
             if (uiButton({354.0f, 516.0f, 76.0f, 24.0f}, "- State")) {
                 if (object.states.size() > 1) {
+                    const std::string removedStateName = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
                     object.states.erase(object.states.begin() + editor.selectedObjectState);
                     editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
                     object.initialState = std::clamp(object.initialState, 0, static_cast<int>(object.states.size()) - 1);
+                    const std::string& replacementStateName = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
+                    remapRemovedObjectStateScriptTargets(object, removedStateName, replacementStateName);
                     editor.status = "Editor: removed object state";
                     return;
                 }
