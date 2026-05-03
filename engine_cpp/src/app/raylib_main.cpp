@@ -1165,6 +1165,27 @@ static void normalizeObjectPackageInstruction(
     }
 }
 
+static void remapRemovedPackageVariableRef(int& ref, int removedIndex, int variableCountAfterRemove) {
+    if (ref < 0) {
+        return;
+    }
+    if (ref == removedIndex) {
+        ref = variableCountAfterRemove > 0 ? std::min(removedIndex, variableCountAfterRemove - 1) : -1;
+    } else if (ref > removedIndex) {
+        --ref;
+    }
+}
+
+static void remapRemovedPackageVariable(std::vector<pf::PackageScript>& scripts, int removedIndex, int variableCountAfterRemove) {
+    for (pf::PackageScript& script : scripts) {
+        for (pf::PackageScriptInstruction& instruction : script.instructions) {
+            remapRemovedPackageVariableRef(instruction.dst, removedIndex, variableCountAfterRemove);
+            remapRemovedPackageVariableRef(instruction.srcA, removedIndex, variableCountAfterRemove);
+            remapRemovedPackageVariableRef(instruction.srcB, removedIndex, variableCountAfterRemove);
+        }
+    }
+}
+
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
@@ -1701,8 +1722,10 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
     if (uiButton({402.0f, 334.0f, 58.0f, 24.0f}, "- Var")) {
         if (!def.packageVariables.empty()) {
-            const std::string removed = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)].name;
-            def.packageVariables.erase(def.packageVariables.begin() + editor.selectedPackageVariable);
+            const int removedIndex = editor.selectedPackageVariable;
+            const std::string removed = def.packageVariables[static_cast<size_t>(removedIndex)].name;
+            def.packageVariables.erase(def.packageVariables.begin() + removedIndex);
+            remapRemovedPackageVariable(def.packageScripts, removedIndex, static_cast<int>(def.packageVariables.size()));
             editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(def.packageVariables.size()) - 1));
             editor.status = "Editor: removed package variable " + removed;
         }
@@ -2171,8 +2194,10 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         }
         if (uiButton({332.0f, 486.0f, 58.0f, 24.0f}, "- OVar")) {
             if (!object.packageVariables.empty()) {
-                const std::string removed = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)].name;
-                object.packageVariables.erase(object.packageVariables.begin() + editor.selectedPackageVariable);
+                const int removedIndex = editor.selectedPackageVariable;
+                const std::string removed = object.packageVariables[static_cast<size_t>(removedIndex)].name;
+                object.packageVariables.erase(object.packageVariables.begin() + removedIndex);
+                remapRemovedPackageVariable(object.packageScripts, removedIndex, static_cast<int>(object.packageVariables.size()));
                 editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(object.packageVariables.size()) - 1));
                 editor.status = "Editor: removed object package variable " + removed;
             }
