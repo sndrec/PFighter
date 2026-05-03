@@ -4723,13 +4723,16 @@ int main(int argc, char** argv) {
         {"ObjectLastFighterVar", 0},
         {"ObjectLastObjectVar", 0},
         {"ObjectDamageVar", 0},
+        {"ObjectPositionXVar", 0},
+        {"ObjectPositionYVar", 0},
+        {"ObjectVelocityXVar", 0},
+        {"ObjectVelocityYVar", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
-        16,
+        24,
         {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
-            {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
             {pf::PackageScriptOp::SetVarFrame, 1, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarStateFrame, 2, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGrounded, 3, -1, -1, 0, 0, {}},
@@ -4739,6 +4742,11 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarObjectLastFighter, 7, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectLastObject, 8, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectDamage, 9, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectPositionX, 10, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectPositionY, 11, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectVelocityX, 12, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectVelocityY, 13, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
             {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 10, 0, {}},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 100, 0, {}},
             {pf::PackageScriptOp::JumpRelative, -1, -1, -1, 2, 0, {}},
@@ -5013,7 +5021,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].packageScripts.size() == 8 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 10 &&
+        loadedPackage.objects[1].packageVariables.size() == 14 &&
         loadedPackage.objects[1].packageScripts.size() == 1;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
@@ -5298,14 +5306,21 @@ int main(int argc, char** argv) {
         object.lastInteractionFighter = 1;
         object.lastInteractionObject = packageObjectIndex;
         object.damageTaken = pf::fxFromFloat(2.0f);
+        object.position = {pf::fxFromFloat(1.25f), pf::fxFromFloat(3.5f)};
+        object.previousPosition = object.position;
+        object.velocity = {pf::fxFromFloat(-0.25f), pf::fxFromFloat(0.75f)};
     }
     pf::tickWorld(packageObjectScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
     const pf::GameObjectRuntime* packageObject = packageObjectIndex >= 0 && packageObjectIndex < static_cast<int>(packageObjectScriptWorld.objects.size())
         ? &packageObjectScriptWorld.objects[static_cast<size_t>(packageObjectIndex)]
         : nullptr;
     const int packageObjectScriptVar = packageObject && !packageObject->packageVars.empty() ? packageObject->packageVars[0] : -1;
+    const pf::Fix packageObjectCtxPosX = packageObject && packageObject->packageVars.size() > 10 ? packageObject->packageVars[10] : pf::Fix{-1};
+    const pf::Fix packageObjectCtxPosY = packageObject && packageObject->packageVars.size() > 11 ? packageObject->packageVars[11] : pf::Fix{-1};
+    const pf::Fix packageObjectCtxVelX = packageObject && packageObject->packageVars.size() > 12 ? packageObject->packageVars[12] : pf::Fix{-1};
+    const pf::Fix packageObjectCtxVelY = packageObject && packageObject->packageVars.size() > 13 ? packageObject->packageVars[13] : pf::Fix{-1};
     const bool packageObjectFactScriptOk = packageObject &&
-        packageObject->packageVars.size() >= 10 &&
+        packageObject->packageVars.size() >= 14 &&
         packageObject->packageVars[1] == 1 &&
         packageObject->packageVars[2] == 1 &&
         packageObject->packageVars[3] == 0 &&
@@ -5314,7 +5329,11 @@ int main(int argc, char** argv) {
         packageObject->packageVars[6] == -1 &&
         packageObject->packageVars[7] == 1 &&
         packageObject->packageVars[8] == packageObjectIndex &&
-        packageObject->packageVars[9] == pf::fxFromFloat(2.0f);
+        packageObject->packageVars[9] == pf::fxFromFloat(2.0f) &&
+        packageObject->packageVars[10] == pf::fxFromFloat(1.0f) &&
+        packageObject->packageVars[11] == pf::fxFromFloat(4.17f) &&
+        packageObject->packageVars[12] == pf::fxFromFloat(-0.25f) &&
+        packageObject->packageVars[13] == pf::fxFromFloat(0.67f);
     const pf::Fix packageObjectScriptVelX = packageObject ? packageObject->velocity.x : pf::Fix{-1};
     pf::World packageObjectStateScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
@@ -5379,6 +5398,10 @@ int main(int argc, char** argv) {
               << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
               << " fighter_package_object_script_fact_ok=" << packageObjectFactScriptOk
+              << " fighter_package_object_script_pos_x=" << pf::fxToFloat(packageObjectCtxPosX)
+              << " fighter_package_object_script_pos_y=" << pf::fxToFloat(packageObjectCtxPosY)
+              << " fighter_package_object_script_vel_x_read=" << pf::fxToFloat(packageObjectCtxVelX)
+              << " fighter_package_object_script_vel_y_read=" << pf::fxToFloat(packageObjectCtxVelY)
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk

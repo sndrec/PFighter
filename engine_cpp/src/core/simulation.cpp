@@ -6881,6 +6881,18 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarObjectDamage:
                 setVar(instruction.dst, object.damageTaken);
                 break;
+            case PackageScriptOp::SetVarObjectPositionX:
+                setVar(instruction.dst, object.position.x);
+                break;
+            case PackageScriptOp::SetVarObjectPositionY:
+                setVar(instruction.dst, object.position.y);
+                break;
+            case PackageScriptOp::SetVarObjectVelocityX:
+                setVar(instruction.dst, object.velocity.x);
+                break;
+            case PackageScriptOp::SetVarObjectVelocityY:
+                setVar(instruction.dst, object.velocity.y);
+                break;
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:
             case PackageScriptOp::SetVarStickX:

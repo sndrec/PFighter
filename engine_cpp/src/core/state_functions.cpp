@@ -2636,6 +2636,10 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SetVarObjectLastFighter:
         case PackageScriptOp::SetVarObjectLastObject:
         case PackageScriptOp::SetVarObjectDamage:
+        case PackageScriptOp::SetVarObjectPositionX:
+        case PackageScriptOp::SetVarObjectPositionY:
+        case PackageScriptOp::SetVarObjectVelocityX:
+        case PackageScriptOp::SetVarObjectVelocityY:
             break;
         case PackageScriptOp::SetVarButtonDown:
             setPackageVar(fighter, instruction.dst, (fighter.input.frames[0].buttons & instruction.intValue) != 0 ? 1 : 0);

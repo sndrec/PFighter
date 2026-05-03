@@ -231,6 +231,10 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarObjectLastFighter:
     case PackageScriptOp::SetVarObjectLastObject:
     case PackageScriptOp::SetVarObjectDamage:
+    case PackageScriptOp::SetVarObjectPositionX:
+    case PackageScriptOp::SetVarObjectPositionY:
+    case PackageScriptOp::SetVarObjectVelocityX:
+    case PackageScriptOp::SetVarObjectVelocityY:
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:
     case PackageScriptOp::SetVarStickX:
@@ -1624,6 +1628,10 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarObjectLastFighter:
     case PackageScriptOp::SetVarObjectLastObject:
     case PackageScriptOp::SetVarObjectDamage:
+    case PackageScriptOp::SetVarObjectPositionX:
+    case PackageScriptOp::SetVarObjectPositionY:
+    case PackageScriptOp::SetVarObjectVelocityX:
+    case PackageScriptOp::SetVarObjectVelocityY:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         if (!allowObjectContextReads) {
             throw std::runtime_error("fighter package script object context read is invalid");

@@ -1006,6 +1006,10 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectLastFighter: return "ObjLastF";
     case pf::PackageScriptOp::SetVarObjectLastObject: return "ObjLastO";
     case pf::PackageScriptOp::SetVarObjectDamage: return "ObjDmg";
+    case pf::PackageScriptOp::SetVarObjectPositionX: return "ObjPosX";
+    case pf::PackageScriptOp::SetVarObjectPositionY: return "ObjPosY";
+    case pf::PackageScriptOp::SetVarObjectVelocityX: return "ObjVelX";
+    case pf::PackageScriptOp::SetVarObjectVelocityY: return "ObjVelY";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
     case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
     case pf::PackageScriptOp::SetVarStickX: return "StickX";
@@ -1138,6 +1142,10 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarObjectLastFighter:
     case pf::PackageScriptOp::SetVarObjectLastObject:
     case pf::PackageScriptOp::SetVarObjectDamage:
+    case pf::PackageScriptOp::SetVarObjectPositionX:
+    case pf::PackageScriptOp::SetVarObjectPositionY:
+    case pf::PackageScriptOp::SetVarObjectVelocityX:
+    case pf::PackageScriptOp::SetVarObjectVelocityY:
         label += " v" + std::to_string(instruction.dst);
         break;
     case pf::PackageScriptOp::SetVarButtonDown:
@@ -1339,7 +1347,11 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectHeldBy: return pf::PackageScriptOp::SetVarObjectLastFighter;
     case pf::PackageScriptOp::SetVarObjectLastFighter: return pf::PackageScriptOp::SetVarObjectLastObject;
     case pf::PackageScriptOp::SetVarObjectLastObject: return pf::PackageScriptOp::SetVarObjectDamage;
-    case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetVarObjectOwner;
+    case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetVarObjectPositionX;
+    case pf::PackageScriptOp::SetVarObjectPositionX: return pf::PackageScriptOp::SetVarObjectPositionY;
+    case pf::PackageScriptOp::SetVarObjectPositionY: return pf::PackageScriptOp::SetVarObjectVelocityX;
+    case pf::PackageScriptOp::SetVarObjectVelocityX: return pf::PackageScriptOp::SetVarObjectVelocityY;
+    case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
     }
 }
