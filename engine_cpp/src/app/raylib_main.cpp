@@ -3694,6 +3694,18 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     }
     if (showingAuthoredClips && !def.authoredSkeleton.empty()) {
         pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(std::clamp(editor.selectedAnimationJoint, 0, static_cast<int>(def.authoredSkeleton.size()) - 1))];
+        if (uiButton({516.0f, 500.0f, 72.0f, 24.0f}, "Jnt Lt")) {
+            joint.translation.x -= pf::fxFromFloat(0.05f);
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: moved authored joint bind offset left";
+        }
+        if (uiButton({516.0f, 530.0f, 72.0f, 24.0f}, "Jnt Rt")) {
+            joint.translation.x += pf::fxFromFloat(0.05f);
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: moved authored joint bind offset right";
+        }
         if (uiButton({262.0f, 516.0f, 72.0f, 24.0f}, "Jnt Up")) {
             joint.translation.y += pf::fxFromFloat(0.05f);
             editor.animationPreviewActive = true;
