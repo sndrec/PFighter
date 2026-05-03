@@ -2797,6 +2797,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.status = "Editor package load failed: no fighters in package";
         } else {
             const int fighterDef = fighter.fighterDef;
+            const size_t fighterIndex = static_cast<size_t>(editor.selectedFighter);
+            const pf::Vec2 position = fighter.position;
+            const int facing = fighter.facing;
             world.fighterDefs[static_cast<size_t>(fighterDef)] = package.fighters.front();
             for (size_t packageFighterIndex = 1; packageFighterIndex < package.fighters.size(); ++packageFighterIndex) {
                 const pf::FighterDefinition& packageFighter = package.fighters[packageFighterIndex];
@@ -2812,6 +2815,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             if (!package.objects.empty()) {
                 world.objectDefs = package.objects;
             }
+            world.objects.clear();
+            pf::resetTrainingFighter(world, fighterIndex, fighterDef, position, facing);
+            selectedFighterDef = fighterDef;
             editor.selectedState = 0;
             editor.selectedSubaction = 0;
             editor.selectedPackageVariable = 0;
