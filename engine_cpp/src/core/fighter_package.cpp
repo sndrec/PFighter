@@ -219,6 +219,11 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarStateFrame:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
+    case PackageScriptOp::SetVarObjectOwner:
+    case PackageScriptOp::SetVarObjectHeldBy:
+    case PackageScriptOp::SetVarObjectLastFighter:
+    case PackageScriptOp::SetVarObjectLastObject:
+    case PackageScriptOp::SetVarObjectDamage:
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:
     case PackageScriptOp::SetVarStickX:
@@ -1564,6 +1569,7 @@ void validatePackageScriptInstruction(
     bool allowFighterTargets,
     bool allowInputReads,
     bool allowObjectLifecycleOps,
+    bool allowObjectContextReads,
     int instructionIndex,
     int instructionCount)
 {
@@ -1577,6 +1583,16 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");
+        break;
+    case PackageScriptOp::SetVarObjectOwner:
+    case PackageScriptOp::SetVarObjectHeldBy:
+    case PackageScriptOp::SetVarObjectLastFighter:
+    case PackageScriptOp::SetVarObjectLastObject:
+    case PackageScriptOp::SetVarObjectDamage:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowObjectContextReads) {
+            throw std::runtime_error("fighter package script object context read is invalid");
+        }
         break;
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:
@@ -1697,7 +1713,8 @@ void validatePackageScripts(
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
     bool allowInputReads,
-    bool allowObjectLifecycleOps)
+    bool allowObjectLifecycleOps,
+    bool allowObjectContextReads)
 {
     std::vector<std::string> seenNames;
     seenNames.reserve(scripts.size());
@@ -1720,6 +1737,7 @@ void validatePackageScripts(
                 allowFighterTargets,
                 allowInputReads,
                 allowObjectLifecycleOps,
+                allowObjectContextReads,
                 instructionIndex,
                 instructionCount);
         }
@@ -1840,6 +1858,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             true,
             true,
             true,
+            false,
             false);
         for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
             validateHurtboxGeometry(hurtbox);
@@ -1892,6 +1911,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             false,
             false,
             false,
+            true,
             true);
         if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {
             throw std::runtime_error("fighter package object initial state is invalid");

@@ -6828,6 +6828,21 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFacing:
                 setVar(instruction.dst, object.facing);
                 break;
+            case PackageScriptOp::SetVarObjectOwner:
+                setVar(instruction.dst, object.ownerFighter);
+                break;
+            case PackageScriptOp::SetVarObjectHeldBy:
+                setVar(instruction.dst, object.heldByFighter);
+                break;
+            case PackageScriptOp::SetVarObjectLastFighter:
+                setVar(instruction.dst, object.lastInteractionFighter);
+                break;
+            case PackageScriptOp::SetVarObjectLastObject:
+                setVar(instruction.dst, object.lastInteractionObject);
+                break;
+            case PackageScriptOp::SetVarObjectDamage:
+                setVar(instruction.dst, object.damageTaken);
+                break;
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:
             case PackageScriptOp::SetVarStickX:

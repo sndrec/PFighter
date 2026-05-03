@@ -994,6 +994,11 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarStateFrame: return "StateFrm";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
+    case pf::PackageScriptOp::SetVarObjectOwner: return "ObjOwner";
+    case pf::PackageScriptOp::SetVarObjectHeldBy: return "ObjHeld";
+    case pf::PackageScriptOp::SetVarObjectLastFighter: return "ObjLastF";
+    case pf::PackageScriptOp::SetVarObjectLastObject: return "ObjLastO";
+    case pf::PackageScriptOp::SetVarObjectDamage: return "ObjDmg";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
     case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
     case pf::PackageScriptOp::SetVarStickX: return "StickX";
@@ -1098,6 +1103,11 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarCStickX:
     case pf::PackageScriptOp::SetVarCStickY:
     case pf::PackageScriptOp::SetVarShield:
+    case pf::PackageScriptOp::SetVarObjectOwner:
+    case pf::PackageScriptOp::SetVarObjectHeldBy:
+    case pf::PackageScriptOp::SetVarObjectLastFighter:
+    case pf::PackageScriptOp::SetVarObjectLastObject:
+    case pf::PackageScriptOp::SetVarObjectDamage:
         label += " v" + std::to_string(instruction.dst);
         break;
     case pf::PackageScriptOp::SetVarButtonDown:
@@ -1271,6 +1281,17 @@ static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
         next = nextPackageScriptOp(next);
     }
     return next;
+}
+
+static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
+    switch (op) {
+    case pf::PackageScriptOp::SetVarObjectOwner: return pf::PackageScriptOp::SetVarObjectHeldBy;
+    case pf::PackageScriptOp::SetVarObjectHeldBy: return pf::PackageScriptOp::SetVarObjectLastFighter;
+    case pf::PackageScriptOp::SetVarObjectLastFighter: return pf::PackageScriptOp::SetVarObjectLastObject;
+    case pf::PackageScriptOp::SetVarObjectLastObject: return pf::PackageScriptOp::SetVarObjectDamage;
+    case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetVarObjectOwner;
+    default: return pf::PackageScriptOp::SetVarObjectOwner;
+    }
 }
 
 static void normalizePackageInstruction(
@@ -2797,6 +2818,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         editor.status = "Editor: appended object runtime fact read";
                     }
                 }
+                if (uiButton({606.0f, 590.0f, 58.0f, 24.0f}, "+ Ctx")) {
+                    if (!object.packageVariables.empty()) {
+                        script.instructions.push_back({pf::PackageScriptOp::SetVarObjectOwner, editor.selectedPackageVariable, -1, -1, 0, 0, {}});
+                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                        editor.status = "Editor: appended object context read";
+                    }
+                }
                 if (uiButton({354.0f, 650.0f, 76.0f, 24.0f}, "BindSp")) {
                     bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
                 }
@@ -2813,6 +2841,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         instruction.op = nextObjectPackageScriptOp(instruction.op);
                         normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
                         editor.status = "Editor: cycled selected object script block op";
+                    }
+                    if (uiButton({606.0f, 680.0f, 58.0f, 22.0f}, "CtxOp")) {
+                        instruction.op = nextObjectContextReadOp(instruction.op);
+                        normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+                        editor.status = "Editor: cycled selected object context read";
                     }
                     if (uiButton({270.0f, 620.0f, 76.0f, 24.0f}, "Dst")) {
                         if (!object.packageVariables.empty()) {
