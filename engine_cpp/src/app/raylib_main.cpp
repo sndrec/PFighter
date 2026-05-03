@@ -997,6 +997,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::JumpRelative: return "Jump";
+    case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
     }
     return "Op";
 }
@@ -1030,6 +1031,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         break;
     case pf::PackageScriptOp::JumpRelative:
         label += " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SwitchFighterDefinition:
+        label += " " + instruction.text;
         break;
     case pf::PackageScriptOp::Nop:
         break;
@@ -1108,9 +1112,15 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::JumpRelative;
-    case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::SwitchFighterDefinition;
+    case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
+}
+
+static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
+    const pf::PackageScriptOp next = nextPackageScriptOp(op);
+    return next == pf::PackageScriptOp::SwitchFighterDefinition ? pf::PackageScriptOp::Nop : next;
 }
 
 static void normalizePackageInstruction(
@@ -1141,6 +1151,9 @@ static void normalizePackageInstruction(
     if (instruction.op == pf::PackageScriptOp::SpawnObject && instruction.text.empty() && !world.objectDefs.empty()) {
         const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
         instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
+    }
+    if (instruction.op == pf::PackageScriptOp::SwitchFighterDefinition && instruction.text.empty() && !world.fighterDefs.empty()) {
+        instruction.text = world.fighterDefs[0].name;
     }
 }
 
@@ -2040,6 +2053,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended jump to " + script->name;
         }
     }
+    if (uiButton({290.0f, 682.0f, 68.0f, 24.0f}, "+ Fighter")) {
+        if (script && !world.fighterDefs.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SwitchFighterDefinition, -1, -1, -1, 0, 0, world.fighterDefs[0].name});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended fighter switch to " + script->name;
+        }
+    }
     if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind In")) {
         if (script) {
             bindPackageScriptCallback(state.onEnter, script->name, "enter", editor);
@@ -2105,6 +2125,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 instruction.text = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)].name;
                 instruction.op = pf::PackageScriptOp::SpawnObject;
                 editor.status = "Editor: targeted selected object from script block";
+            }
+        }
+        if (uiButton({290.0f, 622.0f, 68.0f, 24.0f}, "Fighter")) {
+            if (!world.fighterDefs.empty()) {
+                instruction.text = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].name;
+                instruction.op = pf::PackageScriptOp::SwitchFighterDefinition;
+                editor.status = "Editor: targeted current fighter from script block";
             }
         }
         if (uiButton({365.0f, 652.0f, 68.0f, 24.0f}, "BindLd")) {
@@ -2448,7 +2475,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
                     normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
                     if (uiButton({270.0f, 590.0f, 76.0f, 24.0f}, "Op")) {
-                        instruction.op = nextPackageScriptOp(instruction.op);
+                        instruction.op = nextObjectPackageScriptOp(instruction.op);
                         normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
                         editor.status = "Editor: cycled selected object script block op";
                     }

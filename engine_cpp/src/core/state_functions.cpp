@@ -2630,6 +2630,9 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
             instructionIndex = static_cast<size_t>(target);
             continue;
         }
+        case PackageScriptOp::SwitchFighterDefinition:
+            switchFighterDefinition(world, fighter, instruction.text);
+            return;
         }
         ++instructionIndex;
     }

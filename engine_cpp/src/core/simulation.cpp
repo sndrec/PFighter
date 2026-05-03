@@ -1122,6 +1122,75 @@ void resetTrainingFighter(World& world, size_t fighterIndex, int fighterDefIndex
     runStateFunctions(world, fighterIndex, currentState(world, fighter).onEnter);
 }
 
+bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::string& fighterName, const std::string& stateName) {
+    const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const FighterDefinition& def) {
+        return def.name == fighterName;
+    });
+    if (found == world.fighterDefs.end() || found->states.empty()) {
+        return false;
+    }
+
+    const int fighterDefIndex = static_cast<int>(std::distance(world.fighterDefs.begin(), found));
+    const std::string oldStateName = fighter.fighterDef >= 0 &&
+            fighter.fighterDef < static_cast<int>(world.fighterDefs.size()) &&
+            fighter.state >= 0 &&
+            fighter.state < static_cast<int>(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].states.size())
+        ? currentState(world, fighter).name
+        : std::string{"Wait"};
+    const std::string desiredStateName = stateName.empty() ? oldStateName : stateName;
+    int targetState = found->stateIndex(desiredStateName);
+    if (targetState < 0) {
+        targetState = found->stateIndex("Wait");
+    }
+    if (targetState < 0) {
+        targetState = 0;
+    }
+
+    fighter.fighterDef = fighterDefIndex;
+    fighter.state = targetState;
+    fighter.lastStateChangeFrame = fighter.internalFrame;
+    fighter.interruptibleFrame = found->states[static_cast<size_t>(targetState)].initialInterruptibleFrame;
+    fighter.stateAnimationLengthOverride = 0;
+    fighter.animationFrame = 0;
+    fighter.animationRate = fx(1);
+    fighter.animationActionIndexOverride = -1;
+    fighter.lastActionFrameExecuted = -1;
+    fighter.hsdPoseFacing = fighter.facing;
+    fighter.hsdTransN = {};
+    fighter.previousHsdTransN = {};
+    fighter.hsdTransNOffset = {};
+    fighter.hsdBlendFromPose.joints.clear();
+    fighter.hsdBlendFrames = 0;
+    fighter.hsdBlendElapsed = 0;
+    fighter.throwAnimationFrozen = false;
+    fighter.thrownAnimationFreezeActive = false;
+    fighter.thrownAnimationFreezeFrame = 0;
+    fighter.floorSkipSegment = -1;
+    fighter.activeHitboxes.clear();
+    fighter.fightersHitThisAction.clear();
+    initializePackageVars(*found, fighter);
+    if (found->hsdAsset) {
+        ensureModelVisibilityDefaults(*found, fighter);
+        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
+        fighter.hsdModelPartAnimations.assign(found->hsdAsset->modelPartAnimations.size(), -1);
+    } else {
+        fighter.hsdModelVisibilityDefaultStates.clear();
+        fighter.hsdModelVisibilityStates.clear();
+        fighter.hsdModelPartAnimations.clear();
+    }
+    evaluatePose(*found, found->states[static_cast<size_t>(targetState)], fighter);
+    calculateEcb(*found, fighter, true);
+    calculateEcb(*found, fighter, true);
+
+    const auto runtime = std::find_if(world.fighters.begin(), world.fighters.end(), [&](const FighterRuntime& item) {
+        return &item == &fighter;
+    });
+    if (runtime != world.fighters.end()) {
+        runStateFunctions(world, static_cast<size_t>(std::distance(world.fighters.begin(), runtime)), currentState(world, fighter).onEnter);
+    }
+    return true;
+}
+
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity) {
     const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const GameObjectDefinition& def) {
         return def.name == objectName;
@@ -6747,6 +6816,8 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 instructionIndex = static_cast<size_t>(target);
                 continue;
             }
+            case PackageScriptOp::SwitchFighterDefinition:
+                return;
             }
             ++instructionIndex;
         }
