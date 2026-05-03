@@ -2064,6 +2064,18 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedObjectState,
             0,
             std::max(0, static_cast<int>(object.states.size()) - 1));
+        if (!object.packageVariables.empty()) {
+            pf::PackageVariableDefinition& variable = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+            if (uiButton({270.0f, 424.0f, 58.0f, 22.0f}, "OInit-")) {
+                --variable.initialValue;
+                editor.status = "Editor: decreased initial value for object variable " + variable.name;
+            }
+            if (uiButton({332.0f, 424.0f, 58.0f, 22.0f}, "OInit+")) {
+                ++variable.initialValue;
+                editor.status = "Editor: increased initial value for object variable " + variable.name;
+            }
+            DrawText((variable.name + "=" + std::to_string(variable.initialValue)).c_str(), 398, 429, 12, DARKGRAY);
+        }
 
         if (!object.states.empty()) {
             pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
