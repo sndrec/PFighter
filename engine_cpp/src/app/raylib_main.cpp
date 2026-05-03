@@ -2094,12 +2094,20 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         } else {
             DrawText("No object script selected", 31, 590, 13, GRAY);
         }
-        if (uiButton({270.0f, 486.0f, 76.0f, 24.0f}, "+ OVar")) {
+        if (uiButton({270.0f, 486.0f, 58.0f, 24.0f}, "+ OVar")) {
             object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});
             editor.selectedPackageVariable = static_cast<int>(object.packageVariables.size()) - 1;
             editor.status = "Editor: added object package variable";
         }
-        if (uiButton({354.0f, 486.0f, 76.0f, 24.0f}, "+ OScr")) {
+        if (uiButton({332.0f, 486.0f, 58.0f, 24.0f}, "- OVar")) {
+            if (!object.packageVariables.empty()) {
+                const std::string removed = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)].name;
+                object.packageVariables.erase(object.packageVariables.begin() + editor.selectedPackageVariable);
+                editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(object.packageVariables.size()) - 1));
+                editor.status = "Editor: removed object package variable " + removed;
+            }
+        }
+        if (uiButton({394.0f, 486.0f, 58.0f, 24.0f}, "+ OScr")) {
             pf::PackageScript script;
             script.name = uniqueObjectPackageScriptName(object);
             script.instructionBudget = 64;
@@ -2108,7 +2116,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: added object package script";
         }
-        if (uiButton({438.0f, 486.0f, 76.0f, 24.0f}, "- OScr")) {
+        if (uiButton({456.0f, 486.0f, 58.0f, 24.0f}, "- OScr")) {
             if (!object.packageScripts.empty()) {
                 object.packageScripts.erase(object.packageScripts.begin() + editor.selectedPackageScript);
                 editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
