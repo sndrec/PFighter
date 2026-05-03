@@ -2828,6 +2828,15 @@ static void collectEditorPackageAssets(const std::vector<pf::FighterDefinition>&
     }
 }
 
+static pf::FighterPackage makeEditorPackage(const pf::World& world, const pf::FighterDefinition& root) {
+    pf::FighterPackage package;
+    package.name = root.name + "_editor";
+    package.fighters = collectEditorPackageFighters(world, root);
+    collectEditorPackageAssets(package.fighters, package);
+    package.objects = world.objectDefs;
+    return package;
+}
+
 static void updateEditorPackageSummary(
     pf::FighterEditor& editor,
     const pf::FighterPackage& package,
@@ -2881,11 +2890,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     }
 
     if (uiButton({338.0f, 338.0f, 82.0f, 26.0f}, "Save Pkg")) {
-        pf::FighterPackage package;
-        package.name = def.name + "_editor";
-        package.fighters = collectEditorPackageFighters(world, def);
-        collectEditorPackageAssets(package.fighters, package);
-        package.objects = world.objectDefs;
+        pf::FighterPackage package = makeEditorPackage(world, def);
         std::string error;
         const std::vector<uint8_t> bytes = pf::writeFighterPackage(package, &error);
         if (!bytes.empty() && pf::saveFighterPackage(editor.packagePath, package, &error)) {
@@ -2895,6 +2900,18 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 " checksum=" + std::to_string(pf::fighterPackageChecksum(bytes));
         } else {
             editor.status = "Editor package save failed: " + error;
+        }
+    }
+    if (uiButton({522.0f, 338.0f, 82.0f, 26.0f}, "Check Pkg")) {
+        pf::FighterPackage package = makeEditorPackage(world, def);
+        std::string error;
+        const std::vector<uint8_t> bytes = pf::writeFighterPackage(package, &error);
+        if (!bytes.empty()) {
+            updateEditorPackageSummary(editor, package, bytes);
+            editor.status = "Editor: package validates bytes=" + std::to_string(bytes.size()) +
+                " checksum=" + std::to_string(pf::fighterPackageChecksum(bytes));
+        } else {
+            editor.status = "Editor package validation failed: " + error;
         }
     }
     if (uiButton({430.0f, 338.0f, 82.0f, 26.0f}, "Load Pkg")) {
