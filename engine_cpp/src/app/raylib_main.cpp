@@ -1140,6 +1140,70 @@ static bool packageScriptOpIsProjectileSpawn(pf::PackageScriptOp op) {
         op == pf::PackageScriptOp::SpawnProjectileFromVars;
 }
 
+static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruction& instruction, int variableCount) {
+    if (variableCount > 0) {
+        return;
+    }
+
+    switch (instruction.op) {
+    case pf::PackageScriptOp::SetGroundVelocityFromVar:
+        instruction.op = pf::PackageScriptOp::SetGroundVelocity;
+        break;
+    case pf::PackageScriptOp::SetAirVelocityXFromVar:
+        instruction.op = pf::PackageScriptOp::SetAirVelocityX;
+        break;
+    case pf::PackageScriptOp::SetAirVelocityYFromVar:
+        instruction.op = pf::PackageScriptOp::SetAirVelocityY;
+        break;
+    case pf::PackageScriptOp::SetFacingFromVar:
+        instruction.op = pf::PackageScriptOp::SetFacing;
+        break;
+    case pf::PackageScriptOp::SpawnObjectFromVars:
+        instruction.op = pf::PackageScriptOp::SpawnObject;
+        break;
+    case pf::PackageScriptOp::SpawnProjectileFromVars:
+        instruction.op = pf::PackageScriptOp::SpawnProjectile;
+        break;
+    case pf::PackageScriptOp::SetVarImmediate:
+    case pf::PackageScriptOp::AddVarImmediate:
+    case pf::PackageScriptOp::AddVar:
+    case pf::PackageScriptOp::ScaleVarFixed:
+    case pf::PackageScriptOp::SetVarFrame:
+    case pf::PackageScriptOp::SetVarStateFrame:
+    case pf::PackageScriptOp::SetVarGrounded:
+    case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarFighterPercent:
+    case pf::PackageScriptOp::SetVarFighterShield:
+    case pf::PackageScriptOp::SetVarFighterPositionX:
+    case pf::PackageScriptOp::SetVarFighterPositionY:
+    case pf::PackageScriptOp::SetVarFighterGroundVelocity:
+    case pf::PackageScriptOp::SetVarFighterAirVelocityX:
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY:
+    case pf::PackageScriptOp::SetVarObjectOwner:
+    case pf::PackageScriptOp::SetVarObjectHeldBy:
+    case pf::PackageScriptOp::SetVarObjectLastFighter:
+    case pf::PackageScriptOp::SetVarObjectLastObject:
+    case pf::PackageScriptOp::SetVarObjectDamage:
+    case pf::PackageScriptOp::SetVarObjectPositionX:
+    case pf::PackageScriptOp::SetVarObjectPositionY:
+    case pf::PackageScriptOp::SetVarObjectVelocityX:
+    case pf::PackageScriptOp::SetVarObjectVelocityY:
+    case pf::PackageScriptOp::SetVarButtonDown:
+    case pf::PackageScriptOp::SetVarButtonPressed:
+    case pf::PackageScriptOp::SetVarStickX:
+    case pf::PackageScriptOp::SetVarStickY:
+    case pf::PackageScriptOp::SetVarCStickX:
+    case pf::PackageScriptOp::SetVarCStickY:
+    case pf::PackageScriptOp::SetVarShield:
+    case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
+    case pf::PackageScriptOp::SkipIfVarLessThanVar:
+        instruction.op = pf::PackageScriptOp::Nop;
+        break;
+    default:
+        break;
+    }
+}
+
 static void normalizePackageSpawnInstructionTarget(
     pf::PackageScriptInstruction& instruction,
     const pf::World& world,
@@ -1531,6 +1595,7 @@ static void normalizePackageInstruction(
         instruction.srcA = -1;
         instruction.srcB = -1;
     }
+    sanitizePackageInstructionForVariableCount(instruction, variableCount);
 
     if (instruction.op == pf::PackageScriptOp::SetFacing && instruction.intValue == 0) {
         instruction.intValue = 1;
@@ -1571,6 +1636,7 @@ static void normalizeObjectPackageInstruction(
         instruction.srcA = -1;
         instruction.srcB = -1;
     }
+    sanitizePackageInstructionForVariableCount(instruction, variableCount);
 
     if (instruction.op == pf::PackageScriptOp::SetFacing && instruction.intValue == 0) {
         instruction.intValue = 1;
@@ -1599,6 +1665,31 @@ static void remapRemovedPackageVariable(std::vector<pf::PackageScript>& scripts,
             remapRemovedPackageVariableRef(instruction.dst, removedIndex, variableCountAfterRemove);
             remapRemovedPackageVariableRef(instruction.srcA, removedIndex, variableCountAfterRemove);
             remapRemovedPackageVariableRef(instruction.srcB, removedIndex, variableCountAfterRemove);
+            sanitizePackageInstructionForVariableCount(instruction, variableCountAfterRemove);
+        }
+    }
+}
+
+static void normalizeInterruptPackageVariable(pf::InterruptRule& rule, int variableCount) {
+    if (rule.condition != pf::InterruptCondition::PackageVarAtLeast) {
+        return;
+    }
+    if (variableCount <= 0) {
+        rule.condition = pf::InterruptCondition::WaitInput;
+        rule.packageVariable = -1;
+        return;
+    }
+    rule.packageVariable = std::clamp(rule.packageVariable < 0 ? 0 : rule.packageVariable, 0, variableCount - 1);
+}
+
+static void remapRemovedInterruptPackageVariable(std::vector<pf::FighterState>& states, int removedIndex, int variableCountAfterRemove) {
+    for (pf::FighterState& state : states) {
+        for (pf::InterruptRule& rule : state.interrupts) {
+            if (rule.condition != pf::InterruptCondition::PackageVarAtLeast) {
+                continue;
+            }
+            remapRemovedPackageVariableRef(rule.packageVariable, removedIndex, variableCountAfterRemove);
+            normalizeInterruptPackageVariable(rule, variableCountAfterRemove);
         }
     }
 }
@@ -2596,6 +2687,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             const std::string removed = def.packageVariables[static_cast<size_t>(removedIndex)].name;
             def.packageVariables.erase(def.packageVariables.begin() + removedIndex);
             remapRemovedPackageVariable(def.packageScripts, removedIndex, static_cast<int>(def.packageVariables.size()));
+            remapRemovedInterruptPackageVariable(def.states, removedIndex, static_cast<int>(def.packageVariables.size()));
             for (pf::FighterRuntime& runtime : world.fighters) {
                 if (runtime.fighterDef != fighter.fighterDef) {
                     continue;
@@ -4727,6 +4819,7 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     if (!state.interrupts.empty()) {
         editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
         pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
+        normalizeInterruptPackageVariable(interrupt, static_cast<int>(def.packageVariables.size()));
         DrawText(("Interrupt #" + std::to_string(editor.selectedInterrupt) + " -> " + interrupt.targetState +
                   " " + interruptConditionName(interrupt.condition) +
                   " " + groundRequirementName(interrupt.ground)).c_str(), 276, 506, 13, DARKGRAY);
@@ -4741,7 +4834,14 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         }
         if (uiButton({376.0f, 524.0f, 44.0f, 24.0f}, "Cond")) {
             interrupt.condition = nextCommonInterruptCondition(interrupt.condition);
-            editor.status = "Editor: cycled interrupt condition";
+            if (interrupt.condition == pf::InterruptCondition::PackageVarAtLeast && def.packageVariables.empty()) {
+                interrupt.condition = pf::InterruptCondition::WaitInput;
+                interrupt.packageVariable = -1;
+                editor.status = "Editor: skipped package-var interrupt because no package variables exist";
+            } else {
+                normalizeInterruptPackageVariable(interrupt, static_cast<int>(def.packageVariables.size()));
+                editor.status = "Editor: cycled interrupt condition";
+            }
         }
         if (uiButton({426.0f, 524.0f, 44.0f, 24.0f}, "Gnd")) {
             interrupt.ground = nextGroundRequirement(interrupt.ground);
@@ -4756,12 +4856,14 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             }
         }
         if (uiButton({516.0f, 524.0f, 44.0f, 24.0f}, "Pkg")) {
-            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
-            interrupt.packageVariable = def.packageVariables.empty()
-                ? -1
-                : std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
-            interrupt.packageValue = std::max<int32_t>(1, interrupt.packageValue);
-            editor.status = "Editor: set interrupt to package variable condition";
+            if (def.packageVariables.empty()) {
+                editor.status = "Editor: add a package variable before using package-var interrupts";
+            } else {
+                interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+                interrupt.packageVariable = std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
+                interrupt.packageValue = std::max<int32_t>(1, interrupt.packageValue);
+                editor.status = "Editor: set interrupt to package variable condition";
+            }
         }
         if (uiButton({566.0f, 524.0f, 44.0f, 24.0f}, "Var")) {
             if (!def.packageVariables.empty()) {
@@ -4771,14 +4873,24 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             }
         }
         if (uiButton({616.0f, 524.0f, 44.0f, 24.0f}, "Val+")) {
-            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
-            ++interrupt.packageValue;
-            editor.status = "Editor: raised interrupt package variable threshold";
+            if (def.packageVariables.empty()) {
+                editor.status = "Editor: add a package variable before editing package-var thresholds";
+            } else {
+                interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+                interrupt.packageVariable = std::clamp(interrupt.packageVariable < 0 ? editor.selectedPackageVariable : interrupt.packageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
+                ++interrupt.packageValue;
+                editor.status = "Editor: raised interrupt package variable threshold";
+            }
         }
         if (uiButton({666.0f, 524.0f, 44.0f, 24.0f}, "Val-")) {
-            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
-            --interrupt.packageValue;
-            editor.status = "Editor: lowered interrupt package variable threshold";
+            if (def.packageVariables.empty()) {
+                editor.status = "Editor: add a package variable before editing package-var thresholds";
+            } else {
+                interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+                interrupt.packageVariable = std::clamp(interrupt.packageVariable < 0 ? editor.selectedPackageVariable : interrupt.packageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
+                --interrupt.packageValue;
+                editor.status = "Editor: lowered interrupt package variable threshold";
+            }
         }
     }
 
