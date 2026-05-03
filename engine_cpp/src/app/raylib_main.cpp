@@ -1538,6 +1538,54 @@ static void bindObjectStatePackageScriptCallback(
     editor.selectedObjectStateCallback = callback + 1;
 }
 
+static void removePackageScriptCallbackRefs(std::vector<pf::FunctionCall>& calls, const std::string& scriptName) {
+    const std::string callback = "script:" + scriptName;
+    calls.erase(
+        std::remove_if(calls.begin(), calls.end(), [&](const pf::FunctionCall& call) {
+            return call.name == callback;
+        }),
+        calls.end());
+}
+
+static void removeFighterPackageScriptRefs(pf::FighterDefinition& def, const std::string& scriptName) {
+    for (pf::FighterState& state : def.states) {
+        removePackageScriptCallbackRefs(state.onEnter, scriptName);
+        removePackageScriptCallbackRefs(state.onFrame, scriptName);
+        removePackageScriptCallbackRefs(state.onLanding, scriptName);
+        removePackageScriptCallbackRefs(state.onAirborne, scriptName);
+    }
+}
+
+static void removeObjectPackageScriptRefs(pf::GameObjectDefinition& object, const std::string& scriptName) {
+    for (pf::GameObjectStateDefinition& state : object.states) {
+        removePackageScriptCallbackRefs(state.onEnter, scriptName);
+        removePackageScriptCallbackRefs(state.onFrame, scriptName);
+        removePackageScriptCallbackRefs(state.onPhysics, scriptName);
+        removePackageScriptCallbackRefs(state.onCollision, scriptName);
+    }
+    removePackageScriptCallbackRefs(object.onSpawned, scriptName);
+    removePackageScriptCallbackRefs(object.onDestroyed, scriptName);
+    removePackageScriptCallbackRefs(object.onPickedUp, scriptName);
+    removePackageScriptCallbackRefs(object.onDropped, scriptName);
+    removePackageScriptCallbackRefs(object.onThrown, scriptName);
+    removePackageScriptCallbackRefs(object.onDamageDealt, scriptName);
+    removePackageScriptCallbackRefs(object.onDamageReceived, scriptName);
+    removePackageScriptCallbackRefs(object.onClanked, scriptName);
+    removePackageScriptCallbackRefs(object.onReflected, scriptName);
+    removePackageScriptCallbackRefs(object.onAbsorbed, scriptName);
+    removePackageScriptCallbackRefs(object.onShieldBounced, scriptName);
+    removePackageScriptCallbackRefs(object.onHitShield, scriptName);
+    removePackageScriptCallbackRefs(object.onEnteredAir, scriptName);
+    removePackageScriptCallbackRefs(object.onEnteredHitlag, scriptName);
+    removePackageScriptCallbackRefs(object.onExitedHitlag, scriptName);
+    removePackageScriptCallbackRefs(object.onAccessory, scriptName);
+    removePackageScriptCallbackRefs(object.onTouched, scriptName);
+    removePackageScriptCallbackRefs(object.onJumpedOn, scriptName);
+    removePackageScriptCallbackRefs(object.onGrabDealt, scriptName);
+    removePackageScriptCallbackRefs(object.onGrabbedForVictim, scriptName);
+    removePackageScriptCallbackRefs(object.onInteraction, scriptName);
+}
+
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     const pf::MeleeCommonData& common = def.properties.common;
     const pf::Fix healthRatio = def.shield.maxHealth > 0 ? pf::fxDiv(fighter.shieldHealth, def.shield.maxHealth) : 0;
@@ -1766,6 +1814,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
         if (!def.packageScripts.empty()) {
             const std::string removed = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
             def.packageScripts.erase(def.packageScripts.begin() + editor.selectedPackageScript);
+            removeFighterPackageScriptRefs(def, removed);
             editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(def.packageScripts.size()) - 1));
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: removed package script " + removed;
@@ -2281,10 +2330,12 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         }
         if (uiButton({456.0f, 486.0f, 58.0f, 24.0f}, "- OScr")) {
             if (!object.packageScripts.empty()) {
+                const std::string removed = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
                 object.packageScripts.erase(object.packageScripts.begin() + editor.selectedPackageScript);
+                removeObjectPackageScriptRefs(object, removed);
                 editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
                 editor.selectedPackageInstruction = 0;
-                editor.status = "Editor: removed object package script";
+                editor.status = "Editor: removed object package script " + removed;
             }
         }
         editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
