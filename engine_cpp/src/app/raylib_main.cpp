@@ -990,6 +990,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::AddVarImmediate: return "AddVar";
     case pf::PackageScriptOp::AddVar: return "AddVars";
     case pf::PackageScriptOp::SetVarFrame: return "ReadFrame";
+    case pf::PackageScriptOp::SetVarStateFrame: return "StateFrm";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
@@ -1081,6 +1082,7 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         label += " v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
         break;
     case pf::PackageScriptOp::SetVarFrame:
+    case pf::PackageScriptOp::SetVarStateFrame:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
     case pf::PackageScriptOp::SetVarStickX:
@@ -1193,7 +1195,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarImmediate: return pf::PackageScriptOp::AddVarImmediate;
     case pf::PackageScriptOp::AddVarImmediate: return pf::PackageScriptOp::AddVar;
     case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::SetVarFrame;
-    case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarGrounded;
+    case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
+    case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
     case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarButtonDown;
     case pf::PackageScriptOp::SetVarButtonDown: return pf::PackageScriptOp::SetVarButtonPressed;

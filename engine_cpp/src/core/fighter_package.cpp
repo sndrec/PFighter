@@ -215,6 +215,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::AddVarImmediate:
     case PackageScriptOp::AddVar:
     case PackageScriptOp::SetVarFrame:
+    case PackageScriptOp::SetVarStateFrame:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
     case PackageScriptOp::SetVarButtonDown:
@@ -1563,6 +1564,7 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarImmediate:
     case PackageScriptOp::AddVarImmediate:
     case PackageScriptOp::SetVarFrame:
+    case PackageScriptOp::SetVarStateFrame:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");

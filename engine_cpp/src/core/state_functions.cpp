@@ -2598,6 +2598,9 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SetVarFrame:
             setPackageVar(fighter, instruction.dst, fighter.internalFrame);
             break;
+        case PackageScriptOp::SetVarStateFrame:
+            setPackageVar(fighter, instruction.dst, frameInState(fighter));
+            break;
         case PackageScriptOp::SetVarGrounded:
             setPackageVar(fighter, instruction.dst, fighter.grounded ? 1 : 0);
             break;

@@ -432,6 +432,7 @@ enum class PackageScriptOp : uint8_t {
     AddVarImmediate,
     AddVar,
     SetVarFrame,
+    SetVarStateFrame,
     SetVarGrounded,
     SetVarFacing,
     SetVarButtonDown,
