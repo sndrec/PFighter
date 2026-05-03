@@ -1696,6 +1696,21 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
 
     DrawText("Vars", 24, 392, 13, DARKGRAY);
+    if (!def.packageVariables.empty()) {
+        editor.selectedPackageVariable = std::clamp(
+            editor.selectedPackageVariable,
+            0,
+            static_cast<int>(def.packageVariables.size()) - 1);
+        pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+        if (uiButton({64.0f, 386.0f, 54.0f, 22.0f}, "Init-")) {
+            --variable.initialValue;
+            editor.status = "Editor: decreased initial value for " + variable.name;
+        }
+        if (uiButton({124.0f, 386.0f, 54.0f, 22.0f}, "Init+")) {
+            ++variable.initialValue;
+            editor.status = "Editor: increased initial value for " + variable.name;
+        }
+    }
     const int visibleVars = std::min(5, static_cast<int>(def.packageVariables.size()));
     for (int row = 0; row < visibleVars; ++row) {
         const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(row)];
