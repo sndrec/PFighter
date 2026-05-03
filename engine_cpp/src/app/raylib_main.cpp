@@ -3539,6 +3539,33 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 editor.selectedObjectTouchbox = static_cast<int>(object.touchboxes.size()) - 1;
                 editor.status = "Editor: added object touchbox";
             }
+            if (uiButton({24.0f, 622.0f, 68.0f, 24.0f}, "Hit>")) {
+                if (!object.hitboxes.empty()) {
+                    editor.selectedObjectHitbox = wrappedIndex(
+                        editor.selectedObjectHitbox + 1,
+                        static_cast<int>(object.hitboxes.size()));
+                    editor.status = "Editor: selected next object hitbox";
+                }
+            }
+            if (uiButton({98.0f, 622.0f, 68.0f, 24.0f}, "Hurt>")) {
+                if (!object.hurtboxes.empty()) {
+                    editor.selectedObjectHurtbox = wrappedIndex(
+                        editor.selectedObjectHurtbox + 1,
+                        static_cast<int>(object.hurtboxes.size()));
+                    editor.status = "Editor: selected next object hurtbox";
+                }
+            }
+            if (uiButton({172.0f, 622.0f, 68.0f, 24.0f}, "Touch>")) {
+                if (!object.touchboxes.empty()) {
+                    editor.selectedObjectTouchbox = wrappedIndex(
+                        editor.selectedObjectTouchbox + 1,
+                        static_cast<int>(object.touchboxes.size()));
+                    editor.status = "Editor: selected next object touchbox";
+                }
+            }
+            DrawText(("Selected: H" + std::to_string(editor.selectedObjectHitbox) +
+                      " Hu" + std::to_string(editor.selectedObjectHurtbox) +
+                      " T" + std::to_string(editor.selectedObjectTouchbox)).c_str(), 24, 650, 12, DARKGRAY);
             if (!object.hitboxes.empty()) {
                 pf::HitboxDefinition& hitbox = object.hitboxes[static_cast<size_t>(editor.selectedObjectHitbox)];
                 if (uiButton({270.0f, 592.0f, 76.0f, 24.0f}, "Dmg +")) {
@@ -3628,6 +3655,30 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     editor.status = "Editor: removed object hurtbox";
                     return;
                 }
+                if (uiButton({24.0f, 672.0f, 58.0f, 22.0f}, "HState")) {
+                    hurtbox.state = nextHurtboxState(hurtbox.state);
+                    editor.status = std::string("Editor: set object hurtbox state ") + hurtboxStateName(hurtbox.state);
+                }
+                if (uiButton({86.0f, 672.0f, 36.0f, 22.0f}, "HX+")) {
+                    hurtbox.startOffset.x += pf::fxFromFloat(0.1f);
+                    hurtbox.endOffset.x += pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: moved object hurtbox forward";
+                }
+                if (uiButton({126.0f, 672.0f, 36.0f, 22.0f}, "HX-")) {
+                    hurtbox.startOffset.x -= pf::fxFromFloat(0.1f);
+                    hurtbox.endOffset.x -= pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: moved object hurtbox backward";
+                }
+                if (uiButton({166.0f, 672.0f, 36.0f, 22.0f}, "HY+")) {
+                    hurtbox.startOffset.y += pf::fxFromFloat(0.1f);
+                    hurtbox.endOffset.y += pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: raised object hurtbox";
+                }
+                if (uiButton({206.0f, 672.0f, 36.0f, 22.0f}, "HY-")) {
+                    hurtbox.startOffset.y -= pf::fxFromFloat(0.1f);
+                    hurtbox.endOffset.y -= pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: lowered object hurtbox";
+                }
             }
             if (!object.touchboxes.empty()) {
                 pf::GameObjectTouchboxDefinition& touchbox = object.touchboxes[static_cast<size_t>(editor.selectedObjectTouchbox)];
@@ -3644,6 +3695,24 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     editor.selectedObjectTouchbox = std::clamp(editor.selectedObjectTouchbox, 0, std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
                     editor.status = "Editor: removed object touchbox";
                     return;
+                }
+                if (uiButton({522.0f, 682.0f, 44.0f, 22.0f}, "Ftr", touchbox.touchFighters)) {
+                    touchbox.touchFighters = !touchbox.touchFighters;
+                    editor.status = "Editor: toggled touchbox fighter contact";
+                }
+                if (uiButton({572.0f, 682.0f, 44.0f, 22.0f}, "Obj", touchbox.touchObjects)) {
+                    touchbox.touchObjects = !touchbox.touchObjects;
+                    editor.status = "Editor: toggled touchbox object contact";
+                }
+                if (uiButton({622.0f, 682.0f, 44.0f, 22.0f}, "TX+")) {
+                    touchbox.startOffset.x += pf::fxFromFloat(0.1f);
+                    touchbox.endOffset.x += pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: moved object touchbox forward";
+                }
+                if (uiButton({672.0f, 682.0f, 44.0f, 22.0f}, "TX-")) {
+                    touchbox.startOffset.x -= pf::fxFromFloat(0.1f);
+                    touchbox.endOffset.x -= pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: moved object touchbox backward";
                 }
             }
         }
