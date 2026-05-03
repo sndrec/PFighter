@@ -1473,6 +1473,9 @@ void validateAuthoredMeshData(const HsdFighterMesh& mesh, const std::vector<Anim
         if (batch.vertices.empty()) {
             throw std::runtime_error("fighter package authored mesh batch has no vertices");
         }
+        if ((batch.vertices.size() % 3) != 0) {
+            throw std::runtime_error("fighter package authored mesh batch triangle list is invalid");
+        }
         for (const HsdMeshVertex& vertex : batch.vertices) {
             for (const HsdMeshVertexInfluence& influence : vertex.influences) {
                 if (!validAuthoredMeshBone(influence.bone, skeleton.size()) ||
