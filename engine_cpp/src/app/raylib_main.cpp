@@ -961,6 +961,8 @@ static Rectangle editorDeleteStateButtonRect() {
     return {380.0f, 22.0f, 56.0f, 28.0f};
 }
 
+static void duplicateEditorState(pf::World& world, pf::FighterEditor& editor);
+
 static Rectangle mainMenuButtonRect(int index) {
     return {
         static_cast<float>(GetScreenWidth() / 2 - 150),
@@ -4356,6 +4358,10 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         state.allowBackwardsLedgeGrab = !state.allowBackwardsLedgeGrab;
         editor.status = "Editor: toggled backwards ledge grab for " + state.name;
     }
+    if (uiButton({614.0f, 410.0f, 90.0f, 24.0f}, "CloneSt")) {
+        duplicateEditorState(world, editor);
+        return;
+    }
     if (uiButton({24.0f, 440.0f, 90.0f, 24.0f}, "Wall", state.allowWallCollision)) {
         state.allowWallCollision = !state.allowWallCollision;
         editor.status = "Editor: toggled wall collision for " + state.name;
@@ -5381,6 +5387,38 @@ static void createEditorState(pf::World& world, pf::FighterEditor& editor) {
     editor.selectedState = insertIndex;
     editor.selectedSubaction = 0;
     editor.status = "Editor: created unsaved state " + def.states[static_cast<size_t>(insertIndex)].name;
+}
+
+static void duplicateEditorState(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        editor.status = "Editor: cannot clone a state without a fighter";
+        return;
+    }
+    const pf::FighterRuntime& selectedRuntime = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (selectedRuntime.fighterDef < 0 || selectedRuntime.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        editor.status = "Editor: cannot clone a state for an invalid fighter definition";
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(selectedRuntime.fighterDef)];
+    if (def.states.empty()) {
+        editor.status = "Editor: cannot clone a state from an empty fighter definition";
+        return;
+    }
+    const int sourceIndex = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    pf::FighterState clone = def.states[static_cast<size_t>(sourceIndex)];
+    clone.name = uniqueStateName(def, clone.name + "Copy");
+    const int insertIndex = std::clamp(sourceIndex + 1, 0, static_cast<int>(def.states.size()));
+    def.states.insert(def.states.begin() + insertIndex, std::move(clone));
+    for (pf::FighterRuntime& runtime : world.fighters) {
+        if (runtime.fighterDef == selectedRuntime.fighterDef && runtime.state >= insertIndex) {
+            ++runtime.state;
+        }
+    }
+    editor.selectedState = insertIndex;
+    editor.selectedSubaction = 0;
+    editor.selectedInterrupt = 0;
+    editor.status = "Editor: cloned unsaved state " + def.states[static_cast<size_t>(insertIndex)].name;
 }
 
 static void removeEditorState(pf::World& world, pf::FighterEditor& editor) {
