@@ -1834,13 +1834,24 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         }
         if (uiButton({434.0f, 548.0f, 72.0f, 24.0f}, "+ Key")) {
             const pf::Fix frame = pf::fx(editor.animationScrubFrame);
-            track.keys.push_back({frame, pf::sampleTrack(track, frame), 0, pf::AnimationInterpolation::Linear});
-            sortAnimationKeys(track.keys);
-            for (size_t i = 0; i < track.keys.size(); ++i) {
-                if (track.keys[i].frame == frame) {
-                    editor.selectedAnimationKey = static_cast<int>(i);
-                    break;
+            const auto existing = std::find_if(track.keys.begin(), track.keys.end(), [&](const pf::AnimationKey& key) {
+                return key.frame == frame;
+            });
+            if (existing != track.keys.end()) {
+                editor.selectedAnimationKey = static_cast<int>(std::distance(track.keys.begin(), existing));
+            } else {
+                track.keys.push_back({frame, pf::sampleTrack(track, frame), 0, pf::AnimationInterpolation::Linear});
+                sortAnimationKeys(track.keys);
+                for (size_t i = 0; i < track.keys.size(); ++i) {
+                    if (track.keys[i].frame == frame) {
+                        editor.selectedAnimationKey = static_cast<int>(i);
+                        break;
+                    }
                 }
+            }
+            if (!track.keys.empty()) {
+                const size_t keyIndex = static_cast<size_t>(std::clamp(editor.selectedAnimationKey, 0, static_cast<int>(track.keys.size()) - 1));
+                track.keys[keyIndex].value = pf::sampleTrack(track, frame);
             }
             editor.animationPreviewActive = true;
             editor.paused = true;

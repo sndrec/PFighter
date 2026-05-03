@@ -4620,6 +4620,20 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidWritePackage = sourcePackage;
     invalidWritePackage.fighters[0].packageScripts[0].instructions[0].op = static_cast<pf::PackageScriptOp>(255);
     const bool invalidPackageWriteRejected = pf::writeFighterPackage(invalidWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidAnimationWritePackage = sourcePackage;
+    invalidAnimationWritePackage.fighters[0].authoredSkeleton = {
+        {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
+    };
+    pf::AnimationClip invalidAnimationClip;
+    invalidAnimationClip.name = "InvalidAuthoredAnim";
+    invalidAnimationClip.frameCount = pf::fx(10);
+    invalidAnimationClip.tracks = {{
+        7,
+        pf::AnimationChannel::TranslateY,
+        {{0, 0, 0, pf::AnimationInterpolation::Linear}},
+    }};
+    invalidAnimationWritePackage.fighters[0].authoredClips = {invalidAnimationClip};
+    const bool invalidPackageAnimationWriteRejected = pf::writeFighterPackage(invalidAnimationWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4722,6 +4736,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
+              << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 

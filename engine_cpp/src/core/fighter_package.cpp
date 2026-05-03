@@ -23,6 +23,10 @@ constexpr uint32_t kMaxSubactions = 65536;
 constexpr uint32_t kMaxHitboxes = 4096;
 constexpr uint32_t kMaxHurtboxes = 4096;
 constexpr uint32_t kMaxTouchboxes = 4096;
+constexpr uint32_t kMaxAnimationJoints = 4096;
+constexpr uint32_t kMaxAnimationClips = 2048;
+constexpr uint32_t kMaxAnimationTracks = 65536;
+constexpr uint32_t kMaxAnimationKeys = 65536;
 constexpr uint32_t kMaxStringBytes = 1 << 20;
 
 class PackageWriter {
@@ -1173,7 +1177,7 @@ AnimationTrack readAnimationTrack(PackageReader& reader) {
     AnimationTrack track;
     track.joint = reader.readI32();
     track.channel = readEnum<AnimationChannel>(reader, validAnimationChannel, "animation channel");
-    track.keys = readVector<AnimationKey>(reader, kMaxSubactions, "animation key", [&]() {
+    track.keys = readVector<AnimationKey>(reader, kMaxAnimationKeys, "animation key", [&]() {
         return readAnimationKey(reader);
     });
     return track;
@@ -1197,13 +1201,49 @@ AnimationClip readAnimationClip(PackageReader& reader) {
     clip.actionFlags = reader.readU32();
     clip.defaultBlendFrames = reader.readI32();
     clip.frameCount = reader.readI32();
-    clip.tracks = readVector<AnimationTrack>(reader, kMaxSubactions, "animation track", [&]() {
+    clip.tracks = readVector<AnimationTrack>(reader, kMaxAnimationTracks, "animation track", [&]() {
         return readAnimationTrack(reader);
     });
     return clip;
 }
 
+void validateAuthoredAnimationData(
+    const std::vector<AnimationJoint>& skeleton,
+    const std::vector<AnimationClip>& clips)
+{
+    for (size_t i = 0; i < skeleton.size(); ++i) {
+        const int parent = skeleton[i].parent;
+        if (parent < -1 || parent >= static_cast<int>(i)) {
+            throw std::runtime_error("fighter package authored skeleton parent is invalid");
+        }
+    }
+
+    for (const AnimationClip& clip : clips) {
+        if (clip.frameCount < 0) {
+            throw std::runtime_error("fighter package authored animation frame count is invalid");
+        }
+        for (const AnimationTrack& track : clip.tracks) {
+            if (track.joint < 0 || track.joint >= static_cast<int>(skeleton.size())) {
+                throw std::runtime_error("fighter package authored animation track joint is invalid");
+            }
+            Fix previousFrame = -1;
+            bool hasPreviousFrame = false;
+            for (const AnimationKey& key : track.keys) {
+                if (key.frame < 0 || (clip.frameCount > 0 && key.frame > clip.frameCount)) {
+                    throw std::runtime_error("fighter package authored animation key frame is invalid");
+                }
+                if (hasPreviousFrame && key.frame <= previousFrame) {
+                    throw std::runtime_error("fighter package authored animation key frames are not strictly ordered");
+                }
+                previousFrame = key.frame;
+                hasPreviousFrame = true;
+            }
+        }
+    }
+}
+
 void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
+    validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     writer.writeString(fighter.name);
     writeFighterProperties(writer, fighter.properties);
     writeShieldDefinition(writer, fighter.shield);
@@ -1247,12 +1287,13 @@ FighterDefinition readFighterDefinition(
     fighter.properties = readFighterProperties(reader);
     fighter.shield = readShieldDefinition(reader);
     fighter.authoredEcb = readFighterEcbDefinition(reader);
-    fighter.authoredSkeleton = readVector<AnimationJoint>(reader, kMaxHurtboxes, "authored skeleton joint", [&]() {
+    fighter.authoredSkeleton = readVector<AnimationJoint>(reader, kMaxAnimationJoints, "authored skeleton joint", [&]() {
         return readAnimationJoint(reader);
     });
-    fighter.authoredClips = readVector<AnimationClip>(reader, kMaxStates, "authored animation clip", [&]() {
+    fighter.authoredClips = readVector<AnimationClip>(reader, kMaxAnimationClips, "authored animation clip", [&]() {
         return readAnimationClip(reader);
     });
+    validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();
