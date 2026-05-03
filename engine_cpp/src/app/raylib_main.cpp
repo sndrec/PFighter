@@ -1991,6 +1991,55 @@ static void remapRemovedPackageObjectTargets(
     }
 }
 
+static bool objectNameAvailable(const pf::World& world, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < world.objectDefs.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && world.objectDefs[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void remapPackageFighterTargets(pf::World& world, const std::string& oldFighterName, const std::string& newFighterName) {
+    auto remapInstruction = [&](pf::PackageScriptInstruction& instruction) {
+        if ((instruction.op == pf::PackageScriptOp::SwitchFighterDefinition ||
+             instruction.op == pf::PackageScriptOp::SpawnFighter) &&
+            instruction.text == oldFighterName)
+        {
+            instruction.text = newFighterName;
+        }
+    };
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                remapInstruction(instruction);
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                remapInstruction(instruction);
+            }
+        }
+    }
+}
+
+static bool fighterNameAvailable(const pf::World& world, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < world.fighterDefs.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && world.fighterDefs[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static int visibleListStart(int selected, int itemCount, int visibleRows) {
     if (itemCount <= visibleRows) {
         return 0;
@@ -3870,6 +3919,23 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     if (!world.objectDefs.empty()) {
         editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
         pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
+        std::string renamedObject;
+        if (uiTextField(
+                {522.0f, 424.0f, 160.0f, 22.0f},
+                "object-def-" + std::to_string(editor.selectedObjectDef),
+                editor,
+                object.name,
+                renamedObject))
+        {
+            if (!objectNameAvailable(world, renamedObject, editor.selectedObjectDef)) {
+                editor.status = "Editor: object name is empty or already used";
+            } else {
+                const std::string oldName = object.name;
+                object.name = renamedObject;
+                remapRemovedPackageObjectTargets(world, oldName, object.name);
+                editor.status = "Editor: renamed package object " + oldName + " to " + object.name;
+            }
+        }
         editor.selectedPackageVariable = std::clamp(
             editor.selectedPackageVariable,
             0,
@@ -5993,7 +6059,24 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     DrawRectangleRec(testButton, editor.testMode ? GREEN : ORANGE);
     DrawRectangleLinesEx(testButton, 1.0f, DARKGRAY);
     DrawText("Test", static_cast<int>(testButton.x + 18.0f), static_cast<int>(testButton.y + 7.0f), 14, BLACK);
-    DrawText(("Fighter: " + def.name).c_str(), 24, 54, 16, DARKGRAY);
+    DrawText("Fighter:", 24, 54, 16, DARKGRAY);
+    std::string renamedFighter;
+    if (uiTextField(
+            {88.0f, 50.0f, 210.0f, 24.0f},
+            "fighter-def-" + std::to_string(fighter.fighterDef),
+            editor,
+            def.name,
+            renamedFighter))
+    {
+        if (!fighterNameAvailable(world, renamedFighter, fighter.fighterDef)) {
+            editor.status = "Editor: fighter name is empty or already used";
+        } else {
+            const std::string oldName = def.name;
+            def.name = renamedFighter;
+            remapPackageFighterTargets(world, oldName, def.name);
+            editor.status = "Editor: renamed fighter " + oldName + " to " + def.name;
+        }
+    }
     DrawText(("Live state: " + pf::currentState(world, fighter).name).c_str(), 24, 76, 16, DARKGRAY);
     DrawText("Selected state:", 24, 98, 16, DARKGRAY);
     std::string renamedState;
