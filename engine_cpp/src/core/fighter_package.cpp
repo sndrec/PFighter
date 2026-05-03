@@ -260,6 +260,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
     case PackageScriptOp::JumpRelative:
+    case PackageScriptOp::CallScript:
     case PackageScriptOp::SwitchFighterDefinition:
     case PackageScriptOp::SpawnFighter:
         return true;
@@ -1624,6 +1625,7 @@ void validatePackageScriptInstruction(
     int variableCount,
     const std::vector<std::string>& fighterNames,
     const std::vector<std::string>& stateNames,
+    const std::vector<std::string>& scriptNames,
     const std::vector<std::string>& packageObjectNames,
     const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
@@ -1766,6 +1768,11 @@ void validatePackageScriptInstruction(
         }
         break;
     }
+    case PackageScriptOp::CallScript:
+        if (!hasName(scriptNames, instruction.text)) {
+            throw std::runtime_error("fighter package script call target is invalid");
+        }
+        break;
     case PackageScriptOp::SwitchFighterDefinition:
         if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
             throw std::runtime_error("fighter package script fighter target is invalid");
@@ -1808,6 +1815,7 @@ void validatePackageScripts(
     bool allowObjectLifecycleOps,
     bool allowObjectContextReads)
 {
+    const std::vector<std::string> availableScriptNames = scriptNames(scripts);
     std::vector<std::string> seenNames;
     seenNames.reserve(scripts.size());
     for (const PackageScript& script : scripts) {
@@ -1824,6 +1832,7 @@ void validatePackageScripts(
                 variableCount,
                 fighterNames,
                 stateNames,
+                availableScriptNames,
                 packageObjectNames,
                 packageObjects,
                 allowResolvableStateTargets,

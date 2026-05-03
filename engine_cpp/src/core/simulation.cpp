@@ -6829,12 +6829,22 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             object.packageVars[static_cast<size_t>(index)] = value;
         };
         int budget = std::clamp(found->instructionBudget, 0, 1024);
-        size_t instructionIndex = 0;
-        while (instructionIndex < found->instructions.size()) {
+        struct ScriptFrame {
+            const PackageScript* script = nullptr;
+            size_t instructionIndex = 0;
+        };
+        std::vector<ScriptFrame> scriptStack{{&*found, 0}};
+        while (!scriptStack.empty()) {
+            ScriptFrame& frame = scriptStack.back();
+            if (frame.script == nullptr || frame.instructionIndex >= frame.script->instructions.size()) {
+                scriptStack.pop_back();
+                continue;
+            }
             if (budget-- <= 0) {
                 return;
             }
-            const PackageScriptInstruction& instruction = found->instructions[instructionIndex];
+            const size_t instructionIndex = frame.instructionIndex;
+            const PackageScriptInstruction& instruction = frame.script->instructions[instructionIndex];
             switch (instruction.op) {
             case PackageScriptOp::Nop:
                 break;
@@ -6980,24 +6990,34 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 deactivateGameObject(world, objectIndex);
                 return;
             case PackageScriptOp::SkipIfVarLessThanImmediate:
-                instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
+                frame.instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
                 continue;
             case PackageScriptOp::SkipIfVarLessThanVar:
-                instructionIndex += var(instruction.srcA) < var(instruction.srcB) ? 2 : 1;
+                frame.instructionIndex += var(instruction.srcA) < var(instruction.srcB) ? 2 : 1;
                 continue;
             case PackageScriptOp::JumpRelative: {
                 const int target = static_cast<int>(instructionIndex) + instruction.intValue;
-                if (target < 0 || target > static_cast<int>(found->instructions.size())) {
+                if (target < 0 || target > static_cast<int>(frame.script->instructions.size())) {
                     return;
                 }
-                instructionIndex = static_cast<size_t>(target);
+                frame.instructionIndex = static_cast<size_t>(target);
+                continue;
+            }
+            case PackageScriptOp::CallScript: {
+                const auto target = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
+                    return script.name == instruction.text;
+                });
+                ++frame.instructionIndex;
+                if (target != def.packageScripts.end()) {
+                    scriptStack.push_back({&*target, 0});
+                }
                 continue;
             }
             case PackageScriptOp::SwitchFighterDefinition:
             case PackageScriptOp::SpawnFighter:
                 return;
             }
-            ++instructionIndex;
+            ++frame.instructionIndex;
         }
         return;
     }

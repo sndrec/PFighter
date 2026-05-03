@@ -4707,6 +4707,19 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SpawnProjectile, -1, -1, -1, 0, pf::fxFromFloat(1.0f), "PackageProjectileObject"},
             {pf::PackageScriptOp::SpawnProjectileFromVars, -1, 7, 8, 0, pf::fxFromFloat(1.0f), "PackageProjectileObject"},
         },
+    }, {
+        "CallTargetScript",
+        4,
+        {
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 7, 0, {}},
+        },
+    }, {
+        "CallScript",
+        8,
+        {
+            {pf::PackageScriptOp::CallScript, -1, -1, -1, 0, 0, "CallTargetScript"},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 2, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -4751,6 +4764,19 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 100, 0, {}},
             {pf::PackageScriptOp::JumpRelative, -1, -1, -1, 2, 0, {}},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 1000, 0, {}},
+        },
+    }, {
+        "ObjectCallTargetScript",
+        4,
+        {
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 11, 0, {}},
+        },
+    }, {
+        "ObjectCallScript",
+        8,
+        {
+            {pf::PackageScriptOp::CallScript, -1, -1, -1, 0, 0, "ObjectCallTargetScript"},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 13, 0, {}},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -5011,6 +5037,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidSpawnFighterWritePackage = sourcePackage;
     invalidSpawnFighterWritePackage.fighters[0].packageScripts[3].instructions[0].text = "MissingFighter";
     const bool invalidPackageSpawnFighterWriteRejected = pf::writeFighterPackage(invalidSpawnFighterWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidCallScriptWritePackage = sourcePackage;
+    invalidCallScriptWritePackage.fighters[0].packageScripts.back().instructions[0].text = "MissingScript";
+    const bool invalidPackageCallScriptWriteRejected = pf::writeFighterPackage(invalidCallScriptWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidFighterDestroyWritePackage = sourcePackage;
     invalidFighterDestroyWritePackage.fighters[0].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::DestroyObject,
@@ -5120,11 +5149,11 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 20 &&
-        loadedPackage.fighters[0].packageScripts.size() == 8 &&
+        loadedPackage.fighters[0].packageScripts.size() == 10 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 14 &&
-        loadedPackage.objects[1].packageScripts.size() == 1;
+        loadedPackage.objects[1].packageScripts.size() == 3;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -5204,6 +5233,22 @@ int main(int argc, char** argv) {
     const int packageScriptBranchVar = packageBranchScriptWorld.fighters[0].packageVars.empty()
         ? -1
         : packageBranchScriptWorld.fighters[0].packageVars[0];
+    pf::World packageCallScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageCallScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageCallScriptWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
+        const int waitIndex = packageCallScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            pf::FunctionCall scriptCall;
+            scriptCall.name = "script:CallScript";
+            packageCallScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+        }
+        packageCallScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageCallScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const int packageScriptCallVar = packageCallScriptWorld.fighters[0].packageVars.empty()
+        ? -1
+        : packageCallScriptWorld.fighters[0].packageVars[0];
     pf::World packageFactScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageFactScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5492,6 +5537,23 @@ int main(int argc, char** argv) {
         ? &packageObjectStateScriptWorld.objects[static_cast<size_t>(packageObjectStateIndex)]
         : nullptr;
     const int packageObjectStateScriptVar = packageObjectState && !packageObjectState->packageVars.empty() ? packageObjectState->packageVars[0] : -1;
+    pf::World packageObjectCallScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectCallScriptWorld.objectDefs = loadedPackage.objects;
+        packageObjectCallScriptWorld.objectDefs[1].onSpawned = {{std::string{"script:ObjectCallScript"}}};
+    }
+    const int packageObjectCallScriptIndex = pf::spawnGameObject(
+        packageObjectCallScriptWorld,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const pf::GameObjectRuntime* packageObjectCallScript = packageObjectCallScriptIndex >= 0 &&
+            packageObjectCallScriptIndex < static_cast<int>(packageObjectCallScriptWorld.objects.size())
+        ? &packageObjectCallScriptWorld.objects[static_cast<size_t>(packageObjectCallScriptIndex)]
+        : nullptr;
+    const int packageObjectCallScriptVar = packageObjectCallScript && !packageObjectCallScript->packageVars.empty() ? packageObjectCallScript->packageVars[0] : -1;
     pf::World packageObjectDestroyScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectDestroyScriptWorld.objectDefs = loadedPackage.objects;
@@ -5544,6 +5606,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_var=" << packageScriptVar
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar
               << " fighter_package_script_branch_var=" << packageScriptBranchVar
+              << " fighter_package_script_call_var=" << packageScriptCallVar
               << " fighter_package_script_fact_ok=" << packageFactScriptOk
               << " fighter_package_script_input_ok=" << packageInputScriptOk
               << " fighter_package_script_spawn_vars_ok=" << packageVarSpawnObjectOk
@@ -5568,6 +5631,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_vel_y_read=" << pf::fxToFloat(packageObjectCtxVelY)
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
+              << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
@@ -5605,6 +5669,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_dangling_branch_write_rejected=" << invalidPackageDanglingBranchWriteRejected
               << " fighter_package_invalid_switch_write_rejected=" << invalidPackageSwitchWriteRejected
               << " fighter_package_invalid_spawn_fighter_write_rejected=" << invalidPackageSpawnFighterWriteRejected
+              << " fighter_package_invalid_call_script_write_rejected=" << invalidPackageCallScriptWriteRejected
               << " fighter_package_invalid_fighter_destroy_write_rejected=" << invalidPackageFighterDestroyWriteRejected
               << " fighter_package_invalid_fighter_object_context_write_rejected=" << invalidPackageFighterObjectContextWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected

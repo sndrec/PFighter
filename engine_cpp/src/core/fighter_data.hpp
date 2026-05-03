@@ -476,6 +476,7 @@ enum class PackageScriptOp : uint8_t {
     SkipIfVarLessThanImmediate,
     SkipIfVarLessThanVar,
     JumpRelative,
+    CallScript,
     SwitchFighterDefinition,
     SpawnFighter,
 };
