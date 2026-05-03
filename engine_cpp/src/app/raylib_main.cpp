@@ -2519,6 +2519,13 @@ static void removeAuthoredSkeletonJoint(pf::FighterDefinition& def, int jointInd
     }
 }
 
+static void scaleAuthoredJoint(pf::AnimationJoint& joint, pf::Vec3 delta) {
+    const pf::Fix minScale = pf::fxFromFloat(0.05f);
+    joint.scale.x = std::max(minScale, joint.scale.x + delta.x);
+    joint.scale.y = std::max(minScale, joint.scale.y + delta.y);
+    joint.scale.z = std::max(minScale, joint.scale.z + delta.z);
+}
+
 static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
     std::sort(keys.begin(), keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
         return a.frame < b.frame;
@@ -5173,6 +5180,15 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
 
     if (showingAuthoredClips) {
         DrawText(("Joints: " + std::to_string(def.authoredSkeleton.size())).c_str(), 184, 396, 13, DARKGRAY);
+        if (!def.authoredSkeleton.empty()) {
+            const pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(std::clamp(
+                editor.selectedAnimationJoint,
+                0,
+                static_cast<int>(def.authoredSkeleton.size()) - 1))];
+            DrawText(("Joint scale " + std::to_string(pf::fxToFloat(joint.scale.x)) +
+                      "," + std::to_string(pf::fxToFloat(joint.scale.y)) +
+                      "," + std::to_string(pf::fxToFloat(joint.scale.z))).c_str(), 352, 396, 13, DARKGRAY);
+        }
         const int visibleJoints = std::min(4, static_cast<int>(def.authoredSkeleton.size()));
         const int jointStart = visibleListStart(
             editor.selectedAnimationJoint,
@@ -5375,6 +5391,42 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             }
             editor.animationPreviewActive = true;
             editor.paused = true;
+        }
+        if (uiButton({598.0f, 500.0f, 44.0f, 24.0f}, "Scl+")) {
+            scaleAuthoredJoint(joint, {pf::fxFromFloat(0.05f), pf::fxFromFloat(0.05f), pf::fxFromFloat(0.05f)});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: enlarged authored joint scale";
+        }
+        if (uiButton({648.0f, 500.0f, 44.0f, 24.0f}, "Scl-")) {
+            scaleAuthoredJoint(joint, {-pf::fxFromFloat(0.05f), -pf::fxFromFloat(0.05f), -pf::fxFromFloat(0.05f)});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: reduced authored joint scale";
+        }
+        if (uiButton({598.0f, 530.0f, 44.0f, 24.0f}, "SX+")) {
+            scaleAuthoredJoint(joint, {pf::fxFromFloat(0.05f), 0, 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: widened authored joint scale";
+        }
+        if (uiButton({648.0f, 530.0f, 44.0f, 24.0f}, "SX-")) {
+            scaleAuthoredJoint(joint, {-pf::fxFromFloat(0.05f), 0, 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: narrowed authored joint scale";
+        }
+        if (uiButton({598.0f, 560.0f, 44.0f, 24.0f}, "SY+")) {
+            scaleAuthoredJoint(joint, {0, pf::fxFromFloat(0.05f), 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: stretched authored joint scale";
+        }
+        if (uiButton({648.0f, 560.0f, 44.0f, 24.0f}, "SY-")) {
+            scaleAuthoredJoint(joint, {0, -pf::fxFromFloat(0.05f), 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: shortened authored joint scale";
         }
         if (uiButton({516.0f, 590.0f, 72.0f, 24.0f}, "DelJnt")) {
             if (def.authoredSkeleton.size() <= 1) {
