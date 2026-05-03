@@ -3127,6 +3127,19 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         if (editor.objectPanel == pf::ObjectEditorPanel::Logic) {
             DrawText(("Object logic: " + object.name + " vars " + std::to_string(object.packageVariables.size()) +
                       " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 574, 13, DARKGRAY);
+            if (!object.packageVariables.empty() || !object.packageScripts.empty()) {
+                const std::string variableLabel = object.packageVariables.empty()
+                    ? std::string{"var none"}
+                    : "var " + object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)].name;
+                const std::string scriptLabel = object.packageScripts.empty()
+                    ? std::string{"script none"}
+                    : "script " + object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+                std::string logicSelection = variableLabel + "  " + scriptLabel;
+                while (!logicSelection.empty() && MeasureText(logicSelection.c_str(), 12) > 430) {
+                    logicSelection.pop_back();
+                }
+                DrawText(logicSelection.c_str(), 270, 574, 12, DARKGRAY);
+            }
             if (!object.packageScripts.empty()) {
                 pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
                 editor.selectedPackageInstruction = std::clamp(
