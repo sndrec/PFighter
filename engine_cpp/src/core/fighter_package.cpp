@@ -1642,6 +1642,12 @@ void validateInterruptRuleTiming(const InterruptRule& rule) {
     }
 }
 
+void validateSubactionTiming(const Subaction& subaction) {
+    if (subaction.frames < 0 || subaction.loopCount < 0) {
+        throw std::runtime_error("fighter package subaction timing is invalid");
+    }
+}
+
 void validateFighterPackageReferences(const FighterPackage& package) {
     if (package.name.empty()) {
         throw std::runtime_error("fighter package name is invalid");
@@ -1676,6 +1682,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
                 validateInterruptRuleTiming(rule);
             }
             for (const Subaction& subaction : state.action) {
+                validateSubactionTiming(subaction);
                 if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {
                     throw std::runtime_error("fighter package subaction object target is invalid");
                 }

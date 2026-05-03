@@ -4668,6 +4668,13 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidInterruptWritePackage = sourcePackage;
     invalidInterruptWritePackage.fighters[0].states[0].interrupts[0].enableFrame = -1;
     const bool invalidPackageInterruptWriteRejected = pf::writeFighterPackage(invalidInterruptWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidSubactionWritePackage = sourcePackage;
+    const int invalidSubactionState = invalidSubactionWritePackage.fighters[0].stateIndex("Attack11");
+    if (invalidSubactionState >= 0 && !invalidSubactionWritePackage.fighters[0].states[static_cast<size_t>(invalidSubactionState)].action.empty()) {
+        invalidSubactionWritePackage.fighters[0].states[static_cast<size_t>(invalidSubactionState)].action[0].frames = -1;
+    }
+    const bool invalidPackageSubactionWriteRejected = invalidSubactionState >= 0 &&
+        pf::writeFighterPackage(invalidSubactionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidMeshWritePackage = sourcePackage;
     invalidMeshWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].bone = 99;
     const bool invalidPackageMeshWriteRejected = pf::writeFighterPackage(invalidMeshWritePackage, &invalidPackageError).empty();
@@ -4800,6 +4807,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
+              << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_mesh_write_rejected=" << invalidPackageMeshWriteRejected
               << " fighter_package_invalid_name_write_rejected=" << invalidPackageNameWriteRejected
               << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
