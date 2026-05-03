@@ -1648,6 +1648,22 @@ void validateSubactionTiming(const Subaction& subaction) {
     }
 }
 
+size_t fighterHurtboxCount(const FighterDefinition& fighter) {
+    if (fighter.hasHsdAsset && fighter.hsdAsset) {
+        return fighter.hsdAsset->hurtboxes.size();
+    }
+    return fighter.hurtboxes.size();
+}
+
+void validateSubactionReferences(const FighterDefinition& fighter, const Subaction& subaction) {
+    if (subaction.type != SubactionType::SetHurtboxState || subaction.hsdBone >= 0 || subaction.hurtboxIndex < 0) {
+        return;
+    }
+    if (subaction.hurtboxIndex >= static_cast<int>(fighterHurtboxCount(fighter))) {
+        throw std::runtime_error("fighter package subaction hurtbox reference is invalid");
+    }
+}
+
 void validateFighterPackageReferences(const FighterPackage& package) {
     if (package.name.empty()) {
         throw std::runtime_error("fighter package name is invalid");
@@ -1683,6 +1699,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             }
             for (const Subaction& subaction : state.action) {
                 validateSubactionTiming(subaction);
+                validateSubactionReferences(fighter, subaction);
                 if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {
                     throw std::runtime_error("fighter package subaction object target is invalid");
                 }
