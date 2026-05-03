@@ -3945,6 +3945,52 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     }
 }
 
+static std::string editorClipActionName(const pf::AnimationClip& clip) {
+    const std::string marker = "_ACTION_";
+    const std::string suffix = "_figatree";
+    const size_t markerPos = clip.name.find(marker);
+    const size_t suffixPos = clip.name.rfind(suffix);
+    if (markerPos != std::string::npos && suffixPos != std::string::npos && suffixPos > markerPos + marker.size()) {
+        return clip.name.substr(markerPos + marker.size(), suffixPos - markerPos - marker.size());
+    }
+    return clip.name;
+}
+
+static const std::vector<pf::AnimationClip>* editorStateAnimationClips(const pf::FighterDefinition& def) {
+    if (def.hsdAsset && !def.hsdAsset->clips.empty()) {
+        return &def.hsdAsset->clips;
+    }
+    return def.authoredClips.empty() ? nullptr : &def.authoredClips;
+}
+
+static void assignEditorStateAnimation(pf::FighterState& state, const pf::AnimationClip& clip) {
+    state.animation = editorClipActionName(clip);
+    state.animationActionIndex = clip.actionIndex;
+    state.animationLengthFrames = std::max(1, static_cast<int>(pf::fxToFloat(clip.frameCount)));
+}
+
+static void cycleEditorStateAnimation(const pf::FighterDefinition& def, pf::FighterState& state, pf::FighterEditor& editor) {
+    const std::vector<pf::AnimationClip>* clips = editorStateAnimationClips(def);
+    if (!clips || clips->empty()) {
+        editor.status = "Editor: no clips available for selected state";
+        return;
+    }
+    int selectedClip = -1;
+    for (size_t i = 0; i < clips->size(); ++i) {
+        const pf::AnimationClip& clip = (*clips)[i];
+        if ((state.animationActionIndex >= 0 && clip.actionIndex == state.animationActionIndex) ||
+            (state.animationActionIndex < 0 && editorClipActionName(clip) == state.animation))
+        {
+            selectedClip = static_cast<int>(i);
+            break;
+        }
+    }
+    const int nextClip = wrappedIndex(selectedClip + 1, static_cast<int>(clips->size()));
+    assignEditorStateAnimation(state, (*clips)[static_cast<size_t>(nextClip)]);
+    editor.selectedAnimationClip = nextClip;
+    editor.status = "Editor: assigned animation " + state.animation + " to " + state.name;
+}
+
 static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     if (world.fighters.empty()) {
@@ -3963,6 +4009,8 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     DrawText(("Animation: " + state.animation + " action=" + std::to_string(state.animationActionIndex)).c_str(), 24, 360, 13, DARKGRAY);
     DrawText(("Length: " + std::to_string(state.animationLengthFrames) +
               "  IASA: " + std::to_string(state.initialInterruptibleFrame)).c_str(), 24, 382, 13, DARKGRAY);
+    const std::string finishState = state.onAnimationFinishedState.empty() ? "none" : state.onAnimationFinishedState;
+    DrawText(("Finish: " + finishState + "  Blend " + std::to_string(state.defaultAnimationBlendFrames)).c_str(), 516, 360, 12, DARKGRAY);
 
     if (uiButton({24.0f, 410.0f, 90.0f, 24.0f}, "Loop", state.loopAnimation)) {
         state.loopAnimation = !state.loopAnimation;
@@ -3983,6 +4031,31 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     if (uiButton({416.0f, 410.0f, 90.0f, 24.0f}, "Floor", state.convertFloorCollisionToGround)) {
         state.convertFloorCollisionToGround = !state.convertFloorCollisionToGround;
         editor.status = "Editor: toggled floor collision for " + state.name;
+    }
+    if (uiButton({516.0f, 382.0f, 58.0f, 24.0f}, "Anim>")) {
+        cycleEditorStateAnimation(def, state, editor);
+    }
+    if (uiButton({582.0f, 382.0f, 58.0f, 24.0f}, "Fin>")) {
+        const int current = def.stateIndex(state.onAnimationFinishedState);
+        const int next = wrappedIndex(std::max(0, current) + 1, static_cast<int>(def.states.size()));
+        state.onAnimationFinishedState = def.states[static_cast<size_t>(next)].name;
+        editor.status = "Editor: cycled animation-finished target for " + state.name;
+    }
+    if (uiButton({648.0f, 382.0f, 58.0f, 24.0f}, "FinX")) {
+        state.onAnimationFinishedState.clear();
+        editor.status = "Editor: cleared animation-finished target for " + state.name;
+    }
+    if (uiButton({714.0f, 382.0f, 58.0f, 24.0f}, "Blend-")) {
+        state.defaultAnimationBlendFrames = std::max(0, state.defaultAnimationBlendFrames - 1);
+        editor.status = "Editor: shortened default blend for " + state.name;
+    }
+    if (uiButton({780.0f, 382.0f, 58.0f, 24.0f}, "Blend+")) {
+        ++state.defaultAnimationBlendFrames;
+        editor.status = "Editor: lengthened default blend for " + state.name;
+    }
+    if (uiButton({516.0f, 410.0f, 90.0f, 24.0f}, "BackLed", state.allowBackwardsLedgeGrab)) {
+        state.allowBackwardsLedgeGrab = !state.allowBackwardsLedgeGrab;
+        editor.status = "Editor: toggled backwards ledge grab for " + state.name;
     }
     if (uiButton({24.0f, 440.0f, 90.0f, 24.0f}, "Wall", state.allowWallCollision)) {
         state.allowWallCollision = !state.allowWallCollision;
