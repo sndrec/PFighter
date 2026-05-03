@@ -2526,6 +2526,12 @@ static void scaleAuthoredJoint(pf::AnimationJoint& joint, pf::Vec3 delta) {
     joint.scale.z = std::max(minScale, joint.scale.z + delta.z);
 }
 
+static void rotateAuthoredJoint(pf::AnimationJoint& joint, pf::Vec3 delta) {
+    joint.rotation.x += delta.x;
+    joint.rotation.y += delta.y;
+    joint.rotation.z += delta.z;
+}
+
 static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
     std::sort(keys.begin(), keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
         return a.frame < b.frame;
@@ -5212,6 +5218,9 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             DrawText(("Joint scale " + std::to_string(pf::fxToFloat(joint.scale.x)) +
                       "," + std::to_string(pf::fxToFloat(joint.scale.y)) +
                       "," + std::to_string(pf::fxToFloat(joint.scale.z))).c_str(), 352, 396, 13, DARKGRAY);
+            DrawText(("Joint rot " + std::to_string(pf::fxToFloat(joint.rotation.x)) +
+                      "," + std::to_string(pf::fxToFloat(joint.rotation.y)) +
+                      "," + std::to_string(pf::fxToFloat(joint.rotation.z))).c_str(), 352, 414, 13, DARKGRAY);
         }
         const int visibleJoints = std::min(4, static_cast<int>(def.authoredSkeleton.size()));
         const int jointStart = visibleListStart(
@@ -5451,6 +5460,42 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             editor.animationPreviewActive = true;
             editor.paused = true;
             editor.status = "Editor: shortened authored joint scale";
+        }
+        if (uiButton({598.0f, 590.0f, 44.0f, 24.0f}, "RX-")) {
+            rotateAuthoredJoint(joint, {-pf::fxFromFloat(0.05f), 0, 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: rotated authored joint around X";
+        }
+        if (uiButton({648.0f, 590.0f, 44.0f, 24.0f}, "RX+")) {
+            rotateAuthoredJoint(joint, {pf::fxFromFloat(0.05f), 0, 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: rotated authored joint around X";
+        }
+        if (uiButton({598.0f, 620.0f, 44.0f, 24.0f}, "RY-")) {
+            rotateAuthoredJoint(joint, {0, -pf::fxFromFloat(0.05f), 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: rotated authored joint around Y";
+        }
+        if (uiButton({648.0f, 620.0f, 44.0f, 24.0f}, "RY+")) {
+            rotateAuthoredJoint(joint, {0, pf::fxFromFloat(0.05f), 0});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: rotated authored joint around Y";
+        }
+        if (uiButton({598.0f, 650.0f, 44.0f, 24.0f}, "RZ-")) {
+            rotateAuthoredJoint(joint, {0, 0, -pf::fxFromFloat(0.05f)});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: rotated authored joint around Z";
+        }
+        if (uiButton({648.0f, 650.0f, 44.0f, 24.0f}, "RZ+")) {
+            rotateAuthoredJoint(joint, {0, 0, pf::fxFromFloat(0.05f)});
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            editor.status = "Editor: rotated authored joint around Z";
         }
         if (uiButton({516.0f, 590.0f, 72.0f, 24.0f}, "DelJnt")) {
             if (def.authoredSkeleton.size() <= 1) {
