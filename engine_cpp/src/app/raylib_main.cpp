@@ -1754,9 +1754,19 @@ static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
 static bool uiListRow(Rectangle rect, const std::string& label, bool active) {
     const Vector2 mouse = GetMousePosition();
     const bool hovered = CheckCollisionPointRec(mouse, rect);
+    std::string fittedLabel = label;
+    constexpr int fontSize = 13;
+    const float maxTextWidth = std::max(0.0f, rect.width - 14.0f);
+    if (MeasureText(fittedLabel.c_str(), fontSize) > maxTextWidth) {
+        const std::string suffix = "...";
+        while (!fittedLabel.empty() && MeasureText((fittedLabel + suffix).c_str(), fontSize) > maxTextWidth) {
+            fittedLabel.pop_back();
+        }
+        fittedLabel += suffix;
+    }
     DrawRectangleRec(rect, active ? Fade(GREEN, 0.72f) : (hovered ? Fade(ORANGE, 0.5f) : Fade(RAYWHITE, 0.62f)));
     DrawRectangleLinesEx(rect, 1.0f, Fade(DARKGRAY, 0.75f));
-    DrawText(label.c_str(), static_cast<int>(rect.x + 7.0f), static_cast<int>(rect.y + 5.0f), 13, BLACK);
+    DrawText(fittedLabel.c_str(), static_cast<int>(rect.x + 7.0f), static_cast<int>(rect.y + 5.0f), fontSize, BLACK);
     return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
@@ -4102,6 +4112,64 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     }
 }
 
+static void drawEditorStateBrowser(const pf::FighterDefinition& def, pf::FighterEditor& editor) {
+    constexpr int kVisibleRows = 5;
+    constexpr float kPanelX = 560.0f;
+    constexpr float kPanelY = 170.0f;
+    constexpr float kPanelW = 286.0f;
+    constexpr float kPanelH = 164.0f;
+    const Rectangle panel{kPanelX, kPanelY, kPanelW, kPanelH};
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.56f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText("State Browser", static_cast<int>(kPanelX + 12.0f), static_cast<int>(kPanelY + 10.0f), 16, BLACK);
+
+    const int stateCount = static_cast<int>(def.states.size());
+    DrawText(
+        (std::to_string(editor.selectedState + 1) + "/" + std::to_string(std::max(1, stateCount))).c_str(),
+        static_cast<int>(kPanelX + kPanelW - 58.0f),
+        static_cast<int>(kPanelY + 12.0f),
+        13,
+        DARKGRAY);
+    if (stateCount <= 0) {
+        DrawText("No states", static_cast<int>(kPanelX + 12.0f), static_cast<int>(kPanelY + 44.0f), 13, GRAY);
+        return;
+    }
+
+    editor.selectedState = std::clamp(editor.selectedState, 0, stateCount - 1);
+    const int maxStart = std::max(0, stateCount - kVisibleRows);
+    const int start = std::clamp(editor.selectedState - kVisibleRows / 2, 0, maxStart);
+    for (int row = 0; row < std::min(kVisibleRows, stateCount); ++row) {
+        const int stateIndex = start + row;
+        const pf::FighterState& state = def.states[static_cast<size_t>(stateIndex)];
+        const std::string label = std::to_string(stateIndex) + " " + state.name +
+            "  len " + std::to_string(state.animationLengthFrames) +
+            "  sub " + std::to_string(state.action.size());
+        if (uiListRow(
+                {kPanelX + 12.0f, kPanelY + 38.0f + 24.0f * row, kPanelW - 24.0f, 22.0f},
+                label,
+                stateIndex == editor.selectedState))
+        {
+            editor.selectedState = stateIndex;
+            editor.selectedSubaction = 0;
+            editor.selectedInterrupt = 0;
+            editor.status = "Editor: selected state " + state.name;
+        }
+    }
+
+    if (uiButton({kPanelX + 12.0f, kPanelY + 136.0f, 74.0f, 22.0f}, "Prev")) {
+        editor.selectedState = std::max(0, editor.selectedState - kVisibleRows);
+        editor.selectedSubaction = 0;
+        editor.selectedInterrupt = 0;
+        editor.status = "Editor: paged state browser up";
+    }
+    if (uiButton({kPanelX + 92.0f, kPanelY + 136.0f, 74.0f, 22.0f}, "Next")) {
+        editor.selectedState = std::min(stateCount - 1, editor.selectedState + kVisibleRows);
+        editor.selectedSubaction = 0;
+        editor.selectedInterrupt = 0;
+        editor.status = "Editor: paged state browser down";
+    }
+}
+
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
@@ -4175,6 +4243,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     DrawRectangle(static_cast<int>(liveX), static_cast<int>(timelineY - 3.0f), 3, static_cast<int>(timelineHeight + 6.0f), BLACK);
     DrawText(editor.status.c_str(), 24, 240, 14, DARKGRAY);
     DrawText("N/New state  Del/remove  T/Test playtest  [/] state  ,/. subaction  Space pause  R reset", 24, 258, 14, GRAY);
+    drawEditorStateBrowser(def, editor);
     drawEditorWorkspaceTabs(editor);
     if (editor.workspace == pf::EditorWorkspace::Moveset) {
         drawEditorMovesetWorkspace(world, editor);
