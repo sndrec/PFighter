@@ -2859,12 +2859,17 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
 
     DrawText("Objects / Articles", 24, 436, 13, DARKGRAY);
     const int visibleObjects = std::min(3, static_cast<int>(world.objectDefs.size()));
+    const int objectStart = std::clamp(
+        editor.selectedObjectDef - visibleObjects / 2,
+        0,
+        std::max(0, static_cast<int>(world.objectDefs.size()) - visibleObjects));
     for (int row = 0; row < visibleObjects; ++row) {
-        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(row)];
+        const int objectIndex = objectStart + row;
+        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(objectIndex)];
         const std::string kind = object.kind == pf::GameObjectKind::Projectile ? "Proj" : "Item";
         const std::string label = kind + " " + object.name;
-        if (uiListRow({24.0f, 456.0f + 24.0f * row, 230.0f, 22.0f}, label, row == editor.selectedObjectDef)) {
-            editor.selectedObjectDef = row;
+        if (uiListRow({24.0f, 456.0f + 24.0f * row, 230.0f, 22.0f}, label, objectIndex == editor.selectedObjectDef)) {
+            editor.selectedObjectDef = objectIndex;
         }
     }
     if (world.objectDefs.empty()) {
