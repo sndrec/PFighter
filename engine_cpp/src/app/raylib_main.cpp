@@ -2001,9 +2001,9 @@ static std::string uniqueObjectName(const pf::World& world, const std::string& p
     return prefix + "X";
 }
 
-static std::string uniqueObjectStateName(const pf::GameObjectDefinition& object) {
+static std::string uniqueObjectStateName(const pf::GameObjectDefinition& object, const std::string& prefix) {
     for (int index = 0; index < 10000; ++index) {
-        const std::string candidate = "State" + std::to_string(index);
+        const std::string candidate = prefix + std::to_string(index);
         const bool exists = std::any_of(object.states.begin(), object.states.end(), [&](const pf::GameObjectStateDefinition& state) {
             return state.name == candidate;
         });
@@ -2011,7 +2011,11 @@ static std::string uniqueObjectStateName(const pf::GameObjectDefinition& object)
             return candidate;
         }
     }
-    return "StateX";
+    return prefix + "X";
+}
+
+static std::string uniqueObjectStateName(const pf::GameObjectDefinition& object) {
+    return uniqueObjectStateName(object, "State");
 }
 
 static std::string uniqueFighterName(const pf::World& world, const std::string& prefix) {
@@ -3169,6 +3173,23 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         editor.selectedObjectDef = static_cast<int>(world.objectDefs.size()) - 1;
         editor.status = "Editor: added package projectile " + world.objectDefs.back().name;
     }
+    if (uiButton({606.0f, 456.0f, 76.0f, 24.0f}, "Clone")) {
+        if (!world.objectDefs.empty()) {
+            const int sourceIndex = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            pf::GameObjectDefinition clone = world.objectDefs[static_cast<size_t>(sourceIndex)];
+            clone.name = uniqueObjectName(world, clone.name + "Copy");
+            world.objectDefs.push_back(std::move(clone));
+            editor.selectedObjectDef = static_cast<int>(world.objectDefs.size()) - 1;
+            editor.selectedObjectState = 0;
+            editor.selectedObjectHitbox = 0;
+            editor.selectedObjectHurtbox = 0;
+            editor.selectedObjectTouchbox = 0;
+            editor.selectedPackageVariable = 0;
+            editor.selectedPackageScript = 0;
+            editor.selectedPackageInstruction = 0;
+            editor.status = "Editor: cloned package object " + world.objectDefs.back().name;
+        }
+    }
     if (uiButton({522.0f, 456.0f, 76.0f, 24.0f}, "- Obj")) {
         if (!world.objectDefs.empty()) {
             const int removeIndex = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
@@ -3309,6 +3330,24 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             if (uiButton({438.0f, 516.0f, 76.0f, 24.0f}, "Initial")) {
                 object.initialState = editor.selectedObjectState;
                 editor.status = "Editor: selected object initial state";
+            }
+            if (uiButton({606.0f, 516.0f, 58.0f, 24.0f}, "Clone")) {
+                const int sourceIndex = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+                pf::GameObjectStateDefinition clone = object.states[static_cast<size_t>(sourceIndex)];
+                clone.name = uniqueObjectStateName(object, clone.name + "Copy");
+                const int insertIndex = std::clamp(sourceIndex + 1, 0, static_cast<int>(object.states.size()));
+                object.states.insert(object.states.begin() + insertIndex, std::move(clone));
+                if (object.initialState >= insertIndex) {
+                    ++object.initialState;
+                }
+                for (pf::GameObjectRuntime& runtime : world.objects) {
+                    if (runtime.objectDef == editor.selectedObjectDef && runtime.state >= insertIndex) {
+                        ++runtime.state;
+                    }
+                }
+                editor.selectedObjectState = insertIndex;
+                editor.status = "Editor: cloned object state " + object.states[static_cast<size_t>(insertIndex)].name;
+                return;
             }
             if (uiButton({24.0f, 546.0f, 58.0f, 24.0f}, "Prev")) {
                 editor.selectedObjectState = wrappedIndex(editor.selectedObjectState - 1, static_cast<int>(object.states.size()));
