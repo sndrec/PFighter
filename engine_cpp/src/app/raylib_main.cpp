@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cmath>
 #include <memory>
@@ -1000,6 +1001,58 @@ static bool uiButton(Rectangle rect, const std::string& label, bool active = fal
     const int textWidth = MeasureText(label.c_str(), 14);
     DrawText(label.c_str(), static_cast<int>(rect.x + (rect.width - static_cast<float>(textWidth)) * 0.5f), static_cast<int>(rect.y + 7.0f), 14, BLACK);
     return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+
+static bool packageNameCharAllowed(int codepoint) {
+    return std::isalnum(static_cast<unsigned char>(codepoint)) || codepoint == '_' || codepoint == '-' || codepoint == '.';
+}
+
+static bool uiTextField(
+    Rectangle rect,
+    const std::string& id,
+    pf::FighterEditor& editor,
+    const std::string& value,
+    std::string& committed,
+    size_t maxLength = 31)
+{
+    const Vector2 mouse = GetMousePosition();
+    const bool hovered = CheckCollisionPointRec(mouse, rect);
+    if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && editor.activeTextField != id) {
+        editor.activeTextField = id;
+        editor.textEditBuffer = value;
+    }
+
+    const bool active = editor.activeTextField == id;
+    bool commit = false;
+    if (active) {
+        for (int codepoint = GetCharPressed(); codepoint > 0; codepoint = GetCharPressed()) {
+            if (packageNameCharAllowed(codepoint) && editor.textEditBuffer.size() < maxLength) {
+                editor.textEditBuffer.push_back(static_cast<char>(codepoint));
+            }
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && !editor.textEditBuffer.empty()) {
+            editor.textEditBuffer.pop_back();
+        }
+        commit = IsKeyPressed(KEY_ENTER) ||
+            (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !hovered);
+    }
+
+    const std::string& shown = active ? editor.textEditBuffer : value;
+    DrawRectangleRec(rect, active ? Fade(SKYBLUE, 0.55f) : (hovered ? Fade(RAYWHITE, 0.92f) : Fade(RAYWHITE, 0.72f)));
+    DrawRectangleLinesEx(rect, 1.0f, active ? BLUE : DARKGRAY);
+    std::string clipped = shown.empty() ? std::string{"name"} : shown;
+    while (!clipped.empty() && MeasureText(clipped.c_str(), 12) > static_cast<int>(rect.width - 8.0f)) {
+        clipped.pop_back();
+    }
+    DrawText(clipped.c_str(), static_cast<int>(rect.x + 4.0f), static_cast<int>(rect.y + 6.0f), 12, shown.empty() ? GRAY : BLACK);
+
+    if (commit) {
+        committed = editor.textEditBuffer;
+        editor.activeTextField.clear();
+        editor.textEditBuffer.clear();
+        return true;
+    }
+    return false;
 }
 
 static const char* workspaceName(pf::EditorWorkspace workspace) {
@@ -2156,6 +2209,18 @@ static std::string uniquePackageVariableName(const pf::FighterDefinition& def) {
     return "varX";
 }
 
+static bool packageVariableNameAvailable(const pf::FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.packageVariables.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.packageVariables[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static std::string uniquePackageScriptName(const pf::FighterDefinition& def, const std::string& prefix) {
     for (int index = 0; index < 10000; ++index) {
         const std::string candidate = prefix + std::to_string(index);
@@ -2173,6 +2238,18 @@ static std::string uniquePackageScriptName(const pf::FighterDefinition& def) {
     return uniquePackageScriptName(def, "Script");
 }
 
+static bool packageScriptNameAvailable(const pf::FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.packageScripts.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.packageScripts[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static std::string uniqueObjectPackageVariableName(const pf::GameObjectDefinition& def) {
     for (int index = 0; index < 10000; ++index) {
         const std::string candidate = "objVar" + std::to_string(index);
@@ -2184,6 +2261,18 @@ static std::string uniqueObjectPackageVariableName(const pf::GameObjectDefinitio
         }
     }
     return "objVarX";
+}
+
+static bool objectPackageVariableNameAvailable(const pf::GameObjectDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.packageVariables.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.packageVariables[i].name == name) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition& def, const std::string& prefix) {
@@ -2201,6 +2290,18 @@ static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition&
 
 static std::string uniqueObjectPackageScriptName(const pf::GameObjectDefinition& def) {
     return uniqueObjectPackageScriptName(def, "ObjectScript");
+}
+
+static bool objectPackageScriptNameAvailable(const pf::GameObjectDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.packageScripts.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.packageScripts[i].name == name) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static std::string uniqueObjectName(const pf::World& world, const std::string& prefix) {
@@ -2513,12 +2614,40 @@ static void removePackageScriptCallbackRefs(std::vector<pf::FunctionCall>& calls
         calls.end());
 }
 
+static void remapPackageScriptCallbackRefs(
+    std::vector<pf::FunctionCall>& calls,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    const std::string oldCallback = "script:" + oldScriptName;
+    const std::string newCallback = "script:" + newScriptName;
+    for (pf::FunctionCall& call : calls) {
+        if (call.name == oldCallback) {
+            call.name = newCallback;
+        }
+    }
+}
+
 static void removePackageScriptInstructionRefs(std::vector<pf::PackageScript>& scripts, const std::string& scriptName) {
     for (pf::PackageScript& script : scripts) {
         for (pf::PackageScriptInstruction& instruction : script.instructions) {
             if (instruction.op == pf::PackageScriptOp::CallScript && instruction.text == scriptName) {
                 instruction.op = pf::PackageScriptOp::Nop;
                 instruction.text.clear();
+            }
+        }
+    }
+}
+
+static void remapPackageScriptInstructionRefs(
+    std::vector<pf::PackageScript>& scripts,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (pf::PackageScript& script : scripts) {
+        for (pf::PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.op == pf::PackageScriptOp::CallScript && instruction.text == oldScriptName) {
+                instruction.text = newScriptName;
             }
         }
     }
@@ -2536,6 +2665,20 @@ static void removePackageScriptSubactionRefs(std::vector<pf::FighterState>& stat
     }
 }
 
+static void remapPackageScriptSubactionRefs(
+    std::vector<pf::FighterState>& states,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (pf::FighterState& state : states) {
+        for (pf::Subaction& subaction : state.action) {
+            if (subaction.type == pf::SubactionType::CallScript && subaction.objectName == oldScriptName) {
+                subaction.objectName = newScriptName;
+            }
+        }
+    }
+}
+
 static void removeFighterPackageScriptRefs(pf::FighterDefinition& def, const std::string& scriptName) {
     removePackageScriptInstructionRefs(def.packageScripts, scriptName);
     removePackageScriptSubactionRefs(def.states, scriptName);
@@ -2544,6 +2687,21 @@ static void removeFighterPackageScriptRefs(pf::FighterDefinition& def, const std
         removePackageScriptCallbackRefs(state.onFrame, scriptName);
         removePackageScriptCallbackRefs(state.onLanding, scriptName);
         removePackageScriptCallbackRefs(state.onAirborne, scriptName);
+    }
+}
+
+static void remapFighterPackageScriptRefs(
+    pf::FighterDefinition& def,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    remapPackageScriptInstructionRefs(def.packageScripts, oldScriptName, newScriptName);
+    remapPackageScriptSubactionRefs(def.states, oldScriptName, newScriptName);
+    for (pf::FighterState& state : def.states) {
+        remapPackageScriptCallbackRefs(state.onEnter, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onFrame, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onLanding, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onAirborne, oldScriptName, newScriptName);
     }
 }
 
@@ -2576,6 +2734,41 @@ static void removeObjectPackageScriptRefs(pf::GameObjectDefinition& object, cons
     removePackageScriptCallbackRefs(object.onGrabDealt, scriptName);
     removePackageScriptCallbackRefs(object.onGrabbedForVictim, scriptName);
     removePackageScriptCallbackRefs(object.onInteraction, scriptName);
+}
+
+static void remapObjectPackageScriptRefs(
+    pf::GameObjectDefinition& object,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    remapPackageScriptInstructionRefs(object.packageScripts, oldScriptName, newScriptName);
+    for (pf::GameObjectStateDefinition& state : object.states) {
+        remapPackageScriptCallbackRefs(state.onEnter, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onFrame, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onPhysics, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onCollision, oldScriptName, newScriptName);
+    }
+    remapPackageScriptCallbackRefs(object.onSpawned, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onDestroyed, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onPickedUp, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onDropped, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onThrown, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onDamageDealt, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onDamageReceived, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onClanked, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onReflected, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onAbsorbed, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onShieldBounced, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onHitShield, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onEnteredAir, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onEnteredHitlag, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onExitedHitlag, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onAccessory, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onTouched, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onJumpedOn, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onGrabDealt, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onGrabbedForVictim, oldScriptName, newScriptName);
+    remapPackageScriptCallbackRefs(object.onInteraction, oldScriptName, newScriptName);
 }
 
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
@@ -2862,13 +3055,29 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             0,
             static_cast<int>(def.packageVariables.size()) - 1);
         pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
-        if (uiButton({64.0f, 386.0f, 54.0f, 22.0f}, "Init-")) {
+        if (uiButton({24.0f, 650.0f, 54.0f, 22.0f}, "Init-")) {
             --variable.initialValue;
             editor.status = "Editor: decreased initial value for " + variable.name;
         }
-        if (uiButton({124.0f, 386.0f, 54.0f, 22.0f}, "Init+")) {
+        if (uiButton({84.0f, 650.0f, 54.0f, 22.0f}, "Init+")) {
             ++variable.initialValue;
             editor.status = "Editor: increased initial value for " + variable.name;
+        }
+        std::string renamedVariable;
+        if (uiTextField(
+                {24.0f, 386.0f, 156.0f, 22.0f},
+                "fighter-var-" + std::to_string(editor.selectedPackageVariable),
+                editor,
+                variable.name,
+                renamedVariable))
+        {
+            if (!packageVariableNameAvailable(def, renamedVariable, editor.selectedPackageVariable)) {
+                editor.status = "Editor: package variable name is empty or already used";
+            } else {
+                const std::string oldName = variable.name;
+                variable.name = renamedVariable;
+                editor.status = "Editor: renamed package variable " + oldName + " to " + variable.name;
+            }
         }
     }
     const int visibleVars = std::min(5, static_cast<int>(def.packageVariables.size()));
@@ -2910,6 +3119,23 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     pf::PackageScript* script = nullptr;
     if (!def.packageScripts.empty()) {
         script = &def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        std::string renamedScript;
+        if (uiTextField(
+                {196.0f, 386.0f, 156.0f, 22.0f},
+                "fighter-script-" + std::to_string(editor.selectedPackageScript),
+                editor,
+                script->name,
+                renamedScript))
+        {
+            if (!packageScriptNameAvailable(def, renamedScript, editor.selectedPackageScript)) {
+                editor.status = "Editor: package script name is empty or already used";
+            } else {
+                const std::string oldName = script->name;
+                script->name = renamedScript;
+                remapFighterPackageScriptRefs(def, oldName, script->name);
+                editor.status = "Editor: renamed package script " + oldName + " to " + script->name;
+            }
+        }
     }
     DrawText("Instructions", 24, 506, 13, DARKGRAY);
     if (script) {
@@ -3817,6 +4043,18 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         }
 
         if (editor.objectPanel == pf::ObjectEditorPanel::Logic) {
+            if (!object.packageVariables.empty()) {
+                editor.selectedPackageVariable = std::clamp(
+                    editor.selectedPackageVariable,
+                    0,
+                    static_cast<int>(object.packageVariables.size()) - 1);
+            }
+            if (!object.packageScripts.empty()) {
+                editor.selectedPackageScript = std::clamp(
+                    editor.selectedPackageScript,
+                    0,
+                    static_cast<int>(object.packageScripts.size()) - 1);
+            }
             DrawText(("Object logic: " + object.name + " vars " + std::to_string(object.packageVariables.size()) +
                       " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 574, 13, DARKGRAY);
             if (!object.packageVariables.empty() || !object.packageScripts.empty()) {
@@ -3831,6 +4069,45 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     logicSelection.pop_back();
                 }
                 DrawText(logicSelection.c_str(), 270, 574, 12, DARKGRAY);
+            }
+            if (!object.packageVariables.empty()) {
+                pf::PackageVariableDefinition& variable = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+                std::string renamedVariable;
+                if (uiTextField(
+                        {270.0f, 590.0f, 76.0f, 24.0f},
+                        "object-var-" + std::to_string(editor.selectedObjectDef) + "-" + std::to_string(editor.selectedPackageVariable),
+                        editor,
+                        variable.name,
+                        renamedVariable))
+                {
+                    if (!objectPackageVariableNameAvailable(object, renamedVariable, editor.selectedPackageVariable)) {
+                        editor.status = "Editor: object package variable name is empty or already used";
+                    } else {
+                        const std::string oldName = variable.name;
+                        variable.name = renamedVariable;
+                        editor.status = "Editor: renamed object package variable " + oldName + " to " + variable.name;
+                    }
+                }
+            }
+            if (!object.packageScripts.empty()) {
+                pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+                std::string renamedScript;
+                if (uiTextField(
+                        {270.0f, 620.0f, 76.0f, 24.0f},
+                        "object-script-" + std::to_string(editor.selectedObjectDef) + "-" + std::to_string(editor.selectedPackageScript),
+                        editor,
+                        script.name,
+                        renamedScript))
+                {
+                    if (!objectPackageScriptNameAvailable(object, renamedScript, editor.selectedPackageScript)) {
+                        editor.status = "Editor: object package script name is empty or already used";
+                    } else {
+                        const std::string oldName = script.name;
+                        script.name = renamedScript;
+                        remapObjectPackageScriptRefs(object, oldName, script.name);
+                        editor.status = "Editor: renamed object package script " + oldName + " to " + script.name;
+                    }
+                }
             }
             if (!object.packageScripts.empty()) {
                 pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
