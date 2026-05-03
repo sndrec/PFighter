@@ -4692,6 +4692,12 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SpawnObjectFromVars, -1, 12, 8, 0, pf::fxFromFloat(1.0f), "PackageVelocityObject"},
             {pf::PackageScriptOp::SetFacingFromVar, -1, 9, -1, 0, 0, {}},
         },
+    }, {
+        "InterruptScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 5, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -4809,6 +4815,14 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidInterruptWritePackage = sourcePackage;
     invalidInterruptWritePackage.fighters[0].states[0].interrupts[0].enableFrame = -1;
     const bool invalidPackageInterruptWriteRejected = pf::writeFighterPackage(invalidInterruptWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidInterruptVarWritePackage = sourcePackage;
+    pf::InterruptRule invalidInterruptVarRule;
+    invalidInterruptVarRule.targetState = "Wait";
+    invalidInterruptVarRule.condition = pf::InterruptCondition::PackageVarAtLeast;
+    invalidInterruptVarRule.packageVariable = 999;
+    invalidInterruptVarRule.packageValue = 1;
+    invalidInterruptVarWritePackage.fighters[0].states[0].interrupts.push_back(invalidInterruptVarRule);
+    const bool invalidPackageInterruptVarWriteRejected = pf::writeFighterPackage(invalidInterruptVarWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidSubactionWritePackage = sourcePackage;
     const int invalidSubactionState = invalidSubactionWritePackage.fighters[0].stateIndex("Attack11");
     if (invalidSubactionState >= 0 && !invalidSubactionWritePackage.fighters[0].states[static_cast<size_t>(invalidSubactionState)].action.empty()) {
@@ -4967,7 +4981,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 20 &&
-        loadedPackage.fighters[0].packageScripts.size() == 6 &&
+        loadedPackage.fighters[0].packageScripts.size() == 7 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 10 &&
@@ -5128,6 +5142,36 @@ int main(int argc, char** argv) {
             packageVarSpawnObjectOk = true;
         }
     }
+    pf::World packageInterruptScriptWorld = pf::makeTrainingWorld();
+    std::string packageInterruptTargetState = "SquatWait";
+    if (packageShapeOk) {
+        packageInterruptScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageInterruptScriptWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
+        const int waitIndex = packageInterruptScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            pf::FunctionCall scriptCall;
+            scriptCall.name = "script:InterruptScript";
+            pf::FighterState& wait = packageInterruptScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)];
+            wait.onFrame.push_back(scriptCall);
+            if (packageInterruptScriptWorld.fighterDefs[0].stateIndex(packageInterruptTargetState) < 0) {
+                packageInterruptTargetState = "Fall";
+            }
+            pf::InterruptRule interrupt;
+            interrupt.targetState = packageInterruptTargetState;
+            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+            interrupt.packageVariable = 0;
+            interrupt.packageValue = 5;
+            interrupt.alwaysActive = true;
+            wait.interrupts.push_back(interrupt);
+        }
+        packageInterruptScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageInterruptScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    pf::tickWorld(packageInterruptScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const bool packageInterruptScriptOk = packageShapeOk &&
+        pf::currentState(packageInterruptScriptWorld, packageInterruptScriptWorld.fighters[0]).name == packageInterruptTargetState &&
+        !packageInterruptScriptWorld.fighters[0].packageVars.empty() &&
+        packageInterruptScriptWorld.fighters[0].packageVars[0] == 5;
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageSwitchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5250,6 +5294,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_fact_ok=" << packageFactScriptOk
               << " fighter_package_script_input_ok=" << packageInputScriptOk
               << " fighter_package_script_spawn_vars_ok=" << packageVarSpawnObjectOk
+              << " fighter_package_script_interrupt_ok=" << packageInterruptScriptOk
               << " fighter_package_script_switch_ok=" << packageSwitchScriptOk
               << " fighter_package_script_switch_var=" << packageSwitchScriptVar
               << " fighter_package_script_spawn_fighter_ok=" << packageSpawnFighterScriptOk
@@ -5271,6 +5316,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
               << " fighter_package_invalid_object_property_write_rejected=" << invalidPackageObjectPropertyWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
+              << " fighter_package_invalid_interrupt_var_write_rejected=" << invalidPackageInterruptVarWriteRejected
               << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_hurtbox_ref_write_rejected=" << invalidPackageHurtboxRefWriteRejected
               << " fighter_package_invalid_mesh_write_rejected=" << invalidPackageMeshWriteRejected

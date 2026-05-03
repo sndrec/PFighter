@@ -624,6 +624,7 @@ enum class InterruptCondition : uint8_t {
     LedgeEscapeInput,
     GrabPressed,
     TauntPressed,
+    PackageVarAtLeast,
 };
 
 struct InterruptRule {
@@ -637,6 +638,8 @@ struct InterruptRule {
     bool requireNoHitstun = false;
     int enableFrame = 0;
     int disableFrame = 0;
+    int packageVariable = -1;
+    int32_t packageValue = 1;
 };
 
 struct FighterState {

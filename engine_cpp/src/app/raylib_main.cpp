@@ -1214,6 +1214,7 @@ static const char* interruptConditionName(pf::InterruptCondition condition) {
     case pf::InterruptCondition::DashInput: return "Dash";
     case pf::InterruptCondition::SquatInput: return "Squat";
     case pf::InterruptCondition::TurnInput: return "Turn";
+    case pf::InterruptCondition::PackageVarAtLeast: return "PkgVar";
     default: return "Other";
     }
 }
@@ -1234,6 +1235,7 @@ static pf::InterruptCondition nextCommonInterruptCondition(pf::InterruptConditio
     case pf::InterruptCondition::DashInput: return pf::InterruptCondition::SquatInput;
     case pf::InterruptCondition::SquatInput: return pf::InterruptCondition::TurnInput;
     case pf::InterruptCondition::TurnInput: return pf::InterruptCondition::WaitInput;
+    case pf::InterruptCondition::PackageVarAtLeast: return pf::InterruptCondition::WaitInput;
     default: return pf::InterruptCondition::WaitInput;
     }
 }
@@ -3452,6 +3454,9 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         DrawText(("Interrupt #" + std::to_string(editor.selectedInterrupt) + " -> " + interrupt.targetState +
                   " " + interruptConditionName(interrupt.condition) +
                   " " + groundRequirementName(interrupt.ground)).c_str(), 276, 506, 13, DARKGRAY);
+        if (interrupt.condition == pf::InterruptCondition::PackageVarAtLeast) {
+            DrawText(("v" + std::to_string(interrupt.packageVariable) + " >= " + std::to_string(interrupt.packageValue)).c_str(), 516, 506, 13, DARKGRAY);
+        }
         if (uiButton({276.0f, 524.0f, 44.0f, 24.0f}, "Prev")) {
             --editor.selectedInterrupt;
         }
@@ -3473,6 +3478,31 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
                 interrupt.targetState = def.states[static_cast<size_t>(next)].name;
                 editor.status = "Editor: cycled interrupt target state";
             }
+        }
+        if (uiButton({516.0f, 524.0f, 44.0f, 24.0f}, "Pkg")) {
+            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+            interrupt.packageVariable = def.packageVariables.empty()
+                ? -1
+                : std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
+            interrupt.packageValue = std::max<int32_t>(1, interrupt.packageValue);
+            editor.status = "Editor: set interrupt to package variable condition";
+        }
+        if (uiButton({566.0f, 524.0f, 44.0f, 24.0f}, "Var")) {
+            if (!def.packageVariables.empty()) {
+                interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+                interrupt.packageVariable = (std::max(0, interrupt.packageVariable) + 1) % static_cast<int>(def.packageVariables.size());
+                editor.status = "Editor: cycled interrupt package variable";
+            }
+        }
+        if (uiButton({616.0f, 524.0f, 44.0f, 24.0f}, "Val+")) {
+            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+            ++interrupt.packageValue;
+            editor.status = "Editor: raised interrupt package variable threshold";
+        }
+        if (uiButton({666.0f, 524.0f, 44.0f, 24.0f}, "Val-")) {
+            interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
+            --interrupt.packageValue;
+            editor.status = "Editor: lowered interrupt package variable threshold";
         }
     }
 

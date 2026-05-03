@@ -1833,6 +1833,13 @@ static bool ruleActive(const InterruptRule& rule, const FighterRuntime& fighter)
     return rule.disableFrame == 0 || frame < rule.disableFrame;
 }
 
+static int32_t fighterPackageVar(const FighterRuntime& fighter, int index) {
+    if (index < 0 || index >= static_cast<int>(fighter.packageVars.size())) {
+        return 0;
+    }
+    return fighter.packageVars[static_cast<size_t>(index)];
+}
+
 static bool groundAllowed(GroundRequirement required, const FighterRuntime& fighter) {
     if (required == GroundRequirement::OnlyGrounded) return fighter.grounded;
     if (required == GroundRequirement::OnlyAirborne) return !fighter.grounded;
@@ -2384,6 +2391,8 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                     (fighter.input.down(ButtonShield) && fighter.input.justPressed(ButtonAttack)));
         case InterruptCondition::TauntPressed:
             return fighter.grounded && fighter.input.justPressed(ButtonTaunt);
+        case InterruptCondition::PackageVarAtLeast:
+            return false;
     }
     return false;
 }
@@ -5061,7 +5070,10 @@ static void processInterrupts(World& world, FighterRuntime& fighter) {
         if (useTurnFacing) {
             fighter.facing = fighter.turnFacingAfter == 0 ? -fighter.facing : fighter.turnFacingAfter;
         }
-        if (conditionMet(world, rule.condition, fighter)) {
+        const bool packageVarCondition =
+            rule.condition == InterruptCondition::PackageVarAtLeast &&
+            fighterPackageVar(fighter, rule.packageVariable) >= rule.packageValue;
+        if (packageVarCondition || conditionMet(world, rule.condition, fighter)) {
             if (rule.condition == InterruptCondition::DashInput && signOf(fighter.input.frames[0].move.x) != fighter.facing) {
                 fighter.facing *= -1;
             }

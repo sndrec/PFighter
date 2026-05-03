@@ -388,6 +388,7 @@ bool validInterruptCondition(InterruptCondition condition) {
     case InterruptCondition::LedgeEscapeInput:
     case InterruptCondition::GrabPressed:
     case InterruptCondition::TauntPressed:
+    case InterruptCondition::PackageVarAtLeast:
         return true;
     }
     return false;
@@ -648,6 +649,8 @@ void writeInterrupt(PackageWriter& writer, const InterruptRule& rule) {
     writer.writeBool(rule.requireNoHitstun);
     writer.writeI32(rule.enableFrame);
     writer.writeI32(rule.disableFrame);
+    writer.writeI32(rule.packageVariable);
+    writer.writeI32(rule.packageValue);
 }
 
 InterruptRule readInterrupt(PackageReader& reader) {
@@ -662,6 +665,8 @@ InterruptRule readInterrupt(PackageReader& reader) {
     rule.requireNoHitstun = reader.readBool();
     rule.enableFrame = reader.readI32();
     rule.disableFrame = reader.readI32();
+    rule.packageVariable = reader.readI32();
+    rule.packageValue = reader.readI32();
     return rule;
 }
 
@@ -1813,6 +1818,15 @@ void validateInterruptRuleTiming(const InterruptRule& rule) {
     }
 }
 
+void validateInterruptRulePackageRefs(const InterruptRule& rule, int variableCount) {
+    if (rule.condition != InterruptCondition::PackageVarAtLeast) {
+        return;
+    }
+    if (rule.packageVariable < 0 || rule.packageVariable >= variableCount) {
+        throw std::runtime_error("fighter package interrupt variable reference is invalid");
+    }
+}
+
 bool validAnimationBlendFrames(int blendFrames) {
     return blendFrames >= 0 ||
         blendFrames == kUseDefaultAnimationBlendFrames ||
@@ -1900,6 +1914,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
                     throw std::runtime_error("fighter package interrupt state target is invalid: " + state.name + " -> " + rule.targetState);
                 }
                 validateInterruptRuleTiming(rule);
+                validateInterruptRulePackageRefs(rule, static_cast<int>(fighter.packageVariables.size()));
             }
             for (const Subaction& subaction : state.action) {
                 validateSubactionTiming(subaction);
