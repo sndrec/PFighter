@@ -4041,6 +4041,24 @@ static void cycleEditorStateAnimation(const pf::FighterDefinition& def, pf::Figh
     editor.status = "Editor: assigned animation " + state.animation + " to " + state.name;
 }
 
+static bool moveEditorSubaction(pf::FighterState& state, pf::FighterEditor& editor, int delta) {
+    if (state.action.empty() || delta == 0) {
+        return false;
+    }
+    editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
+    const int target = editor.selectedSubaction + delta;
+    if (target < 0 || target >= static_cast<int>(state.action.size())) {
+        return false;
+    }
+    std::swap(state.action[static_cast<size_t>(editor.selectedSubaction)],
+              state.action[static_cast<size_t>(target)]);
+    editor.selectedSubaction = target;
+    editor.status = delta < 0
+        ? "Editor: moved selected subaction earlier"
+        : "Editor: moved selected subaction later";
+    return true;
+}
+
 static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     if (world.fighters.empty()) {
@@ -4163,6 +4181,12 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         state.action.push_back(subaction);
         editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
         editor.status = "Editor: added reverse-direction subaction to " + state.name;
+    }
+    if (uiButton({780.0f, 440.0f, 58.0f, 24.0f}, "Sub<")) {
+        moveEditorSubaction(state, editor, -1);
+    }
+    if (uiButton({846.0f, 440.0f, 58.0f, 24.0f}, "Sub>")) {
+        moveEditorSubaction(state, editor, 1);
     }
     if (uiButton({122.0f, 470.0f, 90.0f, 24.0f}, "+ Hitbox")) {
         pf::Subaction subaction;
@@ -5327,8 +5351,25 @@ int main() {
         }
         if (appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
         if (appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
-        if (appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) --editor.selectedSubaction;
-        if (appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) ++editor.selectedSubaction;
+        const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+        if (appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) {
+            if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
+                if (pf::FighterState* state = selectedEditorState()) {
+                    moveEditorSubaction(*state, editor, -1);
+                }
+            } else {
+                --editor.selectedSubaction;
+            }
+        }
+        if (appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) {
+            if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
+                if (pf::FighterState* state = selectedEditorState()) {
+                    moveEditorSubaction(*state, editor, 1);
+                }
+            } else {
+                ++editor.selectedSubaction;
+            }
+        }
         if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
             removeSelectedSubaction();
         }
