@@ -16,6 +16,27 @@ static bool sameVec2(pf::Vec2 a, pf::Vec2 b) {
     return a.x == b.x && a.y == b.y;
 }
 
+static pf::HsdFighterMesh makeSmokeAuthoredMesh() {
+    pf::HsdFighterMesh mesh;
+    pf::HsdMeshBatch batch;
+    batch.parentBone = 0;
+    batch.singleBindBone = 0;
+    auto vertex = [](pf::Vec3 position) {
+        pf::HsdMeshVertex out;
+        out.position = position;
+        out.normal = {0, 0, pf::fx(1)};
+        out.influences[0] = {0, 1.0f};
+        return out;
+    };
+    batch.vertices = {
+        vertex({pf::fxFromFloat(-0.25f), pf::fxFromFloat(0.25f), 0}),
+        vertex({pf::fxFromFloat(0.25f), pf::fxFromFloat(0.25f), 0}),
+        vertex({0, pf::fxFromFloat(0.75f), 0}),
+    };
+    mesh.batches.push_back(std::move(batch));
+    return mesh;
+}
+
 static bool matchesI32(const std::vector<uint8_t>& bytes, size_t offset, int32_t expected) {
     if (offset + sizeof(expected) > bytes.size()) {
         return false;
@@ -4583,6 +4604,10 @@ int main(int argc, char** argv) {
               << "\n";
 
     pf::World packageSourceWorld = pf::makeTrainingWorld();
+    packageSourceWorld.fighterDefs[0].authoredSkeleton = {
+        {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
+    };
+    packageSourceWorld.fighterDefs[0].authoredMesh = makeSmokeAuthoredMesh();
     packageSourceWorld.fighterDefs[0].packageVariables = {{"SmokeVar", 4}};
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4643,11 +4668,17 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidInterruptWritePackage = sourcePackage;
     invalidInterruptWritePackage.fighters[0].states[0].interrupts[0].enableFrame = -1;
     const bool invalidPackageInterruptWriteRejected = pf::writeFighterPackage(invalidInterruptWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidMeshWritePackage = sourcePackage;
+    invalidMeshWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].bone = 99;
+    const bool invalidPackageMeshWriteRejected = pf::writeFighterPackage(invalidMeshWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
         loadedPackage.fighters[0].states.size() == packageSourceWorld.fighterDefs[0].states.size() &&
         loadedPackage.fighters[0].hurtboxes.size() == packageSourceWorld.fighterDefs[0].hurtboxes.size() &&
+        loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
+        loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
+        loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 1 &&
         loadedPackage.fighters[0].packageScripts.size() == 1 &&
         loadedPackage.objects.size() > 1 &&
@@ -4749,6 +4780,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
+              << " fighter_package_invalid_mesh_write_rejected=" << invalidPackageMeshWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 
