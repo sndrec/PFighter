@@ -4170,12 +4170,56 @@ static void drawEditorStateBrowser(const pf::FighterDefinition& def, pf::Fighter
     }
 }
 
+static std::vector<int> editorSubactionFirstFrames(const std::vector<pf::Subaction>& action) {
+    std::vector<int> frames(action.size(), -1);
+    int currentFrame = 0;
+    int loopCount = 0;
+    size_t loopStart = 0;
+    size_t index = 0;
+    int safety = 0;
+    while (index < action.size() && safety < 10000) {
+        ++safety;
+        const pf::Subaction& subaction = action[index];
+        if (subaction.type == pf::SubactionType::SetLoop) {
+            loopStart = index + 1;
+            loopCount = std::max(0, subaction.loopCount - 1);
+            ++index;
+            continue;
+        }
+        if (subaction.type == pf::SubactionType::ExecuteLoop) {
+            if (loopCount > 0) {
+                index = loopStart;
+                --loopCount;
+            } else {
+                ++index;
+            }
+            continue;
+        }
+        if (subaction.type == pf::SubactionType::SyncTimer) {
+            currentFrame += subaction.frames;
+            ++index;
+            continue;
+        }
+        if (subaction.type == pf::SubactionType::AsyncTimer) {
+            currentFrame = std::max(currentFrame, subaction.frames);
+            ++index;
+            continue;
+        }
+        if (frames[index] < 0) {
+            frames[index] = currentFrame;
+        }
+        ++index;
+    }
+    return frames;
+}
+
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
     const pf::UnfoldedAction actionFrames = pf::unfoldAction(state.action);
+    const std::vector<int> subactionFrames = editorSubactionFirstFrames(state.action);
     const int timelineFrameCount = std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
     const int liveFrame = pf::currentState(world, fighter).name == state.name ? pf::frameInState(fighter) : 0;
     const float timelineX = 24.0f;
@@ -4239,8 +4283,40 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
         const float x = timelineX + timelineWidth * static_cast<float>(state.initialInterruptibleFrame) / static_cast<float>(timelineFrameCount);
         DrawRectangle(static_cast<int>(x), static_cast<int>(timelineY), 2, static_cast<int>(timelineHeight), GREEN);
     }
+    if (selectedSubaction >= 0 && selectedSubaction < static_cast<int>(subactionFrames.size())) {
+        const int subactionFrame = subactionFrames[static_cast<size_t>(selectedSubaction)];
+        if (subactionFrame >= 0) {
+            const float x = timelineX + timelineWidth * static_cast<float>(std::clamp(subactionFrame, 0, timelineFrameCount)) /
+                static_cast<float>(timelineFrameCount);
+            DrawRectangle(static_cast<int>(x - 2.0f), static_cast<int>(timelineY - 5.0f), 5, static_cast<int>(timelineHeight + 10.0f), BLUE);
+        }
+    }
     const float liveX = timelineX + timelineWidth * static_cast<float>(std::clamp(liveFrame, 0, timelineFrameCount)) / static_cast<float>(timelineFrameCount);
     DrawRectangle(static_cast<int>(liveX), static_cast<int>(timelineY - 3.0f), 3, static_cast<int>(timelineHeight + 6.0f), BLACK);
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        CheckCollisionPointRec(GetMousePosition(), {timelineX, timelineY, timelineWidth, timelineHeight}) &&
+        !state.action.empty())
+    {
+        const float clickT = std::clamp((GetMousePosition().x - timelineX) / timelineWidth, 0.0f, 1.0f);
+        const int clickedFrame = static_cast<int>(std::round(clickT * static_cast<float>(timelineFrameCount)));
+        int bestSubaction = -1;
+        int bestDistance = 1000000;
+        for (size_t i = 0; i < subactionFrames.size(); ++i) {
+            const int frame = subactionFrames[i];
+            if (frame < 0) {
+                continue;
+            }
+            const int distance = std::abs(frame - clickedFrame);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestSubaction = static_cast<int>(i);
+            }
+        }
+        if (bestSubaction >= 0) {
+            editor.selectedSubaction = bestSubaction;
+            editor.status = "Editor: selected timeline subaction " + std::to_string(bestSubaction);
+        }
+    }
     DrawText(editor.status.c_str(), 24, 240, 14, DARKGRAY);
     DrawText("N/New state  Del/remove  T/Test playtest  [/] state  ,/. subaction  Space pause  R reset", 24, 258, 14, GRAY);
     drawEditorStateBrowser(def, editor);
