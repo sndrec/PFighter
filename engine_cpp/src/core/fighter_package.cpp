@@ -1242,6 +1242,189 @@ void validateAuthoredAnimationData(
     }
 }
 
+bool hasName(const std::vector<std::string>& names, const std::string& name) {
+    return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+std::vector<std::string> fighterStateNames(const FighterDefinition& fighter) {
+    std::vector<std::string> names;
+    names.reserve(fighter.states.size());
+    for (const FighterState& state : fighter.states) {
+        names.push_back(state.name);
+    }
+    return names;
+}
+
+std::vector<std::string> objectStateNames(const GameObjectDefinition& object) {
+    std::vector<std::string> names;
+    names.reserve(object.states.size());
+    for (const GameObjectStateDefinition& state : object.states) {
+        names.push_back(state.name);
+    }
+    return names;
+}
+
+std::vector<std::string> objectNames(const FighterPackage& package) {
+    std::vector<std::string> names;
+    names.reserve(package.objects.size());
+    for (const GameObjectDefinition& object : package.objects) {
+        names.push_back(object.name);
+    }
+    return names;
+}
+
+std::vector<std::string> scriptNames(const std::vector<PackageScript>& scripts) {
+    std::vector<std::string> names;
+    names.reserve(scripts.size());
+    for (const PackageScript& script : scripts) {
+        names.push_back(script.name);
+    }
+    return names;
+}
+
+void requireVariableIndex(int index, int variableCount, const char* label) {
+    if (index < 0 || index >= variableCount) {
+        throw std::runtime_error(std::string("fighter package script ") + label + " variable reference is invalid");
+    }
+}
+
+void validatePackageScriptInstruction(
+    const PackageScriptInstruction& instruction,
+    int variableCount,
+    const std::vector<std::string>& stateNames,
+    const std::vector<std::string>& packageObjectNames)
+{
+    switch (instruction.op) {
+    case PackageScriptOp::Nop:
+        break;
+    case PackageScriptOp::SetVarImmediate:
+    case PackageScriptOp::AddVarImmediate:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        break;
+    case PackageScriptOp::AddVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
+        break;
+    case PackageScriptOp::SetGroundVelocity:
+    case PackageScriptOp::SetAirVelocityX:
+    case PackageScriptOp::SetAirVelocityY:
+    case PackageScriptOp::SetFacing:
+        break;
+    case PackageScriptOp::ChangeState:
+        if (!hasName(stateNames, instruction.text)) {
+            throw std::runtime_error("fighter package script state target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnObject:
+        if (!hasName(packageObjectNames, instruction.text)) {
+            throw std::runtime_error("fighter package script object target is invalid");
+        }
+        break;
+    }
+}
+
+void validateFunctionCalls(
+    const std::vector<FunctionCall>& calls,
+    const std::vector<std::string>& availableScripts)
+{
+    for (const FunctionCall& call : calls) {
+        constexpr const char* kScriptPrefix = "script:";
+        constexpr size_t kScriptPrefixSize = 7;
+        if (call.name.rfind(kScriptPrefix, 0) == 0 &&
+            !hasName(availableScripts, call.name.substr(kScriptPrefixSize)))
+        {
+            throw std::runtime_error("fighter package script callback target is invalid");
+        }
+    }
+}
+
+void validatePackageScripts(
+    const std::vector<PackageScript>& scripts,
+    int variableCount,
+    const std::vector<std::string>& stateNames,
+    const std::vector<std::string>& packageObjectNames)
+{
+    std::vector<std::string> seenNames;
+    seenNames.reserve(scripts.size());
+    for (const PackageScript& script : scripts) {
+        if (script.name.empty() || hasName(seenNames, script.name)) {
+            throw std::runtime_error("fighter package script name is invalid");
+        }
+        if (script.instructionBudget < 0 || script.instructionBudget > 1024) {
+            throw std::runtime_error("fighter package script instruction budget is invalid");
+        }
+        for (const PackageScriptInstruction& instruction : script.instructions) {
+            validatePackageScriptInstruction(instruction, variableCount, stateNames, packageObjectNames);
+        }
+        seenNames.push_back(script.name);
+    }
+}
+
+void validateFighterPackageReferences(const FighterPackage& package) {
+    const std::vector<std::string> packageObjectNames = objectNames(package);
+    for (const FighterDefinition& fighter : package.fighters) {
+        const std::vector<std::string> states = fighterStateNames(fighter);
+        const std::vector<std::string> scripts = scriptNames(fighter.packageScripts);
+        validatePackageScripts(fighter.packageScripts, static_cast<int>(fighter.packageVariables.size()), states, packageObjectNames);
+        for (const FighterState& state : fighter.states) {
+            if (!state.onAnimationFinishedState.empty() && !hasName(states, state.onAnimationFinishedState)) {
+                throw std::runtime_error("fighter package animation finished state target is invalid");
+            }
+            validateFunctionCalls(state.onEnter, scripts);
+            validateFunctionCalls(state.onFrame, scripts);
+            validateFunctionCalls(state.onLanding, scripts);
+            validateFunctionCalls(state.onAirborne, scripts);
+            for (const InterruptRule& rule : state.interrupts) {
+                if (!hasName(states, rule.targetState)) {
+                    throw std::runtime_error("fighter package interrupt state target is invalid");
+                }
+            }
+            for (const Subaction& subaction : state.action) {
+                if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {
+                    throw std::runtime_error("fighter package subaction object target is invalid");
+                }
+            }
+        }
+    }
+
+    for (const GameObjectDefinition& object : package.objects) {
+        const std::vector<std::string> states = objectStateNames(object);
+        const std::vector<std::string> scripts = scriptNames(object.packageScripts);
+        validatePackageScripts(object.packageScripts, static_cast<int>(object.packageVariables.size()), states, packageObjectNames);
+        if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {
+            throw std::runtime_error("fighter package object initial state is invalid");
+        }
+        for (const GameObjectStateDefinition& state : object.states) {
+            validateFunctionCalls(state.onEnter, scripts);
+            validateFunctionCalls(state.onFrame, scripts);
+            validateFunctionCalls(state.onPhysics, scripts);
+            validateFunctionCalls(state.onCollision, scripts);
+        }
+        validateFunctionCalls(object.onSpawned, scripts);
+        validateFunctionCalls(object.onDestroyed, scripts);
+        validateFunctionCalls(object.onPickedUp, scripts);
+        validateFunctionCalls(object.onDropped, scripts);
+        validateFunctionCalls(object.onThrown, scripts);
+        validateFunctionCalls(object.onDamageDealt, scripts);
+        validateFunctionCalls(object.onDamageReceived, scripts);
+        validateFunctionCalls(object.onClanked, scripts);
+        validateFunctionCalls(object.onReflected, scripts);
+        validateFunctionCalls(object.onAbsorbed, scripts);
+        validateFunctionCalls(object.onShieldBounced, scripts);
+        validateFunctionCalls(object.onHitShield, scripts);
+        validateFunctionCalls(object.onEnteredAir, scripts);
+        validateFunctionCalls(object.onEnteredHitlag, scripts);
+        validateFunctionCalls(object.onExitedHitlag, scripts);
+        validateFunctionCalls(object.onAccessory, scripts);
+        validateFunctionCalls(object.onTouched, scripts);
+        validateFunctionCalls(object.onJumpedOn, scripts);
+        validateFunctionCalls(object.onGrabDealt, scripts);
+        validateFunctionCalls(object.onGrabbedForVictim, scripts);
+        validateFunctionCalls(object.onInteraction, scripts);
+    }
+}
+
 void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
     validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     writer.writeString(fighter.name);
@@ -1524,6 +1707,7 @@ std::shared_ptr<const HsdFighterAnimationAsset> readHsdAsset(
 
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error) {
     try {
+        validateFighterPackageReferences(package);
         PackageWriter writer;
         writer.writeMagic("PFFP");
         writer.writeU32(kPackageVersion);
@@ -1592,6 +1776,7 @@ bool readFighterPackage(
             return readGameObjectDefinition(reader);
         });
         reader.requireFinished();
+        validateFighterPackageReferences(loaded);
         package = std::move(loaded);
         return true;
     } catch (const std::exception& ex) {
