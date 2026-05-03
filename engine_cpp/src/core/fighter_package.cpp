@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <type_traits>
 
@@ -11,6 +12,8 @@ namespace {
 
 constexpr uint32_t kPackageVersion = 1;
 constexpr uint32_t kMaxFighters = 256;
+constexpr uint32_t kMaxAssets = 1024;
+constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
 constexpr uint32_t kMaxObjects = 4096;
 constexpr uint32_t kMaxStates = 2048;
 constexpr uint32_t kMaxCallbacks = 4096;
@@ -53,6 +56,14 @@ public:
     void writeString(const std::string& value) {
         if (value.size() > kMaxStringBytes) {
             throw std::runtime_error("package string is too large");
+        }
+        writeU32(static_cast<uint32_t>(value.size()));
+        bytes.insert(bytes.end(), value.begin(), value.end());
+    }
+
+    void writeBytes(const std::vector<uint8_t>& value) {
+        if (value.size() > kMaxAssetBytes) {
+            throw std::runtime_error("package asset is too large");
         }
         writeU32(static_cast<uint32_t>(value.size()));
         bytes.insert(bytes.end(), value.begin(), value.end());
@@ -108,6 +119,15 @@ public:
         const uint32_t size = readCount(kMaxStringBytes, "string bytes");
         require(size);
         std::string value(reinterpret_cast<const char*>(bytes.data() + position), size);
+        position += size;
+        return value;
+    }
+
+    std::vector<uint8_t> readBytes(uint32_t maxBytes, const char* label) {
+        const uint32_t size = readCount(maxBytes, label);
+        require(size);
+        std::vector<uint8_t> value(bytes.begin() + static_cast<std::ptrdiff_t>(position),
+                                   bytes.begin() + static_cast<std::ptrdiff_t>(position + size));
         position += size;
         return value;
     }
@@ -605,6 +625,31 @@ bool fail(std::string* error, const std::string& message) {
     return false;
 }
 
+void writeHsdAsset(PackageWriter& writer, const std::shared_ptr<const HsdFighterAnimationAsset>& asset) {
+    writer.writeString(asset ? asset->name : std::string{});
+    writer.writeBytes(asset ? asset->sourceBytes : std::vector<uint8_t>{});
+}
+
+std::shared_ptr<const HsdFighterAnimationAsset> readHsdAsset(
+    PackageReader& reader,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool,
+    size_t index)
+{
+    const std::string assetName = reader.readString();
+    const std::vector<uint8_t> assetBytes = reader.readBytes(kMaxAssetBytes, "asset bytes");
+    if (!assetBytes.empty()) {
+        HsdFighterAnimationAsset asset = loadHsdFighterAnimationAssetFromBytes(assetBytes);
+        if (!assetName.empty() && asset.name != assetName) {
+            throw std::runtime_error("fighter package embedded asset name mismatch");
+        }
+        return std::make_shared<const HsdFighterAnimationAsset>(std::move(asset));
+    }
+    if (index < hsdAssetPool.size()) {
+        return hsdAssetPool[index];
+    }
+    return nullptr;
+}
+
 } // namespace
 
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error) {
@@ -615,7 +660,7 @@ std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::str
         writer.writeString(package.name);
         writer.writeU32(package.version);
         writeVector(writer, package.hsdAssets, [&](const std::shared_ptr<const HsdFighterAnimationAsset>& asset) {
-            writer.writeString(asset ? asset->name : std::string{});
+            writeHsdAsset(writer, asset);
         });
         writeVector(writer, package.fighters, [&](const FighterDefinition& fighter) {
             writeFighterDefinition(writer, package, fighter);
@@ -649,16 +694,10 @@ bool readFighterPackage(
         FighterPackage loaded;
         loaded.name = reader.readString();
         loaded.version = reader.readU32();
-        const uint32_t assetCount = reader.readCount(kMaxFighters, "asset");
+        const uint32_t assetCount = reader.readCount(kMaxAssets, "asset");
         loaded.hsdAssets.reserve(assetCount);
         for (uint32_t i = 0; i < assetCount; ++i) {
-            const std::string assetName = reader.readString();
-            (void) assetName;
-            if (i < hsdAssetPool.size()) {
-                loaded.hsdAssets.push_back(hsdAssetPool[i]);
-            } else {
-                loaded.hsdAssets.push_back(nullptr);
-            }
+            loaded.hsdAssets.push_back(readHsdAsset(reader, hsdAssetPool, i));
         }
         loaded.fighters = readVector<FighterDefinition>(reader, kMaxFighters, "fighter", [&]() {
             return readFighterDefinition(reader, loaded.hsdAssets);

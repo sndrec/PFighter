@@ -4581,7 +4581,7 @@ int main(int argc, char** argv) {
     std::string packageError;
     const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
     pf::FighterPackage loadedPackage;
-    const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError, sourcePackage.hsdAssets);
+    const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4594,7 +4594,13 @@ int main(int argc, char** argv) {
         loadedPackage.objects[1].packageScripts.size() == 1;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
-        loadedPackage.fighters[0].hsdAsset == packageSourceWorld.fighterDefs[0].hsdAsset;
+        loadedPackage.fighters[0].hsdAsset != nullptr &&
+        loadedPackage.fighters[0].hsdAsset != packageSourceWorld.fighterDefs[0].hsdAsset &&
+        loadedPackage.fighters[0].hsdAsset->name == packageSourceWorld.fighterDefs[0].hsdAsset->name &&
+        loadedPackage.fighters[0].hsdAsset->sourceBytes.size() == packageSourceWorld.fighterDefs[0].hsdAsset->sourceBytes.size() &&
+        loadedPackage.fighters[0].hsdAsset->skeleton.size() == packageSourceWorld.fighterDefs[0].hsdAsset->skeleton.size() &&
+        loadedPackage.fighters[0].hsdAsset->clips.size() == packageSourceWorld.fighterDefs[0].hsdAsset->clips.size() &&
+        loadedPackage.fighters[0].hsdAsset->mesh.batches.size() == packageSourceWorld.fighterDefs[0].hsdAsset->mesh.batches.size();
     const bool sandbagRosterOk = std::any_of(packageSourceWorld.fighterDefs.begin(), packageSourceWorld.fighterDefs.end(), [](const pf::FighterDefinition& def) {
         return def.name == "Sandbag" && def.hasHsdAsset && def.hsdAsset != nullptr;
     });

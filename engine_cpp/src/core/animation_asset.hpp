@@ -161,6 +161,7 @@ struct HsdFighterMesh {
 
 struct HsdFighterAnimationAsset {
     std::string name;
+    std::vector<uint8_t> sourceBytes;
     std::vector<AnimationJoint> skeleton;
     std::vector<AnimationClip> clips;
     std::vector<HsdModelPartAnimationSet> modelPartAnimations;
@@ -178,6 +179,7 @@ struct HsdFighterAnimationAsset {
 };
 
 HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path);
+HsdFighterAnimationAsset loadHsdFighterAnimationAssetFromBytes(const std::vector<uint8_t>& bytes);
 const AnimationClip* findClipByActionIndex(const HsdFighterAnimationAsset& asset, int actionIndex);
 const AnimationClip* findClipByName(const HsdFighterAnimationAsset& asset, const std::string& name);
 const HsdActionScript* findActionScriptByActionIndex(const HsdFighterAnimationAsset& asset, int actionIndex);

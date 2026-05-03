@@ -10,6 +10,23 @@
 namespace pf {
 namespace {
 
+constexpr uint32_t kMaxBinaryStringBytes = 1 << 20;
+constexpr int32_t kMaxJoints = 1024;
+constexpr int32_t kMaxAnimationTracks = 65536;
+constexpr int32_t kMaxAnimationKeys = 65536;
+constexpr int32_t kMaxAnimationClips = 8192;
+constexpr int32_t kMaxInverseBindMatrices = 4096;
+constexpr int32_t kMaxTextures = 4096;
+constexpr int32_t kMaxTextureBytes = 128 * 1024 * 1024;
+constexpr int32_t kMaxMeshBatches = 65536;
+constexpr int32_t kMaxMeshVertices = 1 << 22;
+constexpr int32_t kMaxModelPartSets = 4096;
+constexpr int32_t kMaxModelPartEntries = 65536;
+constexpr int32_t kMaxHurtboxes = 4096;
+constexpr int32_t kMaxActionScripts = 8192;
+constexpr int32_t kMaxActionCommands = 65536;
+constexpr int32_t kMaxActionCommandBytes = 1 << 20;
+
 class BinaryReader {
 public:
     explicit BinaryReader(std::vector<uint8_t> data) : data(std::move(data)) {}
@@ -56,6 +73,22 @@ public:
         return value;
     }
 
+    int32_t readCount(int32_t maxValue, const char* label) {
+        const int32_t count = readI32();
+        if (count < 0 || count > maxValue) {
+            throw std::runtime_error(std::string("binary fighter asset ") + label + " count is too large");
+        }
+        return count;
+    }
+
+    uint32_t readByteCount(uint32_t maxValue, const char* label) {
+        const uint32_t count = readU32();
+        if (count > maxValue) {
+            throw std::runtime_error(std::string("binary fighter asset ") + label + " byte count is too large");
+        }
+        return count;
+    }
+
     float readF32() {
         require(4);
         float value = 0.0f;
@@ -65,7 +98,7 @@ public:
     }
 
     std::string readString() {
-        const uint32_t size = readU32();
+        const uint32_t size = readByteCount(kMaxBinaryStringBytes, "string");
         require(size);
         std::string value(reinterpret_cast<const char*>(data.data() + position), size);
         position += size;
@@ -74,6 +107,12 @@ public:
 
     Vec3 readVec3() {
         return {fxFromFloat(readF32()), fxFromFloat(readF32()), fxFromFloat(readF32())};
+    }
+
+    void requireFinished() const {
+        if (position != data.size()) {
+            throw std::runtime_error("binary fighter asset has trailing bytes");
+        }
     }
 
 private:
@@ -131,7 +170,7 @@ AnimationTrack readAnimationTrack(BinaryReader& reader) {
     track.joint = reader.readI32();
     track.channel = channelFromId(reader.readU8());
 
-    const int32_t keyCount = reader.readI32();
+    const int32_t keyCount = reader.readCount(kMaxAnimationKeys, "animation key");
     track.keys.reserve(static_cast<size_t>(keyCount));
     for (int32_t keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
         AnimationKey key;
@@ -152,7 +191,7 @@ AnimationClip readAnimationClip(BinaryReader& reader) {
     clip.defaultBlendFrames = reader.readU8();
     clip.frameCount = fxFromFloat(reader.readF32());
 
-    const int32_t trackCount = reader.readI32();
+    const int32_t trackCount = reader.readCount(kMaxAnimationTracks, "animation track");
     clip.tracks.reserve(static_cast<size_t>(trackCount));
     for (int32_t trackIndex = 0; trackIndex < trackCount; ++trackIndex) {
         clip.tracks.push_back(readAnimationTrack(reader));
@@ -162,7 +201,7 @@ AnimationClip readAnimationClip(BinaryReader& reader) {
 
 HsdFighterMesh readFighterMesh(BinaryReader& reader) {
     HsdFighterMesh mesh;
-    const int32_t inverseBindCount = reader.readI32();
+    const int32_t inverseBindCount = reader.readCount(kMaxInverseBindMatrices, "inverse bind matrix");
     mesh.inverseBindMatrices.reserve(static_cast<size_t>(inverseBindCount));
     for (int32_t i = 0; i < inverseBindCount; ++i) {
         std::array<float, 16> matrix{};
@@ -172,18 +211,18 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
         mesh.inverseBindMatrices.push_back(matrix);
     }
 
-    const int32_t textureCount = reader.readI32();
+    const int32_t textureCount = reader.readCount(kMaxTextures, "texture");
     mesh.textures.reserve(static_cast<size_t>(textureCount));
     for (int32_t i = 0; i < textureCount; ++i) {
         HsdMeshTexture texture;
         texture.width = reader.readI32();
         texture.height = reader.readI32();
-        const int32_t byteCount = reader.readI32();
+        const int32_t byteCount = reader.readCount(kMaxTextureBytes, "texture");
         texture.rgba = reader.readBytes(static_cast<size_t>(byteCount));
         mesh.textures.push_back(std::move(texture));
     }
 
-    const int32_t batchCount = reader.readI32();
+    const int32_t batchCount = reader.readCount(kMaxMeshBatches, "mesh batch");
     mesh.batches.reserve(static_cast<size_t>(batchCount));
     for (int32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex) {
         HsdMeshBatch batch;
@@ -206,7 +245,7 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
             channel = reader.readU8();
         }
 
-        const int32_t vertexCount = reader.readI32();
+        const int32_t vertexCount = reader.readCount(kMaxMeshVertices, "mesh vertex");
         batch.vertices.reserve(static_cast<size_t>(vertexCount));
         for (int32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
             HsdMeshVertex vertex;
@@ -231,16 +270,21 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
 } // namespace
 
 HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
-    BinaryReader reader(readBinaryFile(path));
+    return loadHsdFighterAnimationAssetFromBytes(readBinaryFile(path));
+}
+
+HsdFighterAnimationAsset loadHsdFighterAnimationAssetFromBytes(const std::vector<uint8_t>& bytes) {
+    BinaryReader reader(bytes);
     if (!reader.hasMagic("PFHA")) {
         throw std::runtime_error("invalid binary fighter asset magic");
     }
     reader.skip(4);
 
     HsdFighterAnimationAsset asset;
+    asset.sourceBytes = bytes;
     asset.name = reader.readString();
 
-    const int32_t jointCount = reader.readI32();
+    const int32_t jointCount = reader.readCount(kMaxJoints, "joint");
     asset.skeleton.reserve(static_cast<size_t>(jointCount));
     for (int32_t i = 0; i < jointCount; ++i) {
         AnimationJoint joint;
@@ -264,7 +308,7 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
     asset.fighterBones.leftFoot = reader.readI32();
     asset.fighterBones.rightFoot = reader.readI32();
     asset.commonBoneLookup.fill(-1);
-    const int32_t fighterLookupCount = reader.readI32();
+    const int32_t fighterLookupCount = reader.readCount(static_cast<int32_t>(asset.commonBoneLookup.size()), "fighter bone lookup");
     for (int32_t i = 0; i < fighterLookupCount; ++i) {
         const int32_t bone = reader.readI32();
         if (i >= 0 && i < static_cast<int32_t>(asset.commonBoneLookup.size())) {
@@ -338,7 +382,7 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
     asset.environmentCollision.ledgeGrabYOffset = fxFromFloat(reader.readF32());
     asset.environmentCollision.ledgeGrabHeight = fxFromFloat(reader.readF32());
 
-    const int32_t hurtboxCount = reader.readI32();
+    const int32_t hurtboxCount = reader.readCount(kMaxHurtboxes, "hurtbox");
     asset.hurtboxes.reserve(static_cast<size_t>(hurtboxCount));
     for (int32_t i = 0; i < hurtboxCount; ++i) {
         HsdHurtbox hurtbox;
@@ -354,17 +398,17 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
 
     asset.mesh = readFighterMesh(reader);
 
-    const int32_t modelPartCount = reader.readI32();
+    const int32_t modelPartCount = reader.readCount(kMaxModelPartSets, "model part set");
     asset.modelPartAnimations.reserve(static_cast<size_t>(modelPartCount));
     for (int32_t i = 0; i < modelPartCount; ++i) {
         HsdModelPartAnimationSet set;
         set.startingBone = reader.readI32();
-        const int32_t entryCount = reader.readI32();
+        const int32_t entryCount = reader.readCount(kMaxModelPartEntries, "model part entry");
         set.entries.reserve(static_cast<size_t>(entryCount));
         for (int32_t entryIndex = 0; entryIndex < entryCount; ++entryIndex) {
             set.entries.push_back(reader.readI32());
         }
-        const int32_t animationCount = reader.readI32();
+        const int32_t animationCount = reader.readCount(kMaxAnimationClips, "model part animation");
         set.animations.reserve(static_cast<size_t>(animationCount));
         for (int32_t animIndex = 0; animIndex < animationCount; ++animIndex) {
             set.animations.push_back(readAnimationClip(reader));
@@ -372,31 +416,31 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
         asset.modelPartAnimations.push_back(std::move(set));
     }
 
-    const int32_t clipCount = reader.readI32();
+    const int32_t clipCount = reader.readCount(kMaxAnimationClips, "animation clip");
     asset.clips.reserve(static_cast<size_t>(clipCount));
     for (int32_t i = 0; i < clipCount; ++i) {
         asset.clips.push_back(readAnimationClip(reader));
     }
-    const int32_t scriptCount = reader.readI32();
+    const int32_t scriptCount = reader.readCount(kMaxActionScripts, "action script");
     asset.actionScripts.reserve(static_cast<size_t>(scriptCount));
     for (int32_t scriptIndex = 0; scriptIndex < scriptCount; ++scriptIndex) {
         HsdActionScript script;
         script.name = reader.readString();
         script.actionIndex = reader.readI32();
         script.commonBoneLookup.fill(-1);
-        const int32_t lookupCount = reader.readI32();
+        const int32_t lookupCount = reader.readCount(static_cast<int32_t>(script.commonBoneLookup.size()), "action script bone lookup");
         for (int32_t i = 0; i < lookupCount; ++i) {
             const int32_t bone = reader.readI32();
             if (i >= 0 && i < static_cast<int32_t>(script.commonBoneLookup.size())) {
                 script.commonBoneLookup[static_cast<size_t>(i)] = bone;
             }
         }
-        const int32_t commandCount = reader.readI32();
+        const int32_t commandCount = reader.readCount(kMaxActionCommands, "action command");
         script.commands.reserve(static_cast<size_t>(commandCount));
         for (int32_t commandIndex = 0; commandIndex < commandCount; ++commandIndex) {
             HsdActionCommand command;
             command.code = reader.readU8();
-            const int32_t byteCount = reader.readI32();
+            const int32_t byteCount = reader.readCount(kMaxActionCommandBytes, "action command");
             command.bytes = reader.readBytes(static_cast<size_t>(byteCount));
             script.commands.push_back(std::move(command));
         }
@@ -404,7 +448,7 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
     }
     asset.hasShieldPose = reader.readBool();
     if (asset.hasShieldPose) {
-        const int32_t poseJointCount = reader.readI32();
+        const int32_t poseJointCount = reader.readCount(kMaxJoints, "shield pose joint");
         asset.shieldPose.joints.reserve(static_cast<size_t>(poseJointCount));
         for (int32_t i = 0; i < poseJointCount; ++i) {
             JointPose pose;
@@ -414,6 +458,7 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAsset(const std::string& path) {
             asset.shieldPose.joints.push_back(pose);
         }
     }
+    reader.requireFinished();
     return asset;
 }
 
