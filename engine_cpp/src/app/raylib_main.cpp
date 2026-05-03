@@ -1853,6 +1853,17 @@ static void scaleAuthoredMesh(pf::HsdFighterMesh& mesh, pf::Fix scaleX, pf::Fix 
     }
 }
 
+static void bindAuthoredMeshToJoint(pf::HsdFighterMesh& mesh, int joint) {
+    for (pf::HsdMeshBatch& batch : mesh.batches) {
+        batch.parentBone = joint;
+        batch.singleBindBone = joint;
+        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+            vertex.influences = {};
+            vertex.influences[0] = {joint, 1.0f};
+        }
+    }
+}
+
 static int remapRemovedAuthoredBone(int bone, int removedIndex, int fallbackBone) {
     if (bone < 0) {
         return bone;
@@ -3094,9 +3105,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     }
     if (!def.authoredMesh.batches.empty()) {
         const pf::Vec2 meshSize = authoredMeshSize(def.authoredMesh);
+        const int meshBind = def.authoredMesh.batches.front().singleBindBone;
+        const int meshParent = def.authoredMesh.batches.front().parentBone;
         DrawText(("Mesh verts=" + std::to_string(authoredMeshVertexCount(def.authoredMesh)) +
                   " size " + std::to_string(pf::fxToFloat(meshSize.x)) +
-                  "," + std::to_string(pf::fxToFloat(meshSize.y))).c_str(), 270, 428, 12, DARKGRAY);
+                  "," + std::to_string(pf::fxToFloat(meshSize.y)) +
+                  " bind=" + std::to_string(meshBind) +
+                  " parent=" + std::to_string(meshParent)).c_str(), 270, 428, 12, DARKGRAY);
         if (uiButton({270.0f, 398.0f, 54.0f, 22.0f}, "W+")) {
             scaleAuthoredMesh(def.authoredMesh, pf::fxFromFloat(1.1f), pf::fx(1));
             editor.status = "Editor: widened authored mesh";
@@ -3112,6 +3127,15 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         if (uiButton({450.0f, 398.0f, 54.0f, 22.0f}, "H-")) {
             scaleAuthoredMesh(def.authoredMesh, pf::fx(1), pf::fxFromFloat(0.9f));
             editor.status = "Editor: shortened authored mesh";
+        }
+        if (uiButton({510.0f, 398.0f, 54.0f, 22.0f}, "Bind")) {
+            ensureAuthoredRootJoint(def);
+            const int joint = std::clamp(
+                editor.selectedAnimationJoint,
+                0,
+                std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+            bindAuthoredMeshToJoint(def.authoredMesh, joint);
+            editor.status = "Editor: bound authored mesh weights to selected joint";
         }
     }
 
