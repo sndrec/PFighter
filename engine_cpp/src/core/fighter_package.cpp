@@ -1834,6 +1834,25 @@ void validateObjectTouchboxGeometry(const GameObjectTouchboxDefinition& touchbox
     }
 }
 
+void validateFighterEcbGeometry(const FighterEcbDefinition& ecb) {
+    if (!ecb.enabled) {
+        return;
+    }
+    const Vec2& left = ecb.points[0];
+    const Vec2& top = ecb.points[1];
+    const Vec2& right = ecb.points[2];
+    const Vec2& bottom = ecb.points[3];
+    if (static_cast<int64_t>(top.y) - static_cast<int64_t>(bottom.y) <= 0) {
+        throw std::runtime_error("fighter package authored ECB height is invalid");
+    }
+    if (static_cast<int64_t>(right.x) - static_cast<int64_t>(left.x) <= 0) {
+        throw std::runtime_error("fighter package authored ECB width is invalid");
+    }
+    if (left.y <= bottom.y || left.y >= top.y || right.y <= bottom.y || right.y >= top.y) {
+        throw std::runtime_error("fighter package authored ECB side point is invalid");
+    }
+}
+
 void validateObjectProperties(const GameObjectDefinition& object) {
     if (object.lifetimeFrames < 0 || object.terminalVelocity < 0 || object.maxDamage < 0) {
         throw std::runtime_error("fighter package object property is invalid");
@@ -1918,6 +1937,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         const std::vector<std::string> scripts = scriptNames(fighter.packageScripts);
         requireNonemptyNames(states, "fighter state");
         requireUniqueNonemptyNames(variableNames(fighter.packageVariables), "fighter variable");
+        validateFighterEcbGeometry(fighter.authoredEcb);
         validatePackageScripts(
             fighter.packageScripts,
             static_cast<int>(fighter.packageVariables.size()),
