@@ -3099,6 +3099,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         editor.status = "Editor: appended object context read";
                     }
                 }
+                if (uiButton({666.0f, 590.0f, 58.0f, 24.0f}, "+ Own")) {
+                    if (!object.packageVariables.empty()) {
+                        script.instructions.push_back({pf::PackageScriptOp::SetVarFighterPercent, editor.selectedPackageVariable, -1, -1, 0, 0, {}});
+                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                        editor.status = "Editor: appended owner fighter context read";
+                    }
+                }
                 if (uiButton({354.0f, 650.0f, 76.0f, 24.0f}, "BindSp")) {
                     bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
                 }
@@ -3127,6 +3134,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                             : nextObjectContextReadOp(instruction.op);
                         normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
                         editor.status = "Editor: cycled selected object context read";
+                    }
+                    if (uiButton({666.0f, 680.0f, 58.0f, 22.0f}, "OwnOp")) {
+                        instruction.op = nextFighterContextReadOp(instruction.op);
+                        normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+                        editor.status = "Editor: cycled selected owner fighter context read";
                     }
                     if (uiButton({270.0f, 620.0f, 76.0f, 24.0f}, "Dst")) {
                         if (!object.packageVariables.empty()) {
