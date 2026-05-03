@@ -1237,6 +1237,58 @@ static void remapRemovedFighterStateTargets(
     }
 }
 
+static void remapRemovedObjectScriptTarget(
+    pf::PackageScriptInstruction& instruction,
+    const std::string& removedObjectName,
+    const std::string& replacementObjectName)
+{
+    if (instruction.op != pf::PackageScriptOp::SpawnObject || instruction.text != removedObjectName) {
+        return;
+    }
+    if (replacementObjectName.empty()) {
+        instruction.op = pf::PackageScriptOp::Nop;
+        instruction.text.clear();
+        return;
+    }
+    instruction.text = replacementObjectName;
+}
+
+static void remapRemovedPackageObjectTargets(
+    pf::World& world,
+    const std::string& removedObjectName,
+    const std::string& replacementObjectName)
+{
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::FighterState& state : fighter.states) {
+            for (pf::Subaction& subaction : state.action) {
+                if (subaction.type != pf::SubactionType::SpawnObject || subaction.objectName != removedObjectName) {
+                    continue;
+                }
+                if (replacementObjectName.empty()) {
+                    subaction.type = pf::SubactionType::SyncTimer;
+                    subaction.objectName.clear();
+                    subaction.spawnVelocity = {};
+                    subaction.spawnOffset = {};
+                } else {
+                    subaction.objectName = replacementObjectName;
+                }
+            }
+        }
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                remapRemovedObjectScriptTarget(instruction, removedObjectName, replacementObjectName);
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                remapRemovedObjectScriptTarget(instruction, removedObjectName, replacementObjectName);
+            }
+        }
+    }
+}
+
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
@@ -2164,6 +2216,35 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         world.objectDefs.push_back(makeEditorObjectDefinition(uniqueObjectName(world, "Projectile"), pf::GameObjectKind::Projectile));
         editor.selectedObjectDef = static_cast<int>(world.objectDefs.size()) - 1;
         editor.status = "Editor: added package projectile " + world.objectDefs.back().name;
+    }
+    if (uiButton({522.0f, 456.0f, 76.0f, 24.0f}, "- Obj")) {
+        if (!world.objectDefs.empty()) {
+            const int removeIndex = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            const std::string removedObjectName = world.objectDefs[static_cast<size_t>(removeIndex)].name;
+            world.objectDefs.erase(world.objectDefs.begin() + removeIndex);
+            if (world.objectDefs.empty()) {
+                editor.selectedObjectDef = 0;
+            } else {
+                editor.selectedObjectDef = std::clamp(removeIndex, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            }
+            const std::string replacementObjectName = world.objectDefs.empty()
+                ? std::string{}
+                : world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)].name;
+            remapRemovedPackageObjectTargets(world, removedObjectName, replacementObjectName);
+            for (pf::GameObjectRuntime& runtime : world.objects) {
+                if (runtime.objectDef == removeIndex) {
+                    runtime.active = false;
+                } else if (runtime.objectDef > removeIndex) {
+                    --runtime.objectDef;
+                }
+            }
+            editor.selectedObjectState = 0;
+            editor.selectedPackageVariable = 0;
+            editor.selectedPackageScript = 0;
+            editor.selectedPackageInstruction = 0;
+            editor.status = "Editor: removed package object " + removedObjectName;
+            return;
+        }
     }
     if (uiButton({438.0f, 456.0f, 76.0f, 24.0f}, "Spawn")) {
         if (!world.objectDefs.empty()) {
