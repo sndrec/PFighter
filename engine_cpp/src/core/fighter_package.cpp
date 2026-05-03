@@ -237,6 +237,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
     case PackageScriptOp::SpawnObjectFromVars:
+    case PackageScriptOp::DestroyObject:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
     case PackageScriptOp::JumpRelative:
@@ -1562,6 +1563,7 @@ void validatePackageScriptInstruction(
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
     bool allowInputReads,
+    bool allowObjectLifecycleOps,
     int instructionIndex,
     int instructionCount)
 {
@@ -1633,6 +1635,11 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script object target is invalid");
         }
         break;
+    case PackageScriptOp::DestroyObject:
+        if (!allowObjectLifecycleOps) {
+            throw std::runtime_error("fighter package script object lifecycle op is invalid");
+        }
+        break;
     case PackageScriptOp::SkipIfVarLessThanImmediate:
         requireVariableIndex(instruction.dst, variableCount, "condition");
         if (instructionIndex + 2 > instructionCount) {
@@ -1689,7 +1696,8 @@ void validatePackageScripts(
     const std::vector<std::string>& packageObjectNames,
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
-    bool allowInputReads)
+    bool allowInputReads,
+    bool allowObjectLifecycleOps)
 {
     std::vector<std::string> seenNames;
     seenNames.reserve(scripts.size());
@@ -1711,6 +1719,7 @@ void validatePackageScripts(
                 allowResolvableStateTargets,
                 allowFighterTargets,
                 allowInputReads,
+                allowObjectLifecycleOps,
                 instructionIndex,
                 instructionCount);
         }
@@ -1830,7 +1839,8 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageObjectNames,
             true,
             true,
-            true);
+            true,
+            false);
         for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
             validateHurtboxGeometry(hurtbox);
         }
@@ -1881,7 +1891,8 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageObjectNames,
             false,
             false,
-            false);
+            false,
+            true);
         if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {
             throw std::runtime_error("fighter package object initial state is invalid");
         }

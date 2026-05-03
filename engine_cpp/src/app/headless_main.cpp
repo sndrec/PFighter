@@ -4718,6 +4718,17 @@ int main(int argc, char** argv) {
     packageVelocityObject.touchboxes.clear();
     packageVelocityObject.gravity = 0;
     packageSourceWorld.objectDefs.push_back(packageVelocityObject);
+    pf::GameObjectDefinition packageDestroyObject = packageVelocityObject;
+    packageDestroyObject.name = "PackageDestroyObject";
+    packageDestroyObject.packageScripts = {{
+        "DestroyScript",
+        4,
+        {
+            {pf::PackageScriptOp::DestroyObject, -1, -1, -1, 0, 0, {}},
+        },
+    }};
+    packageDestroyObject.onSpawned = {{std::string{"script:DestroyScript"}}};
+    packageSourceWorld.objectDefs.push_back(packageDestroyObject);
     pf::FighterPackage sourcePackage;
     sourcePackage.name = "headless_smoke_package";
     sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
@@ -4823,6 +4834,17 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidSpawnFighterWritePackage = sourcePackage;
     invalidSpawnFighterWritePackage.fighters[0].packageScripts[3].instructions[0].text = "MissingFighter";
     const bool invalidPackageSpawnFighterWriteRejected = pf::writeFighterPackage(invalidSpawnFighterWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidFighterDestroyWritePackage = sourcePackage;
+    invalidFighterDestroyWritePackage.fighters[0].packageScripts[0].instructions.push_back({
+        pf::PackageScriptOp::DestroyObject,
+        -1,
+        -1,
+        -1,
+        0,
+        0,
+        {},
+    });
+    const bool invalidPackageFighterDestroyWriteRejected = pf::writeFighterPackage(invalidFighterDestroyWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidFactWritePackage = sourcePackage;
     invalidFactWritePackage.fighters[0].packageScripts[4].instructions[0].dst = 999;
     const bool invalidPackageFactWriteRejected = pf::writeFighterPackage(invalidFactWritePackage, &invalidPackageError).empty();
@@ -5129,6 +5151,20 @@ int main(int argc, char** argv) {
         ? &packageObjectStateScriptWorld.objects[static_cast<size_t>(packageObjectStateIndex)]
         : nullptr;
     const int packageObjectStateScriptVar = packageObjectState && !packageObjectState->packageVars.empty() ? packageObjectState->packageVars[0] : -1;
+    pf::World packageObjectDestroyScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectDestroyScriptWorld.objectDefs = loadedPackage.objects;
+    }
+    const int packageObjectDestroyIndex = pf::spawnGameObject(
+        packageObjectDestroyScriptWorld,
+        "PackageDestroyObject",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const bool packageObjectDestroyScriptOk = packageObjectDestroyIndex >= 0 &&
+        packageObjectDestroyIndex < static_cast<int>(packageObjectDestroyScriptWorld.objects.size()) &&
+        !packageObjectDestroyScriptWorld.objects[static_cast<size_t>(packageObjectDestroyIndex)].active;
     std::cout << "fighter_package_bytes=" << packageBytes.size()
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
@@ -5150,6 +5186,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_fact_ok=" << packageObjectFactScriptOk
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
+              << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
@@ -5172,6 +5209,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_dangling_branch_write_rejected=" << invalidPackageDanglingBranchWriteRejected
               << " fighter_package_invalid_switch_write_rejected=" << invalidPackageSwitchWriteRejected
               << " fighter_package_invalid_spawn_fighter_write_rejected=" << invalidPackageSpawnFighterWriteRejected
+              << " fighter_package_invalid_fighter_destroy_write_rejected=" << invalidPackageFighterDestroyWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected
               << " fighter_package_invalid_input_write_rejected=" << invalidPackageInputWriteRejected
               << " fighter_package_invalid_scale_write_rejected=" << invalidPackageScaleWriteRejected

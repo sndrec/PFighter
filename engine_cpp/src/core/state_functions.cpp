@@ -2679,6 +2679,8 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
             spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
             break;
         }
+        case PackageScriptOp::DestroyObject:
+            break;
         case PackageScriptOp::SkipIfVarLessThanImmediate:
             instructionIndex += packageVar(fighter, instruction.dst) < instruction.intValue ? 2 : 1;
             continue;

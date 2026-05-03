@@ -1012,6 +1012,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
     case pf::PackageScriptOp::SpawnObjectFromVars: return "SpawnV";
+    case pf::PackageScriptOp::DestroyObject: return "KillObj";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
     case pf::PackageScriptOp::JumpRelative: return "Jump";
@@ -1132,6 +1133,8 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SpawnObjectFromVars:
         label += " " + instruction.text + " v" + std::to_string(instruction.srcA) + "/v" + std::to_string(instruction.srcB);
         break;
+    case pf::PackageScriptOp::DestroyObject:
+        break;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
         label += " v" + std::to_string(instruction.dst) + " < " + std::to_string(instruction.intValue);
         break;
@@ -1240,6 +1243,7 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SpawnObjectFromVars;
     case pf::PackageScriptOp::SpawnObjectFromVars: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
+    case pf::PackageScriptOp::DestroyObject: return pf::PackageScriptOp::Nop;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::JumpRelative;
     case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::SwitchFighterDefinition;
@@ -2728,6 +2732,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     script.instructions.push_back({pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(1.0f), object.name});
                     editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                     editor.status = "Editor: appended object SpawnObject instruction";
+                }
+                if (uiButton({606.0f, 620.0f, 58.0f, 24.0f}, "+ Kill")) {
+                    script.instructions.push_back({pf::PackageScriptOp::DestroyObject, -1, -1, -1, 0, 0, {}});
+                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                    editor.status = "Editor: appended object destroy instruction";
                 }
                 if (uiButton({438.0f, 620.0f, 76.0f, 24.0f}, "- Instr")) {
                     if (!script.instructions.empty()) {

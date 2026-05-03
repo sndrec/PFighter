@@ -6871,6 +6871,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     object.facing,
                     {object.facing * var(instruction.srcA), var(instruction.srcB)});
                 break;
+            case PackageScriptOp::DestroyObject:
+                deactivateGameObject(world, objectIndex);
+                return;
             case PackageScriptOp::SkipIfVarLessThanImmediate:
                 instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
                 continue;
