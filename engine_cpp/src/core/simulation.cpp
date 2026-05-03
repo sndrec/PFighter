@@ -1098,6 +1098,19 @@ World makeTrainingWorld() {
     return makeTrainingWorld(0, 0);
 }
 
+void resetTrainingFighter(World& world, size_t fighterIndex, int fighterDefIndex, Vec2 position, int facing) {
+    if (fighterIndex >= world.fighters.size() || world.fighterDefs.empty()) {
+        return;
+    }
+    fighterDefIndex = std::clamp(fighterDefIndex, 0, static_cast<int>(world.fighterDefs.size()) - 1);
+    world.fighters[fighterIndex] = makeTrainingFighter(world, fighterDefIndex, position, facing);
+    FighterRuntime& fighter = world.fighters[fighterIndex];
+    evaluatePose(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], currentState(world, fighter), fighter);
+    calculateEcb(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter, true);
+    calculateEcb(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter, true);
+    runStateFunctions(world, fighterIndex, currentState(world, fighter).onEnter);
+}
+
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity) {
     const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const GameObjectDefinition& def) {
         return def.name == objectName;

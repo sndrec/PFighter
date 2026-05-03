@@ -1066,6 +1066,19 @@ static std::string uniqueObjectName(const pf::World& world, const std::string& p
     return prefix + "X";
 }
 
+static std::string uniqueFighterName(const pf::World& world, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        const bool exists = std::any_of(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& fighter) {
+            return fighter.name == candidate;
+        });
+        if (!exists) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
 static pf::GameObjectDefinition makeEditorObjectDefinition(const std::string& name, pf::GameObjectKind kind) {
     pf::GameObjectDefinition object;
     object.name = name;
@@ -1385,7 +1398,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
 }
 
-static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor) {
+static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     if (world.fighters.empty()) {
         return;
@@ -1440,6 +1453,22 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: loaded package fighter " + world.fighterDefs[static_cast<size_t>(fighterDef)].name;
         }
+    }
+    if (uiButton({430.0f, 370.0f, 82.0f, 26.0f}, "Clone")) {
+        pf::FighterDefinition clone = def;
+        clone.name = uniqueFighterName(world, def.name + "Clone");
+        world.fighterDefs.push_back(std::move(clone));
+        const int cloneIndex = static_cast<int>(world.fighterDefs.size()) - 1;
+        const pf::Vec2 position = fighter.position;
+        const int facing = fighter.facing;
+        pf::resetTrainingFighter(world, static_cast<size_t>(editor.selectedFighter), cloneIndex, position, facing);
+        selectedFighterDef = cloneIndex;
+        editor.selectedState = 0;
+        editor.selectedSubaction = 0;
+        editor.selectedPackageVariable = 0;
+        editor.selectedPackageScript = 0;
+        editor.selectedPackageInstruction = 0;
+        editor.status = "Editor: cloned fighter into runtime slot " + world.fighterDefs.back().name;
     }
 
     DrawText("Objects / Articles", 24, 436, 13, DARKGRAY);
@@ -1658,7 +1687,7 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     }
 }
 
-static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
+static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
@@ -1737,7 +1766,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     } else if (editor.workspace == pf::EditorWorkspace::Logic) {
         drawEditorLogicWorkspace(world, editor);
     } else if (editor.workspace == pf::EditorWorkspace::Assets) {
-        drawEditorAssetsWorkspace(world, editor);
+        drawEditorAssetsWorkspace(world, editor, selectedFighterDef);
     } else if (editor.workspace == pf::EditorWorkspace::Animation) {
         drawEditorAnimationWorkspace(world, editor);
     } else if (editor.workspace != pf::EditorWorkspace::Moveset) {
@@ -1998,12 +2027,19 @@ static void launchEditorTestWorld(
     const pf::FighterDefinition editedFighter = world.fighterDefs[static_cast<size_t>(editedFighterDef)];
     const std::vector<pf::GameObjectDefinition> editedObjects = world.objectDefs;
     const int sandbagFighterDef = fighterDefByName(world, "Sandbag", 0);
-    world = pf::makeTrainingWorld(editedFighterDef, sandbagFighterDef);
-    if (editedFighterDef >= 0 && editedFighterDef < static_cast<int>(world.fighterDefs.size())) {
-        world.fighterDefs[static_cast<size_t>(editedFighterDef)] = editedFighter;
+    world = pf::makeTrainingWorld(0, sandbagFighterDef);
+    int testFighterIndex = editedFighterDef;
+    if (testFighterIndex >= 0 && testFighterIndex < static_cast<int>(world.fighterDefs.size()) &&
+        world.fighterDefs[static_cast<size_t>(testFighterIndex)].name == editedFighter.name)
+    {
+        world.fighterDefs[static_cast<size_t>(testFighterIndex)] = editedFighter;
+    } else {
+        world.fighterDefs.push_back(editedFighter);
+        testFighterIndex = static_cast<int>(world.fighterDefs.size()) - 1;
     }
     world.objectDefs = editedObjects;
-    selectedFighterDef = editedFighterDef;
+    pf::resetTrainingFighter(world, 0, testFighterIndex, {-pf::fx(2), 0}, 1);
+    selectedFighterDef = testFighterIndex;
     editor.selectedFighter = 0;
     editor.testMode = true;
     editor.animationPreviewActive = false;
@@ -2189,7 +2225,7 @@ int main() {
             drawGameObjects(world, editor.showBoxes);
             EndMode3D();
             if (appMode == AppMode::Editor) {
-                drawEditor(world, editor);
+                drawEditor(world, editor, testFighterDef);
             }
             drawReplayStatus(replay);
             drawTickrateControl(tickrate);
