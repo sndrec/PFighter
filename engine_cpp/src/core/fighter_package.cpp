@@ -1533,7 +1533,8 @@ void validatePackageScriptInstruction(
     const PackageScriptInstruction& instruction,
     int variableCount,
     const std::vector<std::string>& stateNames,
-    const std::vector<std::string>& packageObjectNames)
+    const std::vector<std::string>& packageObjectNames,
+    bool allowResolvableStateTargets)
 {
     switch (instruction.op) {
     case PackageScriptOp::Nop:
@@ -1553,7 +1554,10 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetFacing:
         break;
     case PackageScriptOp::ChangeState:
-        if (!hasResolvableStateTarget(stateNames, instruction.text)) {
+        if (!(allowResolvableStateTargets
+            ? hasResolvableStateTarget(stateNames, instruction.text)
+            : hasName(stateNames, instruction.text)))
+        {
             throw std::runtime_error("fighter package script state target is invalid");
         }
         break;
@@ -1584,7 +1588,8 @@ void validatePackageScripts(
     const std::vector<PackageScript>& scripts,
     int variableCount,
     const std::vector<std::string>& stateNames,
-    const std::vector<std::string>& packageObjectNames)
+    const std::vector<std::string>& packageObjectNames,
+    bool allowResolvableStateTargets)
 {
     std::vector<std::string> seenNames;
     seenNames.reserve(scripts.size());
@@ -1596,7 +1601,7 @@ void validatePackageScripts(
             throw std::runtime_error("fighter package script instruction budget is invalid");
         }
         for (const PackageScriptInstruction& instruction : script.instructions) {
-            validatePackageScriptInstruction(instruction, variableCount, stateNames, packageObjectNames);
+            validatePackageScriptInstruction(instruction, variableCount, stateNames, packageObjectNames, allowResolvableStateTargets);
         }
         seenNames.push_back(script.name);
     }
@@ -1705,7 +1710,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         const std::vector<std::string> scripts = scriptNames(fighter.packageScripts);
         requireNonemptyNames(states, "fighter state");
         requireUniqueNonemptyNames(variableNames(fighter.packageVariables), "fighter variable");
-        validatePackageScripts(fighter.packageScripts, static_cast<int>(fighter.packageVariables.size()), states, packageObjectNames);
+        validatePackageScripts(fighter.packageScripts, static_cast<int>(fighter.packageVariables.size()), states, packageObjectNames, true);
         for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
             validateHurtboxGeometry(hurtbox);
         }
@@ -1748,7 +1753,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         const std::vector<std::string> scripts = scriptNames(object.packageScripts);
         requireNonemptyNames(states, "object state");
         requireUniqueNonemptyNames(variableNames(object.packageVariables), "object variable");
-        validatePackageScripts(object.packageScripts, static_cast<int>(object.packageVariables.size()), states, packageObjectNames);
+        validatePackageScripts(object.packageScripts, static_cast<int>(object.packageVariables.size()), states, packageObjectNames, false);
         if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {
             throw std::runtime_error("fighter package object initial state is invalid");
         }
