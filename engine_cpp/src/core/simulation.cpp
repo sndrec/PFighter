@@ -6843,6 +6843,16 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetFacing:
                 object.facing = instruction.intValue < 0 ? -1 : 1;
                 break;
+            case PackageScriptOp::SetGroundVelocityFromVar:
+            case PackageScriptOp::SetAirVelocityXFromVar:
+                object.velocity.x = var(instruction.srcA);
+                break;
+            case PackageScriptOp::SetAirVelocityYFromVar:
+                object.velocity.y = var(instruction.srcA);
+                break;
+            case PackageScriptOp::SetFacingFromVar:
+                object.facing = var(instruction.srcA) < 0 ? -1 : 1;
+                break;
             case PackageScriptOp::ChangeState:
                 changeGameObjectState(world, object, instruction.text);
                 return;

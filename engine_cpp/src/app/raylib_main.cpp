@@ -1004,6 +1004,10 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
     case pf::PackageScriptOp::SetFacing: return "Facing";
+    case pf::PackageScriptOp::SetGroundVelocityFromVar: return "GVelVar";
+    case pf::PackageScriptOp::SetAirVelocityXFromVar: return "AirXVar";
+    case pf::PackageScriptOp::SetAirVelocityYFromVar: return "AirYVar";
+    case pf::PackageScriptOp::SetFacingFromVar: return "FaceVar";
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
@@ -1098,6 +1102,12 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         break;
     case pf::PackageScriptOp::AddVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetGroundVelocityFromVar:
+    case pf::PackageScriptOp::SetAirVelocityXFromVar:
+    case pf::PackageScriptOp::SetAirVelocityYFromVar:
+    case pf::PackageScriptOp::SetFacingFromVar:
+        label += " v" + std::to_string(instruction.srcA);
         break;
     case pf::PackageScriptOp::SetGroundVelocity:
     case pf::PackageScriptOp::SetAirVelocityX:
@@ -1209,7 +1219,11 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetGroundVelocity: return pf::PackageScriptOp::SetAirVelocityX;
     case pf::PackageScriptOp::SetAirVelocityX: return pf::PackageScriptOp::SetAirVelocityY;
     case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetFacing;
-    case pf::PackageScriptOp::SetFacing: return pf::PackageScriptOp::ChangeState;
+    case pf::PackageScriptOp::SetFacing: return pf::PackageScriptOp::SetGroundVelocityFromVar;
+    case pf::PackageScriptOp::SetGroundVelocityFromVar: return pf::PackageScriptOp::SetAirVelocityXFromVar;
+    case pf::PackageScriptOp::SetAirVelocityXFromVar: return pf::PackageScriptOp::SetAirVelocityYFromVar;
+    case pf::PackageScriptOp::SetAirVelocityYFromVar: return pf::PackageScriptOp::SetFacingFromVar;
+    case pf::PackageScriptOp::SetFacingFromVar: return pf::PackageScriptOp::ChangeState;
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::JumpRelative;

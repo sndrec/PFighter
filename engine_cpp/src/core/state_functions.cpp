@@ -2640,6 +2640,18 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SetFacing:
             fighter.facing = instruction.intValue < 0 ? -1 : 1;
             break;
+        case PackageScriptOp::SetGroundVelocityFromVar:
+            fighter.groundVelocity = packageVar(fighter, instruction.srcA);
+            break;
+        case PackageScriptOp::SetAirVelocityXFromVar:
+            fighter.fighterVelocity.x = packageVar(fighter, instruction.srcA);
+            break;
+        case PackageScriptOp::SetAirVelocityYFromVar:
+            fighter.fighterVelocity.y = packageVar(fighter, instruction.srcA);
+            break;
+        case PackageScriptOp::SetFacingFromVar:
+            fighter.facing = packageVar(fighter, instruction.srcA) < 0 ? -1 : 1;
+            break;
         case PackageScriptOp::ChangeState:
             changeFighterState(world, fighter, instruction.text);
             break;

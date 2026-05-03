@@ -4662,7 +4662,7 @@ int main(int argc, char** argv) {
         },
     }, {
         "InputScript",
-        8,
+        16,
         {
             {pf::PackageScriptOp::SetVarButtonDown, 5, -1, -1, pf::ButtonPause, 0, {}},
             {pf::PackageScriptOp::SetVarButtonPressed, 6, -1, -1, pf::ButtonPause, 0, {}},
@@ -4671,6 +4671,8 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarCStickX, 9, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarCStickY, 10, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarShield, 11, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetGroundVelocityFromVar, -1, 7, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetFacingFromVar, -1, 9, -1, 0, 0, {}},
         },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
@@ -4809,6 +4811,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidInputWritePackage = sourcePackage;
     invalidInputWritePackage.fighters[0].packageScripts[5].instructions[0].intValue = 1 << 15;
     const bool invalidPackageInputWriteRejected = pf::writeFighterPackage(invalidInputWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidVarMotionWritePackage = sourcePackage;
+    invalidVarMotionWritePackage.fighters[0].packageScripts[5].instructions[7].srcA = 999;
+    const bool invalidPackageVarMotionWriteRejected = pf::writeFighterPackage(invalidVarMotionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectSwitchWritePackage = sourcePackage;
     invalidObjectSwitchWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SwitchFighterDefinition,
@@ -4999,7 +5004,9 @@ int main(int argc, char** argv) {
         packageInputScriptWorld.fighters[0].packageVars[8] == pf::fxFromFloat(-0.5f) &&
         packageInputScriptWorld.fighters[0].packageVars[9] == pf::fxFromFloat(-0.75f) &&
         packageInputScriptWorld.fighters[0].packageVars[10] == pf::fxFromFloat(1.0f) &&
-        packageInputScriptWorld.fighters[0].packageVars[11] == pf::fxFromFloat(0.3f);
+        packageInputScriptWorld.fighters[0].packageVars[11] == pf::fxFromFloat(0.3f) &&
+        packageInputScriptWorld.fighters[0].groundVelocity == pf::fxFromFloat(0.25f) &&
+        packageInputScriptWorld.fighters[0].facing == -1;
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageSwitchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5128,6 +5135,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_spawn_fighter_write_rejected=" << invalidPackageSpawnFighterWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected
               << " fighter_package_invalid_input_write_rejected=" << invalidPackageInputWriteRejected
+              << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected
               << " fighter_package_invalid_object_input_write_rejected=" << invalidPackageObjectInputWriteRejected
               << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk

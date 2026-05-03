@@ -229,6 +229,10 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
     case PackageScriptOp::SetFacing:
+    case PackageScriptOp::SetGroundVelocityFromVar:
+    case PackageScriptOp::SetAirVelocityXFromVar:
+    case PackageScriptOp::SetAirVelocityYFromVar:
+    case PackageScriptOp::SetFacingFromVar:
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
@@ -1595,6 +1599,12 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
     case PackageScriptOp::SetFacing:
+        break;
+    case PackageScriptOp::SetGroundVelocityFromVar:
+    case PackageScriptOp::SetAirVelocityXFromVar:
+    case PackageScriptOp::SetAirVelocityYFromVar:
+    case PackageScriptOp::SetFacingFromVar:
+        requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
     case PackageScriptOp::ChangeState:
         if (!(allowResolvableStateTargets
