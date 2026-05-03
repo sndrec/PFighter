@@ -1956,7 +1956,7 @@ static std::string callbackSummary(const std::vector<pf::FunctionCall>& calls) {
     return summary;
 }
 
-static void removeLastStateCallback(
+static void removeLastCallback(
     std::vector<pf::FunctionCall>& calls,
     const char* label,
     pf::FighterEditor& editor)
@@ -1968,6 +1968,84 @@ static void removeLastStateCallback(
     const std::string removed = calls.back().name;
     calls.pop_back();
     editor.status = std::string("Editor: removed ") + label + " callback " + removed;
+}
+
+static int wrappedIndex(int index, int count) {
+    return (index % count + count) % count;
+}
+
+static const char* objectStateCallbackLabel(int index) {
+    switch (wrappedIndex(index, 4)) {
+    case 0: return "state enter";
+    case 1: return "state frame";
+    case 2: return "state physics";
+    case 3: return "state collision";
+    }
+    return "state enter";
+}
+
+static std::vector<pf::FunctionCall>& objectStateCallbacks(pf::GameObjectStateDefinition& state, int index) {
+    switch (wrappedIndex(index, 4)) {
+    case 0: return state.onEnter;
+    case 1: return state.onFrame;
+    case 2: return state.onPhysics;
+    case 3: return state.onCollision;
+    }
+    return state.onEnter;
+}
+
+static const char* objectEventCallbackLabel(int index) {
+    switch (wrappedIndex(index, 21)) {
+    case 0: return "spawn";
+    case 1: return "destroy";
+    case 2: return "pickup";
+    case 3: return "drop";
+    case 4: return "throw";
+    case 5: return "damage dealt";
+    case 6: return "damage received";
+    case 7: return "clank";
+    case 8: return "reflect";
+    case 9: return "absorb";
+    case 10: return "shield bounce";
+    case 11: return "hit shield";
+    case 12: return "entered air";
+    case 13: return "entered hitlag";
+    case 14: return "exited hitlag";
+    case 15: return "accessory";
+    case 16: return "touch";
+    case 17: return "jumped on";
+    case 18: return "grab dealt";
+    case 19: return "grab victim";
+    case 20: return "interaction";
+    }
+    return "spawn";
+}
+
+static std::vector<pf::FunctionCall>& objectEventCallbacks(pf::GameObjectDefinition& object, int index) {
+    switch (wrappedIndex(index, 21)) {
+    case 0: return object.onSpawned;
+    case 1: return object.onDestroyed;
+    case 2: return object.onPickedUp;
+    case 3: return object.onDropped;
+    case 4: return object.onThrown;
+    case 5: return object.onDamageDealt;
+    case 6: return object.onDamageReceived;
+    case 7: return object.onClanked;
+    case 8: return object.onReflected;
+    case 9: return object.onAbsorbed;
+    case 10: return object.onShieldBounced;
+    case 11: return object.onHitShield;
+    case 12: return object.onEnteredAir;
+    case 13: return object.onEnteredHitlag;
+    case 14: return object.onExitedHitlag;
+    case 15: return object.onAccessory;
+    case 16: return object.onTouched;
+    case 17: return object.onJumpedOn;
+    case 18: return object.onGrabDealt;
+    case 19: return object.onGrabbedForVictim;
+    case 20: return object.onInteraction;
+    }
+    return object.onSpawned;
 }
 
 static void bindObjectPackageScriptCallback(
@@ -1988,21 +2066,8 @@ static void bindObjectStatePackageScriptCallback(
     const std::string& scriptName,
     pf::FighterEditor& editor)
 {
-    const int callback = (editor.selectedObjectStateCallback % 4 + 4) % 4;
-    switch (callback) {
-    case 0:
-        bindObjectPackageScriptCallback(state.onEnter, scriptName, "state enter", editor);
-        break;
-    case 1:
-        bindObjectPackageScriptCallback(state.onFrame, scriptName, "state frame", editor);
-        break;
-    case 2:
-        bindObjectPackageScriptCallback(state.onPhysics, scriptName, "state physics", editor);
-        break;
-    case 3:
-        bindObjectPackageScriptCallback(state.onCollision, scriptName, "state collision", editor);
-        break;
-    }
+    const int callback = wrappedIndex(editor.selectedObjectStateCallback, 4);
+    bindObjectPackageScriptCallback(objectStateCallbacks(state, callback), scriptName, objectStateCallbackLabel(callback), editor);
     editor.selectedObjectStateCallback = callback + 1;
 }
 
@@ -2011,30 +2076,8 @@ static void bindObjectEventPackageScriptCallback(
     const std::string& scriptName,
     pf::FighterEditor& editor)
 {
-    const int callback = (editor.selectedObjectEventCallback % 21 + 21) % 21;
-    switch (callback) {
-    case 0: bindObjectPackageScriptCallback(object.onSpawned, scriptName, "spawn", editor); break;
-    case 1: bindObjectPackageScriptCallback(object.onDestroyed, scriptName, "destroy", editor); break;
-    case 2: bindObjectPackageScriptCallback(object.onPickedUp, scriptName, "pickup", editor); break;
-    case 3: bindObjectPackageScriptCallback(object.onDropped, scriptName, "drop", editor); break;
-    case 4: bindObjectPackageScriptCallback(object.onThrown, scriptName, "throw", editor); break;
-    case 5: bindObjectPackageScriptCallback(object.onDamageDealt, scriptName, "damage dealt", editor); break;
-    case 6: bindObjectPackageScriptCallback(object.onDamageReceived, scriptName, "damage received", editor); break;
-    case 7: bindObjectPackageScriptCallback(object.onClanked, scriptName, "clank", editor); break;
-    case 8: bindObjectPackageScriptCallback(object.onReflected, scriptName, "reflect", editor); break;
-    case 9: bindObjectPackageScriptCallback(object.onAbsorbed, scriptName, "absorb", editor); break;
-    case 10: bindObjectPackageScriptCallback(object.onShieldBounced, scriptName, "shield bounce", editor); break;
-    case 11: bindObjectPackageScriptCallback(object.onHitShield, scriptName, "hit shield", editor); break;
-    case 12: bindObjectPackageScriptCallback(object.onEnteredAir, scriptName, "entered air", editor); break;
-    case 13: bindObjectPackageScriptCallback(object.onEnteredHitlag, scriptName, "entered hitlag", editor); break;
-    case 14: bindObjectPackageScriptCallback(object.onExitedHitlag, scriptName, "exited hitlag", editor); break;
-    case 15: bindObjectPackageScriptCallback(object.onAccessory, scriptName, "accessory", editor); break;
-    case 16: bindObjectPackageScriptCallback(object.onTouched, scriptName, "touch", editor); break;
-    case 17: bindObjectPackageScriptCallback(object.onJumpedOn, scriptName, "jumped on", editor); break;
-    case 18: bindObjectPackageScriptCallback(object.onGrabDealt, scriptName, "grab dealt", editor); break;
-    case 19: bindObjectPackageScriptCallback(object.onGrabbedForVictim, scriptName, "grab victim", editor); break;
-    case 20: bindObjectPackageScriptCallback(object.onInteraction, scriptName, "interaction", editor); break;
-    }
+    const int callback = wrappedIndex(editor.selectedObjectEventCallback, 21);
+    bindObjectPackageScriptCallback(objectEventCallbacks(object, callback), scriptName, objectEventCallbackLabel(callback), editor);
     editor.selectedObjectEventCallback = callback + 1;
 }
 
@@ -2325,16 +2368,16 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
         }
     }
     if (uiButton({466.0f, 334.0f, 50.0f, 24.0f}, "-In")) {
-        removeLastStateCallback(state.onEnter, "enter", editor);
+        removeLastCallback(state.onEnter, "enter", editor);
     }
     if (uiButton({522.0f, 334.0f, 50.0f, 24.0f}, "-Fr")) {
-        removeLastStateCallback(state.onFrame, "frame", editor);
+        removeLastCallback(state.onFrame, "frame", editor);
     }
     if (uiButton({466.0f, 364.0f, 50.0f, 24.0f}, "-Ld")) {
-        removeLastStateCallback(state.onLanding, "landing", editor);
+        removeLastCallback(state.onLanding, "landing", editor);
     }
     if (uiButton({522.0f, 364.0f, 50.0f, 24.0f}, "-Air")) {
-        removeLastStateCallback(state.onAirborne, "airborne", editor);
+        removeLastCallback(state.onAirborne, "airborne", editor);
     }
 
     DrawText("Vars", 24, 392, 13, DARKGRAY);
@@ -2954,6 +2997,26 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 objectState.animationLengthFrames = std::max(1, objectState.animationLengthFrames - 1);
                 editor.status = "Editor: shortened object state";
             }
+            if (uiButton({522.0f, 516.0f, 58.0f, 24.0f}, "StCb>")) {
+                editor.selectedObjectStateCallback = wrappedIndex(editor.selectedObjectStateCallback + 1, 4);
+                editor.status = std::string("Editor: selected object ") + objectStateCallbackLabel(editor.selectedObjectStateCallback) + " callback";
+            }
+            if (uiButton({584.0f, 516.0f, 58.0f, 24.0f}, "-StCb")) {
+                removeLastCallback(
+                    objectStateCallbacks(objectState, editor.selectedObjectStateCallback),
+                    objectStateCallbackLabel(editor.selectedObjectStateCallback),
+                    editor);
+            }
+            if (uiButton({522.0f, 546.0f, 58.0f, 24.0f}, "Evt>")) {
+                editor.selectedObjectEventCallback = wrappedIndex(editor.selectedObjectEventCallback + 1, 21);
+                editor.status = std::string("Editor: selected object ") + objectEventCallbackLabel(editor.selectedObjectEventCallback) + " callback";
+            }
+            if (uiButton({584.0f, 546.0f, 58.0f, 24.0f}, "-Evt")) {
+                removeLastCallback(
+                    objectEventCallbacks(object, editor.selectedObjectEventCallback),
+                    objectEventCallbackLabel(editor.selectedObjectEventCallback),
+                    editor);
+            }
         }
 
         if (editor.objectPanel == pf::ObjectEditorPanel::Logic) {
@@ -3031,8 +3094,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 if (uiButton({354.0f, 650.0f, 76.0f, 24.0f}, "BindSp")) {
                     bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
                 }
-                if (uiButton({438.0f, 650.0f, 76.0f, 24.0f}, "BindAcc")) {
-                    bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
+                if (uiButton({438.0f, 650.0f, 76.0f, 24.0f}, "BindSt")) {
+                    if (!object.states.empty()) {
+                        bindObjectStatePackageScriptCallback(
+                            object.states[static_cast<size_t>(editor.selectedObjectState)],
+                            script.name,
+                            editor);
+                    }
                 }
                 if (uiButton({606.0f, 650.0f, 58.0f, 24.0f}, "BindEvt")) {
                     bindObjectEventPackageScriptCallback(object, script.name, editor);
@@ -3088,6 +3156,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 }
             } else {
                 DrawText("No object script selected", 31, 590, 13, GRAY);
+            }
+            if (!object.states.empty()) {
+                pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
+                DrawText(("State cb: " + std::string(objectStateCallbackLabel(editor.selectedObjectStateCallback)) +
+                          " " + callbackSummary(objectStateCallbacks(objectState, editor.selectedObjectStateCallback))).c_str(), 24, 706, 12, DARKGRAY);
+                DrawText(("Event cb: " + std::string(objectEventCallbackLabel(editor.selectedObjectEventCallback)) +
+                          " " + callbackSummary(objectEventCallbacks(object, editor.selectedObjectEventCallback))).c_str(), 270, 706, 12, DARKGRAY);
             }
             if (uiButton({270.0f, 486.0f, 58.0f, 24.0f}, "+ OVar")) {
                 object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});
