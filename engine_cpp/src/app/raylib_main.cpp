@@ -1470,6 +1470,84 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     }
 }
 
+static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        return;
+    }
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText("Animation Preview", 24, 336, 16, BLACK);
+    if (!def.hsdAsset || def.hsdAsset->clips.empty()) {
+        DrawText("No imported animation clips on this fighter", 24, 364, 13, GRAY);
+        return;
+    }
+
+    editor.selectedAnimationClip = std::clamp(
+        editor.selectedAnimationClip,
+        0,
+        static_cast<int>(def.hsdAsset->clips.size()) - 1);
+    const pf::AnimationClip& selectedClip = def.hsdAsset->clips[static_cast<size_t>(editor.selectedAnimationClip)];
+    const int maxFrame = std::max(0, static_cast<int>(pf::fxToFloat(selectedClip.frameCount)) - 1);
+    editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, maxFrame);
+
+    DrawText(("Clips: " + std::to_string(def.hsdAsset->clips.size())).c_str(), 24, 362, 13, DARKGRAY);
+    DrawText(("Selected: action " + std::to_string(selectedClip.actionIndex) +
+              " frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(maxFrame)).c_str(), 24, 382, 13, DARKGRAY);
+    const int visibleClips = std::min(6, static_cast<int>(def.hsdAsset->clips.size()));
+    for (int row = 0; row < visibleClips; ++row) {
+        const pf::AnimationClip& clip = def.hsdAsset->clips[static_cast<size_t>(row)];
+        const std::string label = std::to_string(clip.actionIndex) + " " + clip.name;
+        if (uiListRow({24.0f, 410.0f + 24.0f * row, 310.0f, 22.0f}, label, row == editor.selectedAnimationClip)) {
+            editor.selectedAnimationClip = row;
+            editor.animationScrubFrame = 0;
+            editor.animationPreviewActive = true;
+            const bool ok = pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), clip.actionIndex, 0);
+            editor.status = ok ? "Editor: previewing animation " + clip.name : "Editor: animation preview failed";
+            editor.paused = true;
+        }
+    }
+
+    if (uiButton({352.0f, 410.0f, 72.0f, 24.0f}, "- Frame")) {
+        --editor.animationScrubFrame;
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+    }
+    if (uiButton({434.0f, 410.0f, 72.0f, 24.0f}, "+ Frame")) {
+        ++editor.animationScrubFrame;
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+    }
+    if (uiButton({352.0f, 440.0f, 72.0f, 24.0f}, "Apply")) {
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+    }
+    if (uiButton({434.0f, 440.0f, 72.0f, 24.0f}, "Clear")) {
+        fighter.animationActionIndexOverride = -1;
+        fighter.animationRate = pf::fx(1);
+        editor.animationPreviewActive = false;
+        editor.status = "Editor: cleared animation preview override";
+        return;
+    }
+    editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, maxFrame);
+    if (editor.animationPreviewActive) {
+        const bool ok = pf::previewFighterAnimation(
+            world,
+            static_cast<size_t>(editor.selectedFighter),
+            selectedClip.actionIndex,
+            pf::fx(editor.animationScrubFrame));
+        if (ok) {
+            DrawText("Preview pose applied to selected fighter", 352, 476, 13, DARKGRAY);
+        }
+    }
+}
+
 static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
@@ -1548,6 +1626,8 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
         drawEditorLogicWorkspace(world, editor);
     } else if (editor.workspace == pf::EditorWorkspace::Assets) {
         drawEditorAssetsWorkspace(world, editor);
+    } else if (editor.workspace == pf::EditorWorkspace::Animation) {
+        drawEditorAnimationWorkspace(world, editor);
     } else if (editor.workspace != pf::EditorWorkspace::Moveset) {
         DrawText((std::string(workspaceName(editor.workspace)) + " workspace shell").c_str(), 24, 324, 14, DARKGRAY);
     }
@@ -1814,6 +1894,7 @@ static void launchEditorTestWorld(
     selectedFighterDef = editedFighterDef;
     editor.selectedFighter = 0;
     editor.testMode = true;
+    editor.animationPreviewActive = false;
     editor.paused = false;
     replay.playbackLoaded = false;
     replay.realtimePlayback = false;
@@ -1859,6 +1940,7 @@ int main() {
         replay.realtimePlayback = false;
         replay.recordingActive = false;
         editor.testMode = false;
+        editor.animationPreviewActive = false;
         editor.status = "Editor: selected " + world.fighterDefs[static_cast<size_t>(testFighterDef)].name;
         editor.selectedState = 0;
         editor.selectedSubaction = 0;
@@ -1903,6 +1985,7 @@ int main() {
             replay.realtimePlayback = false;
             replay.recordingActive = false;
             editor.testMode = false;
+            editor.animationPreviewActive = false;
             editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
         if (appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;

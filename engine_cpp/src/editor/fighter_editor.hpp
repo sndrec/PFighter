@@ -22,10 +22,13 @@ struct FighterEditor {
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;
     int selectedObjectDef = 0;
+    int selectedAnimationClip = 0;
+    int animationScrubFrame = 0;
     bool showBoxes = true;
     bool paused = false;
     bool sideView = false;
     bool testMode = false;
+    bool animationPreviewActive = false;
     EditorWorkspace workspace = EditorWorkspace::Moveset;
     std::string packagePath = "editor_last.pfpkg";
     std::string status = "Editor: T or Test launches current in-memory fighter on Battlefield";

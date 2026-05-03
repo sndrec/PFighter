@@ -2777,6 +2777,28 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
     applyImportedBoneAliases(def, fighter);
 }
 
+bool previewFighterAnimation(World& world, size_t fighterIndex, int actionIndex, Fix frame) {
+    if (fighterIndex >= world.fighters.size()) {
+        return false;
+    }
+    FighterRuntime& fighter = world.fighters[fighterIndex];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return false;
+    }
+    const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (!def.hasHsdAsset || !def.hsdAsset || !findClipByActionIndex(*def.hsdAsset, actionIndex)) {
+        return false;
+    }
+    if (fighter.state < 0 || fighter.state >= static_cast<int>(def.states.size())) {
+        return false;
+    }
+    fighter.animationActionIndexOverride = actionIndex;
+    fighter.animationFrame = std::max(Fix{0}, frame);
+    fighter.animationRate = 0;
+    evaluatePose(def, def.states[static_cast<size_t>(fighter.state)], fighter);
+    return true;
+}
+
 static void applyAnimationGroundVelocity(const FighterState& state, FighterRuntime& fighter) {
     if (!state.useAnimPhysics || !fighter.grounded || frameInState(fighter) <= 1) {
         return;

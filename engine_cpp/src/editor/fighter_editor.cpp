@@ -38,6 +38,11 @@ void FighterEditor::clampToWorld(const World& world) {
         selectedObjectDef,
         0,
         std::max(0, static_cast<int>(world.objectDefs.size()) - 1));
+    const int clipCount = def.hsdAsset ? static_cast<int>(def.hsdAsset->clips.size()) : 0;
+    selectedAnimationClip = std::clamp(selectedAnimationClip, 0, std::max(0, clipCount - 1));
+    if (clipCount == 0) {
+        animationScrubFrame = 0;
+    }
 }
 
 } // namespace pf

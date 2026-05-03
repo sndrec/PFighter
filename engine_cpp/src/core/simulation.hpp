@@ -496,6 +496,7 @@ void changeGameObjectState(World& world, GameObjectRuntime& object, const std::s
 void changeFighterState(World& world, FighterRuntime& fighter, const std::string& stateName, int lagFrames = 0, int blendFrames = kUseDefaultAnimationBlendFrames);
 WorldSnapshot saveWorld(const World& world);
 void loadWorld(World& world, const WorldSnapshot& snapshot);
+bool previewFighterAnimation(World& world, size_t fighterIndex, int actionIndex, Fix frame);
 const FighterState& currentState(const World& world, const FighterRuntime& fighter);
 int frameInState(const FighterRuntime& fighter);
 bool fighterFlag(const FighterRuntime& fighter, int flag);
