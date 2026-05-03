@@ -1390,6 +1390,17 @@ void validateObjectTouchboxGeometry(const GameObjectTouchboxDefinition& touchbox
     }
 }
 
+void validateInterruptRuleTiming(const InterruptRule& rule) {
+    const bool validBlendFrames = rule.blendFrames >= 0 ||
+        rule.blendFrames == kUseDefaultAnimationBlendFrames ||
+        rule.blendFrames == kDisableAnimationBlendFrames;
+    if (!validBlendFrames || rule.lagFrames < 0 ||
+        rule.enableFrame < 0 || rule.disableFrame < 0)
+    {
+        throw std::runtime_error("fighter package interrupt timing is invalid");
+    }
+}
+
 void validateFighterPackageReferences(const FighterPackage& package) {
     const std::vector<std::string> packageObjectNames = objectNames(package);
     for (const FighterDefinition& fighter : package.fighters) {
@@ -1411,6 +1422,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
                 if (!hasName(states, rule.targetState)) {
                     throw std::runtime_error("fighter package interrupt state target is invalid");
                 }
+                validateInterruptRuleTiming(rule);
             }
             for (const Subaction& subaction : state.action) {
                 if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {

@@ -4640,6 +4640,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidGeometryWritePackage = sourcePackage;
     invalidGeometryWritePackage.objects[1].hitboxes[0].radius = 0;
     const bool invalidPackageGeometryWriteRejected = pf::writeFighterPackage(invalidGeometryWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidInterruptWritePackage = sourcePackage;
+    invalidInterruptWritePackage.fighters[0].states[0].interrupts[0].enableFrame = -1;
+    const bool invalidPackageInterruptWriteRejected = pf::writeFighterPackage(invalidInterruptWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4745,6 +4748,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
+              << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 
