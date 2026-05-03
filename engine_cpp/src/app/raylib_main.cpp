@@ -6664,10 +6664,17 @@ int main() {
         if (appMode != AppMode::MainMenu) {
             updateTickrateControl(tickrate);
         }
+        const bool editorTextEditing = appMode == AppMode::Editor && !editor.activeTextField.empty();
+        const bool globalShortcutsEnabled = !editorTextEditing;
         if (IsKeyPressed(KEY_ESCAPE)) {
-            appMode = AppMode::MainMenu;
-            replay.realtimePlayback = false;
-            editor.paused = true;
+            if (editorTextEditing) {
+                editor.activeTextField.clear();
+                editor.textEditBuffer.clear();
+            } else {
+                appMode = AppMode::MainMenu;
+                replay.realtimePlayback = false;
+                editor.paused = true;
+            }
         }
         const bool testClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorTestButtonRect());
@@ -6675,24 +6682,24 @@ int main() {
             CheckCollisionPointRec(GetMousePosition(), editorNewStateButtonRect());
         const bool deleteStateClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorDeleteStateButtonRect());
-        if (appMode == AppMode::Editor && (IsKeyPressed(KEY_N) || newStateClicked)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_N) || newStateClicked)) {
             createEditorState(world, editor);
         }
-        if (appMode == AppMode::Editor && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
             removeEditorState(world, editor);
         }
-        if (appMode == AppMode::Editor && (IsKeyPressed(KEY_T) || testClicked)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_T) || testClicked)) {
             launchEditorTestWorld(world, editor, replay, testFighterDef);
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_SPACE)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_SPACE)) {
             editor.paused = !editor.paused;
             if (editor.paused) {
                 replay.realtimePlayback = false;
             }
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_R)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_R)) {
             world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
             replay.playbackFrame = 0;
             replay.playbackLoaded = false;
@@ -6702,10 +6709,10 @@ int main() {
             editor.animationPreviewActive = false;
             editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
-        if (appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
-        if (appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
         const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-        if (appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
                 if (pf::FighterState* state = selectedEditorState()) {
                     moveEditorSubaction(*state, editor, -1);
@@ -6714,7 +6721,7 @@ int main() {
                 --editor.selectedSubaction;
             }
         }
-        if (appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
                 if (pf::FighterState* state = selectedEditorState()) {
                     moveEditorSubaction(*state, editor, 1);
@@ -6723,41 +6730,41 @@ int main() {
                 ++editor.selectedSubaction;
             }
         }
-        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
             removeSelectedSubaction();
         }
-        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
             adjustSelectedSubactionFrames(-1);
         }
-        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
             adjustSelectedSubactionFrames(1);
         }
-        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Assets && IsKeyPressed(KEY_U)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Assets && IsKeyPressed(KEY_U)) {
             bindSelectedObjectStateCallback();
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
         for (size_t i = 0; i < fighterKeys.size(); ++i) {
-            if (appMode != AppMode::MainMenu && IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
+            if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
                 selectFighterDef(static_cast<int>(i));
             }
         }
 
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F5)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F5)) {
             beginReplayRecording(replay, world, testFighterDef, testFighterDef);
             editor.paused = false;
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F6)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F6)) {
             saveReplayRecording(replay);
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F7)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F7)) {
             loadReplayPlayback(replay, world, testFighterDef);
             editor.paused = true;
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F8)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F8)) {
             stepReplayPlayback(replay, world);
         }
-        if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
             replay.realtimePlayback = !replay.realtimePlayback;
             editor.paused = !replay.realtimePlayback;
         }
