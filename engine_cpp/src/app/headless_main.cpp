@@ -4637,6 +4637,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidReferenceWritePackage = sourcePackage;
     invalidReferenceWritePackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     const bool invalidPackageReferenceWriteRejected = pf::writeFighterPackage(invalidReferenceWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidGeometryWritePackage = sourcePackage;
+    invalidGeometryWritePackage.objects[1].hitboxes[0].radius = 0;
+    const bool invalidPackageGeometryWriteRejected = pf::writeFighterPackage(invalidGeometryWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4741,6 +4744,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
+              << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 

@@ -1361,12 +1361,44 @@ void validatePackageScripts(
     }
 }
 
+void validateHitboxGeometry(const HitboxDefinition& hitbox) {
+    if (hitbox.radius <= 0) {
+        throw std::runtime_error("fighter package hitbox radius is invalid");
+    }
+    if (hitbox.damage < 0 || hitbox.damageShield < 0 || hitbox.knockbackBase < 0 ||
+        hitbox.knockbackGrowth < 0 || hitbox.knockbackWeightSet < 0)
+    {
+        throw std::runtime_error("fighter package hitbox numeric value is invalid");
+    }
+}
+
+void validateHurtboxGeometry(const HurtboxDefinition& hurtbox) {
+    if (hurtbox.radius <= 0) {
+        throw std::runtime_error("fighter package hurtbox radius is invalid");
+    }
+}
+
+void validateObjectHurtboxGeometry(const GameObjectHurtboxDefinition& hurtbox) {
+    if (hurtbox.radius <= 0) {
+        throw std::runtime_error("fighter package object hurtbox radius is invalid");
+    }
+}
+
+void validateObjectTouchboxGeometry(const GameObjectTouchboxDefinition& touchbox) {
+    if (touchbox.radius <= 0) {
+        throw std::runtime_error("fighter package object touchbox radius is invalid");
+    }
+}
+
 void validateFighterPackageReferences(const FighterPackage& package) {
     const std::vector<std::string> packageObjectNames = objectNames(package);
     for (const FighterDefinition& fighter : package.fighters) {
         const std::vector<std::string> states = fighterStateNames(fighter);
         const std::vector<std::string> scripts = scriptNames(fighter.packageScripts);
         validatePackageScripts(fighter.packageScripts, static_cast<int>(fighter.packageVariables.size()), states, packageObjectNames);
+        for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
+            validateHurtboxGeometry(hurtbox);
+        }
         for (const FighterState& state : fighter.states) {
             if (!state.onAnimationFinishedState.empty() && !hasName(states, state.onAnimationFinishedState)) {
                 throw std::runtime_error("fighter package animation finished state target is invalid");
@@ -1383,6 +1415,11 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             for (const Subaction& subaction : state.action) {
                 if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {
                     throw std::runtime_error("fighter package subaction object target is invalid");
+                }
+                if (subaction.type == SubactionType::CreateHitbox ||
+                    subaction.type == SubactionType::CreateThrowHitbox)
+                {
+                    validateHitboxGeometry(subaction.hitbox);
                 }
             }
         }
@@ -1422,6 +1459,15 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         validateFunctionCalls(object.onGrabDealt, scripts);
         validateFunctionCalls(object.onGrabbedForVictim, scripts);
         validateFunctionCalls(object.onInteraction, scripts);
+        for (const HitboxDefinition& hitbox : object.hitboxes) {
+            validateHitboxGeometry(hitbox);
+        }
+        for (const GameObjectHurtboxDefinition& hurtbox : object.hurtboxes) {
+            validateObjectHurtboxGeometry(hurtbox);
+        }
+        for (const GameObjectTouchboxDefinition& touchbox : object.touchboxes) {
+            validateObjectTouchboxGeometry(touchbox);
+        }
     }
 }
 
