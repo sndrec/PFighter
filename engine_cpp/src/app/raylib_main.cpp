@@ -274,15 +274,23 @@ static void drawLedgeSnapSweep(const pf::FighterDefinition& def,
     drawGroundRect(left, bottom, right, top, color);
 }
 
-static void drawImportedSkeleton(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter, Color color) {
-    if (!def.hsdAsset || fighter.hsdJointWorldPositions.empty()) {
+static const std::vector<pf::AnimationJoint>* animationSkeletonForDrawing(const pf::FighterDefinition& def) {
+    if (def.hsdAsset) {
+        return &def.hsdAsset->skeleton;
+    }
+    return def.authoredSkeleton.empty() ? nullptr : &def.authoredSkeleton;
+}
+
+static void drawAnimationSkeleton(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter, Color color) {
+    const std::vector<pf::AnimationJoint>* skeleton = animationSkeletonForDrawing(def);
+    if (!skeleton || fighter.hsdJointWorldPositions.empty()) {
         return;
     }
 
-    const size_t jointCount = std::min(def.hsdAsset->skeleton.size(), fighter.hsdJointWorldPositions.size());
+    const size_t jointCount = std::min(skeleton->size(), fighter.hsdJointWorldPositions.size());
     for (size_t i = 0; i < jointCount; ++i) {
         pf::Vec3 joint = fighter.hsdJointWorldPositions[i];
-        const int parent = def.hsdAsset->skeleton[i].parent;
+        const int parent = (*skeleton)[i].parent;
         if (parent >= 0 && static_cast<size_t>(parent) < fighter.hsdJointWorldPositions.size()) {
             pf::Vec3 parentJoint = fighter.hsdJointWorldPositions[static_cast<size_t>(parent)];
             DrawLine3D(toRay(parentJoint), toRay(joint), color);
@@ -290,10 +298,13 @@ static void drawImportedSkeleton(const pf::FighterDefinition& def, const pf::Fig
         DrawSphere(toRay(joint), 0.04f, color);
     }
 
-    const int head = def.hsdAsset->fighterBones.head;
+    const int head = def.hsdAsset ? def.hsdAsset->fighterBones.head : -1;
     if (head >= 0 && static_cast<size_t>(head) < fighter.hsdJointWorldPositions.size()) {
         pf::Vec3 headJoint = fighter.hsdJointWorldPositions[static_cast<size_t>(head)];
         DrawSphereWires(toRay(headJoint), 0.18f, 10, 6, color);
+    } else if (!def.hsdAsset && fighter.hsdJointWorldPositions.size() > 1) {
+        pf::Vec3 tipJoint = fighter.hsdJointWorldPositions.back();
+        DrawSphereWires(toRay(tipJoint), 0.12f, 8, 4, color);
     }
 }
 
@@ -1250,7 +1261,8 @@ static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterR
 static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, bool boxes) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
-    const bool hasImportedPose = def.hsdAsset && !fighter.hsdJointWorldPositions.empty();
+    const bool hasAnimationPose = !fighter.hsdJointWorldPositions.empty() && animationSkeletonForDrawing(def) != nullptr;
+    const bool hasImportedPose = def.hsdAsset && hasAnimationPose;
     if (fighter.fighterInvisible) {
         // ftDrawCommon skips fighter model display when x221E_b5 is set.
     } else if (hasImportedPose) {
@@ -1258,19 +1270,22 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
             drawImportedMesh(def, fighter);
         } else {
             DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
-            drawImportedSkeleton(def, fighter, color);
+            drawAnimationSkeleton(def, fighter, color);
         }
+    } else if (hasAnimationPose) {
+        DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
+        drawAnimationSkeleton(def, fighter, color);
     } else {
         DrawCube(pos, 0.55f, 1.1f, 0.35f, color);
         DrawCubeWires(pos, 0.55f, 1.1f, 0.35f, BLACK);
     }
 
-    if (!def.hasHsdAsset && (!hasImportedPose || boxes)) {
+    if (!def.hasHsdAsset && (!hasAnimationPose || boxes)) {
         for (int i = 0; i < pf::kBoneCount; ++i) {
             pf::Vec3 bone = fighter.bones[static_cast<size_t>(i)].position;
             bone.x += fighter.position.x;
             bone.y += fighter.position.y;
-            DrawSphere(toRay(bone), hasImportedPose ? 0.04f : 0.07f, hasImportedPose ? Fade(DARKBLUE, 0.35f) : DARKBLUE);
+            DrawSphere(toRay(bone), hasAnimationPose ? 0.04f : 0.07f, hasAnimationPose ? Fade(DARKBLUE, 0.35f) : DARKBLUE);
         }
     }
 
@@ -1304,7 +1319,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     for (const pf::Capsule& hurt : fighter.hsdHurtboxCapsules) {
         drawCapsule(hurt.a, hurt.b, hurt.radius, GREEN);
     }
-    drawImportedSkeleton(def, fighter, DARKGREEN);
+    drawAnimationSkeleton(def, fighter, DARKGREEN);
     for (const pf::ActiveHitbox& hit : fighter.activeHitboxes) {
         drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
     }
@@ -2145,7 +2160,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     } else {
         DrawText("Selected subaction: none", 24, 164, 14, DARKGRAY);
     }
-    DrawText(("HSD pose: " + std::to_string(fighter.hsdJointWorldPositions.size()) + " joints, " +
+    DrawText(("Animation pose: " + std::to_string(fighter.hsdJointWorldPositions.size()) + " joints, " +
               std::to_string(fighter.hsdHurtboxCapsules.size()) + " hurtboxes").c_str(), 24, 182, 14, DARKGRAY);
 
     DrawRectangle(static_cast<int>(timelineX), static_cast<int>(timelineY), static_cast<int>(timelineWidth), static_cast<int>(timelineHeight), Fade(LIGHTGRAY, 0.65f));
