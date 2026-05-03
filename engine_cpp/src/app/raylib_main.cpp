@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -1087,6 +1088,32 @@ static std::string packageObjectTargetName(const pf::World& world, int selectedO
         return object.kind == kind;
     });
     return found == world.objectDefs.end() ? world.objectDefs[static_cast<size_t>(selected)].name : found->name;
+}
+
+static std::string nextObjectTargetName(
+    const pf::World& world,
+    const std::string& currentName,
+    std::optional<pf::GameObjectKind> requiredKind)
+{
+    if (world.objectDefs.empty()) {
+        return {};
+    }
+    int currentIndex = -1;
+    for (int i = 0; i < static_cast<int>(world.objectDefs.size()); ++i) {
+        if (world.objectDefs[static_cast<size_t>(i)].name == currentName) {
+            currentIndex = i;
+            break;
+        }
+    }
+    for (int step = 1; step <= static_cast<int>(world.objectDefs.size()); ++step) {
+        const int baseIndex = currentIndex < 0 ? -1 : currentIndex;
+        const int index = (baseIndex + step) % static_cast<int>(world.objectDefs.size());
+        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(index)];
+        if (!requiredKind || object.kind == *requiredKind) {
+            return object.name;
+        }
+    }
+    return {};
 }
 
 static void cyclePackageFighterTarget(
@@ -3588,6 +3615,80 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             interrupt.condition = pf::InterruptCondition::PackageVarAtLeast;
             --interrupt.packageValue;
             editor.status = "Editor: lowered interrupt package variable threshold";
+        }
+    }
+
+    if (!state.action.empty()) {
+        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
+        pf::Subaction& subaction = state.action[static_cast<size_t>(editor.selectedSubaction)];
+        if (subaction.type == pf::SubactionType::SpawnObject ||
+            subaction.type == pf::SubactionType::SpawnProjectile)
+        {
+            DrawText(("Spawn #" + std::to_string(editor.selectedSubaction) + " -> " + subaction.objectName).c_str(), 516, 554, 12, DARKGRAY);
+            if (uiButton({516.0f, 570.0f, 44.0f, 22.0f}, "Tgt")) {
+                const std::optional<pf::GameObjectKind> requiredKind = subaction.type == pf::SubactionType::SpawnProjectile
+                    ? std::optional<pf::GameObjectKind>{pf::GameObjectKind::Projectile}
+                    : std::optional<pf::GameObjectKind>{};
+                const std::string target = nextObjectTargetName(world, subaction.objectName, requiredKind);
+                if (!target.empty()) {
+                    subaction.objectName = target;
+                    editor.status = "Editor: cycled spawn target to " + target;
+                }
+            }
+            if (uiButton({566.0f, 570.0f, 44.0f, 22.0f}, "Kind")) {
+                if (subaction.type == pf::SubactionType::SpawnProjectile) {
+                    subaction.type = pf::SubactionType::SpawnObject;
+                    editor.status = "Editor: selected spawn now targets any object kind";
+                } else {
+                    const std::string target = nextObjectTargetName(
+                        world,
+                        subaction.objectName,
+                        std::optional<pf::GameObjectKind>{pf::GameObjectKind::Projectile});
+                    if (!target.empty()) {
+                        subaction.type = pf::SubactionType::SpawnProjectile;
+                        subaction.objectName = target;
+                        editor.status = "Editor: selected spawn now requires projectile target";
+                    } else {
+                        editor.status = "Editor: no projectile object exists for selected spawn";
+                    }
+                }
+            }
+            if (uiButton({616.0f, 570.0f, 44.0f, 22.0f}, "VX+")) {
+                subaction.spawnVelocity.x += pf::fxFromFloat(0.1f);
+                editor.status = "Editor: increased spawn X velocity";
+            }
+            if (uiButton({666.0f, 570.0f, 44.0f, 22.0f}, "VX-")) {
+                subaction.spawnVelocity.x -= pf::fxFromFloat(0.1f);
+                editor.status = "Editor: decreased spawn X velocity";
+            }
+            DrawText(("vel " + std::to_string(pf::fxToFloat(subaction.spawnVelocity.x)) +
+                      "," + std::to_string(pf::fxToFloat(subaction.spawnVelocity.y))).c_str(), 516, 596, 12, DARKGRAY);
+            if (uiButton({616.0f, 592.0f, 44.0f, 22.0f}, "VY+")) {
+                subaction.spawnVelocity.y += pf::fxFromFloat(0.1f);
+                editor.status = "Editor: increased spawn Y velocity";
+            }
+            if (uiButton({666.0f, 592.0f, 44.0f, 22.0f}, "VY-")) {
+                subaction.spawnVelocity.y -= pf::fxFromFloat(0.1f);
+                editor.status = "Editor: decreased spawn Y velocity";
+            }
+            DrawText(("off " + std::to_string(pf::fxToFloat(subaction.spawnOffset.x)) +
+                      "," + std::to_string(pf::fxToFloat(subaction.spawnOffset.y))).c_str(), 516, 620, 12, DARKGRAY);
+            if (uiButton({616.0f, 616.0f, 44.0f, 22.0f}, "OX+")) {
+                subaction.spawnOffset.x += pf::fxFromFloat(0.1f);
+                editor.status = "Editor: moved spawn offset forward";
+            }
+            if (uiButton({666.0f, 616.0f, 44.0f, 22.0f}, "OY+")) {
+                subaction.spawnOffset.y += pf::fxFromFloat(0.1f);
+                editor.status = "Editor: raised spawn offset";
+            }
+            if (uiButton({616.0f, 638.0f, 44.0f, 22.0f}, "OX-")) {
+                subaction.spawnOffset.x -= pf::fxFromFloat(0.1f);
+                editor.status = "Editor: moved spawn offset backward";
+            }
+            if (uiButton({666.0f, 638.0f, 44.0f, 22.0f}, "OY-")) {
+                subaction.spawnOffset.y -= pf::fxFromFloat(0.1f);
+                editor.status = "Editor: lowered spawn offset";
+            }
         }
     }
 
