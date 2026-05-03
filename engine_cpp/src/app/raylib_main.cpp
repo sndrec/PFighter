@@ -1853,6 +1853,51 @@ static void scaleAuthoredMesh(pf::HsdFighterMesh& mesh, pf::Fix scaleX, pf::Fix 
     }
 }
 
+static int remapRemovedAuthoredBone(int bone, int removedIndex, int fallbackBone) {
+    if (bone < 0) {
+        return bone;
+    }
+    if (bone == removedIndex) {
+        return fallbackBone;
+    }
+    return bone > removedIndex ? bone - 1 : bone;
+}
+
+static void removeAuthoredSkeletonJoint(pf::FighterDefinition& def, int jointIndex) {
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size()) ||
+        def.authoredSkeleton.size() <= 1)
+    {
+        return;
+    }
+    const int removedParent = def.authoredSkeleton[static_cast<size_t>(jointIndex)].parent;
+    def.authoredSkeleton.erase(def.authoredSkeleton.begin() + jointIndex);
+    const int fallbackBone = def.authoredSkeleton.empty()
+        ? -1
+        : std::clamp(removedParent, 0, static_cast<int>(def.authoredSkeleton.size()) - 1);
+
+    for (pf::AnimationJoint& joint : def.authoredSkeleton) {
+        if (joint.parent == jointIndex) {
+            joint.parent = removedParent;
+        } else if (joint.parent > jointIndex) {
+            --joint.parent;
+        }
+    }
+    for (pf::AnimationClip& clip : def.authoredClips) {
+        for (pf::AnimationTrack& track : clip.tracks) {
+            track.joint = remapRemovedAuthoredBone(track.joint, jointIndex, fallbackBone);
+        }
+    }
+    for (pf::HsdMeshBatch& batch : def.authoredMesh.batches) {
+        batch.parentBone = remapRemovedAuthoredBone(batch.parentBone, jointIndex, fallbackBone);
+        batch.singleBindBone = remapRemovedAuthoredBone(batch.singleBindBone, jointIndex, fallbackBone);
+        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+            for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+                influence.bone = remapRemovedAuthoredBone(influence.bone, jointIndex, fallbackBone);
+            }
+        }
+    }
+}
+
 static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
     std::sort(keys.begin(), keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
         return a.frame < b.frame;
@@ -3799,7 +3844,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
         for (int row = 0; row < visibleJoints; ++row) {
             const int jointIndex = jointStart + row;
             const pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(jointIndex)];
-            const std::string label = std::to_string(jointIndex) + " " + joint.name;
+            const std::string label = std::to_string(jointIndex) + " p" + std::to_string(joint.parent) + " " + joint.name;
             if (uiListRow({184.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, jointIndex == editor.selectedAnimationJoint)) {
                 editor.selectedAnimationJoint = jointIndex;
                 editor.status = "Editor: selected authored joint " + joint.name;
@@ -3929,6 +3974,43 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
             editor.animationPreviewActive = true;
             editor.paused = true;
             editor.status = "Editor: lowered authored joint bind offset";
+        }
+        if (uiButton({516.0f, 560.0f, 72.0f, 24.0f}, "Parent")) {
+            const int selectedJoint = std::clamp(
+                editor.selectedAnimationJoint,
+                0,
+                static_cast<int>(def.authoredSkeleton.size()) - 1);
+            if (selectedJoint <= 0) {
+                joint.parent = -1;
+                editor.status = "Editor: root joint parent is none";
+            } else {
+                joint.parent = (joint.parent + 2) % (selectedJoint + 1) - 1;
+                editor.status = "Editor: cycled authored joint parent";
+            }
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+        }
+        if (uiButton({516.0f, 590.0f, 72.0f, 24.0f}, "DelJnt")) {
+            if (def.authoredSkeleton.size() <= 1) {
+                editor.status = "Editor: cannot delete the only authored joint";
+            } else {
+                const int removeIndex = std::clamp(
+                    editor.selectedAnimationJoint,
+                    0,
+                    static_cast<int>(def.authoredSkeleton.size()) - 1);
+                const std::string removedName = def.authoredSkeleton[static_cast<size_t>(removeIndex)].name;
+                removeAuthoredSkeletonJoint(def, removeIndex);
+                editor.selectedAnimationJoint = std::clamp(
+                    removeIndex,
+                    0,
+                    std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+                editor.selectedAnimationTrack = 0;
+                editor.selectedAnimationKey = 0;
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                editor.status = "Editor: deleted authored joint " + removedName;
+                return;
+            }
         }
     }
 
