@@ -440,6 +440,7 @@ enum class PackageScriptOp : uint8_t {
     SkipIfVarLessThanImmediate,
     JumpRelative,
     SwitchFighterDefinition,
+    SpawnFighter,
 };
 
 struct PackageScriptInstruction {

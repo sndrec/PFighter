@@ -998,6 +998,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::JumpRelative: return "Jump";
     case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
+    case pf::PackageScriptOp::SpawnFighter: return "SpawnF";
     }
     return "Op";
 }
@@ -1033,6 +1034,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         label += " " + std::to_string(instruction.intValue);
         break;
     case pf::PackageScriptOp::SwitchFighterDefinition:
+        label += " " + instruction.text;
+        break;
+    case pf::PackageScriptOp::SpawnFighter:
         label += " " + instruction.text;
         break;
     case pf::PackageScriptOp::Nop:
@@ -1113,14 +1117,18 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::JumpRelative;
     case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::SwitchFighterDefinition;
-    case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::SpawnFighter;
+    case pf::PackageScriptOp::SpawnFighter: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
 }
 
 static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
     const pf::PackageScriptOp next = nextPackageScriptOp(op);
-    return next == pf::PackageScriptOp::SwitchFighterDefinition ? pf::PackageScriptOp::Nop : next;
+    return next == pf::PackageScriptOp::SwitchFighterDefinition ||
+            next == pf::PackageScriptOp::SpawnFighter
+        ? pf::PackageScriptOp::Nop
+        : next;
 }
 
 static void normalizePackageInstruction(
@@ -1153,6 +1161,9 @@ static void normalizePackageInstruction(
         instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
     }
     if (instruction.op == pf::PackageScriptOp::SwitchFighterDefinition && instruction.text.empty() && !world.fighterDefs.empty()) {
+        instruction.text = world.fighterDefs[0].name;
+    }
+    if (instruction.op == pf::PackageScriptOp::SpawnFighter && instruction.text.empty() && !world.fighterDefs.empty()) {
         instruction.text = world.fighterDefs[0].name;
     }
 }
@@ -2060,6 +2071,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended fighter switch to " + script->name;
         }
     }
+    if (uiButton({215.0f, 682.0f, 68.0f, 24.0f}, "+ Ally")) {
+        if (script && !world.fighterDefs.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SpawnFighter, -1, -1, -1, 0, pf::fxFromFloat(1.0f), world.fighterDefs[0].name});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended companion spawn to " + script->name;
+        }
+    }
     if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind In")) {
         if (script) {
             bindPackageScriptCallback(state.onEnter, script->name, "enter", editor);
@@ -2132,6 +2150,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 instruction.text = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].name;
                 instruction.op = pf::PackageScriptOp::SwitchFighterDefinition;
                 editor.status = "Editor: targeted current fighter from script block";
+            }
+        }
+        if (uiButton({215.0f, 622.0f, 68.0f, 24.0f}, "Ally")) {
+            if (!world.fighterDefs.empty()) {
+                instruction.text = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)].name;
+                instruction.op = pf::PackageScriptOp::SpawnFighter;
+                editor.status = "Editor: targeted companion fighter from script block";
             }
         }
         if (uiButton({365.0f, 652.0f, 68.0f, 24.0f}, "BindLd")) {

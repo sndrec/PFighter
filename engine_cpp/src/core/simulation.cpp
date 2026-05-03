@@ -1191,6 +1191,30 @@ bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::s
     return true;
 }
 
+int spawnFighter(World& world, const std::string& fighterName, Vec2 position, int facing) {
+    const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const FighterDefinition& def) {
+        return def.name == fighterName;
+    });
+    if (found == world.fighterDefs.end() || found->states.empty()) {
+        return -1;
+    }
+
+    const int fighterDefIndex = static_cast<int>(std::distance(world.fighterDefs.begin(), found));
+    FighterRuntime fighter = makeTrainingFighter(world, fighterDefIndex, position, facing);
+    fighter.position = position;
+    fighter.previousPosition = position;
+    fighter.facing = facing == 0 ? 1 : facing;
+    fighter.hsdPoseFacing = fighter.facing;
+    world.fighters.push_back(std::move(fighter));
+    const int fighterIndex = static_cast<int>(world.fighters.size()) - 1;
+    FighterRuntime& spawned = world.fighters.back();
+    evaluatePose(*found, currentState(world, spawned), spawned);
+    calculateEcb(*found, spawned, true);
+    calculateEcb(*found, spawned, true);
+    runStateFunctions(world, static_cast<size_t>(fighterIndex), currentState(world, spawned).onEnter);
+    return fighterIndex;
+}
+
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity) {
     const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const GameObjectDefinition& def) {
         return def.name == objectName;
@@ -6817,6 +6841,7 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 continue;
             }
             case PackageScriptOp::SwitchFighterDefinition:
+            case PackageScriptOp::SpawnFighter:
                 return;
             }
             ++instructionIndex;
@@ -7839,26 +7864,31 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         processSmashCharge(fighter);
         processInterrupts(world, fighter);
         runStateFunctions(world, fighterIndex, currentState(world, fighter).onFrame);
+        if (fighterIndex >= world.fighters.size()) {
+            continue;
+        }
+        FighterRuntime& fighterAfterFunctions = world.fighters[fighterIndex];
+        const FighterDefinition& defAfterFunctions = world.fighterDefs[static_cast<size_t>(fighterAfterFunctions.fighterDef)];
         processThrowRelease(world, fighterIndex);
-        evaluatePose(def, currentState(world, fighter), fighter);
-        if (fighter.grabberFighter >= 0 && isHeldCaptureStateName(currentState(world, fighter).name)) {
+        evaluatePose(defAfterFunctions, currentState(world, fighterAfterFunctions), fighterAfterFunctions);
+        if (fighterAfterFunctions.grabberFighter >= 0 && isHeldCaptureStateName(currentState(world, fighterAfterFunctions).name)) {
             maintainCapturedFighterAfterPose(world, fighterIndex);
         } else {
-            applyAnimationGroundVelocity(currentState(world, fighter), fighter);
+            applyAnimationGroundVelocity(currentState(world, fighterAfterFunctions), fighterAfterFunctions);
             integrateAndCollide(world, fighterIndex);
-            refreshHsdWorldPose(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter);
-            applyImportedBoneAliases(world.fighterDefs[static_cast<size_t>(fighter.fighterDef)], fighter);
+            refreshHsdWorldPose(world.fighterDefs[static_cast<size_t>(fighterAfterFunctions.fighterDef)], fighterAfterFunctions);
+            applyImportedBoneAliases(world.fighterDefs[static_cast<size_t>(fighterAfterFunctions.fighterDef)], fighterAfterFunctions);
         }
 
-        const FighterState& stateAfterPhysics = currentState(world, fighter);
-        const int animationLengthFrames = fighter.stateAnimationLengthOverride > 0
-            ? fighter.stateAnimationLengthOverride
+        const FighterState& stateAfterPhysics = currentState(world, fighterAfterFunctions);
+        const int animationLengthFrames = fighterAfterFunctions.stateAnimationLengthOverride > 0
+            ? fighterAfterFunctions.stateAnimationLengthOverride
             : stateAfterPhysics.animationLengthFrames;
-        if (frameInState(fighter) > animationLengthFrames && !stateAfterPhysics.onAnimationFinishedState.empty()) {
-            changeFighterState(world, fighter, stateAfterPhysics.onAnimationFinishedState, 0, stateAfterPhysics.onAnimationFinishedBlendFrames);
+        if (frameInState(fighterAfterFunctions) > animationLengthFrames && !stateAfterPhysics.onAnimationFinishedState.empty()) {
+            changeFighterState(world, fighterAfterFunctions, stateAfterPhysics.onAnimationFinishedState, 0, stateAfterPhysics.onAnimationFinishedBlendFrames);
         }
-        advanceAnimationFrame(def, currentState(world, fighter), fighter);
-        regenerateShield(world, fighter);
+        advanceAnimationFrame(defAfterFunctions, currentState(world, fighterAfterFunctions), fighterAfterFunctions);
+        regenerateShield(world, fighterAfterFunctions);
     }
 
     tickGameObjects(world);

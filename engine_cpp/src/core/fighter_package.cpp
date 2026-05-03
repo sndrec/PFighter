@@ -221,6 +221,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::JumpRelative:
     case PackageScriptOp::SwitchFighterDefinition:
+    case PackageScriptOp::SpawnFighter:
         return true;
     }
     return false;
@@ -1587,6 +1588,11 @@ void validatePackageScriptInstruction(
         break;
     }
     case PackageScriptOp::SwitchFighterDefinition:
+        if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
+            throw std::runtime_error("fighter package script fighter target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnFighter:
         if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
             throw std::runtime_error("fighter package script fighter target is invalid");
         }

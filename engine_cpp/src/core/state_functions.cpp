@@ -2633,6 +2633,14 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SwitchFighterDefinition:
             switchFighterDefinition(world, fighter, instruction.text);
             return;
+        case PackageScriptOp::SpawnFighter: {
+            const Vec2 position{
+                fighter.position.x + fighter.facing * instruction.fixValue,
+                fighter.position.y,
+            };
+            spawnFighter(world, instruction.text, position, fighter.facing);
+            return;
+        }
         }
         ++instructionIndex;
     }

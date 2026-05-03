@@ -485,6 +485,7 @@ World makeTrainingWorld(int p1FighterDef, int p2FighterDef);
 void tickWorld(World& world, const std::vector<InputFrame>& inputs);
 void resetTrainingFighter(World& world, size_t fighterIndex, int fighterDefIndex, Vec2 position, int facing);
 bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::string& fighterName, const std::string& stateName = {});
+int spawnFighter(World& world, const std::string& fighterName, Vec2 position, int facing);
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 bool pickUpGameObject(World& world, int objectIndex, int fighterIndex);
 bool dropGameObject(World& world, int objectIndex, Vec2 velocity = {});
