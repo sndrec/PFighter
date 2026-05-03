@@ -2130,6 +2130,18 @@ static std::string uniqueAuthoredClipName(const pf::FighterDefinition& def) {
     return "ClipX";
 }
 
+static bool authoredClipNameAvailable(const pf::FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.authoredClips.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.authoredClips[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static int uniqueAuthoredClipActionIndex(const pf::FighterDefinition& def) {
     for (int index = 0; index < 10000; ++index) {
         const bool exists = std::any_of(def.authoredClips.begin(), def.authoredClips.end(), [&](const pf::AnimationClip& clip) {
@@ -4744,6 +4756,29 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     DrawText(("Clips: " + std::to_string(clips->size()) + (clips == authoredClips ? " authored" : " imported")).c_str(), 24, 362, 13, DARKGRAY);
     DrawText(("Selected: action " + std::to_string(selectedClip.actionIndex) +
               " frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(maxFrame)).c_str(), 24, 382, 13, DARKGRAY);
+    if (showingAuthoredClips && selectedAuthoredClip) {
+        std::string renamedClip;
+        if (uiTextField(
+                {224.0f, 378.0f, 110.0f, 22.0f},
+                "anim-clip-" + std::to_string(editor.selectedAnimationClip),
+                editor,
+                selectedAuthoredClip->name,
+                renamedClip))
+        {
+            if (!authoredClipNameAvailable(def, renamedClip, editor.selectedAnimationClip)) {
+                editor.status = "Editor: authored clip name is empty or already used";
+            } else {
+                const std::string oldName = selectedAuthoredClip->name;
+                selectedAuthoredClip->name = renamedClip;
+                for (pf::FighterState& fighterState : def.states) {
+                    if (fighterState.animation == oldName) {
+                        fighterState.animation = selectedAuthoredClip->name;
+                    }
+                }
+                editor.status = "Editor: renamed authored clip " + oldName + " to " + selectedAuthoredClip->name;
+            }
+        }
+    }
     DrawText("Clips", 24, 396, 13, DARKGRAY);
     const int visibleClips = std::min(4, static_cast<int>(clips->size()));
     const int clipStart = visibleListStart(
