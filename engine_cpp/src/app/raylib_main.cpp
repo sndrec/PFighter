@@ -1548,6 +1548,103 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     }
 }
 
+static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& editor) {
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        return;
+    }
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
+    DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
+    DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
+    DrawText("State Properties", 24, 336, 16, BLACK);
+    DrawText(("Animation: " + state.animation + " action=" + std::to_string(state.animationActionIndex)).c_str(), 24, 360, 13, DARKGRAY);
+    DrawText(("Length: " + std::to_string(state.animationLengthFrames) +
+              "  IASA: " + std::to_string(state.initialInterruptibleFrame)).c_str(), 24, 382, 13, DARKGRAY);
+
+    if (uiButton({24.0f, 410.0f, 90.0f, 24.0f}, "Loop", state.loopAnimation)) {
+        state.loopAnimation = !state.loopAnimation;
+        editor.status = "Editor: toggled loop animation for " + state.name;
+    }
+    if (uiButton({122.0f, 410.0f, 90.0f, 24.0f}, "Anim Phys", state.useAnimPhysics)) {
+        state.useAnimPhysics = !state.useAnimPhysics;
+        editor.status = "Editor: toggled animation physics for " + state.name;
+    }
+    if (uiButton({220.0f, 410.0f, 90.0f, 24.0f}, "Slideoff", state.allowSlideoff)) {
+        state.allowSlideoff = !state.allowSlideoff;
+        editor.status = "Editor: toggled slideoff for " + state.name;
+    }
+    if (uiButton({318.0f, 410.0f, 90.0f, 24.0f}, "Ledge", state.allowLedgeGrab)) {
+        state.allowLedgeGrab = !state.allowLedgeGrab;
+        editor.status = "Editor: toggled ledge grab for " + state.name;
+    }
+    if (uiButton({416.0f, 410.0f, 90.0f, 24.0f}, "Floor", state.convertFloorCollisionToGround)) {
+        state.convertFloorCollisionToGround = !state.convertFloorCollisionToGround;
+        editor.status = "Editor: toggled floor collision for " + state.name;
+    }
+    if (uiButton({24.0f, 440.0f, 90.0f, 24.0f}, "Wall", state.allowWallCollision)) {
+        state.allowWallCollision = !state.allowWallCollision;
+        editor.status = "Editor: toggled wall collision for " + state.name;
+    }
+    if (uiButton({122.0f, 440.0f, 90.0f, 24.0f}, "Ceiling", state.allowCeilingCollision)) {
+        state.allowCeilingCollision = !state.allowCeilingCollision;
+        editor.status = "Editor: toggled ceiling collision for " + state.name;
+    }
+    if (uiButton({220.0f, 440.0f, 90.0f, 24.0f}, "- Len")) {
+        state.animationLengthFrames = std::max(1, state.animationLengthFrames - 1);
+        editor.status = "Editor: shortened " + state.name;
+    }
+    if (uiButton({318.0f, 440.0f, 90.0f, 24.0f}, "+ Len")) {
+        ++state.animationLengthFrames;
+        editor.status = "Editor: lengthened " + state.name;
+    }
+    if (uiButton({416.0f, 440.0f, 90.0f, 24.0f}, "+ IASA")) {
+        ++state.initialInterruptibleFrame;
+        editor.status = "Editor: moved IASA later for " + state.name;
+    }
+    if (uiButton({24.0f, 470.0f, 90.0f, 24.0f}, "- IASA")) {
+        state.initialInterruptibleFrame = std::max(0, state.initialInterruptibleFrame - 1);
+        editor.status = "Editor: moved IASA earlier for " + state.name;
+    }
+    if (uiButton({122.0f, 470.0f, 90.0f, 24.0f}, "+ Hitbox")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::CreateHitbox;
+        subaction.frames = 3;
+        subaction.hitbox.hitboxId = static_cast<int>(state.action.size());
+        subaction.hitbox.damage = pf::fxFromFloat(3.0f);
+        subaction.hitbox.radius = pf::fxFromFloat(0.45f);
+        subaction.hitbox.offset = {pf::fxFromFloat(0.85f), pf::fxFromFloat(1.2f), 0};
+        subaction.hitbox.knockbackAngleDegrees = pf::fx(45);
+        subaction.hitbox.knockbackBase = pf::fx(20);
+        subaction.hitbox.knockbackGrowth = pf::fx(60);
+        state.action.push_back(subaction);
+        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+        editor.status = "Editor: added hitbox subaction to " + state.name;
+    }
+    if (uiButton({220.0f, 470.0f, 90.0f, 24.0f}, "+ Clear")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::ClearHitboxes;
+        subaction.frames = 1;
+        state.action.push_back(subaction);
+        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
+        editor.status = "Editor: added clear-hitboxes subaction to " + state.name;
+    }
+    if (uiButton({318.0f, 470.0f, 90.0f, 24.0f}, "+ Wait Int")) {
+        pf::InterruptRule interrupt;
+        interrupt.targetState = "Wait";
+        interrupt.condition = pf::InterruptCondition::WaitInput;
+        interrupt.enableFrame = state.initialInterruptibleFrame;
+        interrupt.disableFrame = 0;
+        state.interrupts.push_back(interrupt);
+        editor.status = "Editor: added Wait interrupt to " + state.name;
+    }
+}
+
 static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
@@ -1622,7 +1719,9 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor) {
     DrawText(editor.status.c_str(), 24, 240, 14, DARKGRAY);
     DrawText("N/New state  Del/remove  T/Test playtest  [/] state  ,/. subaction  Space pause  R reset", 24, 258, 14, GRAY);
     drawEditorWorkspaceTabs(editor);
-    if (editor.workspace == pf::EditorWorkspace::Logic) {
+    if (editor.workspace == pf::EditorWorkspace::Moveset) {
+        drawEditorMovesetWorkspace(world, editor);
+    } else if (editor.workspace == pf::EditorWorkspace::Logic) {
         drawEditorLogicWorkspace(world, editor);
     } else if (editor.workspace == pf::EditorWorkspace::Assets) {
         drawEditorAssetsWorkspace(world, editor);
