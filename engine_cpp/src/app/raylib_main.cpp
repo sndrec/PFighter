@@ -6769,8 +6769,8 @@ int main() {
             editor.paused = !replay.realtimePlayback;
         }
 
-        const pf::InputFrame p1Input = readPlayerInput(0, false);
-        const pf::InputFrame p2Input = editor.testMode ? pf::InputFrame{} : readPlayerInput(1, true);
+        const pf::InputFrame p1Input = editorTextEditing ? pf::InputFrame{} : readPlayerInput(0, false);
+        const pf::InputFrame p2Input = editorTextEditing || editor.testMode ? pf::InputFrame{} : readPlayerInput(1, true);
         const bool simRunning = appMode != AppMode::MainMenu && ((replay.playbackLoaded && replay.realtimePlayback) || !editor.paused);
         if (simRunning) {
             tickrate.accumulator += GetFrameTime();
