@@ -3211,6 +3211,42 @@ int main() {
         editor.selectedState = 0;
         editor.selectedSubaction = 0;
     };
+    auto selectedEditorState = [&]() -> pf::FighterState* {
+        if (world.fighters.empty()) {
+            return nullptr;
+        }
+        editor.clampToWorld(world);
+        pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+        if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+            return nullptr;
+        }
+        pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+        if (def.states.empty()) {
+            return nullptr;
+        }
+        editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+        return &def.states[static_cast<size_t>(editor.selectedState)];
+    };
+    auto removeSelectedSubaction = [&]() {
+        pf::FighterState* state = selectedEditorState();
+        if (!state || state->action.empty()) {
+            return;
+        }
+        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state->action.size()) - 1);
+        state->action.erase(state->action.begin() + editor.selectedSubaction);
+        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, std::max(0, static_cast<int>(state->action.size()) - 1));
+        editor.status = "Editor: removed selected subaction";
+    };
+    auto adjustSelectedSubactionFrames = [&](int delta) {
+        pf::FighterState* state = selectedEditorState();
+        if (!state || state->action.empty()) {
+            return;
+        }
+        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state->action.size()) - 1);
+        pf::Subaction& subaction = state->action[static_cast<size_t>(editor.selectedSubaction)];
+        subaction.frames = std::max(0, subaction.frames + delta);
+        editor.status = "Editor: adjusted selected subaction frame count";
+    };
 
     while (!WindowShouldClose()) {
         if (appMode != AppMode::MainMenu) {
@@ -3258,6 +3294,15 @@ int main() {
         if (appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
         if (appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) --editor.selectedSubaction;
         if (appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) ++editor.selectedSubaction;
+        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
+            removeSelectedSubaction();
+        }
+        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
+            adjustSelectedSubactionFrames(-1);
+        }
+        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
+            adjustSelectedSubactionFrames(1);
+        }
         if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
         if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
         for (size_t i = 0; i < fighterKeys.size(); ++i) {
