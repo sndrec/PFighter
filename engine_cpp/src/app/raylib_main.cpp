@@ -3175,6 +3175,45 @@ static void drawAuthoredMesh(const pf::FighterDefinition& def, const pf::Fighter
     }
 }
 
+static bool authoredMeshVertexWorldAt(
+    const pf::FighterDefinition& def,
+    const pf::FighterRuntime& fighter,
+    int vertexIndex,
+    pf::Vec3& out)
+{
+    int cursor = 0;
+    for (const pf::HsdMeshBatch& batch : def.authoredMesh.batches) {
+        const int next = cursor + static_cast<int>(batch.vertices.size());
+        if (vertexIndex >= cursor && vertexIndex < next) {
+            out = authoredMeshVertexWorld(fighter, batch, batch.vertices[static_cast<size_t>(vertexIndex - cursor)]);
+            return true;
+        }
+        cursor = next;
+    }
+    return false;
+}
+
+static void drawEditorSelectedAuthoredMeshVertex(const pf::World& world, const pf::FighterEditor& editor) {
+    if (editor.workspace != pf::EditorWorkspace::Assets ||
+        editor.selectedFighter < 0 ||
+        editor.selectedFighter >= static_cast<int>(world.fighters.size()))
+    {
+        return;
+    }
+    const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    pf::Vec3 selectedPosition;
+    if (!authoredMeshVertexWorldAt(def, fighter, editor.selectedAuthoredMeshVertex, selectedPosition)) {
+        return;
+    }
+    const Vector3 rayPosition = toRay(selectedPosition);
+    DrawSphere(rayPosition, 0.075f, YELLOW);
+    DrawSphereWires(rayPosition, 0.12f, 10, 6, BLACK);
+}
+
 static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, bool boxes) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
@@ -7170,6 +7209,9 @@ int main() {
             drawFighter(world, world.fighters[0], ORANGE, editor.showBoxes);
             drawFighter(world, world.fighters[1], SKYBLUE, editor.showBoxes);
             drawGameObjects(world, editor.showBoxes);
+            if (appMode == AppMode::Editor) {
+                drawEditorSelectedAuthoredMeshVertex(world, editor);
+            }
             EndMode3D();
             if (appMode == AppMode::Editor) {
                 drawEditor(world, editor, testFighterDef);
