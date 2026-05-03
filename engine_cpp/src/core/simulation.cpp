@@ -6862,6 +6862,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SpawnObject:
                 spawnGameObject(world, instruction.text, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
+            case PackageScriptOp::SpawnObjectFromVars:
+                spawnGameObject(
+                    world,
+                    instruction.text,
+                    object.ownerFighter,
+                    {object.position.x + object.facing * instruction.fixValue, object.position.y},
+                    object.facing,
+                    {object.facing * var(instruction.srcA), var(instruction.srcB)});
+                break;
             case PackageScriptOp::SkipIfVarLessThanImmediate:
                 instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
                 continue;

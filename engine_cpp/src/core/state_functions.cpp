@@ -2667,6 +2667,18 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
             spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
             break;
         }
+        case PackageScriptOp::SpawnObjectFromVars: {
+            const Vec2 position{
+                fighter.position.x + fighter.facing * instruction.fixValue,
+                fighter.position.y + fxFromFloat(0.7f),
+            };
+            const Vec2 velocity{
+                fighter.facing * packageVar(fighter, instruction.srcA),
+                packageVar(fighter, instruction.srcB),
+            };
+            spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            break;
+        }
         case PackageScriptOp::SkipIfVarLessThanImmediate:
             instructionIndex += packageVar(fighter, instruction.dst) < instruction.intValue ? 2 : 1;
             continue;

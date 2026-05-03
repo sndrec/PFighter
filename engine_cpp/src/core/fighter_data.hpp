@@ -453,6 +453,7 @@ enum class PackageScriptOp : uint8_t {
     SetFacingFromVar,
     ChangeState,
     SpawnObject,
+    SpawnObjectFromVars,
     SkipIfVarLessThanImmediate,
     SkipIfVarLessThanVar,
     JumpRelative,

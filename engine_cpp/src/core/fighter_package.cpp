@@ -236,6 +236,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetFacingFromVar:
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
+    case PackageScriptOp::SpawnObjectFromVars:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
     case PackageScriptOp::JumpRelative:
@@ -1621,6 +1622,13 @@ void validatePackageScriptInstruction(
         }
         break;
     case PackageScriptOp::SpawnObject:
+        if (!hasName(packageObjectNames, instruction.text)) {
+            throw std::runtime_error("fighter package script object target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnObjectFromVars:
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
         if (!hasName(packageObjectNames, instruction.text)) {
             throw std::runtime_error("fighter package script object target is invalid");
         }

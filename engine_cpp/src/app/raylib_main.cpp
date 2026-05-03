@@ -1011,6 +1011,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetFacingFromVar: return "FaceVar";
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
+    case pf::PackageScriptOp::SpawnObjectFromVars: return "SpawnV";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
     case pf::PackageScriptOp::JumpRelative: return "Jump";
@@ -1128,6 +1129,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SpawnObject:
         label += " " + instruction.text;
         break;
+    case pf::PackageScriptOp::SpawnObjectFromVars:
+        label += " " + instruction.text + " v" + std::to_string(instruction.srcA) + "/v" + std::to_string(instruction.srcB);
+        break;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
         label += " v" + std::to_string(instruction.dst) + " < " + std::to_string(instruction.intValue);
         break;
@@ -1234,7 +1238,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetAirVelocityYFromVar: return pf::PackageScriptOp::SetFacingFromVar;
     case pf::PackageScriptOp::SetFacingFromVar: return pf::PackageScriptOp::ChangeState;
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
-    case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
+    case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SpawnObjectFromVars;
+    case pf::PackageScriptOp::SpawnObjectFromVars: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::JumpRelative;
     case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::SwitchFighterDefinition;
@@ -1296,7 +1301,11 @@ static void normalizePackageInstruction(
         const int stateIndex = std::clamp(selectedState, 0, static_cast<int>(def.states.size()) - 1);
         instruction.text = def.states[static_cast<size_t>(stateIndex)].name;
     }
-    if (instruction.op == pf::PackageScriptOp::SpawnObject && instruction.text.empty() && !world.objectDefs.empty()) {
+    if ((instruction.op == pf::PackageScriptOp::SpawnObject ||
+         instruction.op == pf::PackageScriptOp::SpawnObjectFromVars) &&
+        instruction.text.empty() &&
+        !world.objectDefs.empty())
+    {
         const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
         instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
     }
@@ -1333,7 +1342,11 @@ static void normalizeObjectPackageInstruction(
         const int stateIndex = std::clamp(selectedObjectState, 0, static_cast<int>(def.states.size()) - 1);
         instruction.text = def.states[static_cast<size_t>(stateIndex)].name;
     }
-    if (instruction.op == pf::PackageScriptOp::SpawnObject && instruction.text.empty() && !world.objectDefs.empty()) {
+    if ((instruction.op == pf::PackageScriptOp::SpawnObject ||
+         instruction.op == pf::PackageScriptOp::SpawnObjectFromVars) &&
+        instruction.text.empty() &&
+        !world.objectDefs.empty())
+    {
         const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
         instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
     }
@@ -1416,7 +1429,10 @@ static void remapRemovedObjectScriptTarget(
     const std::string& removedObjectName,
     const std::string& replacementObjectName)
 {
-    if (instruction.op != pf::PackageScriptOp::SpawnObject || instruction.text != removedObjectName) {
+    if ((instruction.op != pf::PackageScriptOp::SpawnObject &&
+         instruction.op != pf::PackageScriptOp::SpawnObjectFromVars) ||
+        instruction.text != removedObjectName)
+    {
         return;
     }
     if (replacementObjectName.empty()) {

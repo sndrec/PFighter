@@ -4664,7 +4664,7 @@ int main(int argc, char** argv) {
         },
     }, {
         "InputScript",
-        16,
+        24,
         {
             {pf::PackageScriptOp::SetVarButtonDown, 5, -1, -1, pf::ButtonPause, 0, {}},
             {pf::PackageScriptOp::SetVarButtonPressed, 6, -1, -1, pf::ButtonPause, 0, {}},
@@ -4675,6 +4675,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarShield, 11, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::ScaleVarFixed, 12, 7, -1, 0, pf::fxFromFloat(2.0f), {}},
             {pf::PackageScriptOp::SetGroundVelocityFromVar, -1, 12, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SpawnObjectFromVars, -1, 12, 8, 0, pf::fxFromFloat(1.0f), "PackageVelocityObject"},
             {pf::PackageScriptOp::SetFacingFromVar, -1, 9, -1, 0, 0, {}},
         },
     }};
@@ -4706,6 +4707,17 @@ int main(int argc, char** argv) {
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
+    pf::GameObjectDefinition packageVelocityObject = packageSourceWorld.objectDefs[1];
+    packageVelocityObject.name = "PackageVelocityObject";
+    packageVelocityObject.states[0].onFrame = {{std::string{"object_lifetime"}}};
+    packageVelocityObject.states[0].onPhysics.clear();
+    packageVelocityObject.states[0].onCollision = {{std::string{"object_blast_destroy"}}};
+    packageVelocityObject.onAccessory.clear();
+    packageVelocityObject.hitboxes.clear();
+    packageVelocityObject.hurtboxes.clear();
+    packageVelocityObject.touchboxes.clear();
+    packageVelocityObject.gravity = 0;
+    packageSourceWorld.objectDefs.push_back(packageVelocityObject);
     pf::FighterPackage sourcePackage;
     sourcePackage.name = "headless_smoke_package";
     sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
@@ -4820,6 +4832,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidVarMotionWritePackage = sourcePackage;
     invalidVarMotionWritePackage.fighters[0].packageScripts[5].instructions[8].srcA = 999;
     const bool invalidPackageVarMotionWriteRejected = pf::writeFighterPackage(invalidVarMotionWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidSpawnObjectVarsWritePackage = sourcePackage;
+    invalidSpawnObjectVarsWritePackage.fighters[0].packageScripts[5].instructions[9].srcB = 999;
+    const bool invalidPackageSpawnObjectVarsWriteRejected = pf::writeFighterPackage(invalidSpawnObjectVarsWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidScaleWritePackage = sourcePackage;
     invalidScaleWritePackage.fighters[0].packageScripts[5].instructions[7].srcA = 999;
     const bool invalidPackageScaleWriteRejected = pf::writeFighterPackage(invalidScaleWritePackage, &invalidPackageError).empty();
@@ -4989,6 +5004,7 @@ int main(int argc, char** argv) {
     if (packageShapeOk) {
         packageInputScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
         packageInputScriptWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
+        packageInputScriptWorld.objectDefs = loadedPackage.objects;
         const int waitIndex = packageInputScriptWorld.fighterDefs[0].stateIndex("Wait");
         if (waitIndex >= 0) {
             pf::FunctionCall scriptCall;
@@ -5017,6 +5033,17 @@ int main(int argc, char** argv) {
         packageInputScriptWorld.fighters[0].packageVars[12] == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].groundVelocity == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].facing == -1;
+    bool packageVarSpawnObjectOk = false;
+    for (const pf::GameObjectRuntime& object : packageInputScriptWorld.objects) {
+        if (object.objectDef >= 0 &&
+            object.objectDef < static_cast<int>(packageInputScriptWorld.objectDefs.size()) &&
+            packageInputScriptWorld.objectDefs[static_cast<size_t>(object.objectDef)].name == "PackageVelocityObject" &&
+            object.velocity.x == pf::fxFromFloat(0.5f) &&
+            object.velocity.y == pf::fxFromFloat(-0.5f))
+        {
+            packageVarSpawnObjectOk = true;
+        }
+    }
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageSwitchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5113,6 +5140,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_branch_var=" << packageScriptBranchVar
               << " fighter_package_script_fact_ok=" << packageFactScriptOk
               << " fighter_package_script_input_ok=" << packageInputScriptOk
+              << " fighter_package_script_spawn_vars_ok=" << packageVarSpawnObjectOk
               << " fighter_package_script_switch_ok=" << packageSwitchScriptOk
               << " fighter_package_script_switch_var=" << packageSwitchScriptVar
               << " fighter_package_script_spawn_fighter_ok=" << packageSpawnFighterScriptOk
@@ -5148,6 +5176,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_input_write_rejected=" << invalidPackageInputWriteRejected
               << " fighter_package_invalid_scale_write_rejected=" << invalidPackageScaleWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
+              << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected
               << " fighter_package_invalid_object_input_write_rejected=" << invalidPackageObjectInputWriteRejected
               << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk
