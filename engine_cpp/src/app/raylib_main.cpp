@@ -1109,6 +1109,7 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
     pf::FighterDefinition def;
     def.name = name;
     def.hasHsdAsset = false;
+    def.authoredEcb.enabled = true;
     def.properties.common = common;
     def.hurtboxes = {
         {pf::BoneId::Hip, {0, pf::fxFromFloat(-0.45f), 0}, {0, pf::fxFromFloat(0.55f), 0}, pf::fxFromFloat(0.45f), pf::HurtboxState::Normal, true},
@@ -1307,7 +1308,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
-    const Rectangle panel{12.0f, 324.0f, 530.0f, 260.0f};
+    const Rectangle panel{12.0f, 324.0f, 530.0f, 330.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Logic", 24, 336, 16, BLACK);
@@ -1796,6 +1797,48 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         }
     } else {
         DrawText("No authored hurtboxes", 24, 532, 13, GRAY);
+    }
+
+    DrawText(("Authored ECB: " + std::string(def.authoredEcb.enabled ? "on" : "off")).c_str(), 24, 590, 13, DARKGRAY);
+    if (uiButton({122.0f, 584.0f, 72.0f, 24.0f}, "ECB", def.authoredEcb.enabled)) {
+        def.authoredEcb.enabled = !def.authoredEcb.enabled;
+        editor.status = def.authoredEcb.enabled ? "Editor: enabled authored ECB" : "Editor: disabled authored ECB";
+        pf::calculateEcb(def, fighter, true);
+    }
+    if (def.authoredEcb.enabled) {
+        const float halfWidth = pf::fxToFloat(def.authoredEcb.points[2].x);
+        const float top = pf::fxToFloat(def.authoredEcb.points[1].y);
+        const float bottom = pf::fxToFloat(def.authoredEcb.points[3].y);
+        DrawText(("w=" + std::to_string(halfWidth * 2.0f) +
+                  " top=" + std::to_string(top) +
+                  " bot=" + std::to_string(bottom)).c_str(), 24, 620, 13, DARKGRAY);
+        if (uiButton({202.0f, 584.0f, 54.0f, 24.0f}, "+ W")) {
+            def.authoredEcb.points[0].x -= pf::fxFromFloat(0.05f);
+            def.authoredEcb.points[2].x += pf::fxFromFloat(0.05f);
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: widened authored ECB";
+        }
+        if (uiButton({262.0f, 584.0f, 54.0f, 24.0f}, "- W")) {
+            def.authoredEcb.points[0].x = std::min(def.authoredEcb.points[0].x + pf::fxFromFloat(0.05f), -pf::fxFromFloat(0.1f));
+            def.authoredEcb.points[2].x = std::max(def.authoredEcb.points[2].x - pf::fxFromFloat(0.05f), pf::fxFromFloat(0.1f));
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: narrowed authored ECB";
+        }
+        if (uiButton({322.0f, 584.0f, 54.0f, 24.0f}, "+ Top")) {
+            def.authoredEcb.points[1].y += pf::fxFromFloat(0.1f);
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: raised authored ECB top";
+        }
+        if (uiButton({382.0f, 584.0f, 54.0f, 24.0f}, "- Top")) {
+            def.authoredEcb.points[1].y = std::max(def.authoredEcb.points[3].y + pf::fxFromFloat(0.5f), def.authoredEcb.points[1].y - pf::fxFromFloat(0.1f));
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: lowered authored ECB top";
+        }
+        if (uiButton({442.0f, 584.0f, 54.0f, 24.0f}, "Up")) {
+            def.authoredEcb.points[3].y += pf::fxFromFloat(0.05f);
+            pf::calculateEcb(def, fighter, true);
+            editor.status = "Editor: raised authored ECB bottom";
+        }
     }
 }
 

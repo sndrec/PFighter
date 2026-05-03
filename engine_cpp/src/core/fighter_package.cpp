@@ -1083,10 +1083,27 @@ ShieldDefinition readShieldDefinition(PackageReader& reader) {
     return shield;
 }
 
+void writeFighterEcbDefinition(PackageWriter& writer, const FighterEcbDefinition& ecb) {
+    writer.writeBool(ecb.enabled);
+    for (const Vec2& point : ecb.points) {
+        writeVec2(writer, point);
+    }
+}
+
+FighterEcbDefinition readFighterEcbDefinition(PackageReader& reader) {
+    FighterEcbDefinition ecb;
+    ecb.enabled = reader.readBool();
+    for (Vec2& point : ecb.points) {
+        point = readVec2(reader);
+    }
+    return ecb;
+}
+
 void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
     writer.writeString(fighter.name);
     writeFighterProperties(writer, fighter.properties);
     writeShieldDefinition(writer, fighter.shield);
+    writeFighterEcbDefinition(writer, fighter.authoredEcb);
     writer.writeBool(fighter.hasHsdAsset);
     const int32_t assetIndex = assetIndexFor(package, fighter.hsdAsset);
     if (fighter.hasHsdAsset && assetIndex < 0) {
@@ -1119,6 +1136,7 @@ FighterDefinition readFighterDefinition(
     fighter.name = reader.readString();
     fighter.properties = readFighterProperties(reader);
     fighter.shield = readShieldDefinition(reader);
+    fighter.authoredEcb = readFighterEcbDefinition(reader);
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();

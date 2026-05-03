@@ -1432,9 +1432,22 @@ static bool calculateHsdDesiredEcb(const FighterDefinition& def, FighterRuntime&
     return true;
 }
 
+static bool calculateAuthoredDesiredEcb(const FighterDefinition& def, FighterRuntime& fighter, Ecb& out) {
+    if (!def.authoredEcb.enabled) {
+        return false;
+    }
+    out.points = def.authoredEcb.points;
+    validateDesiredEcb(out);
+    refreshEcbMetadata(out, fighter);
+    return true;
+}
+
 static Ecb calculateDesiredEcb(const FighterDefinition& def, FighterRuntime& fighter) {
     Ecb desired;
     if (calculateHsdDesiredEcb(def, fighter, desired)) {
+        return desired;
+    }
+    if (calculateAuthoredDesiredEcb(def, fighter, desired)) {
         return desired;
     }
     Fix highest = 0;

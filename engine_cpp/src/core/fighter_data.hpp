@@ -4,6 +4,7 @@
 #include "core/math.hpp"
 #include "core/animation_asset.hpp"
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -379,6 +380,16 @@ struct HurtboxDefinition {
     bool grabbable = true;
 };
 
+struct FighterEcbDefinition {
+    bool enabled = false;
+    std::array<Vec2, 4> points{
+        Vec2{-fxFromFloat(0.55f), fxFromFloat(1.0f)},
+        Vec2{0, fxFromFloat(2.0f)},
+        Vec2{fxFromFloat(0.55f), fxFromFloat(1.0f)},
+        Vec2{0, 0},
+    };
+};
+
 struct HitboxDefinition {
     BoneId bone = BoneId::Hip;
     int hsdBone = -1;
@@ -624,6 +635,7 @@ struct FighterDefinition {
     ShieldDefinition shield;
     std::shared_ptr<const HsdFighterAnimationAsset> hsdAsset;
     bool hasHsdAsset = false;
+    FighterEcbDefinition authoredEcb;
     std::vector<PackageVariableDefinition> packageVariables;
     std::vector<PackageScript> packageScripts;
     std::vector<HurtboxDefinition> hurtboxes;
