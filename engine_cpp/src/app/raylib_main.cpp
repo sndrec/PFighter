@@ -2922,6 +2922,46 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
     }
 }
 
+static void demoteProjectileSpawnsForObject(pf::World& world, const std::string& objectName) {
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::FighterState& state : fighter.states) {
+            for (pf::Subaction& subaction : state.action) {
+                if (subaction.type == pf::SubactionType::SpawnProjectile &&
+                    subaction.objectName == objectName)
+                {
+                    subaction.type = pf::SubactionType::SpawnObject;
+                }
+            }
+        }
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.text != objectName) {
+                    continue;
+                }
+                if (instruction.op == pf::PackageScriptOp::SpawnProjectile) {
+                    instruction.op = pf::PackageScriptOp::SpawnObject;
+                } else if (instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars) {
+                    instruction.op = pf::PackageScriptOp::SpawnObjectFromVars;
+                }
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.text != objectName) {
+                    continue;
+                }
+                if (instruction.op == pf::PackageScriptOp::SpawnProjectile) {
+                    instruction.op = pf::PackageScriptOp::SpawnObject;
+                } else if (instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars) {
+                    instruction.op = pf::PackageScriptOp::SpawnObjectFromVars;
+                }
+            }
+        }
+    }
+}
+
 static bool packageScriptInstructionTargetsFighter(const pf::PackageScriptInstruction& instruction) {
     return instruction.op == pf::PackageScriptOp::SwitchFighterDefinition ||
         instruction.op == pf::PackageScriptOp::SpawnFighter;
@@ -3353,9 +3393,13 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.status = "Editor: object box panel";
         }
         if (uiButton({646.0f, 486.0f, 58.0f, 24.0f}, "Kind")) {
+            const std::string objectName = object.name;
             object.kind = object.kind == pf::GameObjectKind::Projectile
                 ? pf::GameObjectKind::Item
                 : pf::GameObjectKind::Projectile;
+            if (object.kind == pf::GameObjectKind::Item) {
+                demoteProjectileSpawnsForObject(world, objectName);
+            }
             editor.status = object.kind == pf::GameObjectKind::Projectile
                 ? "Editor: object is now a projectile"
                 : "Editor: object is now an item";
