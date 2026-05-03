@@ -638,6 +638,7 @@ struct FighterDefinition {
     FighterEcbDefinition authoredEcb;
     std::vector<AnimationJoint> authoredSkeleton;
     std::vector<AnimationClip> authoredClips;
+    HsdFighterMesh authoredMesh;
     std::vector<PackageVariableDefinition> packageVariables;
     std::vector<PackageScript> packageScripts;
     std::vector<HurtboxDefinition> hurtboxes;

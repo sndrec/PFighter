@@ -1219,6 +1219,29 @@ static void ensureAuthoredRootJoint(pf::FighterDefinition& def) {
     def.authoredSkeleton.push_back({-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}});
 }
 
+static pf::HsdFighterMesh makeEditorTriangleMesh() {
+    pf::HsdFighterMesh mesh;
+    pf::HsdMeshBatch batch;
+    batch.parentBone = 0;
+    batch.singleBindBone = 0;
+    batch.materialColor = {160, 220, 255, 255};
+
+    auto vertex = [](pf::Vec3 position) {
+        pf::HsdMeshVertex out;
+        out.position = position;
+        out.normal = {0, 0, pf::fx(1)};
+        out.influences[0] = {0, 1.0f};
+        return out;
+    };
+    batch.vertices = {
+        vertex({pf::fxFromFloat(-0.35f), pf::fxFromFloat(0.2f), 0}),
+        vertex({pf::fxFromFloat(0.35f), pf::fxFromFloat(0.2f), 0}),
+        vertex({0, pf::fxFromFloat(1.0f), 0}),
+    };
+    mesh.batches.push_back(std::move(batch));
+    return mesh;
+}
+
 static void sortAnimationKeys(std::vector<pf::AnimationKey>& keys) {
     std::sort(keys.begin(), keys.end(), [](const pf::AnimationKey& a, const pf::AnimationKey& b) {
         return a.frame < b.frame;
@@ -1811,6 +1834,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     const size_t assetBytes = def.hsdAsset ? def.hsdAsset->sourceBytes.size() : 0;
     DrawText(("Embedded HSD bytes: " + std::to_string(assetBytes)).c_str(), 24, 382, 13, DARKGRAY);
     DrawText(("Objects/articles in package: " + std::to_string(world.objectDefs.size())).c_str(), 24, 404, 13, DARKGRAY);
+    DrawText(("Authored mesh batches: " + std::to_string(def.authoredMesh.batches.size())).c_str(), 24, 426, 13, DARKGRAY);
 
     if (uiButton({338.0f, 338.0f, 82.0f, 26.0f}, "Save Pkg")) {
         pf::FighterPackage package;
@@ -1879,6 +1903,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         editor.selectedPackageScript = 0;
         editor.selectedPackageInstruction = 0;
         editor.status = "Editor: cloned fighter into runtime slot " + world.fighterDefs.back().name;
+    }
+    if (uiButton({270.0f, 370.0f, 60.0f, 26.0f}, "TriMesh")) {
+        ensureAuthoredRootJoint(def);
+        def.authoredMesh = makeEditorTriangleMesh();
+        editor.status = "Editor: seeded authored mesh triangle batch";
     }
 
     DrawText("Objects / Articles", 24, 436, 13, DARKGRAY);
