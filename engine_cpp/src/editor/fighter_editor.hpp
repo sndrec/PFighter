@@ -56,6 +56,8 @@ struct FighterEditor {
     int lastPackageFighters = 0;
     int lastPackageObjects = 0;
     int lastPackageAssets = 0;
+    bool lastPackageValid = false;
+    std::string lastPackageMessage;
     std::string status = "Editor: T or Test launches current in-memory fighter on Battlefield";
 
     void clampToWorld(const World& world);

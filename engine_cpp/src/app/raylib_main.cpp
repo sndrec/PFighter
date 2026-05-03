@@ -3033,6 +3033,13 @@ static void updateEditorPackageSummary(
     editor.lastPackageFighters = static_cast<int>(package.fighters.size());
     editor.lastPackageObjects = static_cast<int>(package.objects.size());
     editor.lastPackageAssets = static_cast<int>(package.hsdAssets.size());
+    editor.lastPackageValid = true;
+    editor.lastPackageMessage = "OK";
+}
+
+static void updateEditorPackageFailure(pf::FighterEditor& editor, const std::string& message) {
+    editor.lastPackageValid = false;
+    editor.lastPackageMessage = message;
 }
 
 static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
@@ -3064,6 +3071,15 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     } else {
         DrawText("Last package: none saved or loaded", 24, 448, 12, GRAY);
     }
+    if (!editor.lastPackageMessage.empty()) {
+        std::string packageCheck = std::string("Check: ") +
+            (editor.lastPackageValid ? "valid " : "invalid ") +
+            editor.lastPackageMessage;
+        while (!packageCheck.empty() && MeasureText(packageCheck.c_str(), 12) > 700) {
+            packageCheck.pop_back();
+        }
+        DrawText(packageCheck.c_str(), 24, 484, 12, editor.lastPackageValid ? DARKGREEN : RED);
+    }
     if (!world.objectDefs.empty()) {
         const int objectIndex = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
         const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(objectIndex)];
@@ -3085,6 +3101,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                 " bytes=" + std::to_string(bytes.size()) +
                 " checksum=" + std::to_string(pf::fighterPackageChecksum(bytes));
         } else {
+            updateEditorPackageFailure(editor, error);
             editor.status = "Editor package save failed: " + error;
         }
     }
@@ -3097,6 +3114,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.status = "Editor: package validates bytes=" + std::to_string(bytes.size()) +
                 " checksum=" + std::to_string(pf::fighterPackageChecksum(bytes));
         } else {
+            updateEditorPackageFailure(editor, error);
             editor.status = "Editor package validation failed: " + error;
         }
     }
@@ -3104,8 +3122,10 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         pf::FighterPackage package;
         std::string error;
         if (!pf::loadFighterPackage(editor.packagePath, package, &error)) {
+            updateEditorPackageFailure(editor, error);
             editor.status = "Editor package load failed: " + error;
         } else if (package.fighters.empty()) {
+            updateEditorPackageFailure(editor, "no fighters in package");
             editor.status = "Editor package load failed: no fighters in package";
         } else {
             std::string packageSummaryError;
