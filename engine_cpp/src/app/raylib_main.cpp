@@ -1105,6 +1105,47 @@ static pf::GameObjectDefinition makeEditorObjectDefinition(const std::string& na
     return object;
 }
 
+static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string& name, const pf::MeleeCommonData& common) {
+    pf::FighterDefinition def;
+    def.name = name;
+    def.hasHsdAsset = false;
+    def.properties.common = common;
+    def.hurtboxes = {
+        {pf::BoneId::Hip, {0, pf::fxFromFloat(-0.45f), 0}, {0, pf::fxFromFloat(0.55f), 0}, pf::fxFromFloat(0.45f), pf::HurtboxState::Normal, true},
+        {pf::BoneId::Head, {0, pf::fxFromFloat(-0.2f), 0}, {0, pf::fxFromFloat(0.2f), 0}, pf::fxFromFloat(0.32f), pf::HurtboxState::Normal, true},
+    };
+
+    pf::FighterState wait;
+    wait.name = "Wait";
+    wait.animation = "Wait";
+    wait.animationLengthFrames = 60;
+    wait.loopAnimation = true;
+    wait.allowSlideoff = true;
+    wait.allowLedgeGrab = true;
+    wait.allowWallCollision = true;
+    wait.allowCeilingCollision = true;
+    wait.convertFloorCollisionToGround = true;
+    wait.interrupts = {
+        {"Fall", pf::InterruptCondition::BecameAirborne},
+    };
+
+    pf::FighterState fall;
+    fall.name = "Fall";
+    fall.animation = "Fall";
+    fall.animationLengthFrames = 60;
+    fall.loopAnimation = true;
+    fall.allowSlideoff = true;
+    fall.allowLedgeGrab = true;
+    fall.allowWallCollision = true;
+    fall.allowCeilingCollision = true;
+    fall.convertFloorCollisionToGround = true;
+    fall.onFrame = {{"process_airborne"}};
+    fall.onLanding = {{"process_landing"}};
+
+    def.states = {wait, fall};
+    return def;
+}
+
 static bool hasFunctionCall(const std::vector<pf::FunctionCall>& calls, const std::string& name) {
     return std::any_of(calls.begin(), calls.end(), [&](const pf::FunctionCall& call) {
         return call.name == name;
@@ -1453,6 +1494,21 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: loaded package fighter " + world.fighterDefs[static_cast<size_t>(fighterDef)].name;
         }
+    }
+    if (uiButton({338.0f, 370.0f, 82.0f, 26.0f}, "Blank")) {
+        pf::FighterDefinition blank = makeEditorBlankFighterDefinition(
+            uniqueFighterName(world, "BlankFighter"),
+            def.properties.common);
+        world.fighterDefs.push_back(std::move(blank));
+        const int blankIndex = static_cast<int>(world.fighterDefs.size()) - 1;
+        pf::resetTrainingFighter(world, static_cast<size_t>(editor.selectedFighter), blankIndex, fighter.position, fighter.facing);
+        selectedFighterDef = blankIndex;
+        editor.selectedState = 0;
+        editor.selectedSubaction = 0;
+        editor.selectedPackageVariable = 0;
+        editor.selectedPackageScript = 0;
+        editor.selectedPackageInstruction = 0;
+        editor.status = "Editor: created blank runtime fighter " + world.fighterDefs.back().name;
     }
     if (uiButton({430.0f, 370.0f, 82.0f, 26.0f}, "Clone")) {
         pf::FighterDefinition clone = def;
