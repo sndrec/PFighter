@@ -249,6 +249,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
     case PackageScriptOp::SpawnObjectFromVars:
+    case PackageScriptOp::SpawnProjectile:
+    case PackageScriptOp::SpawnProjectileFromVars:
     case PackageScriptOp::DestroyObject:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
@@ -1482,6 +1484,13 @@ bool hasName(const std::vector<std::string>& names, const std::string& name) {
     return std::find(names.begin(), names.end(), name) != names.end();
 }
 
+bool objectHasKind(const std::vector<GameObjectDefinition>& objects, const std::string& name, GameObjectKind kind) {
+    const auto found = std::find_if(objects.begin(), objects.end(), [&](const GameObjectDefinition& object) {
+        return object.name == name;
+    });
+    return found != objects.end() && found->kind == kind;
+}
+
 bool hasResolvableStateTarget(const std::vector<std::string>& names, const std::string& name) {
     if (hasName(names, name)) {
         return true;
@@ -1577,6 +1586,7 @@ void validatePackageScriptInstruction(
     const std::vector<std::string>& fighterNames,
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& packageObjectNames,
+    const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
     bool allowInputReads,
@@ -1676,6 +1686,18 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script object target is invalid");
         }
         break;
+    case PackageScriptOp::SpawnProjectile:
+        if (!objectHasKind(packageObjects, instruction.text, GameObjectKind::Projectile)) {
+            throw std::runtime_error("fighter package script projectile target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnProjectileFromVars:
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
+        if (!objectHasKind(packageObjects, instruction.text, GameObjectKind::Projectile)) {
+            throw std::runtime_error("fighter package script projectile target is invalid");
+        }
+        break;
     case PackageScriptOp::DestroyObject:
         if (!allowObjectLifecycleOps) {
             throw std::runtime_error("fighter package script object lifecycle op is invalid");
@@ -1735,6 +1757,7 @@ void validatePackageScripts(
     const std::vector<std::string>& fighterNames,
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& packageObjectNames,
+    const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
     bool allowInputReads,
@@ -1759,6 +1782,7 @@ void validatePackageScripts(
                 fighterNames,
                 stateNames,
                 packageObjectNames,
+                packageObjects,
                 allowResolvableStateTargets,
                 allowFighterTargets,
                 allowInputReads,
@@ -1891,6 +1915,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageFighterNames,
             states,
             packageObjectNames,
+            package.objects,
             true,
             true,
             true,
@@ -1946,6 +1971,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageFighterNames,
             states,
             packageObjectNames,
+            package.objects,
             false,
             false,
             false,

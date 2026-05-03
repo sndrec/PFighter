@@ -1253,6 +1253,24 @@ int spawnGameObject(World& world, const std::string& objectName, int ownerFighte
     return objectIndex;
 }
 
+int spawnGameObjectOfKind(
+    World& world,
+    const std::string& objectName,
+    GameObjectKind requiredKind,
+    int ownerFighter,
+    Vec2 position,
+    int facing,
+    Vec2 velocity)
+{
+    const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const GameObjectDefinition& def) {
+        return def.name == objectName;
+    });
+    if (found == world.objectDefs.end() || found->kind != requiredKind) {
+        return -1;
+    }
+    return spawnGameObject(world, objectName, ownerFighter, position, facing, velocity);
+}
+
 static bool validGameObjectIndex(const World& world, int objectIndex) {
     return objectIndex >= 0 && objectIndex < static_cast<int>(world.objects.size()) &&
         world.objects[static_cast<size_t>(objectIndex)].active;
@@ -6897,15 +6915,20 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SpawnObject:
                 spawnGameObject(world, instruction.text, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
-            case PackageScriptOp::SpawnObjectFromVars:
-                spawnGameObject(
-                    world,
-                    instruction.text,
-                    object.ownerFighter,
-                    {object.position.x + object.facing * instruction.fixValue, object.position.y},
-                    object.facing,
-                    {object.facing * var(instruction.srcA), var(instruction.srcB)});
+            case PackageScriptOp::SpawnProjectile:
+                spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
+            case PackageScriptOp::SpawnObjectFromVars:
+            case PackageScriptOp::SpawnProjectileFromVars: {
+                const Vec2 position{object.position.x + object.facing * instruction.fixValue, object.position.y};
+                const Vec2 velocity{object.facing * var(instruction.srcA), var(instruction.srcB)};
+                if (instruction.op == PackageScriptOp::SpawnProjectileFromVars) {
+                    spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, object.ownerFighter, position, object.facing, velocity);
+                } else {
+                    spawnGameObject(world, instruction.text, object.ownerFighter, position, object.facing, velocity);
+                }
+                break;
+            }
             case PackageScriptOp::DestroyObject:
                 deactivateGameObject(world, objectIndex);
                 return;

@@ -1024,6 +1024,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
     case pf::PackageScriptOp::SpawnObjectFromVars: return "SpawnV";
+    case pf::PackageScriptOp::SpawnProjectile: return "Proj";
+    case pf::PackageScriptOp::SpawnProjectileFromVars: return "ProjV";
     case pf::PackageScriptOp::DestroyObject: return "KillObj";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
@@ -1065,6 +1067,20 @@ static std::string packageFighterTargetName(const pf::World& world, int fighterD
     }
     const int index = std::clamp(fighterDef, 0, static_cast<int>(world.fighterDefs.size()) - 1);
     return world.fighterDefs[static_cast<size_t>(index)].name;
+}
+
+static std::string packageObjectTargetName(const pf::World& world, int selectedObjectDef, pf::GameObjectKind kind) {
+    if (world.objectDefs.empty()) {
+        return {};
+    }
+    const int selected = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+    if (world.objectDefs[static_cast<size_t>(selected)].kind == kind) {
+        return world.objectDefs[static_cast<size_t>(selected)].name;
+    }
+    const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const pf::GameObjectDefinition& object) {
+        return object.kind == kind;
+    });
+    return found == world.objectDefs.end() ? world.objectDefs[static_cast<size_t>(selected)].name : found->name;
 }
 
 static void cyclePackageFighterTarget(
@@ -1152,9 +1168,11 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         label += " " + instruction.text;
         break;
     case pf::PackageScriptOp::SpawnObject:
+    case pf::PackageScriptOp::SpawnProjectile:
         label += " " + instruction.text;
         break;
     case pf::PackageScriptOp::SpawnObjectFromVars:
+    case pf::PackageScriptOp::SpawnProjectileFromVars:
         label += " " + instruction.text + " v" + std::to_string(instruction.srcA) + "/v" + std::to_string(instruction.srcB);
         break;
     case pf::PackageScriptOp::DestroyObject:
@@ -1275,7 +1293,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetFacingFromVar: return pf::PackageScriptOp::ChangeState;
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SpawnObjectFromVars;
-    case pf::PackageScriptOp::SpawnObjectFromVars: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
+    case pf::PackageScriptOp::SpawnObjectFromVars: return pf::PackageScriptOp::SpawnProjectile;
+    case pf::PackageScriptOp::SpawnProjectile: return pf::PackageScriptOp::SpawnProjectileFromVars;
+    case pf::PackageScriptOp::SpawnProjectileFromVars: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::DestroyObject: return pf::PackageScriptOp::Nop;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::JumpRelative;
@@ -1370,12 +1390,20 @@ static void normalizePackageInstruction(
         instruction.text = def.states[static_cast<size_t>(stateIndex)].name;
     }
     if ((instruction.op == pf::PackageScriptOp::SpawnObject ||
-         instruction.op == pf::PackageScriptOp::SpawnObjectFromVars) &&
+         instruction.op == pf::PackageScriptOp::SpawnObjectFromVars ||
+         instruction.op == pf::PackageScriptOp::SpawnProjectile ||
+         instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars) &&
         instruction.text.empty() &&
         !world.objectDefs.empty())
     {
-        const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
-        instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
+        if (instruction.op == pf::PackageScriptOp::SpawnProjectile ||
+            instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars)
+        {
+            instruction.text = packageObjectTargetName(world, selectedObjectDef, pf::GameObjectKind::Projectile);
+        } else {
+            const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
+        }
     }
     if (instruction.op == pf::PackageScriptOp::SwitchFighterDefinition && instruction.text.empty() && !world.fighterDefs.empty()) {
         instruction.text = packageFighterTargetName(world, currentFighterDef);
@@ -1411,12 +1439,20 @@ static void normalizeObjectPackageInstruction(
         instruction.text = def.states[static_cast<size_t>(stateIndex)].name;
     }
     if ((instruction.op == pf::PackageScriptOp::SpawnObject ||
-         instruction.op == pf::PackageScriptOp::SpawnObjectFromVars) &&
+         instruction.op == pf::PackageScriptOp::SpawnObjectFromVars ||
+         instruction.op == pf::PackageScriptOp::SpawnProjectile ||
+         instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars) &&
         instruction.text.empty() &&
         !world.objectDefs.empty())
     {
-        const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
-        instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
+        if (instruction.op == pf::PackageScriptOp::SpawnProjectile ||
+            instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars)
+        {
+            instruction.text = packageObjectTargetName(world, selectedObjectDef, pf::GameObjectKind::Projectile);
+        } else {
+            const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
+        }
     }
 }
 
@@ -1498,7 +1534,9 @@ static void remapRemovedObjectScriptTarget(
     const std::string& replacementObjectName)
 {
     if ((instruction.op != pf::PackageScriptOp::SpawnObject &&
-         instruction.op != pf::PackageScriptOp::SpawnObjectFromVars) ||
+         instruction.op != pf::PackageScriptOp::SpawnObjectFromVars &&
+         instruction.op != pf::PackageScriptOp::SpawnProjectile &&
+         instruction.op != pf::PackageScriptOp::SpawnProjectileFromVars) ||
         instruction.text != removedObjectName)
     {
         return;
@@ -2319,6 +2357,14 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended SpawnObject instruction for " + object.name;
         }
     }
+    if (uiButton({590.0f, 442.0f, 58.0f, 24.0f}, "+ Proj")) {
+        if (script && !world.objectDefs.empty()) {
+            const std::string projectileName = packageObjectTargetName(world, editor.selectedObjectDef, pf::GameObjectKind::Projectile);
+            script->instructions.push_back({pf::PackageScriptOp::SpawnProjectile, -1, -1, -1, 0, pf::fxFromFloat(1.0f), projectileName});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended projectile spawn for " + projectileName;
+        }
+    }
     if (uiButton({515.0f, 442.0f, 68.0f, 24.0f}, "+ Btn")) {
         if (script && !def.packageVariables.empty()) {
             script->instructions.push_back({pf::PackageScriptOp::SetVarButtonPressed, editor.selectedPackageVariable, -1, -1, pf::ButtonAttack, 0, {}});
@@ -2456,6 +2502,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 instruction.text = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)].name;
                 instruction.op = pf::PackageScriptOp::SpawnObject;
                 editor.status = "Editor: targeted selected object from script block";
+            }
+        }
+        if (uiButton({515.0f, 622.0f, 68.0f, 24.0f}, "Proj")) {
+            if (!world.objectDefs.empty()) {
+                instruction.text = packageObjectTargetName(world, editor.selectedObjectDef, pf::GameObjectKind::Projectile);
+                instruction.op = pf::PackageScriptOp::SpawnProjectile;
+                editor.status = "Editor: targeted projectile " + instruction.text + " from script block";
             }
         }
         if (uiButton({290.0f, 622.0f, 68.0f, 24.0f}, "Fighter")) {
@@ -2841,6 +2894,12 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
                     editor.status = "Editor: appended object SpawnObject instruction";
                 }
+                if (uiButton({606.0f, 560.0f, 58.0f, 24.0f}, "+Proj")) {
+                    const std::string projectileName = packageObjectTargetName(world, editor.selectedObjectDef, pf::GameObjectKind::Projectile);
+                    script.instructions.push_back({pf::PackageScriptOp::SpawnProjectile, -1, -1, -1, 0, pf::fxFromFloat(1.0f), projectileName});
+                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                    editor.status = "Editor: appended object projectile spawn";
+                }
                 if (uiButton({606.0f, 620.0f, 58.0f, 24.0f}, "+ Kill")) {
                     script.instructions.push_back({pf::PackageScriptOp::DestroyObject, -1, -1, -1, 0, 0, {}});
                     editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
@@ -2927,6 +2986,11 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         instruction.text = object.name;
                         instruction.op = pf::PackageScriptOp::SpawnObject;
                         editor.status = "Editor: targeted selected object from object script block";
+                    }
+                    if (uiButton({518.0f, 680.0f, 58.0f, 22.0f}, "Proj")) {
+                        instruction.text = packageObjectTargetName(world, editor.selectedObjectDef, pf::GameObjectKind::Projectile);
+                        instruction.op = pf::PackageScriptOp::SpawnProjectile;
+                        editor.status = "Editor: targeted projectile from object script block";
                     }
                     if (uiButton({456.0f, 680.0f, 58.0f, 22.0f}, "Val-")) {
                         --instruction.intValue;

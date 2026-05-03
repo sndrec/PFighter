@@ -2685,16 +2685,22 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::ChangeState:
             changeFighterState(world, fighter, instruction.text);
             break;
-        case PackageScriptOp::SpawnObject: {
+        case PackageScriptOp::SpawnObject:
+        case PackageScriptOp::SpawnProjectile: {
             const Vec2 position{
                 fighter.position.x + fighter.facing * fxFromFloat(0.75f),
                 fighter.position.y + fxFromFloat(0.7f),
             };
             const Vec2 velocity{fighter.facing * instruction.fixValue, 0};
-            spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            if (instruction.op == PackageScriptOp::SpawnProjectile) {
+                spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            } else {
+                spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            }
             break;
         }
-        case PackageScriptOp::SpawnObjectFromVars: {
+        case PackageScriptOp::SpawnObjectFromVars:
+        case PackageScriptOp::SpawnProjectileFromVars: {
             const Vec2 position{
                 fighter.position.x + fighter.facing * instruction.fixValue,
                 fighter.position.y + fxFromFloat(0.7f),
@@ -2703,7 +2709,11 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
                 fighter.facing * packageVar(fighter, instruction.srcA),
                 packageVar(fighter, instruction.srcB),
             };
-            spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            if (instruction.op == PackageScriptOp::SpawnProjectileFromVars) {
+                spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            } else {
+                spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            }
             break;
         }
         case PackageScriptOp::DestroyObject:
