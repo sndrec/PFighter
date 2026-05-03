@@ -1553,7 +1553,7 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetFacing:
         break;
     case PackageScriptOp::ChangeState:
-        if (!hasName(stateNames, instruction.text)) {
+        if (!hasResolvableStateTarget(stateNames, instruction.text)) {
             throw std::runtime_error("fighter package script state target is invalid");
         }
         break;
@@ -1662,7 +1662,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             validateHurtboxGeometry(hurtbox);
         }
         for (const FighterState& state : fighter.states) {
-            if (!state.onAnimationFinishedState.empty() && !hasName(states, state.onAnimationFinishedState)) {
+            if (!state.onAnimationFinishedState.empty() && !hasResolvableStateTarget(states, state.onAnimationFinishedState)) {
                 throw std::runtime_error("fighter package animation finished state target is invalid");
             }
             validateFunctionCalls(state.onEnter, scripts);

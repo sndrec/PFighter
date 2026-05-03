@@ -4680,6 +4680,17 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidObjectVariableNameWritePackage = sourcePackage;
     invalidObjectVariableNameWritePackage.objects[1].packageVariables.push_back(invalidObjectVariableNameWritePackage.objects[1].packageVariables[0]);
     const bool invalidPackageObjectVariableNameWriteRejected = pf::writeFighterPackage(invalidObjectVariableNameWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage aliasStateWritePackage = sourcePackage;
+    aliasStateWritePackage.fighters[0].packageScripts[0].instructions.push_back({
+        pf::PackageScriptOp::ChangeState,
+        -1,
+        -1,
+        -1,
+        0,
+        0,
+        "AppealS",
+    });
+    const bool packageStateAliasWriteOk = !pf::writeFighterPackage(aliasStateWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4793,6 +4804,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_name_write_rejected=" << invalidPackageNameWriteRejected
               << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
               << " fighter_package_invalid_object_variable_name_write_rejected=" << invalidPackageObjectVariableNameWriteRejected
+              << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 
