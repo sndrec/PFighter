@@ -4870,6 +4870,20 @@ int main(int argc, char** argv) {
     duplicateActionClip.name = "DuplicateActionIndex";
     invalidAnimationActionWritePackage.fighters[0].authoredClips = {firstActionClip, duplicateActionClip};
     const bool invalidPackageAnimationActionWriteRejected = pf::writeFighterPackage(invalidAnimationActionWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage authoredStateAnimationWritePackage = sourcePackage;
+    authoredStateAnimationWritePackage.fighters[0].hasHsdAsset = false;
+    authoredStateAnimationWritePackage.fighters[0].hsdAsset.reset();
+    authoredStateAnimationWritePackage.fighters[0].authoredClips = {firstActionClip};
+    pf::FighterState authoredAnimationState;
+    authoredAnimationState.name = "Wait";
+    authoredAnimationState.animation = firstActionClip.name;
+    authoredAnimationState.animationActionIndex = firstActionClip.actionIndex;
+    authoredAnimationState.animationLengthFrames = 10;
+    authoredStateAnimationWritePackage.fighters[0].states = {authoredAnimationState};
+    const bool packageAuthoredStateAnimationWriteOk = !pf::writeFighterPackage(authoredStateAnimationWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidAuthoredStateAnimationWritePackage = authoredStateAnimationWritePackage;
+    invalidAuthoredStateAnimationWritePackage.fighters[0].states[0].animationActionIndex = 99;
+    const bool invalidPackageAuthoredStateAnimationWriteRejected = pf::writeFighterPackage(invalidAuthoredStateAnimationWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidStateTimingWritePackage = sourcePackage;
     invalidStateTimingWritePackage.fighters[0].states[0].animationLengthFrames = 0;
     const bool invalidPackageStateTimingWriteRejected = pf::writeFighterPackage(invalidStateTimingWritePackage, &invalidPackageError).empty();
@@ -5549,6 +5563,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
               << " fighter_package_invalid_animation_action_write_rejected=" << invalidPackageAnimationActionWriteRejected
+              << " fighter_package_authored_state_animation_write_ok=" << packageAuthoredStateAnimationWriteOk
+              << " fighter_package_invalid_authored_state_animation_write_rejected=" << invalidPackageAuthoredStateAnimationWriteRejected
               << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
               << " fighter_package_invalid_duplicate_state_write_rejected=" << invalidPackageDuplicateStateWriteRejected
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected

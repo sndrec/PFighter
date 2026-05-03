@@ -1970,7 +1970,10 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
             {pf::fx(60), 0, 0, pf::AnimationInterpolation::Linear},
         }},
     };
-    def.authoredClips = {waitClip};
+    pf::AnimationClip fallClip = waitClip;
+    fallClip.name = "Fall";
+    fallClip.actionIndex = 1;
+    def.authoredClips = {waitClip, fallClip};
     def.hurtboxes = {
         {pf::BoneId::Hip, {0, pf::fxFromFloat(-0.45f), 0}, {0, pf::fxFromFloat(0.55f), 0}, pf::fxFromFloat(0.45f), pf::HurtboxState::Normal, true},
         {pf::BoneId::Head, {0, pf::fxFromFloat(-0.2f), 0}, {0, pf::fxFromFloat(0.2f), 0}, pf::fxFromFloat(0.32f), pf::HurtboxState::Normal, true},
@@ -1994,6 +1997,7 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
     pf::FighterState fall;
     fall.name = "Fall";
     fall.animation = "Fall";
+    fall.animationActionIndex = 1;
     fall.animationLengthFrames = 60;
     fall.loopAnimation = true;
     fall.allowSlideoff = true;

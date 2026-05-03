@@ -1907,10 +1907,37 @@ bool validAnimationBlendFrames(int blendFrames) {
 }
 
 void validateFighterStateTiming(const FighterState& state) {
-    if (state.animationLengthFrames <= 0 || state.initialInterruptibleFrame < 0 ||
+    if (state.animationActionIndex < -1 || state.animationLengthFrames <= 0 || state.initialInterruptibleFrame < 0 ||
         state.defaultAnimationBlendFrames < 0 || !validAnimationBlendFrames(state.onAnimationFinishedBlendFrames))
     {
         throw std::runtime_error("fighter package state timing is invalid");
+    }
+}
+
+bool hasAnimationClipActionIndex(const std::vector<AnimationClip>& clips, int actionIndex) {
+    return std::any_of(clips.begin(), clips.end(), [&](const AnimationClip& clip) {
+        return clip.actionIndex == actionIndex;
+    });
+}
+
+bool hasAnimationClipName(const std::vector<AnimationClip>& clips, const std::string& name) {
+    return std::any_of(clips.begin(), clips.end(), [&](const AnimationClip& clip) {
+        return clip.name == name;
+    });
+}
+
+void validateAuthoredStateAnimationReference(const FighterDefinition& fighter, const FighterState& state) {
+    if (fighter.hasHsdAsset || fighter.authoredClips.empty()) {
+        return;
+    }
+    if (state.animationActionIndex >= 0) {
+        if (!hasAnimationClipActionIndex(fighter.authoredClips, state.animationActionIndex)) {
+            throw std::runtime_error("fighter package authored state animation action is invalid");
+        }
+        return;
+    }
+    if (!state.animation.empty() && !hasAnimationClipName(fighter.authoredClips, state.animation)) {
+        throw std::runtime_error("fighter package authored state animation name is invalid");
     }
 }
 
@@ -1977,6 +2004,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         }
         for (const FighterState& state : fighter.states) {
             validateFighterStateTiming(state);
+            validateAuthoredStateAnimationReference(fighter, state);
             if (!state.onAnimationFinishedState.empty() && !hasResolvableStateTarget(states, state.onAnimationFinishedState)) {
                 throw std::runtime_error("fighter package animation finished state target is invalid");
             }
