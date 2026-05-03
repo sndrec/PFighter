@@ -994,6 +994,13 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarStateFrame: return "StateFrm";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
+    case pf::PackageScriptOp::SetVarFighterPercent: return "Pct";
+    case pf::PackageScriptOp::SetVarFighterShield: return "ShieldHp";
+    case pf::PackageScriptOp::SetVarFighterPositionX: return "PosX";
+    case pf::PackageScriptOp::SetVarFighterPositionY: return "PosY";
+    case pf::PackageScriptOp::SetVarFighterGroundVelocity: return "GVel";
+    case pf::PackageScriptOp::SetVarFighterAirVelocityX: return "AirVX";
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return "AirVY";
     case pf::PackageScriptOp::SetVarObjectOwner: return "ObjOwner";
     case pf::PackageScriptOp::SetVarObjectHeldBy: return "ObjHeld";
     case pf::PackageScriptOp::SetVarObjectLastFighter: return "ObjLastF";
@@ -1098,6 +1105,13 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarStateFrame:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarFighterPercent:
+    case pf::PackageScriptOp::SetVarFighterShield:
+    case pf::PackageScriptOp::SetVarFighterPositionX:
+    case pf::PackageScriptOp::SetVarFighterPositionY:
+    case pf::PackageScriptOp::SetVarFighterGroundVelocity:
+    case pf::PackageScriptOp::SetVarFighterAirVelocityX:
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY:
     case pf::PackageScriptOp::SetVarStickX:
     case pf::PackageScriptOp::SetVarStickY:
     case pf::PackageScriptOp::SetVarCStickX:
@@ -1234,7 +1248,14 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
-    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarButtonDown;
+    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
+    case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
+    case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
+    case pf::PackageScriptOp::SetVarFighterPositionY: return pf::PackageScriptOp::SetVarFighterGroundVelocity;
+    case pf::PackageScriptOp::SetVarFighterGroundVelocity: return pf::PackageScriptOp::SetVarFighterAirVelocityX;
+    case pf::PackageScriptOp::SetVarFighterAirVelocityX: return pf::PackageScriptOp::SetVarFighterAirVelocityY;
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarButtonDown;
     case pf::PackageScriptOp::SetVarButtonDown: return pf::PackageScriptOp::SetVarButtonPressed;
     case pf::PackageScriptOp::SetVarButtonPressed: return pf::PackageScriptOp::SetVarStickX;
     case pf::PackageScriptOp::SetVarStickX: return pf::PackageScriptOp::SetVarStickY;
@@ -1268,6 +1289,13 @@ static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
         op != pf::PackageScriptOp::SpawnFighter &&
         op != pf::PackageScriptOp::SetVarButtonDown &&
         op != pf::PackageScriptOp::SetVarButtonPressed &&
+        op != pf::PackageScriptOp::SetVarFighterPercent &&
+        op != pf::PackageScriptOp::SetVarFighterShield &&
+        op != pf::PackageScriptOp::SetVarFighterPositionX &&
+        op != pf::PackageScriptOp::SetVarFighterPositionY &&
+        op != pf::PackageScriptOp::SetVarFighterGroundVelocity &&
+        op != pf::PackageScriptOp::SetVarFighterAirVelocityX &&
+        op != pf::PackageScriptOp::SetVarFighterAirVelocityY &&
         op != pf::PackageScriptOp::SetVarStickX &&
         op != pf::PackageScriptOp::SetVarStickY &&
         op != pf::PackageScriptOp::SetVarCStickX &&
@@ -1291,6 +1319,19 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectLastObject: return pf::PackageScriptOp::SetVarObjectDamage;
     case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
+    }
+}
+
+static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
+    switch (op) {
+    case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
+    case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
+    case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
+    case pf::PackageScriptOp::SetVarFighterPositionY: return pf::PackageScriptOp::SetVarFighterGroundVelocity;
+    case pf::PackageScriptOp::SetVarFighterGroundVelocity: return pf::PackageScriptOp::SetVarFighterAirVelocityX;
+    case pf::PackageScriptOp::SetVarFighterAirVelocityX: return pf::PackageScriptOp::SetVarFighterAirVelocityY;
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarFighterPercent;
+    default: return pf::PackageScriptOp::SetVarFighterPercent;
     }
 }
 
@@ -2253,6 +2294,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: appended runtime fact read to " + script->name;
         }
     }
+    if (uiButton({590.0f, 412.0f, 58.0f, 24.0f}, "+ Ctx")) {
+        if (script && !def.packageVariables.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SetVarFighterPercent, editor.selectedPackageVariable, -1, -1, 0, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended fighter context read to " + script->name;
+        }
+    }
     if (uiButton({365.0f, 442.0f, 68.0f, 24.0f}, "- Instr")) {
         if (script && !script->instructions.empty()) {
             script->instructions.erase(script->instructions.begin() + editor.selectedPackageInstruction);
@@ -2352,6 +2400,11 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             instruction.op = nextPackageScriptOp(instruction.op);
             normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
             editor.status = "Editor: cycled selected script block op";
+        }
+        if (uiButton({590.0f, 502.0f, 58.0f, 24.0f}, "CtxOp")) {
+            instruction.op = nextFighterContextReadOp(instruction.op);
+            normalizePackageInstruction(instruction, def, world, fighter.fighterDef, editor.selectedState, editor.selectedObjectDef);
+            editor.status = "Editor: cycled selected fighter context read";
         }
         if (uiButton({365.0f, 532.0f, 68.0f, 24.0f}, "Dst")) {
             if (!def.packageVariables.empty()) {

@@ -2610,6 +2610,27 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SetVarFacing:
             setPackageVar(fighter, instruction.dst, fighter.facing);
             break;
+        case PackageScriptOp::SetVarFighterPercent:
+            setPackageVar(fighter, instruction.dst, fighter.percent);
+            break;
+        case PackageScriptOp::SetVarFighterShield:
+            setPackageVar(fighter, instruction.dst, fighter.shieldHealth);
+            break;
+        case PackageScriptOp::SetVarFighterPositionX:
+            setPackageVar(fighter, instruction.dst, fighter.position.x);
+            break;
+        case PackageScriptOp::SetVarFighterPositionY:
+            setPackageVar(fighter, instruction.dst, fighter.position.y);
+            break;
+        case PackageScriptOp::SetVarFighterGroundVelocity:
+            setPackageVar(fighter, instruction.dst, fighter.groundVelocity);
+            break;
+        case PackageScriptOp::SetVarFighterAirVelocityX:
+            setPackageVar(fighter, instruction.dst, fighter.fighterVelocity.x);
+            break;
+        case PackageScriptOp::SetVarFighterAirVelocityY:
+            setPackageVar(fighter, instruction.dst, fighter.fighterVelocity.y);
+            break;
         case PackageScriptOp::SetVarObjectOwner:
         case PackageScriptOp::SetVarObjectHeldBy:
         case PackageScriptOp::SetVarObjectLastFighter:

@@ -219,6 +219,13 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarStateFrame:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
+    case PackageScriptOp::SetVarFighterPercent:
+    case PackageScriptOp::SetVarFighterShield:
+    case PackageScriptOp::SetVarFighterPositionX:
+    case PackageScriptOp::SetVarFighterPositionY:
+    case PackageScriptOp::SetVarFighterGroundVelocity:
+    case PackageScriptOp::SetVarFighterAirVelocityX:
+    case PackageScriptOp::SetVarFighterAirVelocityY:
     case PackageScriptOp::SetVarObjectOwner:
     case PackageScriptOp::SetVarObjectHeldBy:
     case PackageScriptOp::SetVarObjectLastFighter:
@@ -1568,6 +1575,7 @@ void validatePackageScriptInstruction(
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
     bool allowInputReads,
+    bool allowFighterContextReads,
     bool allowObjectLifecycleOps,
     bool allowObjectContextReads,
     int instructionIndex,
@@ -1583,6 +1591,18 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");
+        break;
+    case PackageScriptOp::SetVarFighterPercent:
+    case PackageScriptOp::SetVarFighterShield:
+    case PackageScriptOp::SetVarFighterPositionX:
+    case PackageScriptOp::SetVarFighterPositionY:
+    case PackageScriptOp::SetVarFighterGroundVelocity:
+    case PackageScriptOp::SetVarFighterAirVelocityX:
+    case PackageScriptOp::SetVarFighterAirVelocityY:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowFighterContextReads) {
+            throw std::runtime_error("fighter package script fighter context read is invalid");
+        }
         break;
     case PackageScriptOp::SetVarObjectOwner:
     case PackageScriptOp::SetVarObjectHeldBy:
@@ -1713,6 +1733,7 @@ void validatePackageScripts(
     bool allowResolvableStateTargets,
     bool allowFighterTargets,
     bool allowInputReads,
+    bool allowFighterContextReads,
     bool allowObjectLifecycleOps,
     bool allowObjectContextReads)
 {
@@ -1736,6 +1757,7 @@ void validatePackageScripts(
                 allowResolvableStateTargets,
                 allowFighterTargets,
                 allowInputReads,
+                allowFighterContextReads,
                 allowObjectLifecycleOps,
                 allowObjectContextReads,
                 instructionIndex,
@@ -1858,6 +1880,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             true,
             true,
             true,
+            true,
             false,
             false);
         for (const HurtboxDefinition& hurtbox : fighter.hurtboxes) {
@@ -1908,6 +1931,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageFighterNames,
             states,
             packageObjectNames,
+            false,
             false,
             false,
             false,

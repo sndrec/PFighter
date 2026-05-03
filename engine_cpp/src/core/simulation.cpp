@@ -6828,6 +6828,14 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFacing:
                 setVar(instruction.dst, object.facing);
                 break;
+            case PackageScriptOp::SetVarFighterPercent:
+            case PackageScriptOp::SetVarFighterShield:
+            case PackageScriptOp::SetVarFighterPositionX:
+            case PackageScriptOp::SetVarFighterPositionY:
+            case PackageScriptOp::SetVarFighterGroundVelocity:
+            case PackageScriptOp::SetVarFighterAirVelocityX:
+            case PackageScriptOp::SetVarFighterAirVelocityY:
+                return;
             case PackageScriptOp::SetVarObjectOwner:
                 setVar(instruction.dst, object.ownerFighter);
                 break;
