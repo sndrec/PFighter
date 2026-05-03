@@ -1515,6 +1515,29 @@ static void bindObjectPackageScriptCallback(
     editor.status = std::string("Editor: bound ") + scriptName + " to selected object " + label;
 }
 
+static void bindObjectStatePackageScriptCallback(
+    pf::GameObjectStateDefinition& state,
+    const std::string& scriptName,
+    pf::FighterEditor& editor)
+{
+    const int callback = (editor.selectedObjectStateCallback % 4 + 4) % 4;
+    switch (callback) {
+    case 0:
+        bindObjectPackageScriptCallback(state.onEnter, scriptName, "state enter", editor);
+        break;
+    case 1:
+        bindObjectPackageScriptCallback(state.onFrame, scriptName, "state frame", editor);
+        break;
+    case 2:
+        bindObjectPackageScriptCallback(state.onPhysics, scriptName, "state physics", editor);
+        break;
+    case 3:
+        bindObjectPackageScriptCallback(state.onCollision, scriptName, "state collision", editor);
+        break;
+    }
+    editor.selectedObjectStateCallback = callback + 1;
+}
+
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     const pf::MeleeCommonData& common = def.properties.common;
     const pf::Fix healthRatio = def.shield.maxHealth > 0 ? pf::fxDiv(fighter.shieldHealth, def.shield.maxHealth) : 0;
@@ -3280,6 +3303,22 @@ int main() {
         subaction.frames = std::max(0, subaction.frames + delta);
         editor.status = "Editor: adjusted selected subaction frame count";
     };
+    auto bindSelectedObjectStateCallback = [&]() {
+        if (world.objectDefs.empty()) {
+            return;
+        }
+        editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
+        if (object.states.empty() || object.packageScripts.empty()) {
+            return;
+        }
+        editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+        editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+        bindObjectStatePackageScriptCallback(
+            object.states[static_cast<size_t>(editor.selectedObjectState)],
+            object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name,
+            editor);
+    };
 
     while (!WindowShouldClose()) {
         if (appMode != AppMode::MainMenu) {
@@ -3335,6 +3374,9 @@ int main() {
         }
         if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
             adjustSelectedSubactionFrames(1);
+        }
+        if (appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Assets && IsKeyPressed(KEY_U)) {
+            bindSelectedObjectStateCallback();
         }
         if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
         if (appMode != AppMode::MainMenu && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);

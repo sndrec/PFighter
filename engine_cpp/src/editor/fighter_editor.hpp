@@ -27,6 +27,7 @@ struct FighterEditor {
     int selectedObjectHitbox = 0;
     int selectedObjectHurtbox = 0;
     int selectedObjectTouchbox = 0;
+    int selectedObjectStateCallback = 0;
     int selectedAnimationClip = 0;
     int selectedAnimationJoint = 0;
     int selectedAnimationTrack = 0;
