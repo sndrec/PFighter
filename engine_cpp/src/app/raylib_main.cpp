@@ -1935,6 +1935,15 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     DrawText(("Embedded HSD bytes: " + std::to_string(assetBytes)).c_str(), 24, 382, 13, DARKGRAY);
     DrawText(("Objects/articles in package: " + std::to_string(world.objectDefs.size())).c_str(), 24, 404, 13, DARKGRAY);
     DrawText(("Authored mesh batches: " + std::to_string(def.authoredMesh.batches.size())).c_str(), 24, 426, 13, DARKGRAY);
+    if (!world.objectDefs.empty()) {
+        const int objectIndex = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(objectIndex)];
+        if (object.packageVariables.empty()) {
+            DrawText(("Obj life=" + std::to_string(object.lifetimeFrames) +
+                      " term=" + std::to_string(pf::fxToFloat(object.terminalVelocity)) +
+                      " hp=" + std::to_string(pf::fxToFloat(object.maxDamage))).c_str(), 270, 402, 12, DARKGRAY);
+        }
+    }
 
     if (uiButton({338.0f, 338.0f, 82.0f, 26.0f}, "Save Pkg")) {
         pf::FighterPackage package;
@@ -2064,17 +2073,41 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedObjectState,
             0,
             std::max(0, static_cast<int>(object.states.size()) - 1));
+        if (uiButton({270.0f, 424.0f, 36.0f, 22.0f}, "Lf-")) {
+            object.lifetimeFrames = std::max(0, object.lifetimeFrames - 30);
+            editor.status = "Editor: shortened object lifetime";
+        }
+        if (uiButton({310.0f, 424.0f, 36.0f, 22.0f}, "Lf+")) {
+            object.lifetimeFrames += 30;
+            editor.status = "Editor: lengthened object lifetime";
+        }
+        if (uiButton({350.0f, 424.0f, 36.0f, 22.0f}, "V-")) {
+            object.terminalVelocity = std::max(pf::Fix{0}, object.terminalVelocity - pf::fxFromFloat(0.25f));
+            editor.status = "Editor: decreased object terminal velocity";
+        }
+        if (uiButton({390.0f, 424.0f, 36.0f, 22.0f}, "V+")) {
+            object.terminalVelocity += pf::fxFromFloat(0.25f);
+            editor.status = "Editor: increased object terminal velocity";
+        }
+        if (uiButton({430.0f, 424.0f, 36.0f, 22.0f}, "HP-")) {
+            object.maxDamage = std::max(pf::Fix{0}, object.maxDamage - pf::fx(1));
+            editor.status = "Editor: decreased object max damage";
+        }
+        if (uiButton({470.0f, 424.0f, 36.0f, 22.0f}, "HP+")) {
+            object.maxDamage += pf::fx(1);
+            editor.status = "Editor: increased object max damage";
+        }
         if (!object.packageVariables.empty()) {
             pf::PackageVariableDefinition& variable = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
-            if (uiButton({270.0f, 424.0f, 58.0f, 22.0f}, "OInit-")) {
+            if (uiButton({270.0f, 398.0f, 58.0f, 22.0f}, "OInit-")) {
                 --variable.initialValue;
                 editor.status = "Editor: decreased initial value for object variable " + variable.name;
             }
-            if (uiButton({332.0f, 424.0f, 58.0f, 22.0f}, "OInit+")) {
+            if (uiButton({332.0f, 398.0f, 58.0f, 22.0f}, "OInit+")) {
                 ++variable.initialValue;
                 editor.status = "Editor: increased initial value for object variable " + variable.name;
             }
-            DrawText((variable.name + "=" + std::to_string(variable.initialValue)).c_str(), 398, 429, 12, DARKGRAY);
+            DrawText((variable.name + "=" + std::to_string(variable.initialValue)).c_str(), 398, 403, 12, DARKGRAY);
         }
 
         if (!object.states.empty()) {
