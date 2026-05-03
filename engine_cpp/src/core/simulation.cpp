@@ -6824,6 +6824,11 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:
+            case PackageScriptOp::SetVarStickX:
+            case PackageScriptOp::SetVarStickY:
+            case PackageScriptOp::SetVarCStickX:
+            case PackageScriptOp::SetVarCStickY:
+            case PackageScriptOp::SetVarShield:
                 return;
             case PackageScriptOp::SetGroundVelocity:
             case PackageScriptOp::SetAirVelocityX:

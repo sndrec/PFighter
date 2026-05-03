@@ -994,6 +994,11 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
     case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
+    case pf::PackageScriptOp::SetVarStickX: return "StickX";
+    case pf::PackageScriptOp::SetVarStickY: return "StickY";
+    case pf::PackageScriptOp::SetVarCStickX: return "CStickX";
+    case pf::PackageScriptOp::SetVarCStickY: return "CStickY";
+    case pf::PackageScriptOp::SetVarShield: return "ShieldA";
     case pf::PackageScriptOp::SetGroundVelocity: return "GroundVel";
     case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
@@ -1078,6 +1083,11 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarStickX:
+    case pf::PackageScriptOp::SetVarStickY:
+    case pf::PackageScriptOp::SetVarCStickX:
+    case pf::PackageScriptOp::SetVarCStickY:
+    case pf::PackageScriptOp::SetVarShield:
         label += " v" + std::to_string(instruction.dst);
         break;
     case pf::PackageScriptOp::SetVarButtonDown:
@@ -1187,7 +1197,12 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
     case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarButtonDown;
     case pf::PackageScriptOp::SetVarButtonDown: return pf::PackageScriptOp::SetVarButtonPressed;
-    case pf::PackageScriptOp::SetVarButtonPressed: return pf::PackageScriptOp::SetGroundVelocity;
+    case pf::PackageScriptOp::SetVarButtonPressed: return pf::PackageScriptOp::SetVarStickX;
+    case pf::PackageScriptOp::SetVarStickX: return pf::PackageScriptOp::SetVarStickY;
+    case pf::PackageScriptOp::SetVarStickY: return pf::PackageScriptOp::SetVarCStickX;
+    case pf::PackageScriptOp::SetVarCStickX: return pf::PackageScriptOp::SetVarCStickY;
+    case pf::PackageScriptOp::SetVarCStickY: return pf::PackageScriptOp::SetVarShield;
+    case pf::PackageScriptOp::SetVarShield: return pf::PackageScriptOp::SetGroundVelocity;
     case pf::PackageScriptOp::SetGroundVelocity: return pf::PackageScriptOp::SetAirVelocityX;
     case pf::PackageScriptOp::SetAirVelocityX: return pf::PackageScriptOp::SetAirVelocityY;
     case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetFacing;
@@ -1206,7 +1221,12 @@ static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
     return op != pf::PackageScriptOp::SwitchFighterDefinition &&
         op != pf::PackageScriptOp::SpawnFighter &&
         op != pf::PackageScriptOp::SetVarButtonDown &&
-        op != pf::PackageScriptOp::SetVarButtonPressed;
+        op != pf::PackageScriptOp::SetVarButtonPressed &&
+        op != pf::PackageScriptOp::SetVarStickX &&
+        op != pf::PackageScriptOp::SetVarStickY &&
+        op != pf::PackageScriptOp::SetVarCStickX &&
+        op != pf::PackageScriptOp::SetVarCStickY &&
+        op != pf::PackageScriptOp::SetVarShield;
 }
 
 static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
@@ -2154,6 +2174,13 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             script->instructions.push_back({pf::PackageScriptOp::SetVarButtonPressed, editor.selectedPackageVariable, -1, -1, pf::ButtonAttack, 0, {}});
             editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
             editor.status = "Editor: appended button input read to " + script->name;
+        }
+    }
+    if (uiButton({515.0f, 472.0f, 68.0f, 24.0f}, "+ Axis")) {
+        if (script && !def.packageVariables.empty()) {
+            script->instructions.push_back({pf::PackageScriptOp::SetVarStickX, editor.selectedPackageVariable, -1, -1, 0, 0, {}});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended analog input read to " + script->name;
         }
     }
     if (uiButton({365.0f, 682.0f, 68.0f, 24.0f}, "+ If")) {

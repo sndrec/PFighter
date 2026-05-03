@@ -4615,6 +4615,11 @@ int main(int argc, char** argv) {
         {"FacingVar", 0},
         {"ButtonDownVar", 0},
         {"ButtonPressedVar", 0},
+        {"StickXVar", 0},
+        {"StickYVar", 0},
+        {"CStickXVar", 0},
+        {"CStickYVar", 0},
+        {"ShieldVar", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4659,6 +4664,11 @@ int main(int argc, char** argv) {
         {
             {pf::PackageScriptOp::SetVarButtonDown, 4, -1, -1, pf::ButtonPause, 0, {}},
             {pf::PackageScriptOp::SetVarButtonPressed, 5, -1, -1, pf::ButtonPause, 0, {}},
+            {pf::PackageScriptOp::SetVarStickX, 6, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarStickY, 7, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarCStickX, 8, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarCStickY, 9, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarShield, 10, -1, -1, 0, 0, {}},
         },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
@@ -4852,7 +4862,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 6 &&
+        loadedPackage.fighters[0].packageVariables.size() == 11 &&
         loadedPackage.fighters[0].packageScripts.size() == 6 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
@@ -4965,17 +4975,26 @@ int main(int argc, char** argv) {
             pf::FunctionCall scriptCall;
             scriptCall.name = "script:InputScript";
             packageInputScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+            packageInputScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].interrupts.clear();
         }
         packageInputScriptWorld.fighters[0].packageVars.clear();
     }
     pf::InputFrame packagePauseInput{};
     packagePauseInput.buttons = pf::ButtonPause;
+    packagePauseInput.move = {pf::fxFromFloat(0.25f), pf::fxFromFloat(-0.5f)};
+    packagePauseInput.cStick = {pf::fxFromFloat(-0.75f), pf::fxFromFloat(1.0f)};
+    packagePauseInput.shieldAnalog = pf::fxFromFloat(0.3f);
     pf::tickWorld(packageInputScriptWorld, {packagePauseInput, pf::InputFrame{}});
     pf::tickWorld(packageInputScriptWorld, {packagePauseInput, pf::InputFrame{}});
     const bool packageInputScriptOk = packageShapeOk &&
-        packageInputScriptWorld.fighters[0].packageVars.size() >= 6 &&
+        packageInputScriptWorld.fighters[0].packageVars.size() >= 11 &&
         packageInputScriptWorld.fighters[0].packageVars[4] == 1 &&
-        packageInputScriptWorld.fighters[0].packageVars[5] == 0;
+        packageInputScriptWorld.fighters[0].packageVars[5] == 0 &&
+        packageInputScriptWorld.fighters[0].packageVars[6] == pf::fxFromFloat(0.25f) &&
+        packageInputScriptWorld.fighters[0].packageVars[7] == pf::fxFromFloat(-0.5f) &&
+        packageInputScriptWorld.fighters[0].packageVars[8] == pf::fxFromFloat(-0.75f) &&
+        packageInputScriptWorld.fighters[0].packageVars[9] == pf::fxFromFloat(1.0f) &&
+        packageInputScriptWorld.fighters[0].packageVars[10] == pf::fxFromFloat(0.3f);
     pf::World packageSwitchScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageSwitchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];

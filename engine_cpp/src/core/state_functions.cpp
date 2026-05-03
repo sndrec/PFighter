@@ -2610,6 +2610,21 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::SetVarButtonPressed:
             setPackageVar(fighter, instruction.dst, fighter.input.justPressed(static_cast<uint16_t>(instruction.intValue)) ? 1 : 0);
             break;
+        case PackageScriptOp::SetVarStickX:
+            setPackageVar(fighter, instruction.dst, fighter.input.frames[0].move.x);
+            break;
+        case PackageScriptOp::SetVarStickY:
+            setPackageVar(fighter, instruction.dst, fighter.input.frames[0].move.y);
+            break;
+        case PackageScriptOp::SetVarCStickX:
+            setPackageVar(fighter, instruction.dst, fighter.input.frames[0].cStick.x);
+            break;
+        case PackageScriptOp::SetVarCStickY:
+            setPackageVar(fighter, instruction.dst, fighter.input.frames[0].cStick.y);
+            break;
+        case PackageScriptOp::SetVarShield:
+            setPackageVar(fighter, instruction.dst, fighter.input.frames[0].shieldAnalog);
+            break;
         case PackageScriptOp::SetGroundVelocity:
             fighter.groundVelocity = instruction.fixValue;
             break;

@@ -219,6 +219,11 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFacing:
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:
+    case PackageScriptOp::SetVarStickX:
+    case PackageScriptOp::SetVarStickY:
+    case PackageScriptOp::SetVarCStickX:
+    case PackageScriptOp::SetVarCStickY:
+    case PackageScriptOp::SetVarShield:
     case PackageScriptOp::SetGroundVelocity:
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
@@ -1566,6 +1571,16 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarButtonPressed:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         if (!allowInputReads || instruction.intValue == 0 || (instruction.intValue & ~kPackageInputButtonMask) != 0) {
+            throw std::runtime_error("fighter package script input read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetVarStickX:
+    case PackageScriptOp::SetVarStickY:
+    case PackageScriptOp::SetVarCStickX:
+    case PackageScriptOp::SetVarCStickY:
+    case PackageScriptOp::SetVarShield:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowInputReads) {
             throw std::runtime_error("fighter package script input read is invalid");
         }
         break;
