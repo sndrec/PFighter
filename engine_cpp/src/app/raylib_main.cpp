@@ -1727,6 +1727,18 @@ static std::string uniqueAuthoredClipName(const pf::FighterDefinition& def) {
     return "ClipX";
 }
 
+static int uniqueAuthoredClipActionIndex(const pf::FighterDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        const bool exists = std::any_of(def.authoredClips.begin(), def.authoredClips.end(), [&](const pf::AnimationClip& clip) {
+            return clip.actionIndex == index;
+        });
+        if (!exists) {
+            return index;
+        }
+    }
+    return static_cast<int>(def.authoredClips.size());
+}
+
 static void ensureAuthoredRootJoint(pf::FighterDefinition& def) {
     if (!def.authoredSkeleton.empty()) {
         return;
@@ -3683,7 +3695,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     if (showingAuthoredClips && uiButton({24.0f, 516.0f, 72.0f, 24.0f}, "+ Clip")) {
         pf::AnimationClip clip;
         clip.name = uniqueAuthoredClipName(def);
-        clip.actionIndex = static_cast<int>(def.authoredClips.size());
+        clip.actionIndex = uniqueAuthoredClipActionIndex(def);
         clip.frameCount = pf::fx(60);
         def.authoredClips.push_back(std::move(clip));
         editor.selectedAnimationClip = static_cast<int>(def.authoredClips.size()) - 1;

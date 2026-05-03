@@ -4861,6 +4861,15 @@ int main(int argc, char** argv) {
     }};
     invalidAnimationWritePackage.fighters[0].authoredClips = {invalidAnimationClip};
     const bool invalidPackageAnimationWriteRejected = pf::writeFighterPackage(invalidAnimationWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidAnimationActionWritePackage = sourcePackage;
+    pf::AnimationClip firstActionClip;
+    firstActionClip.name = "FirstActionClip";
+    firstActionClip.actionIndex = 0;
+    firstActionClip.frameCount = pf::fx(10);
+    pf::AnimationClip duplicateActionClip = firstActionClip;
+    duplicateActionClip.name = "DuplicateActionIndex";
+    invalidAnimationActionWritePackage.fighters[0].authoredClips = {firstActionClip, duplicateActionClip};
+    const bool invalidPackageAnimationActionWriteRejected = pf::writeFighterPackage(invalidAnimationActionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidStateTimingWritePackage = sourcePackage;
     invalidStateTimingWritePackage.fighters[0].states[0].animationLengthFrames = 0;
     const bool invalidPackageStateTimingWriteRejected = pf::writeFighterPackage(invalidStateTimingWritePackage, &invalidPackageError).empty();
@@ -5533,6 +5542,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
+              << " fighter_package_invalid_animation_action_write_rejected=" << invalidPackageAnimationActionWriteRejected
               << " fighter_package_invalid_state_timing_write_rejected=" << invalidPackageStateTimingWriteRejected
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected

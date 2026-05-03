@@ -1422,7 +1422,22 @@ void validateAuthoredAnimationData(
         }
     }
 
-    for (const AnimationClip& clip : clips) {
+    for (size_t clipIndex = 0; clipIndex < clips.size(); ++clipIndex) {
+        const AnimationClip& clip = clips[clipIndex];
+        if (clip.name.empty()) {
+            throw std::runtime_error("fighter package authored animation clip name is invalid");
+        }
+        if (clip.actionIndex < 0) {
+            throw std::runtime_error("fighter package authored animation action index is invalid");
+        }
+        for (size_t otherIndex = 0; otherIndex < clipIndex; ++otherIndex) {
+            if (clips[otherIndex].name == clip.name) {
+                throw std::runtime_error("fighter package authored animation clip name is duplicate");
+            }
+            if (clips[otherIndex].actionIndex == clip.actionIndex) {
+                throw std::runtime_error("fighter package authored animation action index is duplicate");
+            }
+        }
         if (clip.frameCount < 0) {
             throw std::runtime_error("fighter package authored animation frame count is invalid");
         }
