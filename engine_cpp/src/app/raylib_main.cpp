@@ -1945,6 +1945,31 @@ static void bindPackageScriptCallback(
     editor.status = std::string("Editor: bound ") + scriptName + " to selected state " + label;
 }
 
+static std::string callbackSummary(const std::vector<pf::FunctionCall>& calls) {
+    if (calls.empty()) {
+        return "-";
+    }
+    std::string summary = calls.front().name;
+    if (calls.size() > 1) {
+        summary += " +" + std::to_string(calls.size() - 1);
+    }
+    return summary;
+}
+
+static void removeLastStateCallback(
+    std::vector<pf::FunctionCall>& calls,
+    const char* label,
+    pf::FighterEditor& editor)
+{
+    if (calls.empty()) {
+        editor.status = std::string("Editor: no ") + label + " callback to remove";
+        return;
+    }
+    const std::string removed = calls.back().name;
+    calls.pop_back();
+    editor.status = std::string("Editor: removed ") + label + " callback " + removed;
+}
+
 static void bindObjectPackageScriptCallback(
     std::vector<pf::FunctionCall>& calls,
     const std::string& scriptName,
@@ -2260,6 +2285,10 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
               "  frame " + std::to_string(state.onFrame.size()) +
               "  land " + std::to_string(state.onLanding.size()) +
               "  air " + std::to_string(state.onAirborne.size())).c_str(), 24, 358, 13, DARKGRAY);
+    DrawText(("Hooks: In " + callbackSummary(state.onEnter) +
+              "  Fr " + callbackSummary(state.onFrame) +
+              "  Ld " + callbackSummary(state.onLanding) +
+              "  Air " + callbackSummary(state.onAirborne)).c_str(), 24, 376, 12, DARKGRAY);
 
     if (uiButton({338.0f, 334.0f, 58.0f, 24.0f}, "+ Var")) {
         def.packageVariables.push_back({uniquePackageVariableName(def), 0});
@@ -2294,6 +2323,18 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: removed package script " + removed;
         }
+    }
+    if (uiButton({466.0f, 334.0f, 50.0f, 24.0f}, "-In")) {
+        removeLastStateCallback(state.onEnter, "enter", editor);
+    }
+    if (uiButton({522.0f, 334.0f, 50.0f, 24.0f}, "-Fr")) {
+        removeLastStateCallback(state.onFrame, "frame", editor);
+    }
+    if (uiButton({466.0f, 364.0f, 50.0f, 24.0f}, "-Ld")) {
+        removeLastStateCallback(state.onLanding, "landing", editor);
+    }
+    if (uiButton({522.0f, 364.0f, 50.0f, 24.0f}, "-Air")) {
+        removeLastStateCallback(state.onAirborne, "airborne", editor);
     }
 
     DrawText("Vars", 24, 392, 13, DARKGRAY);
