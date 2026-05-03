@@ -4123,7 +4123,22 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
     }
 }
 
-static void drawEditorStateBrowser(const pf::FighterDefinition& def, pf::FighterEditor& editor) {
+static void previewEditorSelectedState(pf::World& world, pf::FighterEditor& editor, const pf::FighterDefinition& def) {
+    if (world.fighters.empty() || def.states.empty()) {
+        editor.status = "Editor: no state available to preview";
+        return;
+    }
+    editor.selectedFighter = std::clamp(editor.selectedFighter, 0, static_cast<int>(world.fighters.size()) - 1);
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    const pf::FighterState& selectedState = def.states[static_cast<size_t>(editor.selectedState)];
+    pf::changeFighterState(world, fighter, selectedState.name, 0, pf::kDisableAnimationBlendFrames);
+    editor.animationPreviewActive = false;
+    editor.paused = true;
+    editor.status = "Editor: previewing selected state " + selectedState.name;
+}
+
+static void drawEditorStateBrowser(pf::World& world, const pf::FighterDefinition& def, pf::FighterEditor& editor) {
     constexpr int kVisibleRows = 5;
     constexpr float kPanelX = 560.0f;
     constexpr float kPanelY = 170.0f;
@@ -4178,6 +4193,9 @@ static void drawEditorStateBrowser(const pf::FighterDefinition& def, pf::Fighter
         editor.selectedSubaction = 0;
         editor.selectedInterrupt = 0;
         editor.status = "Editor: paged state browser down";
+    }
+    if (uiButton({kPanelX + 172.0f, kPanelY + 136.0f, 90.0f, 22.0f}, "Preview")) {
+        previewEditorSelectedState(world, editor, def);
     }
 }
 
@@ -4330,7 +4348,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     }
     DrawText(editor.status.c_str(), 24, 240, 14, DARKGRAY);
     DrawText("N/New state  Del/remove  T/Test playtest  [/] state  ,/. subaction  Space pause  R reset", 24, 258, 14, GRAY);
-    drawEditorStateBrowser(def, editor);
+    drawEditorStateBrowser(world, def, editor);
     drawEditorWorkspaceTabs(editor);
     if (editor.workspace == pf::EditorWorkspace::Moveset) {
         drawEditorMovesetWorkspace(world, editor);
