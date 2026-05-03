@@ -18,6 +18,7 @@ struct FighterEditor {
     int selectedFighter = 0;
     int selectedState = 0;
     int selectedSubaction = 0;
+    int selectedInterrupt = 0;
     int selectedPackageVariable = 0;
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;

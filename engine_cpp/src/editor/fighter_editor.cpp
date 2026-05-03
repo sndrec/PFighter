@@ -17,6 +17,10 @@ void FighterEditor::clampToWorld(const World& world) {
     selectedState = std::clamp(selectedState, 0, static_cast<int>(def.states.size()) - 1);
     const FighterState& state = def.states[static_cast<size_t>(selectedState)];
     selectedSubaction = std::clamp(selectedSubaction, 0, std::max(0, static_cast<int>(state.action.size()) - 1));
+    selectedInterrupt = std::clamp(
+        selectedInterrupt,
+        0,
+        std::max(0, static_cast<int>(state.interrupts.size()) - 1));
     selectedPackageVariable = std::clamp(
         selectedPackageVariable,
         0,

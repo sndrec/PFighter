@@ -1029,6 +1029,64 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     return label;
 }
 
+static const char* groundRequirementName(pf::GroundRequirement ground) {
+    switch (ground) {
+    case pf::GroundRequirement::Any: return "Any";
+    case pf::GroundRequirement::OnlyGrounded: return "Ground";
+    case pf::GroundRequirement::OnlyAirborne: return "Air";
+    }
+    return "?";
+}
+
+static pf::GroundRequirement nextGroundRequirement(pf::GroundRequirement ground) {
+    switch (ground) {
+    case pf::GroundRequirement::Any: return pf::GroundRequirement::OnlyGrounded;
+    case pf::GroundRequirement::OnlyGrounded: return pf::GroundRequirement::OnlyAirborne;
+    case pf::GroundRequirement::OnlyAirborne: return pf::GroundRequirement::Any;
+    }
+    return pf::GroundRequirement::Any;
+}
+
+static const char* interruptConditionName(pf::InterruptCondition condition) {
+    switch (condition) {
+    case pf::InterruptCondition::WaitInput: return "Wait";
+    case pf::InterruptCondition::BecameAirborne: return "Airborne";
+    case pf::InterruptCondition::JumpPressed: return "Jump";
+    case pf::InterruptCondition::RunJumpPressed: return "RunJump";
+    case pf::InterruptCondition::AttackPressed: return "Attack";
+    case pf::InterruptCondition::GrabPressed: return "Grab";
+    case pf::InterruptCondition::ShieldHeld: return "Shield";
+    case pf::InterruptCondition::SpecialNInput: return "SpecN";
+    case pf::InterruptCondition::SpecialSInput: return "SpecS";
+    case pf::InterruptCondition::SpecialHiInput: return "SpecHi";
+    case pf::InterruptCondition::SpecialLwInput: return "SpecLw";
+    case pf::InterruptCondition::DashInput: return "Dash";
+    case pf::InterruptCondition::SquatInput: return "Squat";
+    case pf::InterruptCondition::TurnInput: return "Turn";
+    default: return "Other";
+    }
+}
+
+static pf::InterruptCondition nextCommonInterruptCondition(pf::InterruptCondition condition) {
+    switch (condition) {
+    case pf::InterruptCondition::WaitInput: return pf::InterruptCondition::BecameAirborne;
+    case pf::InterruptCondition::BecameAirborne: return pf::InterruptCondition::JumpPressed;
+    case pf::InterruptCondition::JumpPressed: return pf::InterruptCondition::RunJumpPressed;
+    case pf::InterruptCondition::RunJumpPressed: return pf::InterruptCondition::AttackPressed;
+    case pf::InterruptCondition::AttackPressed: return pf::InterruptCondition::GrabPressed;
+    case pf::InterruptCondition::GrabPressed: return pf::InterruptCondition::ShieldHeld;
+    case pf::InterruptCondition::ShieldHeld: return pf::InterruptCondition::SpecialNInput;
+    case pf::InterruptCondition::SpecialNInput: return pf::InterruptCondition::SpecialSInput;
+    case pf::InterruptCondition::SpecialSInput: return pf::InterruptCondition::SpecialHiInput;
+    case pf::InterruptCondition::SpecialHiInput: return pf::InterruptCondition::SpecialLwInput;
+    case pf::InterruptCondition::SpecialLwInput: return pf::InterruptCondition::DashInput;
+    case pf::InterruptCondition::DashInput: return pf::InterruptCondition::SquatInput;
+    case pf::InterruptCondition::SquatInput: return pf::InterruptCondition::TurnInput;
+    case pf::InterruptCondition::TurnInput: return pf::InterruptCondition::WaitInput;
+    default: return pf::InterruptCondition::WaitInput;
+    }
+}
+
 static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     switch (op) {
     case pf::PackageScriptOp::Nop: return pf::PackageScriptOp::SetVarImmediate;
@@ -2418,7 +2476,44 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         interrupt.enableFrame = state.initialInterruptibleFrame;
         interrupt.disableFrame = 0;
         state.interrupts.push_back(interrupt);
+        editor.selectedInterrupt = static_cast<int>(state.interrupts.size()) - 1;
         editor.status = "Editor: added Wait interrupt to " + state.name;
+    }
+    if (uiButton({416.0f, 470.0f, 90.0f, 24.0f}, "- Int")) {
+        if (!state.interrupts.empty()) {
+            state.interrupts.erase(state.interrupts.begin() + editor.selectedInterrupt);
+            editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, std::max(0, static_cast<int>(state.interrupts.size()) - 1));
+            editor.status = "Editor: removed interrupt from " + state.name;
+        }
+    }
+    if (!state.interrupts.empty()) {
+        editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
+        pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
+        DrawText(("Interrupt #" + std::to_string(editor.selectedInterrupt) + " -> " + interrupt.targetState +
+                  " " + interruptConditionName(interrupt.condition) +
+                  " " + groundRequirementName(interrupt.ground)).c_str(), 276, 506, 13, DARKGRAY);
+        if (uiButton({276.0f, 524.0f, 44.0f, 24.0f}, "Prev")) {
+            --editor.selectedInterrupt;
+        }
+        if (uiButton({326.0f, 524.0f, 44.0f, 24.0f}, "Next")) {
+            ++editor.selectedInterrupt;
+        }
+        if (uiButton({376.0f, 524.0f, 44.0f, 24.0f}, "Cond")) {
+            interrupt.condition = nextCommonInterruptCondition(interrupt.condition);
+            editor.status = "Editor: cycled interrupt condition";
+        }
+        if (uiButton({426.0f, 524.0f, 44.0f, 24.0f}, "Gnd")) {
+            interrupt.ground = nextGroundRequirement(interrupt.ground);
+            editor.status = "Editor: cycled interrupt ground requirement";
+        }
+        if (uiButton({476.0f, 524.0f, 34.0f, 24.0f}, "Tgt")) {
+            const int current = def.stateIndex(interrupt.targetState);
+            const int next = def.states.empty() ? -1 : (std::max(0, current) + 1) % static_cast<int>(def.states.size());
+            if (next >= 0) {
+                interrupt.targetState = def.states[static_cast<size_t>(next)].name;
+                editor.status = "Editor: cycled interrupt target state";
+            }
+        }
     }
 
     DrawText(("Hurtboxes: " + std::to_string(def.hurtboxes.size())).c_str(), 24, 506, 13, DARKGRAY);
