@@ -1097,6 +1097,19 @@ int main() {
     const std::array<int, 7> fighterKeys{
         KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,
     };
+    auto selectFighterDef = [&](int fighterDef) {
+        if (world.fighterDefs.empty()) {
+            return;
+        }
+        const int fighterDefCount = static_cast<int>(world.fighterDefs.size());
+        testFighterDef = (fighterDef % fighterDefCount + fighterDefCount) % fighterDefCount;
+        world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
+        replay.playbackLoaded = false;
+        replay.realtimePlayback = false;
+        replay.recordingActive = false;
+        editor.selectedState = 0;
+        editor.selectedSubaction = 0;
+    };
 
     while (!WindowShouldClose()) {
         updateTickrateControl(tickrate);
@@ -1117,15 +1130,11 @@ int main() {
         }
         if (IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
         if (IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
+        if (IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
+        if (IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
         for (size_t i = 0; i < fighterKeys.size(); ++i) {
             if (IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
-                testFighterDef = static_cast<int>(i);
-                world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
-                replay.playbackLoaded = false;
-                replay.realtimePlayback = false;
-                replay.recordingActive = false;
-                editor.selectedState = 0;
-                editor.selectedSubaction = 0;
+                selectFighterDef(static_cast<int>(i));
             }
         }
 
