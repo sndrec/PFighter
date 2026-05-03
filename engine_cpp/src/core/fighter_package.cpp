@@ -356,6 +356,22 @@ bool validGameObjectKind(GameObjectKind kind) {
     return false;
 }
 
+bool validBoneId(BoneId bone) {
+    switch (bone) {
+    case BoneId::Hip:
+    case BoneId::Head:
+    case BoneId::HandL:
+    case BoneId::HandR:
+    case BoneId::FootL:
+    case BoneId::FootR:
+    case BoneId::Extra:
+        return true;
+    case BoneId::Count:
+        return false;
+    }
+    return false;
+}
+
 template <typename Enum, typename ValidFn>
 void writeEnum(PackageWriter& writer, Enum value, ValidFn valid, const char* label) {
     if (!valid(value)) {
@@ -370,6 +386,32 @@ Enum readEnum(PackageReader& reader, ValidFn valid, const char* label) {
     if (!valid(value)) {
         throw std::runtime_error(std::string("invalid fighter package ") + label);
     }
+    return value;
+}
+
+void writeVec2(PackageWriter& writer, Vec2 value) {
+    writer.writeI32(value.x);
+    writer.writeI32(value.y);
+}
+
+Vec2 readVec2(PackageReader& reader) {
+    Vec2 value;
+    value.x = reader.readI32();
+    value.y = reader.readI32();
+    return value;
+}
+
+void writeVec3(PackageWriter& writer, Vec3 value) {
+    writer.writeI32(value.x);
+    writer.writeI32(value.y);
+    writer.writeI32(value.z);
+}
+
+Vec3 readVec3(PackageReader& reader) {
+    Vec3 value;
+    value.x = reader.readI32();
+    value.y = reader.readI32();
+    value.z = reader.readI32();
     return value;
 }
 
@@ -454,19 +496,73 @@ PackageScript readPackageScript(PackageReader& reader) {
 }
 
 void writeHitbox(PackageWriter& writer, const HitboxDefinition& hitbox) {
-    writeNativeStruct(writer, hitbox);
+    writeEnum(writer, hitbox.bone, validBoneId, "hitbox bone");
+    writer.writeI32(hitbox.hsdBone);
+    writer.writeI32(hitbox.hitboxId);
+    writeVec3(writer, hitbox.offset);
+    writer.writeI32(hitbox.radius);
+    writer.writeI32(hitbox.damage);
+    writer.writeI32(hitbox.damageShield);
+    writer.writeI32(hitbox.knockbackAngleDegrees);
+    writer.writeBool(hitbox.knockbackAngleFixed);
+    writer.writeI32(hitbox.knockbackBase);
+    writer.writeI32(hitbox.knockbackGrowth);
+    writer.writeI32(hitbox.knockbackWeightSet);
+    writer.writeI32(hitbox.element);
+    writer.writeBool(hitbox.isGrab);
+    writer.writeBool(hitbox.canClank);
+    writer.writeBool(hitbox.reboundsOnClank);
+    writer.writeBool(hitbox.hitFighters);
+    writer.writeBool(hitbox.onlyHitGrabbed);
+    writer.writeBool(hitbox.requiresThrownHitboxOwner);
+    writer.writeBool(hitbox.hitGrounded);
+    writer.writeBool(hitbox.hitAirborne);
 }
 
 HitboxDefinition readHitbox(PackageReader& reader) {
-    return readNativeStruct<HitboxDefinition>(reader, "hitbox");
+    HitboxDefinition hitbox;
+    hitbox.bone = readEnum<BoneId>(reader, validBoneId, "hitbox bone");
+    hitbox.hsdBone = reader.readI32();
+    hitbox.hitboxId = reader.readI32();
+    hitbox.offset = readVec3(reader);
+    hitbox.radius = reader.readI32();
+    hitbox.damage = reader.readI32();
+    hitbox.damageShield = reader.readI32();
+    hitbox.knockbackAngleDegrees = reader.readI32();
+    hitbox.knockbackAngleFixed = reader.readBool();
+    hitbox.knockbackBase = reader.readI32();
+    hitbox.knockbackGrowth = reader.readI32();
+    hitbox.knockbackWeightSet = reader.readI32();
+    hitbox.element = reader.readI32();
+    hitbox.isGrab = reader.readBool();
+    hitbox.canClank = reader.readBool();
+    hitbox.reboundsOnClank = reader.readBool();
+    hitbox.hitFighters = reader.readBool();
+    hitbox.onlyHitGrabbed = reader.readBool();
+    hitbox.requiresThrownHitboxOwner = reader.readBool();
+    hitbox.hitGrounded = reader.readBool();
+    hitbox.hitAirborne = reader.readBool();
+    return hitbox;
 }
 
 void writeHurtbox(PackageWriter& writer, const HurtboxDefinition& hurtbox) {
-    writeNativeStruct(writer, hurtbox);
+    writeEnum(writer, hurtbox.bone, validBoneId, "hurtbox bone");
+    writeVec3(writer, hurtbox.startOffset);
+    writeVec3(writer, hurtbox.endOffset);
+    writer.writeI32(hurtbox.radius);
+    writeEnum(writer, hurtbox.state, validHurtboxState, "hurtbox state");
+    writer.writeBool(hurtbox.grabbable);
 }
 
 HurtboxDefinition readHurtbox(PackageReader& reader) {
-    return readNativeStruct<HurtboxDefinition>(reader, "hurtbox");
+    HurtboxDefinition hurtbox;
+    hurtbox.bone = readEnum<BoneId>(reader, validBoneId, "hurtbox bone");
+    hurtbox.startOffset = readVec3(reader);
+    hurtbox.endOffset = readVec3(reader);
+    hurtbox.radius = reader.readI32();
+    hurtbox.state = readEnum<HurtboxState>(reader, validHurtboxState, "hurtbox state");
+    hurtbox.grabbable = reader.readBool();
+    return hurtbox;
 }
 
 void writeInterrupt(PackageWriter& writer, const InterruptRule& rule) {
@@ -511,8 +607,8 @@ void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
     writer.writeI32(subaction.smashChargeDamageMultiplier);
     writer.writeI32(subaction.selfDamage);
     writer.writeString(subaction.objectName);
-    writeNativeStruct(writer, subaction.spawnVelocity);
-    writeNativeStruct(writer, subaction.spawnOffset);
+    writeVec2(writer, subaction.spawnVelocity);
+    writeVec3(writer, subaction.spawnOffset);
     writer.writeI32(subaction.modelPartIndex);
     writer.writeI32(subaction.modelPartState);
     writer.writeI32(subaction.modelPartAnimation);
@@ -534,8 +630,8 @@ Subaction readSubaction(PackageReader& reader) {
     subaction.smashChargeDamageMultiplier = reader.readI32();
     subaction.selfDamage = reader.readI32();
     subaction.objectName = reader.readString();
-    subaction.spawnVelocity = readNativeStruct<Vec2>(reader, "spawn velocity");
-    subaction.spawnOffset = readNativeStruct<Vec3>(reader, "spawn offset");
+    subaction.spawnVelocity = readVec2(reader);
+    subaction.spawnOffset = readVec3(reader);
     subaction.modelPartIndex = reader.readI32();
     subaction.modelPartState = reader.readI32();
     subaction.modelPartAnimation = reader.readI32();
@@ -689,6 +785,40 @@ GameObjectStateDefinition readGameObjectState(PackageReader& reader) {
     return state;
 }
 
+void writeGameObjectHurtbox(PackageWriter& writer, const GameObjectHurtboxDefinition& hurtbox) {
+    writeVec3(writer, hurtbox.startOffset);
+    writeVec3(writer, hurtbox.endOffset);
+    writer.writeI32(hurtbox.radius);
+    writeEnum(writer, hurtbox.state, validHurtboxState, "object hurtbox state");
+}
+
+GameObjectHurtboxDefinition readGameObjectHurtbox(PackageReader& reader) {
+    GameObjectHurtboxDefinition hurtbox;
+    hurtbox.startOffset = readVec3(reader);
+    hurtbox.endOffset = readVec3(reader);
+    hurtbox.radius = reader.readI32();
+    hurtbox.state = readEnum<HurtboxState>(reader, validHurtboxState, "object hurtbox state");
+    return hurtbox;
+}
+
+void writeGameObjectTouchbox(PackageWriter& writer, const GameObjectTouchboxDefinition& touchbox) {
+    writeVec3(writer, touchbox.startOffset);
+    writeVec3(writer, touchbox.endOffset);
+    writer.writeI32(touchbox.radius);
+    writer.writeBool(touchbox.touchFighters);
+    writer.writeBool(touchbox.touchObjects);
+}
+
+GameObjectTouchboxDefinition readGameObjectTouchbox(PackageReader& reader) {
+    GameObjectTouchboxDefinition touchbox;
+    touchbox.startOffset = readVec3(reader);
+    touchbox.endOffset = readVec3(reader);
+    touchbox.radius = reader.readI32();
+    touchbox.touchFighters = reader.readBool();
+    touchbox.touchObjects = reader.readBool();
+    return touchbox;
+}
+
 void writeGameObjectDefinition(PackageWriter& writer, const GameObjectDefinition& object) {
     writer.writeString(object.name);
     writeEnum(writer, object.kind, validGameObjectKind, "object kind");
@@ -734,10 +864,10 @@ void writeGameObjectDefinition(PackageWriter& writer, const GameObjectDefinition
         writeHitbox(writer, hitbox);
     });
     writeVector(writer, object.hurtboxes, [&](const GameObjectHurtboxDefinition& hurtbox) {
-        writeNativeStruct(writer, hurtbox);
+        writeGameObjectHurtbox(writer, hurtbox);
     });
     writeVector(writer, object.touchboxes, [&](const GameObjectTouchboxDefinition& touchbox) {
-        writeNativeStruct(writer, touchbox);
+        writeGameObjectTouchbox(writer, touchbox);
     });
 }
 
@@ -787,10 +917,10 @@ GameObjectDefinition readGameObjectDefinition(PackageReader& reader) {
         return readHitbox(reader);
     });
     object.hurtboxes = readVector<GameObjectHurtboxDefinition>(reader, kMaxHurtboxes, "object hurtbox", [&]() {
-        return readNativeStruct<GameObjectHurtboxDefinition>(reader, "object hurtbox");
+        return readGameObjectHurtbox(reader);
     });
     object.touchboxes = readVector<GameObjectTouchboxDefinition>(reader, kMaxTouchboxes, "object touchbox", [&]() {
-        return readNativeStruct<GameObjectTouchboxDefinition>(reader, "object touchbox");
+        return readGameObjectTouchbox(reader);
     });
     return object;
 }
