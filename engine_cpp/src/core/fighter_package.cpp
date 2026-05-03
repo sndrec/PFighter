@@ -2009,7 +2009,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             false,
             false,
             false,
-            false,
+            true,
             true,
             true);
         if (object.initialState < 0 || object.initialState >= static_cast<int>(object.states.size())) {

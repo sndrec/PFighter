@@ -1348,13 +1348,6 @@ static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
         op != pf::PackageScriptOp::SpawnFighter &&
         op != pf::PackageScriptOp::SetVarButtonDown &&
         op != pf::PackageScriptOp::SetVarButtonPressed &&
-        op != pf::PackageScriptOp::SetVarFighterPercent &&
-        op != pf::PackageScriptOp::SetVarFighterShield &&
-        op != pf::PackageScriptOp::SetVarFighterPositionX &&
-        op != pf::PackageScriptOp::SetVarFighterPositionY &&
-        op != pf::PackageScriptOp::SetVarFighterGroundVelocity &&
-        op != pf::PackageScriptOp::SetVarFighterAirVelocityX &&
-        op != pf::PackageScriptOp::SetVarFighterAirVelocityY &&
         op != pf::PackageScriptOp::SetVarStickX &&
         op != pf::PackageScriptOp::SetVarStickY &&
         op != pf::PackageScriptOp::SetVarCStickX &&
@@ -1382,6 +1375,21 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityX: return pf::PackageScriptOp::SetVarObjectVelocityY;
     case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
+    }
+}
+
+static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
+    switch (op) {
+    case pf::PackageScriptOp::SetVarFighterPercent:
+    case pf::PackageScriptOp::SetVarFighterShield:
+    case pf::PackageScriptOp::SetVarFighterPositionX:
+    case pf::PackageScriptOp::SetVarFighterPositionY:
+    case pf::PackageScriptOp::SetVarFighterGroundVelocity:
+    case pf::PackageScriptOp::SetVarFighterAirVelocityX:
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -3114,7 +3122,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         editor.status = "Editor: cycled selected object script block op";
                     }
                     if (uiButton({606.0f, 680.0f, 58.0f, 22.0f}, "CtxOp")) {
-                        instruction.op = nextObjectContextReadOp(instruction.op);
+                        instruction.op = packageScriptOpIsFighterContextRead(instruction.op)
+                            ? nextFighterContextReadOp(instruction.op)
+                            : nextObjectContextReadOp(instruction.op);
                         normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
                         editor.status = "Editor: cycled selected object context read";
                     }

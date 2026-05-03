@@ -6868,8 +6868,39 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterPositionY:
             case PackageScriptOp::SetVarFighterGroundVelocity:
             case PackageScriptOp::SetVarFighterAirVelocityX:
-            case PackageScriptOp::SetVarFighterAirVelocityY:
-                return;
+            case PackageScriptOp::SetVarFighterAirVelocityY: {
+                if (!validFighterIndex(world, object.ownerFighter)) {
+                    setVar(instruction.dst, 0);
+                    break;
+                }
+                const FighterRuntime& owner = world.fighters[static_cast<size_t>(object.ownerFighter)];
+                switch (instruction.op) {
+                case PackageScriptOp::SetVarFighterPercent:
+                    setVar(instruction.dst, owner.percent);
+                    break;
+                case PackageScriptOp::SetVarFighterShield:
+                    setVar(instruction.dst, owner.shieldHealth);
+                    break;
+                case PackageScriptOp::SetVarFighterPositionX:
+                    setVar(instruction.dst, owner.position.x);
+                    break;
+                case PackageScriptOp::SetVarFighterPositionY:
+                    setVar(instruction.dst, owner.position.y);
+                    break;
+                case PackageScriptOp::SetVarFighterGroundVelocity:
+                    setVar(instruction.dst, owner.groundVelocity);
+                    break;
+                case PackageScriptOp::SetVarFighterAirVelocityX:
+                    setVar(instruction.dst, owner.fighterVelocity.x);
+                    break;
+                case PackageScriptOp::SetVarFighterAirVelocityY:
+                    setVar(instruction.dst, owner.fighterVelocity.y);
+                    break;
+                default:
+                    break;
+                }
+                break;
+            }
             case PackageScriptOp::SetVarObjectOwner:
                 setVar(instruction.dst, object.ownerFighter);
                 break;

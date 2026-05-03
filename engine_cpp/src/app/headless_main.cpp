@@ -4785,6 +4785,33 @@ int main(int argc, char** argv) {
     }};
     packageDestroyObject.onSpawned = {{std::string{"script:DestroyScript"}}};
     packageSourceWorld.objectDefs.push_back(packageDestroyObject);
+    pf::GameObjectDefinition packageOwnerContextObject = packageVelocityObject;
+    packageOwnerContextObject.name = "PackageOwnerContextObject";
+    packageOwnerContextObject.packageVariables = {
+        {"OwnerPercent", 0},
+        {"OwnerShield", 0},
+        {"OwnerPositionX", 0},
+        {"OwnerPositionY", 0},
+        {"OwnerGroundVelocity", 0},
+        {"OwnerAirVelocityX", 0},
+        {"OwnerAirVelocityY", 0},
+    };
+    packageOwnerContextObject.packageScripts = {{
+        "OwnerContextScript",
+        16,
+        {
+            {pf::PackageScriptOp::SetVarFighterPercent, 0, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterShield, 1, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterPositionX, 2, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterPositionY, 3, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterGroundVelocity, 4, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterAirVelocityX, 5, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterAirVelocityY, 6, -1, -1, 0, 0, {}},
+        },
+    }};
+    packageOwnerContextObject.onAccessory.clear();
+    packageOwnerContextObject.onSpawned = {{std::string{"script:OwnerContextScript"}}};
+    packageSourceWorld.objectDefs.push_back(packageOwnerContextObject);
     pf::FighterPackage sourcePackage;
     sourcePackage.name = "headless_smoke_package";
     sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
@@ -4996,8 +5023,8 @@ int main(int argc, char** argv) {
         {},
     });
     const bool invalidPackageObjectInputWriteRejected = pf::writeFighterPackage(invalidObjectInputWritePackage, &invalidPackageError).empty();
-    pf::FighterPackage invalidObjectFighterContextWritePackage = sourcePackage;
-    invalidObjectFighterContextWritePackage.objects[1].packageScripts[0].instructions.push_back({
+    pf::FighterPackage validObjectFighterContextWritePackage = sourcePackage;
+    validObjectFighterContextWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SetVarFighterPercent,
         0,
         -1,
@@ -5006,7 +5033,7 @@ int main(int argc, char** argv) {
         0,
         {},
     });
-    const bool invalidPackageObjectFighterContextWriteRejected = pf::writeFighterPackage(invalidObjectFighterContextWritePackage, &invalidPackageError).empty();
+    const bool packageObjectFighterContextWriteAccepted = !pf::writeFighterPackage(validObjectFighterContextWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectContextWritePackage = sourcePackage;
     invalidObjectContextWritePackage.objects[1].packageScripts[0].instructions[6].dst = 999;
     const bool invalidPackageObjectContextWriteRejected = pf::writeFighterPackage(invalidObjectContextWritePackage, &invalidPackageError).empty();
@@ -5432,6 +5459,35 @@ int main(int argc, char** argv) {
     const bool packageObjectDestroyScriptOk = packageObjectDestroyIndex >= 0 &&
         packageObjectDestroyIndex < static_cast<int>(packageObjectDestroyScriptWorld.objects.size()) &&
         !packageObjectDestroyScriptWorld.objects[static_cast<size_t>(packageObjectDestroyIndex)].active;
+    pf::World packageObjectOwnerContextWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectOwnerContextWorld.objectDefs = loadedPackage.objects;
+    }
+    packageObjectOwnerContextWorld.fighters[0].percent = pf::fxFromFloat(33.0f);
+    packageObjectOwnerContextWorld.fighters[0].shieldHealth = pf::fxFromFloat(44.0f);
+    packageObjectOwnerContextWorld.fighters[0].position = {pf::fxFromFloat(-2.0f), pf::fxFromFloat(5.0f)};
+    packageObjectOwnerContextWorld.fighters[0].groundVelocity = pf::fxFromFloat(0.75f);
+    packageObjectOwnerContextWorld.fighters[0].fighterVelocity = {pf::fxFromFloat(-0.5f), pf::fxFromFloat(0.25f)};
+    const int packageObjectOwnerContextIndex = pf::spawnGameObject(
+        packageObjectOwnerContextWorld,
+        "PackageOwnerContextObject",
+        0,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const pf::GameObjectRuntime* packageObjectOwnerContext = packageObjectOwnerContextIndex >= 0 &&
+            packageObjectOwnerContextIndex < static_cast<int>(packageObjectOwnerContextWorld.objects.size())
+        ? &packageObjectOwnerContextWorld.objects[static_cast<size_t>(packageObjectOwnerContextIndex)]
+        : nullptr;
+    const bool packageObjectOwnerContextOk = packageObjectOwnerContext &&
+        packageObjectOwnerContext->packageVars.size() >= 7 &&
+        packageObjectOwnerContext->packageVars[0] == pf::fxFromFloat(33.0f) &&
+        packageObjectOwnerContext->packageVars[1] == pf::fxFromFloat(44.0f) &&
+        packageObjectOwnerContext->packageVars[2] == pf::fxFromFloat(-2.0f) &&
+        packageObjectOwnerContext->packageVars[3] == pf::fxFromFloat(5.0f) &&
+        packageObjectOwnerContext->packageVars[4] == pf::fxFromFloat(0.75f) &&
+        packageObjectOwnerContext->packageVars[5] == pf::fxFromFloat(-0.5f) &&
+        packageObjectOwnerContext->packageVars[6] == pf::fxFromFloat(0.25f);
     std::cout << "fighter_package_bytes=" << packageBytes.size()
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
@@ -5466,6 +5522,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
+              << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected
@@ -5500,7 +5557,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected
               << " fighter_package_invalid_object_input_write_rejected=" << invalidPackageObjectInputWriteRejected
-              << " fighter_package_invalid_object_fighter_context_write_rejected=" << invalidPackageObjectFighterContextWriteRejected
+              << " fighter_package_object_fighter_context_write_ok=" << packageObjectFighterContextWriteAccepted
               << " fighter_package_invalid_object_context_write_rejected=" << invalidPackageObjectContextWriteRejected
               << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk
               << " fighter_package_invalid_object_state_alias_write_rejected=" << invalidPackageObjectStateAliasWriteRejected
