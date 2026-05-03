@@ -3520,11 +3520,16 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
               " frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(maxFrame)).c_str(), 24, 382, 13, DARKGRAY);
     DrawText("Clips", 24, 396, 13, DARKGRAY);
     const int visibleClips = std::min(4, static_cast<int>(clips->size()));
+    const int clipStart = visibleListStart(
+        editor.selectedAnimationClip,
+        static_cast<int>(clips->size()),
+        visibleClips);
     for (int row = 0; row < visibleClips; ++row) {
-        const pf::AnimationClip& clip = (*clips)[static_cast<size_t>(row)];
+        const int clipIndex = clipStart + row;
+        const pf::AnimationClip& clip = (*clips)[static_cast<size_t>(clipIndex)];
         const std::string label = std::to_string(clip.actionIndex) + " " + clip.name;
-        if (uiListRow({24.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, row == editor.selectedAnimationClip)) {
-            editor.selectedAnimationClip = row;
+        if (uiListRow({24.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, clipIndex == editor.selectedAnimationClip)) {
+            editor.selectedAnimationClip = clipIndex;
             editor.animationScrubFrame = 0;
             editor.selectedAnimationTrack = 0;
             editor.selectedAnimationKey = 0;
@@ -3538,11 +3543,16 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     if (showingAuthoredClips) {
         DrawText(("Joints: " + std::to_string(def.authoredSkeleton.size())).c_str(), 184, 396, 13, DARKGRAY);
         const int visibleJoints = std::min(4, static_cast<int>(def.authoredSkeleton.size()));
+        const int jointStart = visibleListStart(
+            editor.selectedAnimationJoint,
+            static_cast<int>(def.authoredSkeleton.size()),
+            visibleJoints);
         for (int row = 0; row < visibleJoints; ++row) {
-            const pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(row)];
-            const std::string label = std::to_string(row) + " " + joint.name;
-            if (uiListRow({184.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, row == editor.selectedAnimationJoint)) {
-                editor.selectedAnimationJoint = row;
+            const int jointIndex = jointStart + row;
+            const pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(jointIndex)];
+            const std::string label = std::to_string(jointIndex) + " " + joint.name;
+            if (uiListRow({184.0f, 414.0f + 24.0f * row, 150.0f, 22.0f}, label, jointIndex == editor.selectedAnimationJoint)) {
+                editor.selectedAnimationJoint = jointIndex;
                 editor.status = "Editor: selected authored joint " + joint.name;
             }
         }
