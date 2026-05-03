@@ -4671,6 +4671,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidGeometryWritePackage = sourcePackage;
     invalidGeometryWritePackage.objects[1].hitboxes[0].radius = 0;
     const bool invalidPackageGeometryWriteRejected = pf::writeFighterPackage(invalidGeometryWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectPropertyWritePackage = sourcePackage;
+    invalidObjectPropertyWritePackage.objects[1].terminalVelocity = -1;
+    const bool invalidPackageObjectPropertyWriteRejected = pf::writeFighterPackage(invalidObjectPropertyWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidInterruptWritePackage = sourcePackage;
     invalidInterruptWritePackage.fighters[0].states[0].interrupts[0].enableFrame = -1;
     const bool invalidPackageInterruptWriteRejected = pf::writeFighterPackage(invalidInterruptWritePackage, &invalidPackageError).empty();
@@ -4821,6 +4824,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_object_state_timing_write_rejected=" << invalidPackageObjectStateTimingWriteRejected
               << " fighter_package_invalid_reference_write_rejected=" << invalidPackageReferenceWriteRejected
               << " fighter_package_invalid_geometry_write_rejected=" << invalidPackageGeometryWriteRejected
+              << " fighter_package_invalid_object_property_write_rejected=" << invalidPackageObjectPropertyWriteRejected
               << " fighter_package_invalid_interrupt_write_rejected=" << invalidPackageInterruptWriteRejected
               << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_hurtbox_ref_write_rejected=" << invalidPackageHurtboxRefWriteRejected

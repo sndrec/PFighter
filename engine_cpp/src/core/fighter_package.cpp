@@ -1631,6 +1631,12 @@ void validateObjectTouchboxGeometry(const GameObjectTouchboxDefinition& touchbox
     }
 }
 
+void validateObjectProperties(const GameObjectDefinition& object) {
+    if (object.lifetimeFrames < 0 || object.terminalVelocity < 0 || object.maxDamage < 0) {
+        throw std::runtime_error("fighter package object property is invalid");
+    }
+}
+
 void validateInterruptRuleTiming(const InterruptRule& rule) {
     const bool validBlendFrames = rule.blendFrames >= 0 ||
         rule.blendFrames == kUseDefaultAnimationBlendFrames ||
@@ -1737,6 +1743,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         if (object.states.empty()) {
             throw std::runtime_error("fighter package object states are missing");
         }
+        validateObjectProperties(object);
         const std::vector<std::string> states = objectStateNames(object);
         const std::vector<std::string> scripts = scriptNames(object.packageScripts);
         requireNonemptyNames(states, "object state");
