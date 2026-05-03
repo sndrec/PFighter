@@ -2313,6 +2313,14 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             }
             DrawText((variable.name + "=" + std::to_string(variable.initialValue)).c_str(), 398, 403, 12, DARKGRAY);
         }
+        if (uiButton({522.0f, 486.0f, 58.0f, 24.0f}, "Logic", editor.objectPanel == pf::ObjectEditorPanel::Logic)) {
+            editor.objectPanel = pf::ObjectEditorPanel::Logic;
+            editor.status = "Editor: object logic panel";
+        }
+        if (uiButton({584.0f, 486.0f, 58.0f, 24.0f}, "Boxes", editor.objectPanel == pf::ObjectEditorPanel::Boxes)) {
+            editor.objectPanel = pf::ObjectEditorPanel::Boxes;
+            editor.status = "Editor: object box panel";
+        }
 
         if (!object.states.empty()) {
             pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
@@ -2358,176 +2366,210 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             }
         }
 
-        DrawText(("Object logic: " + object.name + " vars " + std::to_string(object.packageVariables.size()) +
-                  " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 558, 13, DARKGRAY);
-        if (!object.packageScripts.empty()) {
-            pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
-            editor.selectedPackageInstruction = std::clamp(
-                editor.selectedPackageInstruction,
-                0,
-                std::max(0, static_cast<int>(script.instructions.size()) - 1));
-            drawPackageScriptBlockGraph(script, editor, {24.0f, 574.0f, 246.0f, 76.0f});
-            if (uiButton({354.0f, 576.0f, 76.0f, 24.0f}, "+ Add")) {
-                if (!object.packageVariables.empty()) {
-                    script.instructions.push_back({pf::PackageScriptOp::AddVarImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
-                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
-                    editor.status = "Editor: appended object AddVar instruction";
-                }
-            }
-            if (uiButton({438.0f, 576.0f, 76.0f, 24.0f}, "+ VelX")) {
-                script.instructions.push_back({pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}});
-                editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
-                editor.status = "Editor: appended object AirVelX instruction";
-            }
-            if (uiButton({354.0f, 606.0f, 76.0f, 24.0f}, "+ Spawn")) {
-                script.instructions.push_back({pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(1.0f), object.name});
-                editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
-                editor.status = "Editor: appended object SpawnObject instruction";
-            }
-            if (uiButton({438.0f, 606.0f, 76.0f, 24.0f}, "- Instr")) {
-                if (!script.instructions.empty()) {
-                    script.instructions.erase(script.instructions.begin() + editor.selectedPackageInstruction);
-                    editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
-                    editor.status = "Editor: removed object script instruction";
-                }
-            }
-            if (uiButton({354.0f, 636.0f, 76.0f, 24.0f}, "BindSp")) {
-                bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
-            }
-            if (uiButton({438.0f, 636.0f, 76.0f, 24.0f}, "BindAcc")) {
-                bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
-            }
-            if (!script.instructions.empty()) {
-                pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
-                normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
-                if (uiButton({270.0f, 576.0f, 76.0f, 24.0f}, "Op")) {
-                    instruction.op = nextPackageScriptOp(instruction.op);
-                    normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
-                    editor.status = "Editor: cycled selected object script block op";
-                }
-                if (uiButton({270.0f, 606.0f, 76.0f, 24.0f}, "Dst")) {
-                    if (!object.packageVariables.empty()) {
-                        instruction.dst = (std::max(0, instruction.dst) + 1) % static_cast<int>(object.packageVariables.size());
-                        editor.status = "Editor: cycled selected object script destination variable";
-                    }
-                }
-                if (uiButton({270.0f, 636.0f, 76.0f, 24.0f}, "Val +")) {
-                    ++instruction.intValue;
-                    editor.status = "Editor: increased selected object script integer value";
-                }
-                if (uiButton({270.0f, 658.0f, 58.0f, 22.0f}, "Fix+")) {
-                    instruction.fixValue += pf::fxFromFloat(0.1f);
-                    editor.status = "Editor: increased selected object script fixed value";
-                }
-                if (uiButton({332.0f, 658.0f, 58.0f, 22.0f}, "State")) {
-                    if (!object.states.empty()) {
-                        instruction.text = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
-                        instruction.op = pf::PackageScriptOp::ChangeState;
-                        editor.status = "Editor: targeted selected object state from script block";
-                    }
-                }
-                if (uiButton({394.0f, 658.0f, 58.0f, 22.0f}, "Object")) {
-                    instruction.text = object.name;
-                    instruction.op = pf::PackageScriptOp::SpawnObject;
-                    editor.status = "Editor: targeted selected object from object script block";
-                }
-                if (uiButton({456.0f, 658.0f, 58.0f, 22.0f}, "Val-")) {
-                    --instruction.intValue;
-                    editor.status = "Editor: decreased selected object script integer value";
-                }
-            }
-        } else {
-            DrawText("No object script selected", 31, 590, 13, GRAY);
-        }
-        if (uiButton({270.0f, 486.0f, 58.0f, 24.0f}, "+ OVar")) {
-            object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});
-            editor.selectedPackageVariable = static_cast<int>(object.packageVariables.size()) - 1;
-            editor.status = "Editor: added object package variable";
-        }
-        if (uiButton({332.0f, 486.0f, 58.0f, 24.0f}, "- OVar")) {
-            if (!object.packageVariables.empty()) {
-                const int removedIndex = editor.selectedPackageVariable;
-                const std::string removed = object.packageVariables[static_cast<size_t>(removedIndex)].name;
-                object.packageVariables.erase(object.packageVariables.begin() + removedIndex);
-                remapRemovedPackageVariable(object.packageScripts, removedIndex, static_cast<int>(object.packageVariables.size()));
-                editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(object.packageVariables.size()) - 1));
-                editor.status = "Editor: removed object package variable " + removed;
-            }
-        }
-        if (uiButton({394.0f, 486.0f, 58.0f, 24.0f}, "+ OScr")) {
-            pf::PackageScript script;
-            script.name = uniqueObjectPackageScriptName(object);
-            script.instructionBudget = 64;
-            object.packageScripts.push_back(std::move(script));
-            editor.selectedPackageScript = static_cast<int>(object.packageScripts.size()) - 1;
-            editor.selectedPackageInstruction = 0;
-            editor.status = "Editor: added object package script";
-        }
-        if (uiButton({456.0f, 486.0f, 58.0f, 24.0f}, "- OScr")) {
+        if (editor.objectPanel == pf::ObjectEditorPanel::Logic) {
+            DrawText(("Object logic: " + object.name + " vars " + std::to_string(object.packageVariables.size()) +
+                      " scripts " + std::to_string(object.packageScripts.size())).c_str(), 24, 574, 13, DARKGRAY);
             if (!object.packageScripts.empty()) {
-                const std::string removed = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
-                object.packageScripts.erase(object.packageScripts.begin() + editor.selectedPackageScript);
-                removeObjectPackageScriptRefs(object, removed);
-                editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
+                pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+                editor.selectedPackageInstruction = std::clamp(
+                    editor.selectedPackageInstruction,
+                    0,
+                    std::max(0, static_cast<int>(script.instructions.size()) - 1));
+                drawPackageScriptBlockGraph(script, editor, {24.0f, 590.0f, 246.0f, 76.0f});
+                if (uiButton({354.0f, 590.0f, 76.0f, 24.0f}, "+ Add")) {
+                    if (!object.packageVariables.empty()) {
+                        script.instructions.push_back({pf::PackageScriptOp::AddVarImmediate, editor.selectedPackageVariable, -1, -1, 1, 0, {}});
+                        editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                        editor.status = "Editor: appended object AddVar instruction";
+                    }
+                }
+                if (uiButton({438.0f, 590.0f, 76.0f, 24.0f}, "+ VelX")) {
+                    script.instructions.push_back({pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}});
+                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                    editor.status = "Editor: appended object AirVelX instruction";
+                }
+                if (uiButton({354.0f, 620.0f, 76.0f, 24.0f}, "+ Spawn")) {
+                    script.instructions.push_back({pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(1.0f), object.name});
+                    editor.selectedPackageInstruction = static_cast<int>(script.instructions.size()) - 1;
+                    editor.status = "Editor: appended object SpawnObject instruction";
+                }
+                if (uiButton({438.0f, 620.0f, 76.0f, 24.0f}, "- Instr")) {
+                    if (!script.instructions.empty()) {
+                        script.instructions.erase(script.instructions.begin() + editor.selectedPackageInstruction);
+                        editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
+                        editor.status = "Editor: removed object script instruction";
+                    }
+                }
+                if (uiButton({354.0f, 650.0f, 76.0f, 24.0f}, "BindSp")) {
+                    bindObjectPackageScriptCallback(object.onSpawned, script.name, "spawn", editor);
+                }
+                if (uiButton({438.0f, 650.0f, 76.0f, 24.0f}, "BindAcc")) {
+                    bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
+                }
+                if (!script.instructions.empty()) {
+                    pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
+                    normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+                    if (uiButton({270.0f, 590.0f, 76.0f, 24.0f}, "Op")) {
+                        instruction.op = nextPackageScriptOp(instruction.op);
+                        normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+                        editor.status = "Editor: cycled selected object script block op";
+                    }
+                    if (uiButton({270.0f, 620.0f, 76.0f, 24.0f}, "Dst")) {
+                        if (!object.packageVariables.empty()) {
+                            instruction.dst = (std::max(0, instruction.dst) + 1) % static_cast<int>(object.packageVariables.size());
+                            editor.status = "Editor: cycled selected object script destination variable";
+                        }
+                    }
+                    if (uiButton({270.0f, 650.0f, 76.0f, 24.0f}, "Val +")) {
+                        ++instruction.intValue;
+                        editor.status = "Editor: increased selected object script integer value";
+                    }
+                    if (uiButton({270.0f, 680.0f, 58.0f, 22.0f}, "Fix+")) {
+                        instruction.fixValue += pf::fxFromFloat(0.1f);
+                        editor.status = "Editor: increased selected object script fixed value";
+                    }
+                    if (uiButton({332.0f, 680.0f, 58.0f, 22.0f}, "State")) {
+                        if (!object.states.empty()) {
+                            instruction.text = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
+                            instruction.op = pf::PackageScriptOp::ChangeState;
+                            editor.status = "Editor: targeted selected object state from script block";
+                        }
+                    }
+                    if (uiButton({394.0f, 680.0f, 58.0f, 22.0f}, "Object")) {
+                        instruction.text = object.name;
+                        instruction.op = pf::PackageScriptOp::SpawnObject;
+                        editor.status = "Editor: targeted selected object from object script block";
+                    }
+                    if (uiButton({456.0f, 680.0f, 58.0f, 22.0f}, "Val-")) {
+                        --instruction.intValue;
+                        editor.status = "Editor: decreased selected object script integer value";
+                    }
+                }
+            } else {
+                DrawText("No object script selected", 31, 590, 13, GRAY);
+            }
+            if (uiButton({270.0f, 486.0f, 58.0f, 24.0f}, "+ OVar")) {
+                object.packageVariables.push_back({uniqueObjectPackageVariableName(object), 0});
+                editor.selectedPackageVariable = static_cast<int>(object.packageVariables.size()) - 1;
+                editor.status = "Editor: added object package variable";
+            }
+            if (uiButton({332.0f, 486.0f, 58.0f, 24.0f}, "- OVar")) {
+                if (!object.packageVariables.empty()) {
+                    const int removedIndex = editor.selectedPackageVariable;
+                    const std::string removed = object.packageVariables[static_cast<size_t>(removedIndex)].name;
+                    object.packageVariables.erase(object.packageVariables.begin() + removedIndex);
+                    remapRemovedPackageVariable(object.packageScripts, removedIndex, static_cast<int>(object.packageVariables.size()));
+                    editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, std::max(0, static_cast<int>(object.packageVariables.size()) - 1));
+                    editor.status = "Editor: removed object package variable " + removed;
+                }
+            }
+            if (uiButton({394.0f, 486.0f, 58.0f, 24.0f}, "+ OScr")) {
+                pf::PackageScript script;
+                script.name = uniqueObjectPackageScriptName(object);
+                script.instructionBudget = 64;
+                object.packageScripts.push_back(std::move(script));
+                editor.selectedPackageScript = static_cast<int>(object.packageScripts.size()) - 1;
                 editor.selectedPackageInstruction = 0;
-                editor.status = "Editor: removed object package script " + removed;
+                editor.status = "Editor: added object package script";
+            }
+            if (uiButton({456.0f, 486.0f, 58.0f, 24.0f}, "- OScr")) {
+                if (!object.packageScripts.empty()) {
+                    const std::string removed = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+                    object.packageScripts.erase(object.packageScripts.begin() + editor.selectedPackageScript);
+                    removeObjectPackageScriptRefs(object, removed);
+                    editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
+                    editor.selectedPackageInstruction = 0;
+                    editor.status = "Editor: removed object package script " + removed;
+                }
             }
         }
-        editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
-        editor.selectedObjectHurtbox = std::clamp(editor.selectedObjectHurtbox, 0, std::max(0, static_cast<int>(object.hurtboxes.size()) - 1));
-        editor.selectedObjectTouchbox = std::clamp(editor.selectedObjectTouchbox, 0, std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
-        DrawText(("Object boxes: hit " + std::to_string(object.hitboxes.size()) +
-                  " hurt " + std::to_string(object.hurtboxes.size()) +
-                  " touch " + std::to_string(object.touchboxes.size())).c_str(), 24, 666, 13, DARKGRAY);
-        if (uiButton({24.0f, 684.0f, 68.0f, 24.0f}, "+ Hit")) {
-            pf::HitboxDefinition hitbox;
-            hitbox.radius = pf::fxFromFloat(0.35f);
-            hitbox.damage = pf::fxFromFloat(3.0f);
-            hitbox.knockbackAngleDegrees = pf::fx(45);
-            hitbox.knockbackBase = pf::fx(20);
-            hitbox.knockbackGrowth = pf::fx(40);
-            object.hitboxes.push_back(hitbox);
-            editor.selectedObjectHitbox = static_cast<int>(object.hitboxes.size()) - 1;
-            editor.status = "Editor: added object hitbox";
-        }
-        if (uiButton({98.0f, 684.0f, 68.0f, 24.0f}, "+ Hurt")) {
-            object.hurtboxes.push_back({{}, {0, pf::fxFromFloat(0.7f), 0}, pf::fxFromFloat(0.35f), pf::HurtboxState::Normal});
-            editor.selectedObjectHurtbox = static_cast<int>(object.hurtboxes.size()) - 1;
-            editor.status = "Editor: added object hurtbox";
-        }
-        if (uiButton({172.0f, 684.0f, 68.0f, 24.0f}, "+ Touch")) {
-            object.touchboxes.push_back({{}, {0, pf::fxFromFloat(0.8f), 0}, pf::fxFromFloat(0.45f), true, true});
-            editor.selectedObjectTouchbox = static_cast<int>(object.touchboxes.size()) - 1;
-            editor.status = "Editor: added object touchbox";
-        }
-        if (!object.hitboxes.empty()) {
-            pf::HitboxDefinition& hitbox = object.hitboxes[static_cast<size_t>(editor.selectedObjectHitbox)];
-            if (uiButton({270.0f, 654.0f, 76.0f, 24.0f}, "Dmg +")) {
-                hitbox.damage += pf::fx(1);
-                editor.status = "Editor: raised object hitbox damage";
+        if (editor.objectPanel == pf::ObjectEditorPanel::Boxes) {
+            editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
+            editor.selectedObjectHurtbox = std::clamp(editor.selectedObjectHurtbox, 0, std::max(0, static_cast<int>(object.hurtboxes.size()) - 1));
+            editor.selectedObjectTouchbox = std::clamp(editor.selectedObjectTouchbox, 0, std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
+            DrawText(("Object boxes: hit " + std::to_string(object.hitboxes.size()) +
+                      " hurt " + std::to_string(object.hurtboxes.size()) +
+                      " touch " + std::to_string(object.touchboxes.size())).c_str(), 24, 574, 13, DARKGRAY);
+            if (uiButton({24.0f, 592.0f, 68.0f, 24.0f}, "+ Hit")) {
+                pf::HitboxDefinition hitbox;
+                hitbox.radius = pf::fxFromFloat(0.35f);
+                hitbox.damage = pf::fxFromFloat(3.0f);
+                hitbox.knockbackAngleDegrees = pf::fx(45);
+                hitbox.knockbackBase = pf::fx(20);
+                hitbox.knockbackGrowth = pf::fx(40);
+                object.hitboxes.push_back(hitbox);
+                editor.selectedObjectHitbox = static_cast<int>(object.hitboxes.size()) - 1;
+                editor.status = "Editor: added object hitbox";
             }
-            if (uiButton({354.0f, 654.0f, 76.0f, 24.0f}, "Dmg -")) {
-                hitbox.damage = std::max(pf::Fix{0}, hitbox.damage - pf::fx(1));
-                editor.status = "Editor: lowered object hitbox damage";
+            if (uiButton({98.0f, 592.0f, 68.0f, 24.0f}, "+ Hurt")) {
+                object.hurtboxes.push_back({{}, {0, pf::fxFromFloat(0.7f), 0}, pf::fxFromFloat(0.35f), pf::HurtboxState::Normal});
+                editor.selectedObjectHurtbox = static_cast<int>(object.hurtboxes.size()) - 1;
+                editor.status = "Editor: added object hurtbox";
             }
-            if (uiButton({438.0f, 654.0f, 76.0f, 24.0f}, "- Hit")) {
-                object.hitboxes.erase(object.hitboxes.begin() + editor.selectedObjectHitbox);
-                editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
-                editor.status = "Editor: removed object hitbox";
-                return;
+            if (uiButton({172.0f, 592.0f, 68.0f, 24.0f}, "+ Touch")) {
+                object.touchboxes.push_back({{}, {0, pf::fxFromFloat(0.8f), 0}, pf::fxFromFloat(0.45f), true, true});
+                editor.selectedObjectTouchbox = static_cast<int>(object.touchboxes.size()) - 1;
+                editor.status = "Editor: added object touchbox";
             }
-            if (uiButton({270.0f, 684.0f, 76.0f, 24.0f}, "Hit +")) {
-                hitbox.radius += pf::fxFromFloat(0.05f);
-                editor.status = "Editor: enlarged object hitbox";
+            if (!object.hitboxes.empty()) {
+                pf::HitboxDefinition& hitbox = object.hitboxes[static_cast<size_t>(editor.selectedObjectHitbox)];
+                if (uiButton({270.0f, 592.0f, 76.0f, 24.0f}, "Dmg +")) {
+                    hitbox.damage += pf::fx(1);
+                    editor.status = "Editor: raised object hitbox damage";
+                }
+                if (uiButton({354.0f, 592.0f, 76.0f, 24.0f}, "Dmg -")) {
+                    hitbox.damage = std::max(pf::Fix{0}, hitbox.damage - pf::fx(1));
+                    editor.status = "Editor: lowered object hitbox damage";
+                }
+                if (uiButton({438.0f, 592.0f, 76.0f, 24.0f}, "- Hit")) {
+                    object.hitboxes.erase(object.hitboxes.begin() + editor.selectedObjectHitbox);
+                    editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, std::max(0, static_cast<int>(object.hitboxes.size()) - 1));
+                    editor.status = "Editor: removed object hitbox";
+                    return;
+                }
+                if (uiButton({270.0f, 622.0f, 76.0f, 24.0f}, "Hit +")) {
+                    hitbox.radius += pf::fxFromFloat(0.05f);
+                    editor.status = "Editor: enlarged object hitbox";
+                }
+                if (uiButton({354.0f, 622.0f, 76.0f, 24.0f}, "Hit -")) {
+                    hitbox.radius = std::max(pf::fxFromFloat(0.05f), hitbox.radius - pf::fxFromFloat(0.05f));
+                    editor.status = "Editor: shrank object hitbox";
+                }
             }
-            if (uiButton({354.0f, 684.0f, 76.0f, 24.0f}, "Hit -")) {
-                hitbox.radius = std::max(pf::fxFromFloat(0.05f), hitbox.radius - pf::fxFromFloat(0.05f));
-                editor.status = "Editor: shrank object hitbox";
+            if (!object.hurtboxes.empty()) {
+                pf::GameObjectHurtboxDefinition& hurtbox = object.hurtboxes[static_cast<size_t>(editor.selectedObjectHurtbox)];
+                if (uiButton({270.0f, 652.0f, 76.0f, 24.0f}, "Hurt +")) {
+                    hurtbox.radius += pf::fxFromFloat(0.05f);
+                    editor.status = "Editor: enlarged object hurtbox";
+                }
+                if (uiButton({354.0f, 652.0f, 76.0f, 24.0f}, "Hurt -")) {
+                    hurtbox.radius = std::max(pf::fxFromFloat(0.05f), hurtbox.radius - pf::fxFromFloat(0.05f));
+                    editor.status = "Editor: shrank object hurtbox";
+                }
+                if (uiButton({438.0f, 652.0f, 76.0f, 24.0f}, "- Hurt")) {
+                    object.hurtboxes.erase(object.hurtboxes.begin() + editor.selectedObjectHurtbox);
+                    editor.selectedObjectHurtbox = std::clamp(editor.selectedObjectHurtbox, 0, std::max(0, static_cast<int>(object.hurtboxes.size()) - 1));
+                    editor.status = "Editor: removed object hurtbox";
+                    return;
+                }
             }
-        }
-        if (!object.hurtboxes.empty() && uiButton({438.0f, 684.0f, 76.0f, 24.0f}, "Hurt +")) {
-            object.hurtboxes[static_cast<size_t>(editor.selectedObjectHurtbox)].radius += pf::fxFromFloat(0.05f);
-            editor.status = "Editor: enlarged object hurtbox";
+            if (!object.touchboxes.empty()) {
+                pf::GameObjectTouchboxDefinition& touchbox = object.touchboxes[static_cast<size_t>(editor.selectedObjectTouchbox)];
+                if (uiButton({270.0f, 682.0f, 76.0f, 24.0f}, "Touch +")) {
+                    touchbox.radius += pf::fxFromFloat(0.05f);
+                    editor.status = "Editor: enlarged object touchbox";
+                }
+                if (uiButton({354.0f, 682.0f, 76.0f, 24.0f}, "Touch -")) {
+                    touchbox.radius = std::max(pf::fxFromFloat(0.05f), touchbox.radius - pf::fxFromFloat(0.05f));
+                    editor.status = "Editor: shrank object touchbox";
+                }
+                if (uiButton({438.0f, 682.0f, 76.0f, 24.0f}, "- Touch")) {
+                    object.touchboxes.erase(object.touchboxes.begin() + editor.selectedObjectTouchbox);
+                    editor.selectedObjectTouchbox = std::clamp(editor.selectedObjectTouchbox, 0, std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
+                    editor.status = "Editor: removed object touchbox";
+                    return;
+                }
+            }
         }
     }
 }

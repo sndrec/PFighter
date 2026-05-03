@@ -14,6 +14,11 @@ enum class EditorWorkspace : uint8_t {
     TestLab,
 };
 
+enum class ObjectEditorPanel : uint8_t {
+    Logic,
+    Boxes,
+};
+
 struct FighterEditor {
     int selectedFighter = 0;
     int selectedState = 0;
@@ -28,6 +33,7 @@ struct FighterEditor {
     int selectedObjectHurtbox = 0;
     int selectedObjectTouchbox = 0;
     int selectedObjectStateCallback = 0;
+    ObjectEditorPanel objectPanel = ObjectEditorPanel::Logic;
     int selectedAnimationClip = 0;
     int selectedAnimationJoint = 0;
     int selectedAnimationTrack = 0;
