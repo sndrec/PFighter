@@ -995,6 +995,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetFacing: return "Facing";
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
+    case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
+    case pf::PackageScriptOp::JumpRelative: return "Jump";
     }
     return "Op";
 }
@@ -1022,6 +1024,12 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         break;
     case pf::PackageScriptOp::SpawnObject:
         label += " " + instruction.text;
+        break;
+    case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
+        label += " v" + std::to_string(instruction.dst) + " < " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::JumpRelative:
+        label += " " + std::to_string(instruction.intValue);
         break;
     case pf::PackageScriptOp::Nop:
         break;
@@ -1098,7 +1106,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetFacing;
     case pf::PackageScriptOp::SetFacing: return pf::PackageScriptOp::ChangeState;
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
-    case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
+    case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::JumpRelative;
+    case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
 }

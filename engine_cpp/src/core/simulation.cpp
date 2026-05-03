@@ -6702,10 +6702,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             object.packageVars[static_cast<size_t>(index)] = value;
         };
         int budget = std::clamp(found->instructionBudget, 0, 1024);
-        for (const PackageScriptInstruction& instruction : found->instructions) {
+        size_t instructionIndex = 0;
+        while (instructionIndex < found->instructions.size()) {
             if (budget-- <= 0) {
                 return;
             }
+            const PackageScriptInstruction& instruction = found->instructions[instructionIndex];
             switch (instruction.op) {
             case PackageScriptOp::Nop:
                 break;
@@ -6734,7 +6736,19 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SpawnObject:
                 spawnGameObject(world, instruction.text, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
+            case PackageScriptOp::SkipIfVarLessThanImmediate:
+                instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
+                continue;
+            case PackageScriptOp::JumpRelative: {
+                const int target = static_cast<int>(instructionIndex) + instruction.intValue;
+                if (target < 0 || target > static_cast<int>(found->instructions.size())) {
+                    return;
+                }
+                instructionIndex = static_cast<size_t>(target);
+                continue;
             }
+            }
+            ++instructionIndex;
         }
         return;
     }

@@ -4616,6 +4616,16 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 3, 0, {}},
             {pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(0.25f), "TrainingItem"},
         },
+    }, {
+        "BranchScript",
+        16,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 1, 0, {}},
+            {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 3, 0, {}},
+            {pf::PackageScriptOp::JumpRelative, -1, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::JumpRelative, -1, -1, -1, -3, 0, {}},
+        },
     }};
     packageSourceWorld.objectDefs[1].packageVariables = {{"ObjectSmokeVar", 2}};
     packageSourceWorld.objectDefs[1].packageScripts = {{
@@ -4624,6 +4634,10 @@ int main(int argc, char** argv) {
         {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
             {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
+            {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 10, 0, {}},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 100, 0, {}},
+            {pf::PackageScriptOp::JumpRelative, -1, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 1000, 0, {}},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -4709,6 +4723,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidObjectVariableNameWritePackage = sourcePackage;
     invalidObjectVariableNameWritePackage.objects[1].packageVariables.push_back(invalidObjectVariableNameWritePackage.objects[1].packageVariables[0]);
     const bool invalidPackageObjectVariableNameWriteRejected = pf::writeFighterPackage(invalidObjectVariableNameWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScriptBranchWritePackage = sourcePackage;
+    invalidScriptBranchWritePackage.fighters[0].packageScripts[1].instructions[3].intValue = 99;
+    const bool invalidPackageBranchWriteRejected = pf::writeFighterPackage(invalidScriptBranchWritePackage, &invalidPackageError).empty();
     pf::FighterPackage aliasStateWritePackage = sourcePackage;
     aliasStateWritePackage.fighters[0].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::ChangeState,
@@ -4745,7 +4762,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 1 &&
-        loadedPackage.fighters[0].packageScripts.size() == 1 &&
+        loadedPackage.fighters[0].packageScripts.size() == 2 &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 1 &&
         loadedPackage.objects[1].packageScripts.size() == 1;
@@ -4810,6 +4827,21 @@ int main(int argc, char** argv) {
     const int packageScriptRestoreVar = packageScriptWorld.fighters[0].packageVars.empty()
         ? -1
         : packageScriptWorld.fighters[0].packageVars[0];
+    pf::World packageBranchScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageBranchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        const int waitIndex = packageBranchScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            pf::FunctionCall scriptCall;
+            scriptCall.name = "script:BranchScript";
+            packageBranchScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+        }
+        packageBranchScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageBranchScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const int packageScriptBranchVar = packageBranchScriptWorld.fighters[0].packageVars.empty()
+        ? -1
+        : packageBranchScriptWorld.fighters[0].packageVars[0];
     pf::World packageObjectScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectScriptWorld.objectDefs = loadedPackage.objects;
@@ -4859,6 +4891,7 @@ int main(int argc, char** argv) {
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar
+              << " fighter_package_script_branch_var=" << packageScriptBranchVar
               << " fighter_package_script_spawn_ok=" << (packageScriptSpawnCount > 0)
               << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
@@ -4881,6 +4914,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_name_write_rejected=" << invalidPackageNameWriteRejected
               << " fighter_package_invalid_variable_name_write_rejected=" << invalidPackageVariableNameWriteRejected
               << " fighter_package_invalid_object_variable_name_write_rejected=" << invalidPackageObjectVariableNameWriteRejected
+              << " fighter_package_invalid_branch_write_rejected=" << invalidPackageBranchWriteRejected
               << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk
               << " fighter_package_invalid_object_state_alias_write_rejected=" << invalidPackageObjectStateAliasWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk

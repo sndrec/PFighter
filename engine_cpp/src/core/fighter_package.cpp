@@ -218,6 +218,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetFacing:
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
+    case PackageScriptOp::SkipIfVarLessThanImmediate:
+    case PackageScriptOp::JumpRelative:
         return true;
     }
     return false;
@@ -1534,7 +1536,9 @@ void validatePackageScriptInstruction(
     int variableCount,
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& packageObjectNames,
-    bool allowResolvableStateTargets)
+    bool allowResolvableStateTargets,
+    int instructionIndex,
+    int instructionCount)
 {
     switch (instruction.op) {
     case PackageScriptOp::Nop:
@@ -1566,6 +1570,16 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script object target is invalid");
         }
         break;
+    case PackageScriptOp::SkipIfVarLessThanImmediate:
+        requireVariableIndex(instruction.dst, variableCount, "condition");
+        break;
+    case PackageScriptOp::JumpRelative: {
+        const int target = instructionIndex + instruction.intValue;
+        if (target < 0 || target > instructionCount) {
+            throw std::runtime_error("fighter package script jump target is invalid");
+        }
+        break;
+    }
     }
 }
 
@@ -1600,8 +1614,16 @@ void validatePackageScripts(
         if (script.instructionBudget < 0 || script.instructionBudget > 1024) {
             throw std::runtime_error("fighter package script instruction budget is invalid");
         }
-        for (const PackageScriptInstruction& instruction : script.instructions) {
-            validatePackageScriptInstruction(instruction, variableCount, stateNames, packageObjectNames, allowResolvableStateTargets);
+        const int instructionCount = static_cast<int>(script.instructions.size());
+        for (int instructionIndex = 0; instructionIndex < instructionCount; ++instructionIndex) {
+            validatePackageScriptInstruction(
+                script.instructions[static_cast<size_t>(instructionIndex)],
+                variableCount,
+                stateNames,
+                packageObjectNames,
+                allowResolvableStateTargets,
+                instructionIndex,
+                instructionCount);
         }
         seenNames.push_back(script.name);
     }

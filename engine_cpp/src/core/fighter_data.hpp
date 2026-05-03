@@ -437,6 +437,8 @@ enum class PackageScriptOp : uint8_t {
     SetFacing,
     ChangeState,
     SpawnObject,
+    SkipIfVarLessThanImmediate,
+    JumpRelative,
 };
 
 struct PackageScriptInstruction {
