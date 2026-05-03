@@ -425,6 +425,7 @@ enum class PackageScriptOp : uint8_t {
     SetAirVelocityY,
     SetFacing,
     ChangeState,
+    SpawnObject,
 };
 
 struct PackageScriptInstruction {

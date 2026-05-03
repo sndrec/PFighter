@@ -4589,6 +4589,7 @@ int main(int argc, char** argv) {
         8,
         {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 3, 0, {}},
+            {pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(0.25f), "TrainingItem"},
         },
     }};
     packageSourceWorld.objectDefs[1].packageVariables = {{"ObjectSmokeVar", 2}};
@@ -4678,6 +4679,7 @@ int main(int argc, char** argv) {
         packageScriptWorld.fighters[0].packageVars.clear();
     }
     pf::tickWorld(packageScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const int packageScriptSpawnCount = static_cast<int>(packageScriptWorld.objects.size());
     pf::WorldSnapshot packageScriptSnapshot = pf::saveWorld(packageScriptWorld);
     const int packageScriptVar = packageScriptWorld.fighters[0].packageVars.empty()
         ? -1
@@ -4714,6 +4716,8 @@ int main(int argc, char** argv) {
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar
+              << " fighter_package_script_spawn_ok=" << (packageScriptSpawnCount > 0)
+              << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected

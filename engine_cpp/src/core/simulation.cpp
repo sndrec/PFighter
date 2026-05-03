@@ -6679,6 +6679,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::ChangeState:
                 changeGameObjectState(world, object, instruction.text);
                 return;
+            case PackageScriptOp::SpawnObject:
+                spawnGameObject(world, instruction.text, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
+                break;
             }
         }
         return;

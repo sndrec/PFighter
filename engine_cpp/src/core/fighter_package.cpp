@@ -208,6 +208,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetAirVelocityY:
     case PackageScriptOp::SetFacing:
     case PackageScriptOp::ChangeState:
+    case PackageScriptOp::SpawnObject:
         return true;
     }
     return false;

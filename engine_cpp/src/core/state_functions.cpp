@@ -2608,6 +2608,15 @@ static void runPackageScript(World& world, FighterRuntime& fighter, const std::s
         case PackageScriptOp::ChangeState:
             changeFighterState(world, fighter, instruction.text);
             break;
+        case PackageScriptOp::SpawnObject: {
+            const Vec2 position{
+                fighter.position.x + fighter.facing * fxFromFloat(0.75f),
+                fighter.position.y + fxFromFloat(0.7f),
+            };
+            const Vec2 velocity{fighter.facing * instruction.fixValue, 0};
+            spawnGameObject(world, instruction.text, static_cast<int>(&fighter - world.fighters.data()), position, fighter.facing, velocity);
+            break;
+        }
         }
     }
 }

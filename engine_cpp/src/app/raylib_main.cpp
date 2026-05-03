@@ -983,6 +983,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
     case pf::PackageScriptOp::SetFacing: return "Facing";
     case pf::PackageScriptOp::ChangeState: return "State";
+    case pf::PackageScriptOp::SpawnObject: return "Spawn";
     }
     return "Op";
 }
@@ -1006,6 +1007,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         label += instruction.intValue < 0 ? " left" : " right";
         break;
     case pf::PackageScriptOp::ChangeState:
+        label += " " + instruction.text;
+        break;
+    case pf::PackageScriptOp::SpawnObject:
         label += " " + instruction.text;
         break;
     case pf::PackageScriptOp::Nop:
@@ -1354,17 +1358,26 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             editor.status = "Editor: removed package instruction";
         }
     }
-    if (uiButton({440.0f, 442.0f, 68.0f, 24.0f}, "Bind In")) {
+    if (uiButton({440.0f, 442.0f, 68.0f, 24.0f}, "+ Spawn")) {
+        if (script && !world.objectDefs.empty()) {
+            editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+            const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(editor.selectedObjectDef)];
+            script->instructions.push_back({pf::PackageScriptOp::SpawnObject, -1, -1, -1, 0, pf::fxFromFloat(1.0f), object.name});
+            editor.selectedPackageInstruction = static_cast<int>(script->instructions.size()) - 1;
+            editor.status = "Editor: appended SpawnObject instruction for " + object.name;
+        }
+    }
+    if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind In")) {
         if (script) {
             bindPackageScriptCallback(state.onEnter, script->name, "enter", editor);
         }
     }
-    if (uiButton({365.0f, 472.0f, 68.0f, 24.0f}, "Bind Fr")) {
+    if (uiButton({440.0f, 472.0f, 68.0f, 24.0f}, "Bind Fr")) {
         if (script) {
             bindPackageScriptCallback(state.onFrame, script->name, "frame", editor);
         }
     }
-    if (uiButton({440.0f, 472.0f, 68.0f, 24.0f}, "Budget")) {
+    if (uiButton({365.0f, 502.0f, 68.0f, 24.0f}, "Budget")) {
         if (script) {
             script->instructionBudget = script->instructionBudget == 64 ? 256 : 64;
             editor.status = "Editor: script budget set to " + std::to_string(script->instructionBudget);
