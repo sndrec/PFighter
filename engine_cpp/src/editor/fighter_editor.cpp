@@ -93,6 +93,14 @@ void FighterEditor::clampToWorld(const World& world) {
     if (clipCount == 0) {
         animationScrubFrame = 0;
     }
+    int authoredMeshVertices = 0;
+    for (const HsdMeshBatch& batch : def.authoredMesh.batches) {
+        authoredMeshVertices += static_cast<int>(batch.vertices.size());
+    }
+    selectedAuthoredMeshVertex = std::clamp(
+        selectedAuthoredMeshVertex,
+        0,
+        std::max(0, authoredMeshVertices - 1));
     selectedHurtbox = std::clamp(
         selectedHurtbox,
         0,

@@ -42,6 +42,7 @@ struct FighterEditor {
     int selectedAnimationTrack = 0;
     int selectedAnimationKey = 0;
     int animationScrubFrame = 0;
+    int selectedAuthoredMeshVertex = 0;
     int selectedHurtbox = 0;
     bool showBoxes = true;
     bool paused = false;

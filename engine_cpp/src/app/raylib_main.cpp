@@ -2227,6 +2227,18 @@ static int authoredMeshVertexCount(const pf::HsdFighterMesh& mesh) {
     return count;
 }
 
+static pf::HsdMeshVertex* authoredMeshVertexAt(pf::HsdFighterMesh& mesh, int vertexIndex) {
+    int cursor = 0;
+    for (pf::HsdMeshBatch& batch : mesh.batches) {
+        const int next = cursor + static_cast<int>(batch.vertices.size());
+        if (vertexIndex >= cursor && vertexIndex < next) {
+            return &batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
+        }
+        cursor = next;
+    }
+    return nullptr;
+}
+
 static pf::Vec2 authoredMeshSize(const pf::HsdFighterMesh& mesh) {
     bool haveVertex = false;
     pf::Fix minX = 0;
@@ -2257,6 +2269,16 @@ static void scaleAuthoredMesh(pf::HsdFighterMesh& mesh, pf::Fix scaleX, pf::Fix 
             vertex.position.y = pf::fxMul(vertex.position.y, scaleY);
         }
     }
+}
+
+static void nudgeAuthoredMeshVertex(pf::HsdFighterMesh& mesh, int vertexIndex, pf::Vec3 delta) {
+    pf::HsdMeshVertex* vertex = authoredMeshVertexAt(mesh, vertexIndex);
+    if (!vertex) {
+        return;
+    }
+    vertex->position.x += delta.x;
+    vertex->position.y += delta.y;
+    vertex->position.z += delta.z;
 }
 
 static void bindAuthoredMeshToJoint(pf::HsdFighterMesh& mesh, int joint) {
@@ -3938,9 +3960,18 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     }
     if (!def.authoredMesh.batches.empty()) {
         const pf::Vec2 meshSize = authoredMeshSize(def.authoredMesh);
+        const int meshVerts = authoredMeshVertexCount(def.authoredMesh);
+        editor.selectedAuthoredMeshVertex = std::clamp(
+            editor.selectedAuthoredMeshVertex,
+            0,
+            std::max(0, meshVerts - 1));
+        pf::HsdMeshVertex* selectedVertex = authoredMeshVertexAt(
+            def.authoredMesh,
+            editor.selectedAuthoredMeshVertex);
         const int meshBind = def.authoredMesh.batches.front().singleBindBone;
         const int meshParent = def.authoredMesh.batches.front().parentBone;
-        DrawText(("Mesh verts=" + std::to_string(authoredMeshVertexCount(def.authoredMesh)) +
+        DrawText(("Mesh verts=" + std::to_string(meshVerts) +
+                  " v=" + std::to_string(editor.selectedAuthoredMeshVertex) +
                   " inf=" + std::to_string(authoredMeshMaxInfluences(def.authoredMesh)) +
                   " size " + std::to_string(pf::fxToFloat(meshSize.x)) +
                   "," + std::to_string(pf::fxToFloat(meshSize.y)) +
@@ -3975,6 +4006,32 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             ensureAuthoredRootJoint(def);
             autoWeightAuthoredMeshToSkeleton(def.authoredMesh, def.authoredSkeleton);
             editor.status = "Editor: generated authored mesh skin weights from skeleton";
+        }
+        if (selectedVertex) {
+            if (uiButton({642.0f, 398.0f, 34.0f, 22.0f}, "V-")) {
+                editor.selectedAuthoredMeshVertex = wrappedIndex(editor.selectedAuthoredMeshVertex - 1, meshVerts);
+                editor.status = "Editor: selected authored mesh vertex " + std::to_string(editor.selectedAuthoredMeshVertex);
+            }
+            if (uiButton({680.0f, 398.0f, 34.0f, 22.0f}, "V+")) {
+                editor.selectedAuthoredMeshVertex = wrappedIndex(editor.selectedAuthoredMeshVertex + 1, meshVerts);
+                editor.status = "Editor: selected authored mesh vertex " + std::to_string(editor.selectedAuthoredMeshVertex);
+            }
+            if (uiButton({718.0f, 398.0f, 34.0f, 22.0f}, "X-")) {
+                nudgeAuthoredMeshVertex(def.authoredMesh, editor.selectedAuthoredMeshVertex, {-pf::fxFromFloat(0.05f), 0, 0});
+                editor.status = "Editor: nudged authored mesh vertex left";
+            }
+            if (uiButton({756.0f, 398.0f, 34.0f, 22.0f}, "X+")) {
+                nudgeAuthoredMeshVertex(def.authoredMesh, editor.selectedAuthoredMeshVertex, {pf::fxFromFloat(0.05f), 0, 0});
+                editor.status = "Editor: nudged authored mesh vertex right";
+            }
+            if (uiButton({794.0f, 398.0f, 34.0f, 22.0f}, "Y-")) {
+                nudgeAuthoredMeshVertex(def.authoredMesh, editor.selectedAuthoredMeshVertex, {0, -pf::fxFromFloat(0.05f), 0});
+                editor.status = "Editor: lowered authored mesh vertex";
+            }
+            if (uiButton({832.0f, 398.0f, 34.0f, 22.0f}, "Y+")) {
+                nudgeAuthoredMeshVertex(def.authoredMesh, editor.selectedAuthoredMeshVertex, {0, pf::fxFromFloat(0.05f), 0});
+                editor.status = "Editor: raised authored mesh vertex";
+            }
         }
     }
 
