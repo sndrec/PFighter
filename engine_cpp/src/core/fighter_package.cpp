@@ -197,6 +197,181 @@ std::vector<T> readVector(PackageReader& reader, uint32_t maxCount, const char* 
     return values;
 }
 
+bool validPackageScriptOp(PackageScriptOp op) {
+    switch (op) {
+    case PackageScriptOp::Nop:
+    case PackageScriptOp::SetVarImmediate:
+    case PackageScriptOp::AddVarImmediate:
+    case PackageScriptOp::AddVar:
+    case PackageScriptOp::SetGroundVelocity:
+    case PackageScriptOp::SetAirVelocityX:
+    case PackageScriptOp::SetAirVelocityY:
+    case PackageScriptOp::SetFacing:
+    case PackageScriptOp::ChangeState:
+        return true;
+    }
+    return false;
+}
+
+bool validSubactionType(SubactionType type) {
+    switch (type) {
+    case SubactionType::SyncTimer:
+    case SubactionType::AsyncTimer:
+    case SubactionType::SetLoop:
+    case SubactionType::ExecuteLoop:
+    case SubactionType::CreateHitbox:
+    case SubactionType::RemoveHitbox:
+    case SubactionType::AdjustHitboxDamage:
+    case SubactionType::AdjustHitboxSize:
+    case SubactionType::SetHitboxInteraction:
+    case SubactionType::CreateThrowHitbox:
+    case SubactionType::ClearHitboxes:
+    case SubactionType::SetHurtboxState:
+    case SubactionType::SetBodyCollisionState:
+    case SubactionType::SetInterruptible:
+    case SubactionType::SetFlag:
+    case SubactionType::SetThrowFlag:
+    case SubactionType::SetThrowFlagLiteral:
+    case SubactionType::EnableJabFollowup:
+    case SubactionType::SetJabRapid:
+    case SubactionType::SetJumpState:
+    case SubactionType::ReverseDirection:
+    case SubactionType::StartSmashCharge:
+    case SubactionType::SetModelVisibility:
+    case SubactionType::RevertModelVisibility:
+    case SubactionType::RemoveModelVisibility:
+    case SubactionType::SetModelPartAnimation:
+    case SubactionType::SetFighterVisibility:
+    case SubactionType::SelfDamage:
+    case SubactionType::SpawnObject:
+        return true;
+    }
+    return false;
+}
+
+bool validHurtboxState(HurtboxState state) {
+    switch (state) {
+    case HurtboxState::Normal:
+    case HurtboxState::Invincible:
+    case HurtboxState::Intangible:
+        return true;
+    }
+    return false;
+}
+
+bool validGroundRequirement(GroundRequirement ground) {
+    switch (ground) {
+    case GroundRequirement::Any:
+    case GroundRequirement::OnlyGrounded:
+    case GroundRequirement::OnlyAirborne:
+        return true;
+    }
+    return false;
+}
+
+bool validInterruptCondition(InterruptCondition condition) {
+    switch (condition) {
+    case InterruptCondition::JumpPressed:
+    case InterruptCondition::AerialJumpForwardPressed:
+    case InterruptCondition::AerialJumpBackwardPressed:
+    case InterruptCondition::AirDodgePressed:
+    case InterruptCondition::WallJumpInput:
+    case InterruptCondition::SquatInput:
+    case InterruptCondition::SquatReleaseInput:
+    case InterruptCondition::AttackPressed:
+    case InterruptCondition::JabFollowupPressed:
+    case InterruptCondition::RapidJabReady:
+    case InterruptCondition::SpecialNInput:
+    case InterruptCondition::SpecialSInput:
+    case InterruptCondition::SpecialHiInput:
+    case InterruptCondition::SpecialLwInput:
+    case InterruptCondition::SpecialAirNInput:
+    case InterruptCondition::SpecialAirSInput:
+    case InterruptCondition::SpecialAirHiInput:
+    case InterruptCondition::SpecialAirLwInput:
+    case InterruptCondition::AttackDashPressed:
+    case InterruptCondition::AttackDashGrabBuffer:
+    case InterruptCondition::AttackS4HiPressed:
+    case InterruptCondition::AttackS4HiSPressed:
+    case InterruptCondition::AttackS4Pressed:
+    case InterruptCondition::AttackS4LwSPressed:
+    case InterruptCondition::AttackS4LwPressed:
+    case InterruptCondition::AttackS42Pressed:
+    case InterruptCondition::AttackHi4Pressed:
+    case InterruptCondition::AttackHi4NoStickWindowPressed:
+    case InterruptCondition::AttackLw4Pressed:
+    case InterruptCondition::AttackS3HiPressed:
+    case InterruptCondition::AttackS3HiSPressed:
+    case InterruptCondition::AttackS3Pressed:
+    case InterruptCondition::AttackS3LwSPressed:
+    case InterruptCondition::AttackS3LwPressed:
+    case InterruptCondition::AttackHi3Pressed:
+    case InterruptCondition::AttackLw3Pressed:
+    case InterruptCondition::AttackLw3Repeat:
+    case InterruptCondition::AerialAttackNPressed:
+    case InterruptCondition::AerialAttackFPressed:
+    case InterruptCondition::AerialAttackBPressed:
+    case InterruptCondition::AerialAttackHiPressed:
+    case InterruptCondition::AerialAttackLwPressed:
+    case InterruptCondition::DashInput:
+    case InterruptCondition::ReverseDashInput:
+    case InterruptCondition::RunInput:
+    case InterruptCondition::RunJumpPressed:
+    case InterruptCondition::TeeterWalkInput:
+    case InterruptCondition::HorizontalWalkSlow:
+    case InterruptCondition::HorizontalWalkMiddle:
+    case InterruptCondition::HorizontalWalkFast:
+    case InterruptCondition::TurnInput:
+    case InterruptCondition::TurnRunInput:
+    case InterruptCondition::RunBrakeTurnRunInput:
+    case InterruptCondition::RunBrakeInput:
+    case InterruptCondition::WaitInput:
+    case InterruptCondition::BecameAirborne:
+    case InterruptCondition::ShieldReflectInput:
+    case InterruptCondition::ShieldPressed:
+    case InterruptCondition::ShieldHeld:
+    case InterruptCondition::ShieldJumpPressed:
+    case InterruptCondition::GuardCatchDashPressed:
+    case InterruptCondition::SpotDodgeInput:
+    case InterruptCondition::RollForwardInput:
+    case InterruptCondition::RollBackwardInput:
+    case InterruptCondition::LedgeClimbInput:
+    case InterruptCondition::LedgeDropInput:
+    case InterruptCondition::LedgeAttackInput:
+    case InterruptCondition::LedgeEscapeInput:
+    case InterruptCondition::GrabPressed:
+    case InterruptCondition::TauntPressed:
+        return true;
+    }
+    return false;
+}
+
+bool validGameObjectKind(GameObjectKind kind) {
+    switch (kind) {
+    case GameObjectKind::Item:
+    case GameObjectKind::Projectile:
+        return true;
+    }
+    return false;
+}
+
+template <typename Enum, typename ValidFn>
+void writeEnum(PackageWriter& writer, Enum value, ValidFn valid, const char* label) {
+    if (!valid(value)) {
+        throw std::runtime_error(std::string("invalid fighter package ") + label);
+    }
+    writer.writeU8(static_cast<uint8_t>(value));
+}
+
+template <typename Enum, typename ValidFn>
+Enum readEnum(PackageReader& reader, ValidFn valid, const char* label) {
+    const Enum value = static_cast<Enum>(reader.readU8());
+    if (!valid(value)) {
+        throw std::runtime_error(std::string("invalid fighter package ") + label);
+    }
+    return value;
+}
+
 void writeFunctionCall(PackageWriter& writer, const FunctionCall& call) {
     writer.writeString(call.name);
     writer.writeBool(call.boolParam);
@@ -238,7 +413,7 @@ PackageVariableDefinition readPackageVariable(PackageReader& reader) {
 }
 
 void writePackageScriptInstruction(PackageWriter& writer, const PackageScriptInstruction& instruction) {
-    writer.writeU8(static_cast<uint8_t>(instruction.op));
+    writeEnum(writer, instruction.op, validPackageScriptOp, "script op");
     writer.writeI32(instruction.dst);
     writer.writeI32(instruction.srcA);
     writer.writeI32(instruction.srcB);
@@ -249,7 +424,7 @@ void writePackageScriptInstruction(PackageWriter& writer, const PackageScriptIns
 
 PackageScriptInstruction readPackageScriptInstruction(PackageReader& reader) {
     PackageScriptInstruction instruction;
-    instruction.op = static_cast<PackageScriptOp>(reader.readU8());
+    instruction.op = readEnum<PackageScriptOp>(reader, validPackageScriptOp, "script op");
     instruction.dst = reader.readI32();
     instruction.srcA = reader.readI32();
     instruction.srcB = reader.readI32();
@@ -295,8 +470,8 @@ HurtboxDefinition readHurtbox(PackageReader& reader) {
 
 void writeInterrupt(PackageWriter& writer, const InterruptRule& rule) {
     writer.writeString(rule.targetState);
-    writer.writeU8(static_cast<uint8_t>(rule.condition));
-    writer.writeU8(static_cast<uint8_t>(rule.ground));
+    writeEnum(writer, rule.condition, validInterruptCondition, "interrupt condition");
+    writeEnum(writer, rule.ground, validGroundRequirement, "interrupt ground requirement");
     writer.writeI32(rule.blendFrames);
     writer.writeI32(rule.lagFrames);
     writer.writeBool(rule.startActive);
@@ -309,8 +484,8 @@ void writeInterrupt(PackageWriter& writer, const InterruptRule& rule) {
 InterruptRule readInterrupt(PackageReader& reader) {
     InterruptRule rule;
     rule.targetState = reader.readString();
-    rule.condition = static_cast<InterruptCondition>(reader.readU8());
-    rule.ground = static_cast<GroundRequirement>(reader.readU8());
+    rule.condition = readEnum<InterruptCondition>(reader, validInterruptCondition, "interrupt condition");
+    rule.ground = readEnum<GroundRequirement>(reader, validGroundRequirement, "interrupt ground requirement");
     rule.blendFrames = reader.readI32();
     rule.lagFrames = reader.readI32();
     rule.startActive = reader.readBool();
@@ -322,14 +497,14 @@ InterruptRule readInterrupt(PackageReader& reader) {
 }
 
 void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
-    writer.writeU8(static_cast<uint8_t>(subaction.type));
+    writeEnum(writer, subaction.type, validSubactionType, "subaction type");
     writer.writeI32(subaction.frames);
     writer.writeI32(subaction.loopCount);
     writer.writeI32(subaction.interruptibleFrame);
     writer.writeI32(subaction.flag);
     writer.writeI32(subaction.hurtboxIndex);
     writer.writeI32(subaction.hsdBone);
-    writer.writeU8(static_cast<uint8_t>(subaction.hurtboxState));
+    writeEnum(writer, subaction.hurtboxState, validHurtboxState, "hurtbox state");
     writer.writeU32(subaction.flagValue);
     writer.writeI32(subaction.smashChargeHoldFrames);
     writer.writeI32(subaction.smashChargeDamageMultiplier);
@@ -345,14 +520,14 @@ void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
 
 Subaction readSubaction(PackageReader& reader) {
     Subaction subaction;
-    subaction.type = static_cast<SubactionType>(reader.readU8());
+    subaction.type = readEnum<SubactionType>(reader, validSubactionType, "subaction type");
     subaction.frames = reader.readI32();
     subaction.loopCount = reader.readI32();
     subaction.interruptibleFrame = reader.readI32();
     subaction.flag = reader.readI32();
     subaction.hurtboxIndex = reader.readI32();
     subaction.hsdBone = reader.readI32();
-    subaction.hurtboxState = static_cast<HurtboxState>(reader.readU8());
+    subaction.hurtboxState = readEnum<HurtboxState>(reader, validHurtboxState, "hurtbox state");
     subaction.flagValue = reader.readU32();
     subaction.smashChargeHoldFrames = reader.readI32();
     subaction.smashChargeDamageMultiplier = reader.readI32();
@@ -515,7 +690,7 @@ GameObjectStateDefinition readGameObjectState(PackageReader& reader) {
 
 void writeGameObjectDefinition(PackageWriter& writer, const GameObjectDefinition& object) {
     writer.writeString(object.name);
-    writer.writeU8(static_cast<uint8_t>(object.kind));
+    writeEnum(writer, object.kind, validGameObjectKind, "object kind");
     writer.writeI32(object.initialState);
     writer.writeI32(object.lifetimeFrames);
     writer.writeI32(object.gravity);
@@ -568,7 +743,7 @@ void writeGameObjectDefinition(PackageWriter& writer, const GameObjectDefinition
 GameObjectDefinition readGameObjectDefinition(PackageReader& reader) {
     GameObjectDefinition object;
     object.name = reader.readString();
-    object.kind = static_cast<GameObjectKind>(reader.readU8());
+    object.kind = readEnum<GameObjectKind>(reader, validGameObjectKind, "object kind");
     object.initialState = reader.readI32();
     object.lifetimeFrames = reader.readI32();
     object.gravity = reader.readI32();

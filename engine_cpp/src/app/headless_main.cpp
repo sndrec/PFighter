@@ -5,6 +5,8 @@
 #include "core/replay.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <tuple>
@@ -12,6 +14,32 @@
 
 static bool sameVec2(pf::Vec2 a, pf::Vec2 b) {
     return a.x == b.x && a.y == b.y;
+}
+
+static bool matchesI32(const std::vector<uint8_t>& bytes, size_t offset, int32_t expected) {
+    if (offset + sizeof(expected) > bytes.size()) {
+        return false;
+    }
+    int32_t value = 0;
+    std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value == expected;
+}
+
+static bool corruptFirstSmokeScriptOp(std::vector<uint8_t>& bytes) {
+    for (size_t i = 0; i + 25 <= bytes.size(); ++i) {
+        if (bytes[i] == static_cast<uint8_t>(pf::PackageScriptOp::AddVarImmediate) &&
+            matchesI32(bytes, i + 1, 0) &&
+            matchesI32(bytes, i + 5, -1) &&
+            matchesI32(bytes, i + 9, -1) &&
+            matchesI32(bytes, i + 13, 3) &&
+            matchesI32(bytes, i + 17, 0) &&
+            matchesI32(bytes, i + 21, 0))
+        {
+            bytes[i] = 255;
+            return true;
+        }
+    }
+    return false;
 }
 
 static bool sameFighterRuntimeCore(const pf::World& aWorld, const pf::World& bWorld, size_t fighterIndex) {
@@ -4582,6 +4610,15 @@ int main(int argc, char** argv) {
     const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
     pf::FighterPackage loadedPackage;
     const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
+    pf::FighterPackage invalidReadPackage;
+    std::string invalidPackageError;
+    std::vector<uint8_t> invalidPackageBytes = packageBytes;
+    const bool invalidPackageMutated = corruptFirstSmokeScriptOp(invalidPackageBytes);
+    const bool invalidPackageRejected = invalidPackageMutated &&
+        !pf::readFighterPackage(invalidPackageBytes, invalidReadPackage, &invalidPackageError);
+    pf::FighterPackage invalidWritePackage = sourcePackage;
+    invalidWritePackage.fighters[0].packageScripts[0].instructions[0].op = static_cast<pf::PackageScriptOp>(255);
+    const bool invalidPackageWriteRejected = pf::writeFighterPackage(invalidWritePackage, &invalidPackageError).empty();
     const bool packageShapeOk = packageLoaded &&
         loadedPackage.fighters.size() == 1 &&
         loadedPackage.objects.size() == packageSourceWorld.objectDefs.size() &&
@@ -4679,6 +4716,8 @@ int main(int argc, char** argv) {
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar
               << " fighter_package_object_script_var=" << packageObjectScriptVar
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
+              << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
+              << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk
               << "\n";
 
