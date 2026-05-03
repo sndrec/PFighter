@@ -1134,6 +1134,37 @@ static void normalizePackageInstruction(
     }
 }
 
+static void normalizeObjectPackageInstruction(
+    pf::PackageScriptInstruction& instruction,
+    const pf::GameObjectDefinition& def,
+    const pf::World& world,
+    int selectedObjectState,
+    int selectedObjectDef)
+{
+    const int variableCount = static_cast<int>(def.packageVariables.size());
+    if (variableCount > 0) {
+        instruction.dst = std::clamp(instruction.dst < 0 ? 0 : instruction.dst, 0, variableCount - 1);
+        instruction.srcA = std::clamp(instruction.srcA < 0 ? 0 : instruction.srcA, 0, variableCount - 1);
+        instruction.srcB = std::clamp(instruction.srcB < 0 ? 0 : instruction.srcB, 0, variableCount - 1);
+    } else {
+        instruction.dst = -1;
+        instruction.srcA = -1;
+        instruction.srcB = -1;
+    }
+
+    if (instruction.op == pf::PackageScriptOp::SetFacing && instruction.intValue == 0) {
+        instruction.intValue = 1;
+    }
+    if (instruction.op == pf::PackageScriptOp::ChangeState && instruction.text.empty() && !def.states.empty()) {
+        const int stateIndex = std::clamp(selectedObjectState, 0, static_cast<int>(def.states.size()) - 1);
+        instruction.text = def.states[static_cast<size_t>(stateIndex)].name;
+    }
+    if (instruction.op == pf::PackageScriptOp::SpawnObject && instruction.text.empty() && !world.objectDefs.empty()) {
+        const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
+    }
+}
+
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
@@ -2090,6 +2121,45 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             }
             if (uiButton({438.0f, 636.0f, 76.0f, 24.0f}, "BindAcc")) {
                 bindObjectPackageScriptCallback(object.onAccessory, script.name, "accessory", editor);
+            }
+            if (!script.instructions.empty()) {
+                pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
+                normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+                if (uiButton({270.0f, 576.0f, 76.0f, 24.0f}, "Op")) {
+                    instruction.op = nextPackageScriptOp(instruction.op);
+                    normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+                    editor.status = "Editor: cycled selected object script block op";
+                }
+                if (uiButton({270.0f, 606.0f, 76.0f, 24.0f}, "Dst")) {
+                    if (!object.packageVariables.empty()) {
+                        instruction.dst = (std::max(0, instruction.dst) + 1) % static_cast<int>(object.packageVariables.size());
+                        editor.status = "Editor: cycled selected object script destination variable";
+                    }
+                }
+                if (uiButton({270.0f, 636.0f, 76.0f, 24.0f}, "Val +")) {
+                    ++instruction.intValue;
+                    editor.status = "Editor: increased selected object script integer value";
+                }
+                if (uiButton({270.0f, 658.0f, 58.0f, 22.0f}, "Fix+")) {
+                    instruction.fixValue += pf::fxFromFloat(0.1f);
+                    editor.status = "Editor: increased selected object script fixed value";
+                }
+                if (uiButton({332.0f, 658.0f, 58.0f, 22.0f}, "State")) {
+                    if (!object.states.empty()) {
+                        instruction.text = object.states[static_cast<size_t>(editor.selectedObjectState)].name;
+                        instruction.op = pf::PackageScriptOp::ChangeState;
+                        editor.status = "Editor: targeted selected object state from script block";
+                    }
+                }
+                if (uiButton({394.0f, 658.0f, 58.0f, 22.0f}, "Object")) {
+                    instruction.text = object.name;
+                    instruction.op = pf::PackageScriptOp::SpawnObject;
+                    editor.status = "Editor: targeted selected object from object script block";
+                }
+                if (uiButton({456.0f, 658.0f, 58.0f, 22.0f}, "Val-")) {
+                    --instruction.intValue;
+                    editor.status = "Editor: decreased selected object script integer value";
+                }
             }
         } else {
             DrawText("No object script selected", 31, 590, 13, GRAY);
