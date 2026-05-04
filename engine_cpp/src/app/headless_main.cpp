@@ -5510,7 +5510,7 @@ int main(int argc, char** argv) {
     pf::FighterPackageDescriptor packageDescriptor;
     const bool packageDescriptorOk = pf::describeFighterPackage(sourcePackage, packageDescriptor, packageBytes, &packageError) &&
         packageDescriptor.name == sourcePackage.name &&
-        packageDescriptor.version == 3 &&
+        packageDescriptor.version == 4 &&
         packageDescriptor.byteSize == packageBytes.size() &&
         packageDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
@@ -5574,7 +5574,7 @@ int main(int argc, char** argv) {
     invalidWritePackage.fighters[0].packageScripts[0].instructions[0].op = static_cast<pf::PackageScriptOp>(255);
     const bool invalidPackageWriteRejected = pf::writeFighterPackage(invalidWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidVersionWritePackage = sourcePackage;
-    invalidVersionWritePackage.version = 2;
+    invalidVersionWritePackage.version = 3;
     const bool invalidPackageVersionWriteRejected = pf::writeFighterPackage(invalidVersionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidAnimationWritePackage = sourcePackage;
     invalidAnimationWritePackage.fighters[0].authoredSkeleton = {
@@ -7454,6 +7454,9 @@ int main(int argc, char** argv) {
         !loadedPackage.fighters[0].authoredClips.empty() &&
         !loadedPackage.fighters[0].authoredMesh.batches.empty() &&
         !loadedPackage.fighters[0].hurtboxes.empty();
+    const bool packageImportProvenanceOk = packageNativeAssetOk &&
+        !loadedPackage.fighters[0].importProvenance.sourceFileName.empty() &&
+        !loadedPackage.fighters[0].importProvenance.sourceAssetName.empty();
     pf::FighterEditorSession nativePackageEditorSession;
     pf::FighterEditorStateTimeline nativePackageAttackHi3Timeline;
     const bool nativePackageAttackHi3TimelineOk = packageNativeAssetOk &&
@@ -9096,6 +9099,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_blank_export_authored_ok=" << blankEditorSessionExportAuthoredOk
               << " fighter_editor_blank_export_ok=" << blankEditorSessionExportOk
               << " fighter_package_native_asset_ok=" << packageNativeAssetOk
+              << " fighter_package_import_provenance_ok=" << packageImportProvenanceOk
               << " fighter_package_attackhi3_native_timeline_ok=" << nativePackageAttackHi3TimelineOk
               << " fighter_package_hsd_dependent_rejected=" << hsdDependentPackageRejected
               << " fighter_package_parity_ok=" << packageParityOk

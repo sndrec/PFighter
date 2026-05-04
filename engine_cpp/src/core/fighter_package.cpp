@@ -13,7 +13,7 @@
 namespace pf {
 namespace {
 
-constexpr uint32_t kPackageVersion = 3;
+constexpr uint32_t kPackageVersion = 4;
 constexpr uint32_t kMaxFighters = 256;
 constexpr uint32_t kMaxAssets = 1024;
 constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
@@ -37,6 +37,7 @@ constexpr uint32_t kMaxMeshVertices = 1024 * 1024;
 constexpr uint32_t kMaxMeshMatrices = 65536;
 constexpr uint32_t kMaxScriptGraphNodes = 65536;
 constexpr uint32_t kMaxScriptGraphLinks = 131072;
+constexpr uint32_t kMaxImportWarnings = 4096;
 constexpr uint32_t kMaxStringBytes = 1 << 20;
 
 class PackageWriter {
@@ -1527,6 +1528,20 @@ AnimationClip readAnimationClip(PackageReader& reader) {
     return clip;
 }
 
+void writeFighterImportProvenance(PackageWriter& writer, const FighterImportProvenance& provenance) {
+    writer.writeString(provenance.sourceFileName);
+    writer.writeString(provenance.sourceAssetName);
+    writeStringVector(writer, provenance.warnings);
+}
+
+FighterImportProvenance readFighterImportProvenance(PackageReader& reader) {
+    FighterImportProvenance provenance;
+    provenance.sourceFileName = reader.readString();
+    provenance.sourceAssetName = reader.readString();
+    provenance.warnings = readStringVector(reader, kMaxImportWarnings, "import warning");
+    return provenance;
+}
+
 void writeModelPartAnimationSet(PackageWriter& writer, const HsdModelPartAnimationSet& set) {
     writer.writeI32(set.startingBone);
     writeVector(writer, set.entries, [&](int entry) {
@@ -2911,6 +2926,7 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
     validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     validateAuthoredMeshData(fighter.authoredMesh, fighter.authoredSkeleton);
     writer.writeString(fighter.name);
+    writeFighterImportProvenance(writer, fighter.importProvenance);
     writeFighterProperties(writer, fighter.properties);
     writeShieldDefinition(writer, fighter.shield);
     writeFighterEcbDefinition(writer, fighter.authoredEcb);
@@ -2950,6 +2966,7 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
 FighterDefinition readFighterDefinition(PackageReader& reader) {
     FighterDefinition fighter;
     fighter.name = reader.readString();
+    fighter.importProvenance = readFighterImportProvenance(reader);
     fighter.properties = readFighterProperties(reader);
     fighter.shield = readShieldDefinition(reader);
     fighter.authoredEcb = readFighterEcbDefinition(reader);

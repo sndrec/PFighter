@@ -855,6 +855,8 @@ static FighterDefinition makeImportedFighterDefinition(
 {
     FighterDefinition def = makeDebugRook();
     def.name = spec.displayName;
+    def.importProvenance.sourceFileName = spec.fileName;
+    def.importProvenance.sourceAssetName = asset ? asset->name : std::string{};
     def.properties.common = common;
     def.shield.maxHealth = common.startShieldHealthX260;
     applyCommonStateTimings(def);
@@ -1717,6 +1719,7 @@ bool makeNativePackageFighterDefinition(const FighterDefinition& source, Fighter
         out.environmentCollisionMultiplier = source.hsdAsset->environmentCollision.multiplier;
         out.authoredEcb.enabled = true;
     }
+    int generatedFallbackClipCount = 0;
     for (FighterState& state : out.states) {
         int actionIndex = state.animationActionIndex;
         if (actionIndex < 0) {
@@ -1744,6 +1747,15 @@ bool makeNativePackageFighterDefinition(const FighterDefinition& source, Fighter
         clip.defaultBlendFrames = static_cast<int8_t>(std::clamp(state.defaultAnimationBlendFrames, 0, 127));
         clip.generatedFallback = true;
         out.authoredClips.push_back(std::move(clip));
+        ++generatedFallbackClipCount;
+    }
+    if (out.importProvenance.sourceAssetName.empty()) {
+        out.importProvenance.sourceAssetName = source.hsdAsset->name;
+    }
+    if (generatedFallbackClipCount > 0) {
+        out.importProvenance.warnings.push_back(
+            "generated " + std::to_string(generatedFallbackClipCount) +
+            " native fallback animation clips for states without imported clips");
     }
     uniquifyAnimationClipNames(out.authoredClips);
     uniquifyAnimationClipActionIndexes(out.authoredClips);

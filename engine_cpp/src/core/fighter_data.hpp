@@ -800,8 +800,15 @@ struct FighterState {
     std::vector<Subaction> action;
 };
 
+struct FighterImportProvenance {
+    std::string sourceFileName;
+    std::string sourceAssetName;
+    std::vector<std::string> warnings;
+};
+
 struct FighterDefinition {
     std::string name;
+    FighterImportProvenance importProvenance;
     FighterProperties properties;
     ShieldDefinition shield;
     std::shared_ptr<const HsdFighterAnimationAsset> hsdAsset;
