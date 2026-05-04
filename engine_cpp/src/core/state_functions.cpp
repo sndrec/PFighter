@@ -2638,6 +2638,12 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarFighterFacing:
             setPackageVar(fighter, instruction.dst, fighter.facing);
             break;
+        case PackageScriptOp::SetVarFighterJumpsUsed:
+            setPackageVar(fighter, instruction.dst, fighter.jumpsUsed);
+            break;
+        case PackageScriptOp::SetVarFighterJumpsRemaining:
+            setPackageVar(fighter, instruction.dst, std::max(0, def.properties.maxJumps - fighter.jumpsUsed));
+            break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
             break;

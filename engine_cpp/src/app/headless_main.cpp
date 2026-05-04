@@ -4638,6 +4638,8 @@ int main(int argc, char** argv) {
         {"FighterStateIndexVar", 0},
         {"FighterGroundedVar", 0},
         {"FighterFacingVar", 0},
+        {"FighterJumpsUsedVar", 0},
+        {"FighterJumpsRemainingVar", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4671,7 +4673,7 @@ int main(int argc, char** argv) {
         },
     }, {
         "FactScript",
-        16,
+        32,
         {
             {pf::PackageScriptOp::SetVarFrame, 1, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarStateFrame, 2, -1, -1, 0, 0, {}},
@@ -4680,6 +4682,8 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarFighterStateIndex, 25, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterGrounded, 26, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterFacing, 27, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterJumpsUsed, 28, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterJumpsRemaining, 29, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGrounded, 3, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFacing, 4, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterPercent, 13, -1, -1, 0, 0, {}},
@@ -4797,6 +4801,8 @@ int main(int argc, char** argv) {
         {"ObjectOwnerStateIndexVar", 0},
         {"ObjectOwnerGroundedVar", 0},
         {"ObjectOwnerFacingVar", 0},
+        {"ObjectOwnerJumpsUsedVar", 0},
+        {"ObjectOwnerJumpsRemainingVar", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
@@ -4810,6 +4816,8 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarFighterStateIndex, 20, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterGrounded, 21, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterFacing, 22, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterJumpsUsed, 23, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterJumpsRemaining, 24, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGrounded, 3, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFacing, 4, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectOwner, 5, -1, -1, 0, 0, {}},
@@ -5280,11 +5288,11 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 28 &&
+        loadedPackage.fighters[0].packageVariables.size() == 30 &&
         loadedPackage.fighters[0].packageScripts.size() == 13 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 23 &&
+        loadedPackage.objects[1].packageVariables.size() == 25 &&
         loadedPackage.objects[1].packageScripts.size() == 4;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
@@ -5422,7 +5430,7 @@ int main(int argc, char** argv) {
     }
     pf::tickWorld(packageFactScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
     const bool packageFactScriptOk = packageShapeOk &&
-        packageFactScriptWorld.fighters[0].packageVars.size() >= 28 &&
+        packageFactScriptWorld.fighters[0].packageVars.size() >= 30 &&
         packageFactScriptWorld.fighters[0].packageVars[1] == 1 &&
         packageFactScriptWorld.fighters[0].packageVars[2] == 1 &&
         packageFactScriptWorld.fighters[0].packageVars[3] == 1 &&
@@ -5438,7 +5446,9 @@ int main(int argc, char** argv) {
         packageFactScriptWorld.fighters[0].packageVars[24] == 1 &&
         packageFactScriptWorld.fighters[0].packageVars[25] == packageFactWaitStateIndex &&
         packageFactScriptWorld.fighters[0].packageVars[26] == 1 &&
-        packageFactScriptWorld.fighters[0].packageVars[27] == -1;
+        packageFactScriptWorld.fighters[0].packageVars[27] == -1 &&
+        packageFactScriptWorld.fighters[0].packageVars[28] == 0 &&
+        packageFactScriptWorld.fighters[0].packageVars[29] == 2;
     pf::World packageInputScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageInputScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5728,7 +5738,7 @@ int main(int argc, char** argv) {
     const pf::Fix packageObjectCtxVelX = packageObject && packageObject->packageVars.size() > 12 ? packageObject->packageVars[12] : pf::Fix{-1};
     const pf::Fix packageObjectCtxVelY = packageObject && packageObject->packageVars.size() > 13 ? packageObject->packageVars[13] : pf::Fix{-1};
     const bool packageObjectFactScriptOk = packageObject &&
-        packageObject->packageVars.size() >= 23 &&
+        packageObject->packageVars.size() >= 25 &&
         packageObject->packageVars[1] == 1 &&
         packageObject->packageVars[2] == 1 &&
         packageObject->packageVars[3] == 0 &&
@@ -5751,6 +5761,8 @@ int main(int argc, char** argv) {
         packageObject->packageVars[20] == packageObjectScriptWorld.fighters[0].state &&
         packageObject->packageVars[21] == (packageObjectScriptWorld.fighters[0].grounded ? 1 : 0) &&
         packageObject->packageVars[22] == packageObjectScriptWorld.fighters[0].facing &&
+        packageObject->packageVars[23] == packageObjectScriptWorld.fighters[0].jumpsUsed &&
+        packageObject->packageVars[24] == 2 &&
         packageObject->animationRate == pf::fxFromFloat(0.25f) &&
         packageObject->animationFrame == pf::fxFromFloat(2.25f);
     const bool packageObjectOwnerVarWriteOk =
@@ -5919,6 +5931,8 @@ int main(int argc, char** argv) {
               << " fighter_package_script_fighter_state_index=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 25 ? packageFactScriptWorld.fighters[0].packageVars[25] : -1)
               << " fighter_package_script_fighter_grounded=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 26 ? packageFactScriptWorld.fighters[0].packageVars[26] : -1)
               << " fighter_package_script_fighter_facing=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 27 ? packageFactScriptWorld.fighters[0].packageVars[27] : -1)
+              << " fighter_package_script_fighter_jumps_used=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 28 ? packageFactScriptWorld.fighters[0].packageVars[28] : -1)
+              << " fighter_package_script_fighter_jumps_remaining=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 29 ? packageFactScriptWorld.fighters[0].packageVars[29] : -1)
               << " fighter_package_script_spawn_ok=" << (packageScriptSpawnCount > 0)
               << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
@@ -5939,6 +5953,8 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_state_index=" << (packageObject && packageObject->packageVars.size() > 20 ? packageObject->packageVars[20] : -1)
               << " fighter_package_object_owner_grounded=" << (packageObject && packageObject->packageVars.size() > 21 ? packageObject->packageVars[21] : -1)
               << " fighter_package_object_owner_facing=" << (packageObject && packageObject->packageVars.size() > 22 ? packageObject->packageVars[22] : -1)
+              << " fighter_package_object_owner_jumps_used=" << (packageObject && packageObject->packageVars.size() > 23 ? packageObject->packageVars[23] : -1)
+              << " fighter_package_object_owner_jumps_remaining=" << (packageObject && packageObject->packageVars.size() > 24 ? packageObject->packageVars[24] : -1)
               << " fighter_package_object_owner_var_write_ok=" << packageObjectOwnerVarWriteOk
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
