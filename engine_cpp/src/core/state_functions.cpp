@@ -2361,11 +2361,11 @@ static Vec3 scaleTransN(Vec3 transN, Fix scale) {
 static bool ledgeActionTransN(const World& world, const FighterRuntime& fighter, Vec3& transN) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const FighterState& state = currentState(world, fighter);
-    if (!def.hasHsdAsset || !def.hsdAsset || state.animationActionIndex < 0) {
+    if (def.authoredSkeleton.empty() || state.animationActionIndex < 0) {
         return false;
     }
     if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, state.animationActionIndex)) {
-        const AnimationPose pose = evaluateClip(def.hsdAsset->skeleton, *clip, animationFrameForState(fighter, state, *clip));
+        const AnimationPose pose = evaluateClip(def.authoredSkeleton, *clip, animationFrameForState(fighter, state, *clip));
         if (pose.joints.size() > 1) {
             transN = scaleTransN(pose.joints[1].translation, def.properties.modelScale);
             return true;

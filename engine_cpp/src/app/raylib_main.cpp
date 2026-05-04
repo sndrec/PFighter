@@ -278,9 +278,6 @@ static void drawLedgeSnapSweep(const pf::FighterDefinition& def,
 }
 
 static const std::vector<pf::AnimationJoint>* animationSkeletonForDrawing(const pf::FighterDefinition& def) {
-    if (def.hsdAsset) {
-        return &def.hsdAsset->skeleton;
-    }
     return def.authoredSkeleton.empty() ? nullptr : &def.authoredSkeleton;
 }
 
@@ -649,7 +646,7 @@ static Texture2D loadTextureFromRgba(const pf::HsdMeshTexture& texture) {
     return loaded;
 }
 
-static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& asset) {
+static HsdRenderCache createHsdRenderCache(const pf::HsdFighterMesh& mesh) {
     HsdRenderCache cache;
     cache.shader = LoadShaderFromMemory(hsdMeshVertexShader(), hsdMeshFragmentShader());
     cache.locMvp = GetShaderLocation(cache.shader, "mvp");
@@ -666,15 +663,15 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& a
     cache.locMaterialColor = GetShaderLocation(cache.shader, "materialColor");
     cache.boneUniformBuffer = createBoneUniformBuffer(cache.shader);
 
-    cache.textures.reserve(asset.mesh.textures.size());
-    for (const pf::HsdMeshTexture& texture : asset.mesh.textures) {
+    cache.textures.reserve(mesh.textures.size());
+    for (const pf::HsdMeshTexture& texture : mesh.textures) {
         if (texture.width > 0 && texture.height > 0 && !texture.rgba.empty()) {
             cache.textures.push_back(loadTextureFromRgba(texture));
         }
     }
 
-    cache.batches.reserve(asset.mesh.batches.size());
-    for (const pf::HsdMeshBatch& source : asset.mesh.batches) {
+    cache.batches.reserve(mesh.batches.size());
+    for (const pf::HsdMeshBatch& source : mesh.batches) {
         HsdRenderBatch batch;
         batch.parentBone = source.parentBone;
         batch.singleBindBone = source.singleBindBone;
@@ -750,11 +747,11 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterAnimationAsset& a
     return cache;
 }
 
-static HsdRenderCache& hsdRenderCache(const pf::HsdFighterAnimationAsset& asset) {
-    static std::unordered_map<const pf::HsdFighterAnimationAsset*, std::unique_ptr<HsdRenderCache>> caches;
-    auto it = caches.find(&asset);
+static HsdRenderCache& hsdRenderCache(const pf::HsdFighterMesh& mesh) {
+    static std::unordered_map<const pf::HsdFighterMesh*, std::unique_ptr<HsdRenderCache>> caches;
+    auto it = caches.find(&mesh);
     if (it == caches.end()) {
-        it = caches.emplace(&asset, std::make_unique<HsdRenderCache>(createHsdRenderCache(asset))).first;
+        it = caches.emplace(&mesh, std::make_unique<HsdRenderCache>(createHsdRenderCache(mesh))).first;
     }
     return *it->second;
 }
@@ -782,21 +779,22 @@ static bool isBatchVisible(const HsdRenderBatch& batch, const pf::FighterRuntime
 }
 
 static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    if (!def.hsdAsset || def.hsdAsset->mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
+    const pf::HsdFighterMesh& mesh = def.authoredMesh;
+    if (mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
         return;
     }
 
-    HsdRenderCache& cache = hsdRenderCache(*def.hsdAsset);
+    HsdRenderCache& cache = hsdRenderCache(mesh);
     constexpr int kMaxBones = kHsdShaderMaxBones;
     std::vector<Matrix> boneWorldMatrices(kMaxBones, MatrixIdentity());
     std::vector<Matrix> boneMatrices(kMaxBones, MatrixIdentity());
     const size_t boneCount = std::min({fighter.hsdJointWorldTransforms.size(),
-                                       def.hsdAsset->mesh.inverseBindMatrices.size(),
+                                       mesh.inverseBindMatrices.size(),
                                        static_cast<size_t>(kMaxBones)});
     for (size_t i = 0; i < boneCount; ++i) {
         std::array<float, 16> world = toFloatMatrix(fighter.hsdJointWorldTransforms[i]);
         boneWorldMatrices[i] = toRayMatrix(world);
-        boneMatrices[i] = toRayMatrix(multiplyRowMajor(world, def.hsdAsset->mesh.inverseBindMatrices[i]));
+        boneMatrices[i] = toRayMatrix(multiplyRowMajor(world, mesh.inverseBindMatrices[i]));
     }
 
     Matrix mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
@@ -4117,21 +4115,13 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
     const bool hasAnimationPose = !fighter.hsdJointWorldPositions.empty() && animationSkeletonForDrawing(def) != nullptr;
-    const bool hasImportedPose = def.hsdAsset && hasAnimationPose;
     if (!editor.showModel) {
         // Keep debug volumes visible when the mesh/model layer is hidden.
     } else if (fighter.fighterInvisible) {
         // ftDrawCommon skips fighter model display when x221E_b5 is set.
-    } else if (hasImportedPose) {
-        if (!def.hsdAsset->mesh.batches.empty()) {
-            drawImportedMesh(def, fighter);
-        } else {
-            DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
-            drawAnimationSkeleton(def, fighter, color);
-        }
     } else if (hasAnimationPose) {
         if (!def.authoredMesh.batches.empty()) {
-            drawAuthoredMesh(def, fighter);
+            drawImportedMesh(def, fighter);
         } else {
             DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
             drawAnimationSkeleton(def, fighter, color);

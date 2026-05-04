@@ -772,7 +772,7 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     def.fighterBones = def.hsdAsset->fighterBones;
     def.commonBoneLookup = def.hsdAsset->commonBoneLookup;
     def.hasShieldPose = def.hsdAsset->hasShieldPose;
-    def.shieldPose = def.hsdAsset->shieldPose;
+    def.shieldPose = def.hasShieldPose ? def.hsdAsset->shieldPose : AnimationPose{};
     def.hurtboxes.clear();
     def.hurtboxes.reserve(def.hsdAsset->hurtboxes.size());
     for (const HsdHurtbox& hurtbox : def.hsdAsset->hurtboxes) {
@@ -835,9 +835,6 @@ static std::array<Fix, 16> fighterModelMatrix(const FighterDefinition& def, cons
 static const std::vector<AnimationJoint>* fighterAnimationSkeleton(const FighterDefinition& def) {
     if (!def.authoredSkeleton.empty()) {
         return &def.authoredSkeleton;
-    }
-    if (def.hasHsdAsset && def.hsdAsset) {
-        return &def.hsdAsset->skeleton;
     }
     return nullptr;
 }
@@ -1514,8 +1511,9 @@ FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& so
     }
     out.fighterBones = source.hsdAsset->fighterBones;
     out.commonBoneLookup = source.hsdAsset->commonBoneLookup;
-    out.hasShieldPose = source.hsdAsset->hasShieldPose;
-    out.shieldPose = source.hsdAsset->shieldPose;
+    out.hasShieldPose = source.hsdAsset->hasShieldPose &&
+        source.hsdAsset->shieldPose.joints.size() == out.authoredSkeleton.size();
+    out.shieldPose = out.hasShieldPose ? source.hsdAsset->shieldPose : AnimationPose{};
     if (out.hurtboxes.empty()) {
         out.hurtboxes.reserve(source.hsdAsset->hurtboxes.size());
         for (const HsdHurtbox& hurtbox : source.hsdAsset->hurtboxes) {
@@ -3250,7 +3248,7 @@ static void applyShieldPose(const FighterDefinition& def, const FighterState& st
     if (const AnimationClip* guardClip = findClipByActionIndex(*def.hsdAsset, 38)) {
         const Fix stickBlend = std::clamp(fighter.guardPoseBlend, Fix{0}, fx(1));
         if (stickBlend > 0) {
-            AnimationPose stickPose = evaluateClip(def.hsdAsset->skeleton, *guardClip, fighter.guardPoseFrame);
+            AnimationPose stickPose = evaluateClip(def.authoredSkeleton, *guardClip, fighter.guardPoseFrame);
             extractTransNForModelPose(stickPose);
             target = blendedPose(target, stickPose, stickBlend);
         }
@@ -5009,7 +5007,10 @@ static bool positionAtLedgeFromCurrentAnimation(const FighterDefinition& def, Fi
     if (!clip) {
         return false;
     }
-    const AnimationPose pose = evaluateClip(def.hsdAsset->skeleton, *clip, fighter.animationFrame);
+    if (def.authoredSkeleton.empty()) {
+        return false;
+    }
+    const AnimationPose pose = evaluateClip(def.authoredSkeleton, *clip, fighter.animationFrame);
     if (pose.joints.size() <= 1) {
         return false;
     }
@@ -6892,11 +6893,11 @@ static bool isZeroVec3(Vec3 value) {
 }
 
 static Vec3 meleeInitialTopNFromXRotN(const FighterDefinition& def, const FighterRuntime& fighter) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
+    if (def.authoredSkeleton.empty()) {
         return {};
     }
 
-    AnimationPose pose = bindPose(def.hsdAsset->skeleton);
+    AnimationPose pose = bindPose(def.authoredSkeleton);
     FighterRuntime temp = fighter;
     temp.hsdPose = pose;
     const std::vector<JointWorldTransform> transforms = fighterWorldTransforms(def, temp);

@@ -27,10 +27,9 @@ package load/save should operate on native authored data only.
   through `cachedHsdFighterAsset`, sets `FighterDefinition::hasHsdAsset`, then
   derives attributes, ledge snap values, animation lengths, and native
   subactions from that asset at runtime.
-- Animation lookup and playback prefer `def.hsdAsset->clips` and
-  `def.hsdAsset->skeleton` in simulation, state functions, headless checks, and
-  raylib preview/rendering. This must become native `authoredClips` and
-  `authoredSkeleton`.
+- Animation clip lookup still prefers `def.hsdAsset->clips` in several gameplay
+  paths, but skeleton evaluation/drawing now uses native `authoredSkeleton`
+  once the import/conversion boundary has copied it.
 - Imported hurtbox collision now populates `FighterDefinition::hurtboxes` with
   native joint/type/capsule data and runtime collision/grab/damage-region logic
   reads those native hurtbox definitions. The live capsule cache is still named
@@ -56,8 +55,8 @@ package load/save should operate on native authored data only.
   `package.hsdAssets`; package loads no longer accept an external HSD asset pool.
 - Clip lists prefer imported clips when `def.hsdAsset` exists, so converted
   Melee animations are not purely edited through `authoredClips`.
-- Imported mesh status and preview paths read `def.hsdAsset->mesh` separately
-  from `def.authoredMesh`.
+- Imported mesh rendering now reads `def.authoredMesh`; imported mesh status and
+  editor controls still use the legacy `HsdMesh*` struct names.
 - The timeline/subaction editor can show converted action subactions, but the
   conversion currently happens during runtime fighter construction, not as
   persisted package data.
@@ -79,8 +78,8 @@ package load/save should operate on native authored data only.
 
 - Native skeleton, animation clips, mesh textures/material-ish batches, and
   hurtboxes have storage and serialization.
-- Native mesh storage is still named `HsdFighterMesh`/`HsdMesh*`; that should be
-  renamed or wrapped as PFighter mesh data after behavior is migrated.
+- Native mesh storage is still named `HsdFighterMesh`/`HsdMesh*`, but package
+  rendering now reads it from `FighterDefinition::authoredMesh`.
 - Native metadata now exists for imported fighter bone roles, common-bone
   lookup, ECB source bones, and shield pose. Native metadata is still missing
   for model-part visibility tables/animation sets and import provenance.
@@ -96,7 +95,7 @@ package load/save should operate on native authored data only.
 3. Continue moving imported roster construction behind an explicit conversion
    boundary without duplicating the full Melee animation payload in runtime
    memory.
-4. Switch runtime animation, model-part visibility, and render paths to read
-   native fields only.
+4. Switch runtime animation clips and model-part visibility to read native
+   fields only.
 5. Keep `HSDRaw` and `HsdFighterAnimationAsset` parsing isolated to exporter or
    explicit conversion utilities until the names can be retired.
