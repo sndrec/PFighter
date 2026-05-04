@@ -13,7 +13,7 @@
 namespace pf {
 namespace {
 
-constexpr uint32_t kPackageVersion = 5;
+constexpr uint32_t kPackageVersion = 6;
 constexpr uint32_t kMaxFighters = 256;
 constexpr uint32_t kMaxAssets = 1024;
 constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
@@ -1365,6 +1365,7 @@ FighterEcbDefinition readFighterEcbDefinition(PackageReader& reader) {
 void writeAnimationJoint(PackageWriter& writer, const AnimationJoint& joint) {
     writer.writeI32(joint.parent);
     writer.writeString(joint.name);
+    writer.writeI32(joint.importSourceJointIndex);
     writer.writeU32(joint.flags);
     writeVec3(writer, joint.translation);
     writeVec3(writer, joint.rotation);
@@ -1375,6 +1376,7 @@ AnimationJoint readAnimationJoint(PackageReader& reader) {
     AnimationJoint joint;
     joint.parent = reader.readI32();
     joint.name = reader.readString();
+    joint.importSourceJointIndex = reader.readI32();
     joint.flags = reader.readU32();
     joint.translation = readVec3(reader);
     joint.rotation = readVec3(reader);
@@ -1511,6 +1513,7 @@ AnimationTrack readAnimationTrack(PackageReader& reader) {
 void writeAnimationClip(PackageWriter& writer, const AnimationClip& clip) {
     writer.writeString(clip.name);
     writer.writeI32(clip.actionIndex);
+    writer.writeI32(clip.importSourceClipIndex);
     writer.writeU32(clip.actionFlags);
     writer.writeI32(clip.defaultBlendFrames);
     writer.writeI32(clip.frameCount);
@@ -1524,6 +1527,7 @@ AnimationClip readAnimationClip(PackageReader& reader) {
     AnimationClip clip;
     clip.name = reader.readString();
     clip.actionIndex = reader.readI32();
+    clip.importSourceClipIndex = reader.readI32();
     clip.actionFlags = reader.readU32();
     clip.defaultBlendFrames = reader.readI32();
     clip.frameCount = reader.readI32();
@@ -1601,6 +1605,7 @@ std::array<uint8_t, 4> readByteArray4(PackageReader& reader) {
 void writeMeshTexture(PackageWriter& writer, const FighterMeshTexture& texture) {
     writer.writeI32(texture.width);
     writer.writeI32(texture.height);
+    writer.writeI32(texture.importSourceTextureIndex);
     writer.writeBytes(texture.rgba);
 }
 
@@ -1608,6 +1613,7 @@ FighterMeshTexture readMeshTexture(PackageReader& reader) {
     FighterMeshTexture texture;
     texture.width = reader.readI32();
     texture.height = reader.readI32();
+    texture.importSourceTextureIndex = reader.readI32();
     texture.rgba = reader.readBytes(kMaxAssetBytes, "mesh texture bytes");
     return texture;
 }
@@ -1661,6 +1667,7 @@ void writeMeshBatch(PackageWriter& writer, const FighterMeshBatch& batch) {
     writer.writeBool(batch.unknown2);
     writer.writeBool(batch.shapeSetAverage);
     writer.writeI32(batch.texture);
+    writer.writeI32(batch.importSourceMaterialIndex);
     writer.writeI32(batch.textureColorOperation);
     writer.writeI32(batch.textureAlphaOperation);
     writer.writePod(batch.textureBlend);
@@ -1684,6 +1691,7 @@ FighterMeshBatch readMeshBatch(PackageReader& reader) {
     batch.unknown2 = reader.readBool();
     batch.shapeSetAverage = reader.readBool();
     batch.texture = reader.readI32();
+    batch.importSourceMaterialIndex = reader.readI32();
     batch.textureColorOperation = reader.readI32();
     batch.textureAlphaOperation = reader.readI32();
     batch.textureBlend = reader.readPod<float>();
@@ -1732,6 +1740,9 @@ void validateAuthoredAnimationData(
         if (parent < -1 || parent >= static_cast<int>(i)) {
             throw std::runtime_error("fighter package authored skeleton parent is invalid");
         }
+        if (skeleton[i].importSourceJointIndex < -1) {
+            throw std::runtime_error("fighter package authored skeleton import source joint is invalid");
+        }
         if (skeleton[i].scale.x <= 0 || skeleton[i].scale.y <= 0 || skeleton[i].scale.z <= 0) {
             throw std::runtime_error("fighter package authored skeleton scale is invalid");
         }
@@ -1749,6 +1760,9 @@ void validateAuthoredAnimationData(
         }
         if (clip.actionIndex < 0) {
             throw std::runtime_error("fighter package authored animation action index is invalid");
+        }
+        if (clip.importSourceClipIndex < -1) {
+            throw std::runtime_error("fighter package authored animation import source clip is invalid");
         }
         for (size_t otherIndex = 0; otherIndex < clipIndex; ++otherIndex) {
             if (clips[otherIndex].name == clip.name) {
@@ -1790,6 +1804,9 @@ void validateAuthoredMeshData(const FighterMesh& mesh, const std::vector<Animati
         if (texture.width < 0 || texture.height < 0) {
             throw std::runtime_error("fighter package authored mesh texture size is invalid");
         }
+        if (texture.importSourceTextureIndex < -1) {
+            throw std::runtime_error("fighter package authored mesh texture import source is invalid");
+        }
         const uint64_t expectedBytes = static_cast<uint64_t>(texture.width) *
             static_cast<uint64_t>(texture.height) * 4u;
         if (expectedBytes > kMaxAssetBytes || texture.rgba.size() != expectedBytes) {
@@ -1804,6 +1821,9 @@ void validateAuthoredMeshData(const FighterMesh& mesh, const std::vector<Animati
         }
         if (batch.texture < -1 || batch.texture >= static_cast<int>(mesh.textures.size())) {
             throw std::runtime_error("fighter package authored mesh texture reference is invalid");
+        }
+        if (batch.importSourceMaterialIndex < -1) {
+            throw std::runtime_error("fighter package authored mesh material import source is invalid");
         }
         if (batch.vertices.empty()) {
             throw std::runtime_error("fighter package authored mesh batch has no vertices");

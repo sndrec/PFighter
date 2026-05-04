@@ -209,7 +209,7 @@ static pf::Vec2 ecbJointProjection(const pf::FighterRuntime& fighter, pf::Vec3 j
     return {fighter.position.x + fighter.facing * joint.z, joint.y};
 }
 
-static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
+static void drawNativeEcbSourceJoints(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     if (fighter.jointWorldPositions.empty()) {
         return;
     }
@@ -778,7 +778,7 @@ static bool isBatchVisible(const FighterMeshRenderBatch& batch, const pf::Fighte
     return fighter.modelVisibilityStates[static_cast<size_t>(batch.modelPartIndex)] == batch.modelPartState;
 }
 
-static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
+static void drawNativeFighterMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
     if (mesh.batches.empty() || fighter.jointWorldTransforms.empty()) {
         return;
@@ -4123,7 +4123,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     } else if (hasAnimationPose) {
         const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
         if (!mesh.batches.empty()) {
-            drawImportedMesh(def, fighter);
+            drawNativeFighterMesh(def, fighter);
         } else {
             DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
             drawAnimationSkeleton(def, fighter, color);
@@ -4165,7 +4165,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
 
     if (editor.showEcb) {
         drawEcb(fighter, YELLOW);
-        drawImportedEcbSources(def, fighter);
+        drawNativeEcbSourceJoints(def, fighter);
     }
     if (editor.showHurtboxes && fighter.poseHurtboxCapsules.empty()) {
         for (const pf::HurtboxDefinition& hurt : def.hurtboxes) {

@@ -11,7 +11,7 @@ namespace pf {
 
 struct FighterPackage {
     std::string name;
-    uint32_t version = 5;
+    uint32_t version = 6;
     std::vector<FighterDefinition> fighters;
     std::vector<GameObjectDefinition> objects;
 };

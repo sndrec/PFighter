@@ -43,8 +43,9 @@ package load/save should operate on native authored data only.
 - `FighterImportProvenance` now preserves source file name, source asset name,
   and importer warnings as debug metadata. Action indices are retained on native
   clips and state animation references, and converted HSD action subactions keep
-  non-authoritative source action/command/code IDs for traceability, so
-  provenance does not need to be gameplay truth.
+  non-authoritative source action/command/code IDs for traceability. Imported
+  skeleton joints, animation clips, mesh textures, and mesh material batches also
+  retain source index metadata. Provenance does not need to be gameplay truth.
 - `engine_cpp/data/packages/` contains generated native packages for the full
   current Melee training roster. Runtime roster construction requires these
   packages by filename and fails loudly when one is missing.
@@ -91,9 +92,11 @@ package load/save should operate on native authored data only.
   accept an external HSD asset pool.
 - Clip lists, asset summaries, mesh rendering, selected-vertex overlays, and
   animation previews now read native authored data. If package-first roster data
-  is still parked in source-backed native vectors, entering the assets or
-  animation workspace materializes those vectors into direct editable fields.
-- Imported mesh editor controls now use the native `FighterMesh*` struct names.
+  is parked in source-backed native vectors for runtime memory savings, entering
+  the assets or animation workspace materializes those vectors into direct
+  editable fields.
+- Mesh editor controls and runtime render helpers now use the native
+  `FighterMesh*` struct names.
 - The timeline/subaction editor can show converted action subactions from
   persisted package data. `AttackHi3` has a headless package/editor gate that
   verifies native hitbox/subaction timeline markers and native clip references.
@@ -116,7 +119,7 @@ package load/save should operate on native authored data only.
   path. The one-time converter owns imported-HSD conversion into native package
   data.
 
-## Native Data Already Present But Incomplete
+## Native Data Coverage
 
 - Native skeleton, animation clips, mesh textures/material-ish batches, and
   hurtboxes have storage and serialization.
@@ -128,13 +131,13 @@ package load/save should operate on native authored data only.
 - Native action subactions exist, and HSD action scripts can be decoded into
   `FighterState::action`; converted packages persist those decoded native
   subactions as package truth.
-- Provenance is still incomplete for some authoring surfaces. Per-joint and
-  per-material source IDs are not yet serialized except where equivalent IDs
-  already survive in native records such as action indices, clip IDs, batch
-  object indices, model-part indices, texture/material fields, and subaction
-  source command references.
+- Import provenance is serialized as debug metadata only: source file/name and
+  warnings at fighter scope; source joint, clip, texture, material/batch, and
+  action command references on native authored records where the converter can
+  identify them.
 
-## First Migration Targets
+## Remaining Audit Notes
 
-1. Expand import provenance for optional original joint/material/source-command
-   IDs without letting those IDs drive gameplay behavior.
+- Optional raw byte offsets for original HSD action commands are not available
+  from the current PFHA export, so packages preserve source action/command/code
+  IDs instead of raw offsets.

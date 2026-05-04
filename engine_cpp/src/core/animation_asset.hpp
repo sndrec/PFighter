@@ -32,6 +32,7 @@ struct FighterMeshTexture {
     int width = 0;
     int height = 0;
     std::vector<uint8_t> rgba;
+    int importSourceTextureIndex = -1;
 };
 
 struct FighterMeshVertexInfluence {
@@ -66,6 +67,7 @@ struct FighterMeshBatch {
     float textureBlend = 0.0f;
     std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
     std::vector<FighterMeshVertex> vertices;
+    int importSourceMaterialIndex = -1;
 };
 
 struct FighterMesh {

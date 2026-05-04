@@ -217,6 +217,7 @@ FighterMesh readFighterMesh(BinaryReader& reader) {
         FighterMeshTexture texture;
         texture.width = reader.readI32();
         texture.height = reader.readI32();
+        texture.importSourceTextureIndex = i;
         const int32_t byteCount = reader.readCount(kMaxTextureBytes, "texture");
         texture.rgba = reader.readBytes(static_cast<size_t>(byteCount));
         mesh.textures.push_back(std::move(texture));
@@ -238,6 +239,7 @@ FighterMesh readFighterMesh(BinaryReader& reader) {
         batch.unknown2 = reader.readBool();
         batch.shapeSetAverage = reader.readBool();
         batch.texture = reader.readI32();
+        batch.importSourceMaterialIndex = batch.dobjIndex >= 0 ? batch.dobjIndex : batchIndex;
         batch.textureColorOperation = reader.readI32();
         batch.textureAlphaOperation = reader.readI32();
         batch.textureBlend = reader.readF32();
@@ -290,6 +292,7 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAssetFromBytes(const std::vector
         AnimationJoint joint;
         joint.parent = reader.readI32();
         joint.name = reader.readString();
+        joint.importSourceJointIndex = i;
         joint.flags = reader.readU32();
         joint.translation = reader.readVec3();
         joint.rotation = reader.readVec3();
@@ -411,7 +414,9 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAssetFromBytes(const std::vector
         const int32_t animationCount = reader.readCount(kMaxAnimationClips, "model part animation");
         set.animations.reserve(static_cast<size_t>(animationCount));
         for (int32_t animIndex = 0; animIndex < animationCount; ++animIndex) {
-            set.animations.push_back(readAnimationClip(reader));
+            AnimationClip clip = readAnimationClip(reader);
+            clip.importSourceClipIndex = animIndex;
+            set.animations.push_back(std::move(clip));
         }
         asset.modelPartAnimations.push_back(std::move(set));
     }
@@ -419,7 +424,9 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAssetFromBytes(const std::vector
     const int32_t clipCount = reader.readCount(kMaxAnimationClips, "animation clip");
     asset.clips.reserve(static_cast<size_t>(clipCount));
     for (int32_t i = 0; i < clipCount; ++i) {
-        asset.clips.push_back(readAnimationClip(reader));
+        AnimationClip clip = readAnimationClip(reader);
+        clip.importSourceClipIndex = i;
+        asset.clips.push_back(std::move(clip));
     }
     const int32_t scriptCount = reader.readCount(kMaxActionScripts, "action script");
     asset.actionScripts.reserve(static_cast<size_t>(scriptCount));

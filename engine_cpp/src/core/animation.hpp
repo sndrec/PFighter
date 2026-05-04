@@ -46,6 +46,7 @@ struct AnimationJoint {
     Vec3 translation{};
     Vec3 rotation{};
     Vec3 scale{fx(1), fx(1), fx(1)};
+    int importSourceJointIndex = -1;
 };
 
 struct Quaternion {
@@ -63,6 +64,7 @@ struct AnimationClip {
     Fix frameCount = 0;
     bool generatedFallback = false;
     std::vector<AnimationTrack> tracks;
+    int importSourceClipIndex = -1;
 };
 
 struct JointPose {
