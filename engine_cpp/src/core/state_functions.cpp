@@ -2364,7 +2364,14 @@ static bool ledgeActionTransN(const World& world, const FighterRuntime& fighter,
     if (def.authoredSkeleton.empty() || state.animationActionIndex < 0) {
         return false;
     }
-    if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, state.animationActionIndex)) {
+    const AnimationClip* clip = nullptr;
+    for (const AnimationClip& candidate : def.authoredClips) {
+        if (candidate.actionIndex == state.animationActionIndex) {
+            clip = &candidate;
+            break;
+        }
+    }
+    if (clip) {
         const AnimationPose pose = evaluateClip(def.authoredSkeleton, *clip, animationFrameForState(fighter, state, *clip));
         if (pose.joints.size() > 1) {
             transN = scaleTransN(pose.joints[1].translation, def.properties.modelScale);

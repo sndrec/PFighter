@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <filesystem>
@@ -105,6 +106,51 @@ static std::filesystem::path findFighterAssetPath(const std::string& fileName) {
         std::filesystem::path("../data/fighters") / fileName,
         std::filesystem::path("../../engine_cpp/data/fighters") / fileName,
         std::filesystem::path("../../data/fighters") / fileName,
+    };
+    for (const std::filesystem::path& candidate : candidates) {
+        if (std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
+static std::string nativePackageFileStem(std::string name) {
+    std::string out;
+    out.reserve(name.size() + 7);
+    bool previousUnderscore = false;
+    for (char ch : name) {
+        const unsigned char c = static_cast<unsigned char>(ch);
+        if (std::isalnum(c)) {
+            out.push_back(static_cast<char>(std::tolower(c)));
+            previousUnderscore = false;
+        } else if (!previousUnderscore && !out.empty()) {
+            out.push_back('_');
+            previousUnderscore = true;
+        }
+    }
+    while (!out.empty() && out.back() == '_') {
+        out.pop_back();
+    }
+    if (out.empty()) {
+        out = "fighter";
+    }
+    out += "_native";
+    return out;
+}
+
+static std::string nativePackageFileName(const HsdFighterAssetSpec& spec) {
+    return nativePackageFileStem(spec.displayName) + ".pfpkg";
+}
+
+static std::filesystem::path findNativeFighterPackagePath(const HsdFighterAssetSpec& spec) {
+    const std::string fileName = nativePackageFileName(spec);
+    const std::array<std::filesystem::path, 5> candidates = {
+        std::filesystem::path("engine_cpp/data/packages") / fileName,
+        std::filesystem::path("data/packages") / fileName,
+        std::filesystem::path("../data/packages") / fileName,
+        std::filesystem::path("../../engine_cpp/data/packages") / fileName,
+        std::filesystem::path("../../data/packages") / fileName,
     };
     for (const std::filesystem::path& candidate : candidates) {
         if (std::filesystem::exists(candidate)) {
@@ -821,6 +867,36 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     return makeImportedFighterDefinition(spec, common, cachedHsdFighterAsset(spec.fileName));
 }
 
+static bool tryLoadNativePackageFighterDefinition(const HsdFighterAssetSpec& spec, FighterDefinition& out) {
+    const std::filesystem::path packagePath = findNativeFighterPackagePath(spec);
+    if (packagePath.empty()) {
+        return false;
+    }
+    FighterPackage package;
+    std::string error;
+    if (!loadFighterPackage(packagePath.string(), package, &error) || package.fighters.empty()) {
+        throw std::runtime_error("invalid native fighter package " + packagePath.string() + ": " + error);
+    }
+    out = std::move(package.fighters.front());
+    if (out.name != spec.displayName) {
+        throw std::runtime_error(
+            "native fighter package " + packagePath.string() + " contains fighter '" + out.name +
+            "' but roster expected '" + spec.displayName + "'");
+    }
+    if (out.hasHsdAsset || out.hsdAsset) {
+        throw std::runtime_error("native fighter package " + packagePath.string() + " depends on imported HSD data");
+    }
+    return true;
+}
+
+static FighterDefinition makeTrainingRosterFighterDefinition(const HsdFighterAssetSpec& spec, const MeleeCommonData& common) {
+    FighterDefinition native;
+    if (tryLoadNativePackageFighterDefinition(spec, native)) {
+        return native;
+    }
+    return makeHsdFighterDefinition(spec, common);
+}
+
 static std::array<Fix, 16> multiplyMatrix4(const std::array<Fix, 16>& a, const std::array<Fix, 16>& b) {
     std::array<Fix, 16> result{};
     for (int row = 0; row < 4; ++row) {
@@ -1165,7 +1241,7 @@ World makeTrainingWorld(int p1FighterDef, int p2FighterDef) {
     world.stage = makeBattlefieldTrainingStage();
     const MeleeCommonData common = loadMeleeCommonData();
     for (const HsdFighterAssetSpec& spec : meleeTrainingRoster()) {
-        world.fighterDefs.push_back(makeHsdFighterDefinition(spec, common));
+        world.fighterDefs.push_back(makeTrainingRosterFighterDefinition(spec, common));
     }
     world.objectDefs = makeDefaultObjectDefinitions();
     p1FighterDef = std::clamp(p1FighterDef, 0, static_cast<int>(world.fighterDefs.size()) - 1);
@@ -3360,7 +3436,14 @@ static void applyShieldPose(const FighterDefinition& def, const FighterState& st
     }
 
     AnimationPose target = def.shieldPose;
-    if (const AnimationClip* guardClip = findClipByActionIndex(*def.hsdAsset, 38)) {
+    const AnimationClip* guardClip = nullptr;
+    for (const AnimationClip& clip : def.authoredClips) {
+        if (clip.actionIndex == 38) {
+            guardClip = &clip;
+            break;
+        }
+    }
+    if (guardClip) {
         const Fix stickBlend = std::clamp(fighter.guardPoseBlend, Fix{0}, fx(1));
         if (stickBlend > 0) {
             AnimationPose stickPose = evaluateClip(def.authoredSkeleton, *guardClip, fighter.guardPoseFrame);
