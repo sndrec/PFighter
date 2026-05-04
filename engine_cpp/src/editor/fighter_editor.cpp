@@ -775,6 +775,84 @@ const PackageScriptGraphNode* graphNodeById(const PackageScriptGraph& graph, int
     return found == graph.nodes.end() ? nullptr : &*found;
 }
 
+int nextGraphNodeId(const PackageScriptGraph& graph) {
+    int next = 0;
+    for (const PackageScriptGraphNode& node : graph.nodes) {
+        next = std::max(next, node.id + 1);
+    }
+    return next;
+}
+
+bool addGraphNode(PackageScriptGraph& graph, PackageScriptGraphNode node, int* addedNodeId, std::string* error) {
+    if (node.id < 0) {
+        node.id = nextGraphNodeId(graph);
+    }
+    if (graphHasNode(graph, node.id)) {
+        setEditorError(error, "editor package script graph node id is already used");
+        return false;
+    }
+    if (node.kind == PackageScriptGraphNodeKind::Entry) {
+        graph.entryNode = node.id;
+    }
+    graph.nodes.push_back(node);
+    if (addedNodeId) {
+        *addedNodeId = node.id;
+    }
+    return true;
+}
+
+bool setGraphNode(PackageScriptGraph& graph, int nodeId, PackageScriptGraphNode node, std::string* error) {
+    PackageScriptGraphNode* target = graphNodeById(graph, nodeId);
+    if (!target) {
+        setEditorError(error, "editor package script graph node id is invalid");
+        return false;
+    }
+    node.id = nodeId;
+    *target = node;
+    if (node.kind == PackageScriptGraphNodeKind::Entry) {
+        graph.entryNode = nodeId;
+    } else if (graph.entryNode == nodeId) {
+        graph.entryNode = -1;
+    }
+    return true;
+}
+
+bool removeGraphNode(PackageScriptGraph& graph, int nodeId, std::string* error) {
+    const auto found = std::find_if(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+    if (found == graph.nodes.end()) {
+        setEditorError(error, "editor package script graph node id is invalid");
+        return false;
+    }
+    graph.nodes.erase(found);
+    eraseGraphLinksToMissingNodes(graph);
+    return true;
+}
+
+void setGraphLink(PackageScriptGraph& graph, const PackageScriptGraphLink& link) {
+    const auto found = std::find_if(graph.links.begin(), graph.links.end(), [&](const PackageScriptGraphLink& existing) {
+        return existing.fromNode == link.fromNode && existing.fromSocket == link.fromSocket;
+    });
+    if (found == graph.links.end()) {
+        graph.links.push_back(link);
+    } else {
+        *found = link;
+    }
+}
+
+bool removeGraphLink(PackageScriptGraph& graph, int fromNode, int fromSocket, std::string* error) {
+    const auto found = std::find_if(graph.links.begin(), graph.links.end(), [&](const PackageScriptGraphLink& link) {
+        return link.fromNode == fromNode && link.fromSocket == fromSocket;
+    });
+    if (found == graph.links.end()) {
+        setEditorError(error, "editor package script graph link is invalid");
+        return false;
+    }
+    graph.links.erase(found);
+    return true;
+}
+
 bool graphNodeSeen(const std::vector<int>& seen, int nodeId) {
     return std::find(seen.begin(), seen.end(), nodeId) != seen.end();
 }
@@ -2942,6 +3020,104 @@ bool setEditorSessionPackageScriptGraph(
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
+bool addEditorSessionPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptGraphNode& node,
+    int* addedNodeId,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    int nodeId = -1;
+    if (!addGraphNode(script->graph, node, &nodeId, error)) {
+        return false;
+    }
+    session.selectedPackageScript = scriptIndex;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedNodeId) {
+        *addedNodeId = nodeId;
+    }
+    return true;
+}
+
+bool setEditorSessionPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int nodeId,
+    const PackageScriptGraphNode& node,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!setGraphNode(script->graph, nodeId, node, error)) {
+        return false;
+    }
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int nodeId,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!removeGraphNode(script->graph, nodeId, error)) {
+        return false;
+    }
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptGraphLink& link,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    setGraphLink(script->graph, link);
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int fromNode,
+    int fromSocket,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!removeGraphLink(script->graph, fromNode, fromSocket, error)) {
+        return false;
+    }
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
 bool compileEditorSessionPackageScriptGraph(
     FighterEditorSession& session,
     int scriptIndex,
@@ -4448,6 +4624,104 @@ bool setEditorSessionObjectPackageScriptGraph(
     }
     FighterPackage previous = session.package;
     script->graph = graph;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionObjectPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const PackageScriptGraphNode& node,
+    int* addedNodeId,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    int nodeId = -1;
+    if (!addGraphNode(script->graph, node, &nodeId, error)) {
+        return false;
+    }
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedNodeId) {
+        *addedNodeId = nodeId;
+    }
+    return true;
+}
+
+bool setEditorSessionObjectPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int nodeId,
+    const PackageScriptGraphNode& node,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!setGraphNode(script->graph, nodeId, node, error)) {
+        return false;
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObjectPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int nodeId,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!removeGraphNode(script->graph, nodeId, error)) {
+        return false;
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const PackageScriptGraphLink& link,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    setGraphLink(script->graph, link);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObjectPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int fromNode,
+    int fromSocket,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!removeGraphLink(script->graph, fromNode, fromSocket, error)) {
+        return false;
+    }
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 

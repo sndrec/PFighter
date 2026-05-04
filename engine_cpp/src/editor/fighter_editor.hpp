@@ -339,6 +339,34 @@ bool setEditorSessionPackageScriptGraph(
     int scriptIndex,
     const PackageScriptGraph& graph,
     std::string* error = nullptr);
+bool addEditorSessionPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptGraphNode& node,
+    int* addedNodeId = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int nodeId,
+    const PackageScriptGraphNode& node,
+    std::string* error = nullptr);
+bool removeEditorSessionPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int nodeId,
+    std::string* error = nullptr);
+bool setEditorSessionPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptGraphLink& link,
+    std::string* error = nullptr);
+bool removeEditorSessionPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int fromNode,
+    int fromSocket,
+    std::string* error = nullptr);
 bool compileEditorSessionPackageScriptGraph(
     FighterEditorSession& session,
     int scriptIndex,
@@ -649,6 +677,39 @@ bool setEditorSessionObjectPackageScriptGraph(
     int objectIndex,
     int scriptIndex,
     const PackageScriptGraph& graph,
+    std::string* error = nullptr);
+bool addEditorSessionObjectPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const PackageScriptGraphNode& node,
+    int* addedNodeId = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionObjectPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int nodeId,
+    const PackageScriptGraphNode& node,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectPackageScriptGraphNode(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int nodeId,
+    std::string* error = nullptr);
+bool setEditorSessionObjectPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const PackageScriptGraphLink& link,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectPackageScriptGraphLink(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int fromNode,
+    int fromSocket,
     std::string* error = nullptr);
 bool compileEditorSessionObjectPackageScriptGraph(
     FighterEditorSession& session,

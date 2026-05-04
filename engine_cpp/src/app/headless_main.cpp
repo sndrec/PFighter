@@ -6360,6 +6360,33 @@ int main(int argc, char** argv) {
         pf::setEditorSessionPackageScriptGraph(editorSession, editorLogicScriptIndex, editorLogicGraph, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes.size() == 3;
+    int editorGraphCommentNode = -1;
+    pf::PackageScriptGraphNode editorGraphComment;
+    editorGraphComment.kind = pf::PackageScriptGraphNodeKind::Comment;
+    editorGraphComment.instructionIndex = -1;
+    editorGraphComment.position = {pf::fx(4), pf::fx(2)};
+    editorGraphComment.label = "Editor graph note";
+    pf::PackageScriptGraphNode editorGraphRenamedComment = editorGraphComment;
+    editorGraphRenamedComment.label = "Editor graph note renamed";
+    const bool editorSessionScriptGraphNodeOk = editorSessionScriptGraphOk &&
+        pf::addEditorSessionPackageScriptGraphNode(editorSession, editorLogicScriptIndex, editorGraphComment, &editorGraphCommentNode, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes.size() == 4 &&
+        pf::setEditorSessionPackageScriptGraphNode(editorSession, editorLogicScriptIndex, editorGraphCommentNode, editorGraphRenamedComment, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes.back().label == "Editor graph note renamed" &&
+        pf::setEditorSessionPackageScriptGraphLink(
+            editorSession,
+            editorLogicScriptIndex,
+            {editorLogicGraph.entryNode, 1, editorGraphCommentNode, 0},
+            &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.links.size() == 3 &&
+        pf::removeEditorSessionPackageScriptGraphLink(editorSession, editorLogicScriptIndex, editorLogicGraph.entryNode, 1, &packageError) &&
+        pf::removeEditorSessionPackageScriptGraphNode(editorSession, editorLogicScriptIndex, editorGraphCommentNode, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes.size() == 3 &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.links.size() == 2;
     pf::PackageScript editorGraphCompileProbe;
     editorGraphCompileProbe.name = "GraphCompileProbe";
     editorGraphCompileProbe.instructions = {editorSetVarInstruction, editorNopInstruction};
@@ -6371,7 +6398,7 @@ int main(int argc, char** argv) {
     }
     pf::FighterEditorSession editorGraphExportSession = editorSession;
     pf::FighterEditorPackageSnapshot editorGraphExportSnapshot;
-    const bool editorSessionExportCompilesGraphOk = editorSessionScriptGraphOk &&
+    const bool editorSessionExportCompilesGraphOk = editorSessionScriptGraphNodeOk &&
         pf::setEditorSessionPackageScriptGraph(editorGraphExportSession, editorLogicScriptIndex, editorGraphCompileProbe.graph, &packageError) &&
         pf::exportFighterEditorSessionPackage(editorGraphExportSession, editorGraphExportSnapshot, &packageError) &&
         !editorGraphExportSnapshot.package.fighters.empty() &&
@@ -6608,7 +6635,51 @@ int main(int argc, char** argv) {
         (editorObjectLogicGraph = pf::makePackageScriptLinearGraph(editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)]), true) &&
         pf::setEditorSessionObjectPackageScriptGraph(editorSession, editorArticleObjectIndex, editorObjectLogicScript, editorObjectLogicGraph, &packageError) &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes.size() == 3;
-    const bool editorSessionCompileObjectScriptGraphOk = editorSessionObjectScriptGraphOk &&
+    int editorObjectGraphCommentNode = -1;
+    pf::PackageScriptGraphNode editorObjectGraphComment = editorGraphComment;
+    editorObjectGraphComment.label = "Editor object graph note";
+    pf::PackageScriptGraphNode editorObjectGraphRenamedComment = editorObjectGraphComment;
+    editorObjectGraphRenamedComment.label = "Editor object graph note renamed";
+    const bool editorSessionObjectScriptGraphNodeOk = editorSessionObjectScriptGraphOk &&
+        pf::addEditorSessionObjectPackageScriptGraphNode(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            editorObjectGraphComment,
+            &editorObjectGraphCommentNode,
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes.size() == 4 &&
+        pf::setEditorSessionObjectPackageScriptGraphNode(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            editorObjectGraphCommentNode,
+            editorObjectGraphRenamedComment,
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes.back().label == "Editor object graph note renamed" &&
+        pf::setEditorSessionObjectPackageScriptGraphLink(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            {editorObjectLogicGraph.entryNode, 1, editorObjectGraphCommentNode, 0},
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.links.size() == 3 &&
+        pf::removeEditorSessionObjectPackageScriptGraphLink(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            editorObjectLogicGraph.entryNode,
+            1,
+            &packageError) &&
+        pf::removeEditorSessionObjectPackageScriptGraphNode(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            editorObjectGraphCommentNode,
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes.size() == 3 &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.links.size() == 2;
+    const bool editorSessionCompileObjectScriptGraphOk = editorSessionObjectScriptGraphNodeOk &&
         pf::compileEditorSessionObjectPackageScriptGraph(editorSession, editorArticleObjectIndex, editorObjectLogicScript, &packageError) &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].instructions.size() == 2;
     int editorMovedObjectInstructionIndex = -1;
@@ -8530,6 +8601,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_instruction_ok=" << editorSessionAddInstructionOk
               << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
               << " fighter_editor_session_script_graph_ok=" << editorSessionScriptGraphOk
+              << " fighter_editor_session_script_graph_node_ok=" << editorSessionScriptGraphNodeOk
               << " fighter_editor_session_export_compiles_graph_ok=" << editorSessionExportCompilesGraphOk
               << " fighter_editor_session_compile_standalone_graph_ok=" << editorSessionCompileStandaloneGraphOk
               << " fighter_editor_session_compile_branch_graph_ok=" << editorSessionCompileBranchGraphOk
@@ -8564,6 +8636,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_object_instruction_ok=" << editorSessionAddObjectInstructionOk
               << " fighter_editor_session_add_second_object_instruction_ok=" << editorSessionAddSecondObjectInstructionOk
               << " fighter_editor_session_object_script_graph_ok=" << editorSessionObjectScriptGraphOk
+              << " fighter_editor_session_object_script_graph_node_ok=" << editorSessionObjectScriptGraphNodeOk
               << " fighter_editor_session_compile_object_script_graph_ok=" << editorSessionCompileObjectScriptGraphOk
               << " fighter_editor_session_move_object_instruction_ok=" << editorSessionMoveObjectInstructionOk
               << " fighter_editor_session_invalid_object_instruction_rejected=" << editorSessionInvalidObjectInstructionRejected
