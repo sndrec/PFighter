@@ -6583,14 +6583,134 @@ int main(int argc, char** argv) {
     const bool blankEditorSessionObjectOk = blankEditorSessionBeginOk &&
         pf::addEditorSessionObject(blankEditorSession, "BlankSmokeProjectile", pf::GameObjectKind::Projectile, &blankEditorObjectIndex, &packageError) &&
         blankEditorObjectIndex == 0;
+    pf::FighterEcbDefinition blankEditorEcb;
+    blankEditorEcb.enabled = true;
+    blankEditorEcb.points[0] = {-pf::fxFromFloat(0.7f), pf::fxFromFloat(0.9f)};
+    blankEditorEcb.points[1] = {0, pf::fxFromFloat(2.1f)};
+    blankEditorEcb.points[2] = {pf::fxFromFloat(0.7f), pf::fxFromFloat(0.9f)};
+    blankEditorEcb.points[3] = {0, -pf::fxFromFloat(0.1f)};
+    const bool blankEditorSessionEcbOk = blankEditorSessionObjectOk &&
+        pf::setEditorSessionAuthoredEcb(blankEditorSession, blankEditorEcb, true, &packageError) &&
+        blankEditorSession.rootFighter() &&
+        blankEditorSession.rootFighter()->authoredEcb.enabled;
+    pf::HurtboxDefinition blankEditorHurtbox;
+    blankEditorHurtbox.startOffset = {0, pf::fxFromFloat(-0.2f), 0};
+    blankEditorHurtbox.endOffset = {0, pf::fxFromFloat(0.4f), 0};
+    blankEditorHurtbox.radius = pf::fxFromFloat(0.25f);
+    int blankEditorHurtboxIndex = -1;
+    const bool blankEditorSessionHurtboxOk = blankEditorSessionEcbOk &&
+        pf::addEditorSessionHurtbox(blankEditorSession, blankEditorHurtbox, -1, &blankEditorHurtboxIndex, &packageError) &&
+        blankEditorHurtboxIndex >= 0;
+    blankEditorHurtbox.radius = pf::fxFromFloat(0.3f);
+    const bool blankEditorSessionSetHurtboxOk = blankEditorSessionHurtboxOk &&
+        pf::setEditorSessionHurtbox(blankEditorSession, blankEditorHurtboxIndex, blankEditorHurtbox, &packageError) &&
+        blankEditorSession.rootFighter() &&
+        blankEditorSession.rootFighter()->hurtboxes[static_cast<size_t>(blankEditorHurtboxIndex)].radius == pf::fxFromFloat(0.3f);
+    pf::AnimationJoint blankEditorJoint;
+    blankEditorJoint.name = "EditorJoint";
+    blankEditorJoint.parent = 0;
+    blankEditorJoint.translation = {0, pf::fxFromFloat(0.8f), 0};
+    int blankEditorJointIndex = -1;
+    const bool blankEditorSessionJointOk = blankEditorSessionSetHurtboxOk &&
+        pf::addEditorSessionAuthoredJoint(blankEditorSession, blankEditorJoint, -1, &blankEditorJointIndex, &packageError) &&
+        blankEditorJointIndex >= 1;
+    blankEditorJoint.name = "EditorJointRenamed";
+    blankEditorJoint.scale = {pf::fxFromFloat(1.1f), pf::fxFromFloat(1.2f), pf::fx(1)};
+    const bool blankEditorSessionSetJointOk = blankEditorSessionJointOk &&
+        pf::setEditorSessionAuthoredJoint(blankEditorSession, blankEditorJointIndex, blankEditorJoint, &packageError) &&
+        blankEditorSession.rootFighter() &&
+        blankEditorSession.rootFighter()->authoredSkeleton[static_cast<size_t>(blankEditorJointIndex)].name == "EditorJointRenamed";
+    int blankEditorClipIndex = -1;
+    const bool blankEditorSessionCreateClipOk = blankEditorSessionSetJointOk &&
+        pf::createEditorSessionAuthoredClip(blankEditorSession, "EditorClip", 0, &blankEditorClipIndex, &packageError) &&
+        blankEditorClipIndex >= 0;
+    const bool blankEditorSessionRenameClipOk = blankEditorSessionCreateClipOk &&
+        pf::renameEditorSessionAuthoredClip(blankEditorSession, blankEditorClipIndex, "EditorClipRenamed", &packageError);
+    const bool blankEditorSessionClipPropertiesOk = blankEditorSessionRenameClipOk &&
+        pf::setEditorSessionAuthoredClipProperties(blankEditorSession, blankEditorClipIndex, 7, pf::fx(36), 3, 0, &packageError) &&
+        blankEditorSession.rootFighter() &&
+        blankEditorSession.rootFighter()->authoredClips[static_cast<size_t>(blankEditorClipIndex)].actionIndex == 7;
+    pf::AnimationTrack blankEditorTrack;
+    blankEditorTrack.joint = blankEditorJointIndex;
+    blankEditorTrack.channel = pf::AnimationChannel::TranslateX;
+    blankEditorTrack.keys = {
+        {0, 0, 0, pf::AnimationInterpolation::Linear},
+        {pf::fx(10), pf::fxFromFloat(0.4f), 0, pf::AnimationInterpolation::Linear},
+    };
+    int blankEditorTrackIndex = -1;
+    const bool blankEditorSessionAddTrackOk = blankEditorSessionClipPropertiesOk &&
+        pf::addEditorSessionAuthoredTrack(blankEditorSession, blankEditorClipIndex, blankEditorTrack, -1, &blankEditorTrackIndex, &packageError) &&
+        blankEditorTrackIndex >= 0;
+    blankEditorTrack.channel = pf::AnimationChannel::TranslateY;
+    const bool blankEditorSessionSetTrackOk = blankEditorSessionAddTrackOk &&
+        pf::setEditorSessionAuthoredTrack(blankEditorSession, blankEditorClipIndex, blankEditorTrackIndex, blankEditorTrack, &packageError) &&
+        blankEditorSession.rootFighter() &&
+        blankEditorSession.rootFighter()->authoredClips[static_cast<size_t>(blankEditorClipIndex)].tracks[static_cast<size_t>(blankEditorTrackIndex)].channel == pf::AnimationChannel::TranslateY;
+    int blankEditorKeyIndex = -1;
+    const bool blankEditorSessionAddKeyOk = blankEditorSessionSetTrackOk &&
+        pf::addEditorSessionAuthoredKey(
+            blankEditorSession,
+            blankEditorClipIndex,
+            blankEditorTrackIndex,
+            {pf::fx(5), pf::fxFromFloat(0.2f), 0, pf::AnimationInterpolation::Linear},
+            &blankEditorKeyIndex,
+            &packageError) &&
+        blankEditorKeyIndex >= 0;
+    const bool blankEditorSessionSetKeyOk = blankEditorSessionAddKeyOk &&
+        pf::setEditorSessionAuthoredKey(
+            blankEditorSession,
+            blankEditorClipIndex,
+            blankEditorTrackIndex,
+            blankEditorKeyIndex,
+            {pf::fx(6), pf::fxFromFloat(0.25f), 0, pf::AnimationInterpolation::Linear},
+            &packageError);
+    const bool blankEditorSessionRemoveKeyOk = blankEditorSessionSetKeyOk &&
+        pf::removeEditorSessionAuthoredKey(blankEditorSession, blankEditorClipIndex, blankEditorTrackIndex, blankEditorKeyIndex, &packageError);
+    int blankEditorDuplicateClipIndex = -1;
+    const bool blankEditorSessionDuplicateClipOk = blankEditorSessionRemoveKeyOk &&
+        pf::duplicateEditorSessionAuthoredClip(blankEditorSession, blankEditorClipIndex, &blankEditorDuplicateClipIndex, &packageError) &&
+        blankEditorDuplicateClipIndex >= 0;
+    const bool blankEditorSessionRemoveClipOk = blankEditorSessionDuplicateClipOk &&
+        pf::removeEditorSessionAuthoredClip(blankEditorSession, blankEditorDuplicateClipIndex, {}, &packageError);
+    const bool blankEditorSessionMeshOk = blankEditorSessionRemoveClipOk &&
+        pf::setEditorSessionAuthoredMesh(blankEditorSession, pf::makeFighterEditorTriangleMesh(), &packageError) &&
+        blankEditorSession.rootFighter() &&
+        pf::editorAuthoredMeshVertexCount(blankEditorSession.rootFighter()->authoredMesh) == 3;
+    const bool blankEditorSessionMeshScaleOk = blankEditorSessionMeshOk &&
+        pf::scaleEditorSessionAuthoredMesh(blankEditorSession, pf::fxFromFloat(1.1f), pf::fxFromFloat(1.05f), &packageError);
+    const bool blankEditorSessionMeshNudgeOk = blankEditorSessionMeshScaleOk &&
+        pf::nudgeEditorSessionAuthoredMeshVertex(blankEditorSession, 0, {pf::fxFromFloat(0.03f), 0, 0}, &packageError);
+    const bool blankEditorSessionMeshBindOk = blankEditorSessionMeshNudgeOk &&
+        pf::bindEditorSessionAuthoredMeshToJoint(blankEditorSession, 0, &packageError) &&
+        pf::bindEditorSessionAuthoredMeshVertexToJoint(blankEditorSession, 0, blankEditorJointIndex, &packageError) &&
+        pf::blendEditorSessionAuthoredMeshVertexTowardJoint(blankEditorSession, 1, blankEditorJointIndex, 0.35f, &packageError) &&
+        pf::autoWeightEditorSessionAuthoredMeshToSkeleton(blankEditorSession, &packageError);
+    const bool blankEditorSessionRemoveJointOk = blankEditorSessionMeshBindOk &&
+        pf::removeEditorSessionAuthoredJoint(blankEditorSession, blankEditorJointIndex, &packageError) &&
+        blankEditorSession.rootFighter() &&
+        blankEditorSession.rootFighter()->authoredClips[static_cast<size_t>(blankEditorClipIndex)].tracks[static_cast<size_t>(blankEditorTrackIndex)].joint == 0;
+    const bool blankEditorSessionRemoveHurtboxOk = blankEditorSessionRemoveJointOk &&
+        pf::removeEditorSessionHurtbox(blankEditorSession, blankEditorHurtboxIndex, &packageError);
     pf::FighterEditorPackageSnapshot blankEditorSnapshot;
-    const bool blankEditorSessionExportOk = blankEditorSessionObjectOk &&
+    const bool blankEditorSessionExportWriteOk = blankEditorSessionRemoveHurtboxOk &&
         pf::exportFighterEditorSessionPackage(blankEditorSession, blankEditorSnapshot, &packageError) &&
-        blankEditorSnapshot.descriptor.rootFighterName == "BlankSmoke" &&
-        blankEditorSnapshot.descriptor.fighterNames.size() == 1 &&
-        blankEditorSnapshot.descriptor.objectNames.size() == 1 &&
-        blankEditorSnapshot.package.fighters[0].states.size() == 2 &&
-        blankEditorSnapshot.package.fighters[0].authoredClips.size() == 2;
+        !blankEditorSnapshot.bytes.empty();
+    const bool blankEditorSessionExportRootOk = blankEditorSessionExportWriteOk &&
+        blankEditorSnapshot.descriptor.rootFighterName == "BlankSmoke";
+    const bool blankEditorSessionExportObjectOk = blankEditorSessionExportWriteOk &&
+        std::find(blankEditorSnapshot.descriptor.objectNames.begin(), blankEditorSnapshot.descriptor.objectNames.end(), "BlankSmokeProjectile") != blankEditorSnapshot.descriptor.objectNames.end();
+    const bool blankEditorSessionExportStatesOk = blankEditorSessionExportWriteOk &&
+        !blankEditorSnapshot.package.fighters.empty() &&
+        blankEditorSnapshot.package.fighters[0].states.size() == 2;
+    const bool blankEditorSessionExportAuthoredOk = blankEditorSessionExportWriteOk &&
+        !blankEditorSnapshot.package.fighters.empty() &&
+        blankEditorSnapshot.package.fighters[0].authoredClips.size() >= 3 &&
+        !blankEditorSnapshot.package.fighters[0].authoredMesh.batches.empty();
+    const bool blankEditorSessionExportOk =
+        blankEditorSessionExportRootOk &&
+        blankEditorSessionExportObjectOk &&
+        blankEditorSessionExportStatesOk &&
+        blankEditorSessionExportAuthoredOk;
     pf::FighterPackage invalidInstallPackage = sourcePackage;
     invalidInstallPackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     pf::World invalidPackageInstallWorld = pf::makeTrainingWorld();
@@ -8059,6 +8179,32 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_test_world_ok=" << editorSessionTestWorldOk
               << " fighter_editor_blank_session_ok=" << blankEditorSessionBeginOk
               << " fighter_editor_blank_object_ok=" << blankEditorSessionObjectOk
+              << " fighter_editor_blank_ecb_ok=" << blankEditorSessionEcbOk
+              << " fighter_editor_blank_hurtbox_ok=" << blankEditorSessionHurtboxOk
+              << " fighter_editor_blank_set_hurtbox_ok=" << blankEditorSessionSetHurtboxOk
+              << " fighter_editor_blank_joint_ok=" << blankEditorSessionJointOk
+              << " fighter_editor_blank_set_joint_ok=" << blankEditorSessionSetJointOk
+              << " fighter_editor_blank_create_clip_ok=" << blankEditorSessionCreateClipOk
+              << " fighter_editor_blank_rename_clip_ok=" << blankEditorSessionRenameClipOk
+              << " fighter_editor_blank_clip_properties_ok=" << blankEditorSessionClipPropertiesOk
+              << " fighter_editor_blank_add_track_ok=" << blankEditorSessionAddTrackOk
+              << " fighter_editor_blank_set_track_ok=" << blankEditorSessionSetTrackOk
+              << " fighter_editor_blank_add_key_ok=" << blankEditorSessionAddKeyOk
+              << " fighter_editor_blank_set_key_ok=" << blankEditorSessionSetKeyOk
+              << " fighter_editor_blank_remove_key_ok=" << blankEditorSessionRemoveKeyOk
+              << " fighter_editor_blank_duplicate_clip_ok=" << blankEditorSessionDuplicateClipOk
+              << " fighter_editor_blank_remove_clip_ok=" << blankEditorSessionRemoveClipOk
+              << " fighter_editor_blank_mesh_ok=" << blankEditorSessionMeshOk
+              << " fighter_editor_blank_mesh_scale_ok=" << blankEditorSessionMeshScaleOk
+              << " fighter_editor_blank_mesh_nudge_ok=" << blankEditorSessionMeshNudgeOk
+              << " fighter_editor_blank_mesh_bind_ok=" << blankEditorSessionMeshBindOk
+              << " fighter_editor_blank_remove_joint_ok=" << blankEditorSessionRemoveJointOk
+              << " fighter_editor_blank_remove_hurtbox_ok=" << blankEditorSessionRemoveHurtboxOk
+              << " fighter_editor_blank_export_write_ok=" << blankEditorSessionExportWriteOk
+              << " fighter_editor_blank_export_root_ok=" << blankEditorSessionExportRootOk
+              << " fighter_editor_blank_export_object_ok=" << blankEditorSessionExportObjectOk
+              << " fighter_editor_blank_export_states_ok=" << blankEditorSessionExportStatesOk
+              << " fighter_editor_blank_export_authored_ok=" << blankEditorSessionExportAuthoredOk
               << " fighter_editor_blank_export_ok=" << blankEditorSessionExportOk
               << " fighter_package_asset_ok=" << packageAssetOk
               << " fighter_package_parity_ok=" << packageParityOk

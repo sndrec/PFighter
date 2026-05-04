@@ -361,6 +361,148 @@ bool bindEditorSessionPackageScriptCallback(
     FighterEditorStateCallbackSlot slot,
     const std::string& scriptName,
     std::string* error = nullptr);
+std::string uniqueEditorAuthoredClipName(const FighterDefinition& def, const std::string& prefix = "Clip");
+std::string uniqueEditorAuthoredJointName(const FighterDefinition& def, const std::string& prefix = "Joint");
+int uniqueEditorAuthoredClipActionIndex(const FighterDefinition& def);
+bool editorAuthoredClipNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex = -1);
+bool editorAuthoredJointNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex = -1);
+bool editorAuthoredClipActionIndexAvailable(const FighterDefinition& def, int actionIndex, int ignoredIndex = -1);
+HsdFighterMesh makeFighterEditorTriangleMesh();
+int editorAuthoredMeshVertexCount(const HsdFighterMesh& mesh);
+bool setEditorSessionAuthoredEcb(
+    FighterEditorSession& session,
+    const FighterEcbDefinition& ecb,
+    bool normalize = true,
+    std::string* error = nullptr);
+bool addEditorSessionHurtbox(
+    FighterEditorSession& session,
+    const HurtboxDefinition& hurtbox,
+    int insertIndex = -1,
+    int* addedHurtboxIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionHurtbox(
+    FighterEditorSession& session,
+    int hurtboxIndex,
+    const HurtboxDefinition& hurtbox,
+    std::string* error = nullptr);
+bool removeEditorSessionHurtbox(
+    FighterEditorSession& session,
+    int hurtboxIndex,
+    std::string* error = nullptr);
+bool addEditorSessionAuthoredJoint(
+    FighterEditorSession& session,
+    const AnimationJoint& joint,
+    int insertIndex = -1,
+    int* addedJointIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionAuthoredJoint(
+    FighterEditorSession& session,
+    int jointIndex,
+    const AnimationJoint& joint,
+    std::string* error = nullptr);
+bool removeEditorSessionAuthoredJoint(
+    FighterEditorSession& session,
+    int jointIndex,
+    std::string* error = nullptr);
+bool createEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    const std::string& requestedName = {},
+    int sourceClipIndex = -1,
+    int* createdClipIndex = nullptr,
+    std::string* error = nullptr);
+bool duplicateEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    int sourceClipIndex,
+    int* createdClipIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    int clipIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool setEditorSessionAuthoredClipProperties(
+    FighterEditorSession& session,
+    int clipIndex,
+    int actionIndex,
+    Fix frameCount,
+    int defaultBlendFrames,
+    uint32_t actionFlags,
+    std::string* error = nullptr);
+bool removeEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    int clipIndex,
+    const std::string& replacementClipName = {},
+    std::string* error = nullptr);
+bool addEditorSessionAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    const AnimationTrack& track,
+    int insertIndex = -1,
+    int* addedTrackIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    const AnimationTrack& track,
+    std::string* error = nullptr);
+bool removeEditorSessionAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    std::string* error = nullptr);
+bool addEditorSessionAuthoredKey(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    const AnimationKey& key,
+    int* addedKeyIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionAuthoredKey(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    int keyIndex,
+    const AnimationKey& key,
+    std::string* error = nullptr);
+bool removeEditorSessionAuthoredKey(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    int keyIndex,
+    std::string* error = nullptr);
+bool setEditorSessionAuthoredMesh(
+    FighterEditorSession& session,
+    const HsdFighterMesh& mesh,
+    std::string* error = nullptr);
+bool scaleEditorSessionAuthoredMesh(
+    FighterEditorSession& session,
+    Fix scaleX,
+    Fix scaleY,
+    std::string* error = nullptr);
+bool nudgeEditorSessionAuthoredMeshVertex(
+    FighterEditorSession& session,
+    int vertexIndex,
+    Vec3 delta,
+    std::string* error = nullptr);
+bool bindEditorSessionAuthoredMeshToJoint(
+    FighterEditorSession& session,
+    int jointIndex,
+    std::string* error = nullptr);
+bool bindEditorSessionAuthoredMeshVertexToJoint(
+    FighterEditorSession& session,
+    int vertexIndex,
+    int jointIndex,
+    std::string* error = nullptr);
+bool blendEditorSessionAuthoredMeshVertexTowardJoint(
+    FighterEditorSession& session,
+    int vertexIndex,
+    int jointIndex,
+    float amount,
+    std::string* error = nullptr);
+bool autoWeightEditorSessionAuthoredMeshToSkeleton(
+    FighterEditorSession& session,
+    std::string* error = nullptr);
 std::string uniqueEditorObjectName(const FighterPackage& package, const std::string& prefix = "Object");
 std::string uniqueEditorObjectStateName(const GameObjectDefinition& object, const std::string& prefix = "State");
 bool editorObjectNameAvailable(const FighterPackage& package, const std::string& name, int ignoredIndex = -1);

@@ -3,6 +3,7 @@
 #include "core/action.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace pf {
@@ -1343,6 +1344,251 @@ void normalizeFighterEditorAuthoredEcb(FighterDefinition& def) {
     ecb.points[2].y = sideY;
 }
 
+namespace {
+
+bool validEditorAuthoredClip(
+    FighterEditorSession& session,
+    int clipIndex,
+    FighterDefinition** fighter,
+    AnimationClip** clip,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (clipIndex < 0 || clipIndex >= static_cast<int>(def.authoredClips.size())) {
+        setEditorError(error, "editor authored clip index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = &def;
+    }
+    if (clip) {
+        *clip = &def.authoredClips[static_cast<size_t>(clipIndex)];
+    }
+    return true;
+}
+
+bool validEditorAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    FighterDefinition** fighter,
+    AnimationClip** clip,
+    AnimationTrack** track,
+    std::string* error)
+{
+    AnimationClip* targetClip = nullptr;
+    FighterDefinition* def = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, &def, &targetClip, error)) {
+        return false;
+    }
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(targetClip->tracks.size())) {
+        setEditorError(error, "editor authored track index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = def;
+    }
+    if (clip) {
+        *clip = targetClip;
+    }
+    if (track) {
+        *track = &targetClip->tracks[static_cast<size_t>(trackIndex)];
+    }
+    return true;
+}
+
+int remapRemovedAuthoredBone(int bone, int removedIndex, int fallbackBone) {
+    if (bone < 0) {
+        return bone;
+    }
+    if (bone == removedIndex) {
+        return fallbackBone;
+    }
+    return bone > removedIndex ? bone - 1 : bone;
+}
+
+void sortEditorAnimationKeys(std::vector<AnimationKey>& keys) {
+    std::sort(keys.begin(), keys.end(), [](const AnimationKey& a, const AnimationKey& b) {
+        return a.frame < b.frame;
+    });
+}
+
+void sanitizeEditorAnimationTrackKeys(AnimationTrack& track, Fix frameCount) {
+    sortEditorAnimationKeys(track.keys);
+    Fix previousFrame = -1;
+    bool hasPreviousFrame = false;
+    track.keys.erase(
+        std::remove_if(track.keys.begin(), track.keys.end(), [&](const AnimationKey& key) {
+            const bool invalid = key.frame < 0 ||
+                (frameCount > 0 && key.frame > frameCount) ||
+                (hasPreviousFrame && key.frame <= previousFrame);
+            if (!invalid) {
+                previousFrame = key.frame;
+                hasPreviousFrame = true;
+            }
+            return invalid;
+        }),
+        track.keys.end());
+}
+
+bool hasEditorAnimationKeyFrame(const std::vector<AnimationKey>& keys, Fix frame, int ignoredIndex = -1) {
+    for (size_t i = 0; i < keys.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && keys[i].frame == frame) {
+            return true;
+        }
+    }
+    return false;
+}
+
+HsdMeshVertex* editorAuthoredMeshVertexAt(HsdFighterMesh& mesh, int vertexIndex) {
+    int cursor = 0;
+    for (HsdMeshBatch& batch : mesh.batches) {
+        const int next = cursor + static_cast<int>(batch.vertices.size());
+        if (vertexIndex >= cursor && vertexIndex < next) {
+            return &batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
+        }
+        cursor = next;
+    }
+    return nullptr;
+}
+
+float editorAuthoredMeshDistanceSquared(Vec3 a, Vec3 b) {
+    const float dx = fxToFloat(a.x - b.x);
+    const float dy = fxToFloat(a.y - b.y);
+    const float dz = fxToFloat(a.z - b.z);
+    return dx * dx + dy * dy + dz * dz;
+}
+
+std::vector<Vec3> editorAuthoredSkeletonBindPositions(const std::vector<AnimationJoint>& skeleton) {
+    if (skeleton.empty()) {
+        return {};
+    }
+    const AnimationPose pose = bindPose(skeleton);
+    return jointWorldTranslations(skeleton, pose);
+}
+
+void normalizeEditorAuthoredMeshVertexInfluences(HsdMeshVertex& vertex, int fallbackJoint) {
+    float sum = 0.0f;
+    for (HsdMeshVertexInfluence& influence : vertex.influences) {
+        if (influence.bone < 0 || influence.weight <= 0.0f) {
+            influence = {};
+            influence.bone = -1;
+            continue;
+        }
+        sum += influence.weight;
+    }
+    if (sum <= 0.0f) {
+        vertex.influences = {};
+        vertex.influences[0] = {fallbackJoint, 1.0f};
+        return;
+    }
+    for (HsdMeshVertexInfluence& influence : vertex.influences) {
+        if (influence.bone >= 0 && influence.weight > 0.0f) {
+            influence.weight /= sum;
+        }
+    }
+}
+
+void bindEditorAuthoredMeshVertexToJoint(HsdFighterMesh& mesh, int vertexIndex, int joint, int skeletonSize) {
+    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(mesh, vertexIndex);
+    if (!vertex) {
+        return;
+    }
+    vertex->influences = {};
+    vertex->influences[0] = {joint, 1.0f};
+    for (HsdMeshBatch& batch : mesh.batches) {
+        batch.parentBone = skeletonSize > 1 ? -1 : joint;
+        batch.singleBindBone = skeletonSize > 1 ? -1 : joint;
+        batch.hasEnvelopes = skeletonSize > 1;
+    }
+}
+
+void blendEditorAuthoredMeshVertexTowardJoint(
+    HsdFighterMesh& mesh,
+    int vertexIndex,
+    int joint,
+    int skeletonSize,
+    float amount)
+{
+    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(mesh, vertexIndex);
+    if (!vertex) {
+        return;
+    }
+    HsdMeshVertexInfluence* target = nullptr;
+    HsdMeshVertexInfluence* empty = nullptr;
+    for (HsdMeshVertexInfluence& influence : vertex->influences) {
+        if (influence.bone == joint) {
+            target = &influence;
+        }
+        if (!empty && (influence.bone < 0 || influence.weight <= 0.0f)) {
+            empty = &influence;
+        }
+        if (influence.weight > 0.0f) {
+            influence.weight *= (1.0f - amount);
+        }
+    }
+    if (!target) {
+        target = empty ? empty : &vertex->influences.back();
+        target->bone = joint;
+        target->weight = 0.0f;
+    }
+    target->weight += amount;
+    normalizeEditorAuthoredMeshVertexInfluences(*vertex, joint);
+    for (HsdMeshBatch& batch : mesh.batches) {
+        batch.parentBone = skeletonSize > 1 ? -1 : joint;
+        batch.singleBindBone = skeletonSize > 1 ? -1 : joint;
+        batch.hasEnvelopes = skeletonSize > 1;
+    }
+}
+
+void autoWeightEditorAuthoredMesh(HsdFighterMesh& mesh, const std::vector<AnimationJoint>& skeleton) {
+    const std::vector<Vec3> joints = editorAuthoredSkeletonBindPositions(skeleton);
+    if (joints.empty()) {
+        return;
+    }
+    for (HsdMeshBatch& batch : mesh.batches) {
+        batch.parentBone = joints.size() > 1 ? -1 : 0;
+        batch.singleBindBone = joints.size() > 1 ? -1 : 0;
+        batch.hasEnvelopes = joints.size() > 1;
+        for (HsdMeshVertex& vertex : batch.vertices) {
+            int nearest = 0;
+            int second = -1;
+            float nearestDist = editorAuthoredMeshDistanceSquared(vertex.position, joints.front());
+            float secondDist = 0.0f;
+            for (size_t jointIndex = 1; jointIndex < joints.size(); ++jointIndex) {
+                const float dist = editorAuthoredMeshDistanceSquared(vertex.position, joints[jointIndex]);
+                if (dist < nearestDist) {
+                    second = nearest;
+                    secondDist = nearestDist;
+                    nearest = static_cast<int>(jointIndex);
+                    nearestDist = dist;
+                } else if (second < 0 || dist < secondDist) {
+                    second = static_cast<int>(jointIndex);
+                    secondDist = dist;
+                }
+            }
+            vertex.influences = {};
+            if (second < 0) {
+                vertex.influences[0] = {nearest, 1.0f};
+                continue;
+            }
+            const float nearestLength = std::sqrt(nearestDist);
+            const float secondLength = std::sqrt(secondDist);
+            const float totalLength = nearestLength + secondLength;
+            const float nearestWeight = totalLength > 0.0001f
+                ? std::clamp(secondLength / totalLength, 0.0f, 1.0f)
+                : 1.0f;
+            vertex.influences[0] = {nearest, nearestWeight};
+            vertex.influences[1] = {second, 1.0f - nearestWeight};
+        }
+    }
+}
+
+} // namespace
+
 FighterDefinition makeFighterEditorBlankDefinition(const std::string& name, const MeleeCommonData& common) {
     FighterDefinition def;
     def.name = name;
@@ -2368,6 +2614,755 @@ bool bindEditorSessionPackageScriptCallback(
         calls->push_back({callback});
     }
     session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+std::string uniqueEditorAuthoredClipName(const FighterDefinition& def, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorAuthoredClipNameAvailable(def, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+std::string uniqueEditorAuthoredJointName(const FighterDefinition& def, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorAuthoredJointNameAvailable(def, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+int uniqueEditorAuthoredClipActionIndex(const FighterDefinition& def) {
+    for (int index = 0; index < 10000; ++index) {
+        if (editorAuthoredClipActionIndexAvailable(def, index)) {
+            return index;
+        }
+    }
+    return static_cast<int>(def.authoredClips.size());
+}
+
+bool editorAuthoredClipNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.authoredClips.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.authoredClips[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool editorAuthoredJointNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.authoredSkeleton.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.authoredSkeleton[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool editorAuthoredClipActionIndexAvailable(const FighterDefinition& def, int actionIndex, int ignoredIndex) {
+    if (actionIndex < 0) {
+        return false;
+    }
+    for (size_t i = 0; i < def.authoredClips.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.authoredClips[i].actionIndex == actionIndex) {
+            return false;
+        }
+    }
+    return true;
+}
+
+HsdFighterMesh makeFighterEditorTriangleMesh() {
+    HsdFighterMesh mesh;
+    HsdMeshBatch batch;
+    batch.parentBone = 0;
+    batch.singleBindBone = 0;
+    batch.materialColor = {160, 220, 255, 255};
+    auto vertex = [](Vec3 position) {
+        HsdMeshVertex out;
+        out.position = position;
+        out.normal = {0, 0, fx(1)};
+        out.influences[0] = {0, 1.0f};
+        return out;
+    };
+    batch.vertices = {
+        vertex({fxFromFloat(-0.35f), fxFromFloat(0.2f), 0}),
+        vertex({fxFromFloat(0.35f), fxFromFloat(0.2f), 0}),
+        vertex({0, fxFromFloat(1.0f), 0}),
+    };
+    mesh.batches.push_back(std::move(batch));
+    return mesh;
+}
+
+int editorAuthoredMeshVertexCount(const HsdFighterMesh& mesh) {
+    int count = 0;
+    for (const HsdMeshBatch& batch : mesh.batches) {
+        count += static_cast<int>(batch.vertices.size());
+    }
+    return count;
+}
+
+bool setEditorSessionAuthoredEcb(
+    FighterEditorSession& session,
+    const FighterEcbDefinition& ecb,
+    bool normalize,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    FighterDefinition& def = session.package.fighters.front();
+    def.authoredEcb = ecb;
+    if (normalize) {
+        normalizeFighterEditorAuthoredEcb(def);
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionHurtbox(
+    FighterEditorSession& session,
+    const HurtboxDefinition& hurtbox,
+    int insertIndex,
+    int* addedHurtboxIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    FighterDefinition& def = session.package.fighters.front();
+    const int index = insertIndex < 0
+        ? static_cast<int>(def.hurtboxes.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(def.hurtboxes.size()));
+    def.hurtboxes.insert(def.hurtboxes.begin() + index, hurtbox);
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedHurtboxIndex) {
+        *addedHurtboxIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionHurtbox(
+    FighterEditorSession& session,
+    int hurtboxIndex,
+    const HurtboxDefinition& hurtbox,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (hurtboxIndex < 0 || hurtboxIndex >= static_cast<int>(def.hurtboxes.size())) {
+        setEditorError(error, "editor hurtbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    def.hurtboxes[static_cast<size_t>(hurtboxIndex)] = hurtbox;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionHurtbox(
+    FighterEditorSession& session,
+    int hurtboxIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (hurtboxIndex < 0 || hurtboxIndex >= static_cast<int>(def.hurtboxes.size())) {
+        setEditorError(error, "editor hurtbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    def.hurtboxes.erase(def.hurtboxes.begin() + hurtboxIndex);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionAuthoredJoint(
+    FighterEditorSession& session,
+    const AnimationJoint& joint,
+    int insertIndex,
+    int* addedJointIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    FighterDefinition& def = session.package.fighters.front();
+    AnimationJoint added = joint;
+    if (added.name.empty()) {
+        added.name = uniqueEditorAuthoredJointName(def);
+    }
+    const int index = insertIndex < 0
+        ? static_cast<int>(def.authoredSkeleton.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(def.authoredSkeleton.size()));
+    for (AnimationJoint& existing : def.authoredSkeleton) {
+        if (existing.parent >= index) {
+            ++existing.parent;
+        }
+    }
+    for (AnimationClip& clip : def.authoredClips) {
+        for (AnimationTrack& track : clip.tracks) {
+            if (track.joint >= index) {
+                ++track.joint;
+            }
+        }
+    }
+    for (HsdMeshBatch& batch : def.authoredMesh.batches) {
+        if (batch.parentBone >= index) {
+            ++batch.parentBone;
+        }
+        if (batch.singleBindBone >= index) {
+            ++batch.singleBindBone;
+        }
+        for (HsdMeshVertex& vertex : batch.vertices) {
+            for (HsdMeshVertexInfluence& influence : vertex.influences) {
+                if (influence.bone >= index) {
+                    ++influence.bone;
+                }
+            }
+        }
+    }
+    def.authoredSkeleton.insert(def.authoredSkeleton.begin() + index, std::move(added));
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedJointIndex) {
+        *addedJointIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionAuthoredJoint(
+    FighterEditorSession& session,
+    int jointIndex,
+    const AnimationJoint& joint,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
+        setEditorError(error, "editor authored joint index is invalid");
+        return false;
+    }
+    if (!editorAuthoredJointNameAvailable(def, joint.name, jointIndex)) {
+        setEditorError(error, "editor authored joint name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    AnimationJoint edited = joint;
+    if (jointIndex == 0) {
+        edited.parent = -1;
+    }
+    def.authoredSkeleton[static_cast<size_t>(jointIndex)] = edited;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionAuthoredJoint(
+    FighterEditorSession& session,
+    int jointIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
+        setEditorError(error, "editor authored joint index is invalid");
+        return false;
+    }
+    if (def.authoredSkeleton.size() <= 1) {
+        setEditorError(error, "editor cannot remove the only authored joint");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int removedParent = def.authoredSkeleton[static_cast<size_t>(jointIndex)].parent;
+    def.authoredSkeleton.erase(def.authoredSkeleton.begin() + jointIndex);
+    const int fallbackBone = def.authoredSkeleton.empty()
+        ? -1
+        : std::clamp(removedParent, 0, static_cast<int>(def.authoredSkeleton.size()) - 1);
+    for (AnimationJoint& joint : def.authoredSkeleton) {
+        if (joint.parent == jointIndex) {
+            joint.parent = fallbackBone;
+        } else if (joint.parent > jointIndex) {
+            --joint.parent;
+        }
+    }
+    for (AnimationClip& clip : def.authoredClips) {
+        for (AnimationTrack& track : clip.tracks) {
+            track.joint = remapRemovedAuthoredBone(track.joint, jointIndex, fallbackBone);
+        }
+    }
+    for (HsdMeshBatch& batch : def.authoredMesh.batches) {
+        batch.parentBone = remapRemovedAuthoredBone(batch.parentBone, jointIndex, fallbackBone);
+        batch.singleBindBone = remapRemovedAuthoredBone(batch.singleBindBone, jointIndex, fallbackBone);
+        for (HsdMeshVertex& vertex : batch.vertices) {
+            for (HsdMeshVertexInfluence& influence : vertex.influences) {
+                influence.bone = remapRemovedAuthoredBone(influence.bone, jointIndex, fallbackBone);
+            }
+        }
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool createEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    const std::string& requestedName,
+    int sourceClipIndex,
+    int* createdClipIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    const std::string name = requestedName.empty() ? uniqueEditorAuthoredClipName(def) : requestedName;
+    if (!editorAuthoredClipNameAvailable(def, name)) {
+        setEditorError(error, "editor authored clip name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    ensureFighterEditorAuthoredRootJoint(def);
+    AnimationClip clip;
+    clip.name = name;
+    clip.actionIndex = uniqueEditorAuthoredClipActionIndex(def);
+    clip.frameCount = fx(60);
+    if (sourceClipIndex >= 0 && sourceClipIndex < static_cast<int>(def.authoredClips.size())) {
+        clip = def.authoredClips[static_cast<size_t>(sourceClipIndex)];
+        clip.name = name;
+        clip.actionIndex = uniqueEditorAuthoredClipActionIndex(def);
+    }
+    def.authoredClips.push_back(std::move(clip));
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (createdClipIndex) {
+        *createdClipIndex = static_cast<int>(session.package.fighters.front().authoredClips.size()) - 1;
+    }
+    return true;
+}
+
+bool duplicateEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    int sourceClipIndex,
+    int* createdClipIndex,
+    std::string* error)
+{
+    return createEditorSessionAuthoredClip(session, {}, sourceClipIndex, createdClipIndex, error);
+}
+
+bool renameEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    int clipIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, &def, &clip, error)) {
+        return false;
+    }
+    if (!editorAuthoredClipNameAvailable(*def, newName, clipIndex)) {
+        setEditorError(error, "editor authored clip name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string oldName = clip->name;
+    clip->name = newName;
+    for (FighterState& state : def->states) {
+        if (state.animation == oldName) {
+            state.animation = newName;
+        }
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionAuthoredClipProperties(
+    FighterEditorSession& session,
+    int clipIndex,
+    int actionIndex,
+    Fix frameCount,
+    int defaultBlendFrames,
+    uint32_t actionFlags,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, &def, &clip, error)) {
+        return false;
+    }
+    if (!editorAuthoredClipActionIndexAvailable(*def, actionIndex, clipIndex)) {
+        setEditorError(error, "editor authored clip action index is invalid or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int oldActionIndex = clip->actionIndex;
+    clip->actionIndex = actionIndex;
+    clip->frameCount = frameCount;
+    clip->defaultBlendFrames = defaultBlendFrames;
+    clip->actionFlags = actionFlags;
+    for (AnimationTrack& track : clip->tracks) {
+        sanitizeEditorAnimationTrackKeys(track, frameCount);
+    }
+    for (FighterState& state : def->states) {
+        if (state.animation == clip->name || state.animationActionIndex == oldActionIndex) {
+            state.animationActionIndex = actionIndex;
+        }
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionAuthoredClip(
+    FighterEditorSession& session,
+    int clipIndex,
+    const std::string& replacementClipName,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, &def, &clip, error)) {
+        return false;
+    }
+    if (def->authoredClips.size() <= 1) {
+        setEditorError(error, "editor cannot remove the only authored clip");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string removedName = clip->name;
+    const int removedAction = clip->actionIndex;
+    def->authoredClips.erase(def->authoredClips.begin() + clipIndex);
+    const AnimationClip* replacement = nullptr;
+    if (!replacementClipName.empty()) {
+        const auto found = std::find_if(def->authoredClips.begin(), def->authoredClips.end(), [&](const AnimationClip& candidate) {
+            return candidate.name == replacementClipName;
+        });
+        replacement = found == def->authoredClips.end() ? nullptr : &*found;
+    }
+    if (!replacement) {
+        replacement = &def->authoredClips[static_cast<size_t>(std::clamp(clipIndex, 0, static_cast<int>(def->authoredClips.size()) - 1))];
+    }
+    for (FighterState& state : def->states) {
+        if (state.animation == removedName || state.animationActionIndex == removedAction) {
+            state.animation = replacement->name;
+            state.animationActionIndex = replacement->actionIndex;
+            state.animationLengthFrames = std::max(1, static_cast<int>(fxToFloat(replacement->frameCount)));
+        }
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    const AnimationTrack& track,
+    int insertIndex,
+    int* addedTrackIndex,
+    std::string* error)
+{
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, nullptr, &clip, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(clip->tracks.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(clip->tracks.size()));
+    clip->tracks.insert(clip->tracks.begin() + index, track);
+    sanitizeEditorAnimationTrackKeys(clip->tracks[static_cast<size_t>(index)], clip->frameCount);
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedTrackIndex) {
+        *addedTrackIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    const AnimationTrack& track,
+    std::string* error)
+{
+    AnimationTrack* target = nullptr;
+    if (!validEditorAuthoredTrack(session, clipIndex, trackIndex, nullptr, nullptr, &target, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    *target = track;
+    sanitizeEditorAnimationTrackKeys(*target, session.package.fighters.front().authoredClips[static_cast<size_t>(clipIndex)].frameCount);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionAuthoredTrack(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    std::string* error)
+{
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredTrack(session, clipIndex, trackIndex, nullptr, &clip, nullptr, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    clip->tracks.erase(clip->tracks.begin() + trackIndex);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionAuthoredKey(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    const AnimationKey& key,
+    int* addedKeyIndex,
+    std::string* error)
+{
+    AnimationTrack* track = nullptr;
+    if (!validEditorAuthoredTrack(session, clipIndex, trackIndex, nullptr, nullptr, &track, error)) {
+        return false;
+    }
+    const AnimationClip& clip = session.package.fighters.front().authoredClips[static_cast<size_t>(clipIndex)];
+    if (key.frame < 0 || (clip.frameCount > 0 && key.frame > clip.frameCount)) {
+        setEditorError(error, "editor authored key frame is invalid");
+        return false;
+    }
+    if (hasEditorAnimationKeyFrame(track->keys, key.frame)) {
+        setEditorError(error, "editor authored key frame is already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    track->keys.push_back(key);
+    sortEditorAnimationKeys(track->keys);
+    int addedIndex = 0;
+    for (size_t i = 0; i < track->keys.size(); ++i) {
+        if (track->keys[i].frame == key.frame) {
+            addedIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedKeyIndex) {
+        *addedKeyIndex = addedIndex;
+    }
+    return true;
+}
+
+bool setEditorSessionAuthoredKey(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    int keyIndex,
+    const AnimationKey& key,
+    std::string* error)
+{
+    AnimationTrack* track = nullptr;
+    if (!validEditorAuthoredTrack(session, clipIndex, trackIndex, nullptr, nullptr, &track, error)) {
+        return false;
+    }
+    if (keyIndex < 0 || keyIndex >= static_cast<int>(track->keys.size())) {
+        setEditorError(error, "editor authored key index is invalid");
+        return false;
+    }
+    const AnimationClip& clip = session.package.fighters.front().authoredClips[static_cast<size_t>(clipIndex)];
+    if (key.frame < 0 || (clip.frameCount > 0 && key.frame > clip.frameCount)) {
+        setEditorError(error, "editor authored key frame is invalid");
+        return false;
+    }
+    if (hasEditorAnimationKeyFrame(track->keys, key.frame, keyIndex)) {
+        setEditorError(error, "editor authored key frame is already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    track->keys[static_cast<size_t>(keyIndex)] = key;
+    sortEditorAnimationKeys(track->keys);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionAuthoredKey(
+    FighterEditorSession& session,
+    int clipIndex,
+    int trackIndex,
+    int keyIndex,
+    std::string* error)
+{
+    AnimationTrack* track = nullptr;
+    if (!validEditorAuthoredTrack(session, clipIndex, trackIndex, nullptr, nullptr, &track, error)) {
+        return false;
+    }
+    if (keyIndex < 0 || keyIndex >= static_cast<int>(track->keys.size())) {
+        setEditorError(error, "editor authored key index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    track->keys.erase(track->keys.begin() + keyIndex);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionAuthoredMesh(
+    FighterEditorSession& session,
+    const HsdFighterMesh& mesh,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    session.package.fighters.front().authoredMesh = mesh;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool scaleEditorSessionAuthoredMesh(
+    FighterEditorSession& session,
+    Fix scaleX,
+    Fix scaleY,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    for (HsdMeshBatch& batch : session.package.fighters.front().authoredMesh.batches) {
+        for (HsdMeshVertex& vertex : batch.vertices) {
+            vertex.position.x = fxMul(vertex.position.x, scaleX);
+            vertex.position.y = fxMul(vertex.position.y, scaleY);
+        }
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool nudgeEditorSessionAuthoredMeshVertex(
+    FighterEditorSession& session,
+    int vertexIndex,
+    Vec3 delta,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(session.package.fighters.front().authoredMesh, vertexIndex);
+    if (!vertex) {
+        setEditorError(error, "editor authored mesh vertex index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    vertex->position.x += delta.x;
+    vertex->position.y += delta.y;
+    vertex->position.z += delta.z;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool bindEditorSessionAuthoredMeshToJoint(
+    FighterEditorSession& session,
+    int jointIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
+        setEditorError(error, "editor authored mesh joint index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    for (HsdMeshBatch& batch : def.authoredMesh.batches) {
+        batch.parentBone = jointIndex;
+        batch.singleBindBone = jointIndex;
+        batch.hasEnvelopes = false;
+        for (HsdMeshVertex& vertex : batch.vertices) {
+            vertex.influences = {};
+            vertex.influences[0] = {jointIndex, 1.0f};
+        }
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool bindEditorSessionAuthoredMeshVertexToJoint(
+    FighterEditorSession& session,
+    int vertexIndex,
+    int jointIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
+        setEditorError(error, "editor authored mesh joint index is invalid");
+        return false;
+    }
+    if (vertexIndex < 0 || vertexIndex >= editorAuthoredMeshVertexCount(def.authoredMesh)) {
+        setEditorError(error, "editor authored mesh vertex index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    bindEditorAuthoredMeshVertexToJoint(def.authoredMesh, vertexIndex, jointIndex, static_cast<int>(def.authoredSkeleton.size()));
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool blendEditorSessionAuthoredMeshVertexTowardJoint(
+    FighterEditorSession& session,
+    int vertexIndex,
+    int jointIndex,
+    float amount,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
+        setEditorError(error, "editor authored mesh joint index is invalid");
+        return false;
+    }
+    if (vertexIndex < 0 || vertexIndex >= editorAuthoredMeshVertexCount(def.authoredMesh)) {
+        setEditorError(error, "editor authored mesh vertex index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    blendEditorAuthoredMeshVertexTowardJoint(
+        def.authoredMesh,
+        vertexIndex,
+        jointIndex,
+        static_cast<int>(def.authoredSkeleton.size()),
+        std::clamp(amount, 0.0f, 1.0f));
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool autoWeightEditorSessionAuthoredMeshToSkeleton(
+    FighterEditorSession& session,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (def.authoredSkeleton.empty()) {
+        setEditorError(error, "editor authored skeleton is empty");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    autoWeightEditorAuthoredMesh(def.authoredMesh, def.authoredSkeleton);
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
