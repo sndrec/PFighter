@@ -28,6 +28,9 @@ target_include_directories(pfighter_core PUBLIC src)
 add_executable(pfighter_headless src/app/headless_main.cpp)
 target_link_libraries(pfighter_headless PRIVATE pfighter_core)
 
+add_executable(pfighter_package_converter src/app/package_converter_main.cpp)
+target_link_libraries(pfighter_package_converter PRIVATE pfighter_core)
+
 if(MINGW)
     get_filename_component(_pfighter_mingw_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
     set(_pfighter_mingw_runtime_dlls
@@ -50,6 +53,7 @@ if(MINGW)
     endfunction()
 
     pfighter_copy_mingw_runtime(pfighter_headless)
+    pfighter_copy_mingw_runtime(pfighter_package_converter)
 endif()
 
 if(PFIGHTER_BUILD_RAYLIB_APP)

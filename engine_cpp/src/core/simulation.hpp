@@ -496,6 +496,19 @@ int spawnGameObject(World& world, const std::string& objectName, int ownerFighte
 int spawnGameObjectOfKind(World& world, const std::string& objectName, GameObjectKind requiredKind, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 int countGameObjectsOwnedBy(const World& world, int ownerFighter, const std::string& objectName);
 FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source);
+bool makeNativePackageFighterDefinition(
+    const FighterDefinition& source,
+    FighterDefinition& out,
+    std::string* error = nullptr);
+std::vector<std::string> meleeTrainingRosterFighterNames();
+bool makeConvertedMeleeFighterPackage(
+    const std::string& fighterName,
+    FighterPackage& package,
+    std::string* error = nullptr);
+bool saveConvertedMeleeFighterPackage(
+    const std::string& fighterName,
+    const std::string& path,
+    std::string* error = nullptr);
 FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef, const std::string& packageName = {});
 bool installFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef = nullptr, std::string* error = nullptr);
 bool installFighterPackageBytes(

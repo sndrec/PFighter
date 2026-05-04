@@ -39,6 +39,43 @@ static pf::HsdFighterMesh makeSmokeAuthoredMesh() {
     return mesh;
 }
 
+static void prepareHeadlessNativePackageFighter(pf::FighterDefinition& def) {
+    def.hasHsdAsset = false;
+    def.hsdAsset.reset();
+    def.authoredClips.clear();
+    int nextActionIndex = 0;
+    for (const pf::FighterState& state : def.states) {
+        nextActionIndex = std::max(nextActionIndex, state.animationActionIndex + 1);
+    }
+    for (pf::FighterState& state : def.states) {
+        if (state.animationActionIndex < 0) {
+            if (state.animation.empty()) {
+                continue;
+            }
+            state.animationActionIndex = nextActionIndex++;
+        }
+        const bool exists = std::any_of(def.authoredClips.begin(), def.authoredClips.end(), [&](const pf::AnimationClip& clip) {
+            return clip.actionIndex == state.animationActionIndex;
+        });
+        if (exists) {
+            continue;
+        }
+        pf::AnimationClip clip;
+        const std::string baseName = state.animation.empty() ? state.name : state.animation;
+        clip.name = baseName;
+        const bool duplicateName = std::any_of(def.authoredClips.begin(), def.authoredClips.end(), [&](const pf::AnimationClip& existing) {
+            return existing.name == clip.name;
+        });
+        if (duplicateName) {
+            clip.name = baseName + "_" + std::to_string(state.animationActionIndex);
+        }
+        clip.actionIndex = state.animationActionIndex;
+        clip.frameCount = pf::fx(std::max(1, state.animationLengthFrames));
+        clip.defaultBlendFrames = static_cast<int8_t>(std::clamp(state.defaultAnimationBlendFrames, 0, 127));
+        def.authoredClips.push_back(std::move(clip));
+    }
+}
+
 static bool matchesI32(const std::vector<uint8_t>& bytes, size_t offset, int32_t expected) {
     if (offset + sizeof(expected) > bytes.size()) {
         return false;
@@ -4627,11 +4664,26 @@ int main(int argc, char** argv) {
               << " object_shield_bounce_vel=" << pf::toString(shieldBounceVelocity)
               << "\n";
 
-    pf::World packageSourceWorld = pf::makeTrainingWorld();
+    pf::World packageSourceWorld = world;
+    pf::FighterDefinition packageConversionMismatchProbe = packageSourceWorld.fighterDefs[0];
+    packageConversionMismatchProbe.authoredSkeleton = {
+        {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
+    };
+    pf::FighterDefinition packageConversionMismatchOut;
+    std::string packageConversionMismatchError;
+    const bool packageConversionMismatchRejected =
+        !pf::makeNativePackageFighterDefinition(
+            packageConversionMismatchProbe,
+            packageConversionMismatchOut,
+            &packageConversionMismatchError) &&
+        packageConversionMismatchError.find("shield pose/skeleton joint count mismatch") != std::string::npos;
     packageSourceWorld.fighterDefs[0].authoredSkeleton = {
         {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
     };
+    packageSourceWorld.fighterDefs[0].hasShieldPose = false;
+    packageSourceWorld.fighterDefs[0].shieldPose = {};
     packageSourceWorld.fighterDefs[0].authoredMesh = makeSmokeAuthoredMesh();
+    prepareHeadlessNativePackageFighter(packageSourceWorld.fighterDefs[0]);
     packageSourceWorld.fighterDefs[0].packageVariables = {
         {"SmokeVar", 4},
         {"FrameVar", 0},
@@ -6412,10 +6464,23 @@ int main(int argc, char** argv) {
         !pf::setEditorSessionStateTiming(editorSession, 0, 0, 5, 2, pf::kUseDefaultAnimationBlendFrames, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->states[0].animationLengthFrames == 72;
+    const std::string editorActionZeroClipName = editorSession.rootFighter()
+        ? ([&]() {
+            const auto found = std::find_if(
+                editorSession.rootFighter()->authoredClips.begin(),
+                editorSession.rootFighter()->authoredClips.end(),
+                [](const pf::AnimationClip& clip) {
+                    return clip.actionIndex == 0;
+                });
+            return found == editorSession.rootFighter()->authoredClips.end()
+                ? std::string{"Wait"}
+                : found->name;
+        }())
+        : std::string{"Wait"};
     const bool editorSessionStateAnimationOk = editorSessionInvalidTimingRejected &&
-        pf::setEditorSessionStateAnimation(editorSession, 0, "Wait", 0, 72, &packageError) &&
+        pf::setEditorSessionStateAnimation(editorSession, 0, editorActionZeroClipName, 0, 72, &packageError) &&
         editorSession.rootFighter() &&
-        editorSession.rootFighter()->states[0].animation == "Wait" &&
+        editorSession.rootFighter()->states[0].animation == editorActionZeroClipName &&
         editorSession.rootFighter()->states[0].animationActionIndex == 0 &&
         editorSession.rootFighter()->states[0].animationLengthFrames == 72;
     const bool editorSessionCollisionFlagsOk = editorSessionStateAnimationOk &&
@@ -8813,6 +8878,7 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_bytes_descriptor_ok=" << runtimePackageBytesDescriptorOk
               << " fighter_package_runtime_closure_ok=" << runtimePackageClosureOk
               << " fighter_package_runtime_native_self_contained_ok=" << runtimePackageNativeSelfContainedOk
+              << " fighter_package_conversion_mismatch_rejected=" << packageConversionMismatchRejected
               << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
               << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()

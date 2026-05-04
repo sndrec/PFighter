@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -126,6 +127,24 @@ static std::shared_ptr<const HsdFighterAnimationAsset> cachedHsdFighterAsset(con
         std::make_shared<HsdFighterAnimationAsset>(loadHsdFighterAnimationAsset(assetPath.string()));
     assets.emplace(fileName, asset);
     return asset;
+}
+
+static const HsdFighterAssetSpec* meleeTrainingRosterSpecByName(const std::string& fighterName) {
+    for (const HsdFighterAssetSpec& spec : meleeTrainingRoster()) {
+        if (fighterName == spec.displayName || fighterName == spec.fileName) {
+            return &spec;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<std::string> meleeTrainingRosterFighterNames() {
+    std::vector<std::string> names;
+    names.reserve(meleeTrainingRoster().size());
+    for (const HsdFighterAssetSpec& spec : meleeTrainingRoster()) {
+        names.push_back(spec.displayName);
+    }
+    return names;
 }
 
 static std::filesystem::path findBattlefieldStagePath() {
@@ -760,13 +779,17 @@ static HurtboxDefinition nativeHurtboxFromImported(const HsdHurtbox& source) {
     return out;
 }
 
-static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spec, const MeleeCommonData& common) {
+static FighterDefinition makeImportedFighterDefinition(
+    const HsdFighterAssetSpec& spec,
+    const MeleeCommonData& common,
+    std::shared_ptr<const HsdFighterAnimationAsset> asset)
+{
     FighterDefinition def = makeDebugRook();
     def.name = spec.displayName;
     def.properties.common = common;
     def.shield.maxHealth = common.startShieldHealthX260;
     applyCommonStateTimings(def);
-    def.hsdAsset = cachedHsdFighterAsset(spec.fileName);
+    def.hsdAsset = std::move(asset);
     def.hasHsdAsset = true;
     def.authoredSkeleton = def.hsdAsset->skeleton;
     def.modelPartAnimations = def.hsdAsset->modelPartAnimations;
@@ -792,6 +815,10 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     applyHsdAnimationLengths(def);
     importHsdActionScriptsAsNativeSubactions(def);
     return def;
+}
+
+static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spec, const MeleeCommonData& common) {
+    return makeImportedFighterDefinition(spec, common, cachedHsdFighterAsset(spec.fileName));
 }
 
 static std::array<Fix, 16> multiplyMatrix4(const std::array<Fix, 16>& a, const std::array<Fix, 16>& b) {
@@ -1440,6 +1467,29 @@ static void uniquifyAnimationClipActionIndexes(std::vector<AnimationClip>& clips
     }
 }
 
+static bool failNativeConversion(std::string* error, const std::string& message) {
+    if (error) {
+        *error = message;
+    }
+    return false;
+}
+
+static bool validateImportedFighterConversionSource(
+    const FighterDefinition& source,
+    const HsdFighterAnimationAsset& asset,
+    std::string* error)
+{
+    if (asset.hasShieldPose && asset.shieldPose.joints.size() != source.authoredSkeleton.size()) {
+        std::ostringstream message;
+        message << "imported fighter '" << source.name << "' has shield pose/skeleton joint count mismatch: "
+            << "shieldPoseJoints=" << asset.shieldPose.joints.size()
+            << " skeletonJoints=" << source.authoredSkeleton.size()
+            << " sourceAsset=" << asset.name;
+        return failNativeConversion(error, message.str());
+    }
+    return true;
+}
+
 static void appendRuntimePackageFighterDependency(FighterPackage& package, const World& world, const std::string& fighterName) {
     if (fighterName.empty() || runtimePackageHasFighter(package, fighterName)) {
         return;
@@ -1494,10 +1544,13 @@ static void collectRuntimePackageObjectDependencies(FighterPackage& package, con
     }
 }
 
-FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source) {
-    FighterDefinition out = source;
+bool makeNativePackageFighterDefinition(const FighterDefinition& source, FighterDefinition& out, std::string* error) {
+    out = source;
+    if (source.hsdAsset && !validateImportedFighterConversionSource(source, *source.hsdAsset, error)) {
+        return false;
+    }
     if (!source.hsdAsset) {
-        return out;
+        return true;
     }
 
     if (out.authoredSkeleton.empty()) {
@@ -1515,8 +1568,7 @@ FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& so
     }
     out.fighterBones = source.hsdAsset->fighterBones;
     out.commonBoneLookup = source.hsdAsset->commonBoneLookup;
-    out.hasShieldPose = source.hsdAsset->hasShieldPose &&
-        source.hsdAsset->shieldPose.joints.size() == out.authoredSkeleton.size();
+    out.hasShieldPose = source.hsdAsset->hasShieldPose;
     out.shieldPose = out.hasShieldPose ? source.hsdAsset->shieldPose : AnimationPose{};
     if (out.hurtboxes.empty()) {
         out.hurtboxes.reserve(source.hsdAsset->hurtboxes.size());
@@ -1560,7 +1612,66 @@ FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& so
 
     out.hasHsdAsset = false;
     out.hsdAsset.reset();
+    return true;
+}
+
+FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source) {
+    FighterDefinition out = source;
+    std::string error;
+    if (!makeNativePackageFighterDefinition(source, out, &error)) {
+        throw std::runtime_error(error);
+    }
     return out;
+}
+
+bool makeConvertedMeleeFighterPackage(
+    const std::string& fighterName,
+    FighterPackage& package,
+    std::string* error)
+{
+    const HsdFighterAssetSpec* spec = meleeTrainingRosterSpecByName(fighterName);
+    if (!spec) {
+        std::ostringstream message;
+        message << "unknown Melee fighter '" << fighterName << "'. Known fighters:";
+        for (const std::string& name : meleeTrainingRosterFighterNames()) {
+            message << " " << name << ";";
+        }
+        return failNativeConversion(error, message.str());
+    }
+
+    const std::filesystem::path assetPath = findFighterAssetPath(spec->fileName);
+    if (assetPath.empty()) {
+        return failNativeConversion(error, "missing binary fighter asset: engine_cpp/data/fighters/" + std::string(spec->fileName));
+    }
+
+    try {
+        const MeleeCommonData common = loadMeleeCommonData();
+        auto asset = std::make_shared<HsdFighterAnimationAsset>(loadHsdFighterAnimationAsset(assetPath.string()));
+        FighterDefinition imported = makeImportedFighterDefinition(*spec, common, std::move(asset));
+        FighterDefinition native;
+        if (!makeNativePackageFighterDefinition(imported, native, error)) {
+            return false;
+        }
+
+        package = {};
+        package.name = native.name + "_native";
+        package.fighters.push_back(std::move(native));
+        return validateFighterPackage(package, error);
+    } catch (const std::exception& ex) {
+        return failNativeConversion(error, ex.what());
+    }
+}
+
+bool saveConvertedMeleeFighterPackage(
+    const std::string& fighterName,
+    const std::string& path,
+    std::string* error)
+{
+    FighterPackage package;
+    if (!makeConvertedMeleeFighterPackage(fighterName, package, error)) {
+        return false;
+    }
+    return saveFighterPackage(path, package, error);
 }
 
 FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef, const std::string& packageName) {
