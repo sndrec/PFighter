@@ -234,8 +234,21 @@ bool createEditorSessionState(
     int sourceStateIndex = -1,
     int* createdStateIndex = nullptr,
     std::string* error = nullptr);
+bool createEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& requestedName = {},
+    int sourceStateIndex = -1,
+    int* createdStateIndex = nullptr,
+    std::string* error = nullptr);
 bool duplicateEditorSessionState(
     FighterEditorSession& session,
+    int sourceStateIndex = -1,
+    int* createdStateIndex = nullptr,
+    std::string* error = nullptr);
+bool duplicateEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
     int sourceStateIndex = -1,
     int* createdStateIndex = nullptr,
     std::string* error = nullptr);
@@ -244,8 +257,20 @@ bool renameEditorSessionState(
     int stateIndex,
     const std::string& newName,
     std::string* error = nullptr);
+bool renameEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    int stateIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
 bool removeEditorSessionState(
     FighterEditorSession& session,
+    int stateIndex,
+    const std::string& replacementStateName = {},
+    std::string* error = nullptr);
+bool removeEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
     int stateIndex,
     const std::string& replacementStateName = {},
     std::string* error = nullptr);

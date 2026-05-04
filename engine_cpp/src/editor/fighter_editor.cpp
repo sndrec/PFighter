@@ -173,6 +173,50 @@ bool validSessionState(
     return true;
 }
 
+bool validSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    FighterDefinition** fighter,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    if (fighterIndex < 0 || fighterIndex >= static_cast<int>(session.package.fighters.size())) {
+        setEditorError(error, "editor package fighter index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = &session.package.fighters[static_cast<size_t>(fighterIndex)];
+    }
+    return true;
+}
+
+bool validSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    int stateIndex,
+    FighterDefinition** fighter,
+    FighterState** state,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    if (!validSessionPackageFighter(session, fighterIndex, &def, error)) {
+        return false;
+    }
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(def->states.size())) {
+        setEditorError(error, "editor state index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = def;
+    }
+    if (state) {
+        *state = &def->states[static_cast<size_t>(stateIndex)];
+    }
+    return true;
+}
+
 bool validateEditorSessionAfterMutation(
     FighterEditorSession& session,
     FighterPackage&& previous,
@@ -2279,10 +2323,25 @@ bool createEditorSessionState(
     int* createdStateIndex,
     std::string* error)
 {
+    return createEditorSessionPackageFighterState(session, 0, requestedName, sourceStateIndex, createdStateIndex, error);
+}
+
+bool createEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& requestedName,
+    int sourceStateIndex,
+    int* createdStateIndex,
+    std::string* error)
+{
     if (!validRootFighter(session, error)) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition* fighter = nullptr;
+    if (!validSessionPackageFighter(session, fighterIndex, &fighter, error)) {
+        return false;
+    }
+    FighterDefinition& def = *fighter;
     const std::string name = requestedName.empty()
         ? uniqueEditorStateName(def, "NewState")
         : requestedName;
@@ -2290,8 +2349,12 @@ bool createEditorSessionState(
         setEditorError(error, "editor state name is empty or already used");
         return false;
     }
-    const int insertIndex = std::clamp(session.selectedState + 1, 0, static_cast<int>(def.states.size()));
+    const int selectedState = fighterIndex == session.selectedFighter
+        ? session.selectedState
+        : static_cast<int>(def.states.size()) - 1;
+    const int insertIndex = std::clamp(selectedState + 1, 0, static_cast<int>(def.states.size()));
     def.states.insert(def.states.begin() + insertIndex, makeDefaultEditorState(def, name, sourceStateIndex));
+    session.selectedFighter = fighterIndex;
     session.selectedState = insertIndex;
     session.selectedSubaction = 0;
     session.selectedInterrupt = 0;
@@ -2309,17 +2372,30 @@ bool duplicateEditorSessionState(
     int* createdStateIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    return duplicateEditorSessionPackageFighterState(session, 0, sourceStateIndex, createdStateIndex, error);
+}
+
+bool duplicateEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    int sourceStateIndex,
+    int* createdStateIndex,
+    std::string* error)
+{
+    FighterDefinition* fighter = nullptr;
+    if (!validSessionPackageFighter(session, fighterIndex, &fighter, error)) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *fighter;
     if (def.states.empty()) {
         setEditorError(error, "editor cannot clone a state from an empty fighter");
         return false;
     }
     const int sourceIndex = sourceStateIndex >= 0
         ? sourceStateIndex
-        : std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+        : (fighterIndex == session.selectedFighter
+            ? std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1)
+            : 0);
     if (sourceIndex < 0 || sourceIndex >= static_cast<int>(def.states.size())) {
         setEditorError(error, "editor clone source state is invalid");
         return false;
@@ -2328,6 +2404,7 @@ bool duplicateEditorSessionState(
     clone.name = uniqueEditorStateName(def, clone.name + "Copy");
     const int insertIndex = std::clamp(sourceIndex + 1, 0, static_cast<int>(def.states.size()));
     def.states.insert(def.states.begin() + insertIndex, std::move(clone));
+    session.selectedFighter = fighterIndex;
     session.selectedState = insertIndex;
     session.selectedSubaction = 0;
     session.selectedInterrupt = 0;
@@ -2345,10 +2422,21 @@ bool renameEditorSessionState(
     const std::string& newName,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    return renameEditorSessionPackageFighterState(session, 0, stateIndex, newName, error);
+}
+
+bool renameEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    int stateIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    FighterDefinition* fighter = nullptr;
+    if (!validSessionPackageFighter(session, fighterIndex, &fighter, error)) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *fighter;
     if (stateIndex < 0 || stateIndex >= static_cast<int>(def.states.size())) {
         setEditorError(error, "editor rename state index is invalid");
         return false;
@@ -2360,6 +2448,7 @@ bool renameEditorSessionState(
     const std::string oldName = def.states[static_cast<size_t>(stateIndex)].name;
     def.states[static_cast<size_t>(stateIndex)].name = newName;
     remapEditorFighterStateTargets(def, oldName, newName);
+    session.selectedFighter = fighterIndex;
     session.selectedState = stateIndex;
     session.dirty = true;
     session.clamp();
@@ -2372,10 +2461,21 @@ bool removeEditorSessionState(
     const std::string& replacementStateName,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    return removeEditorSessionPackageFighterState(session, 0, stateIndex, replacementStateName, error);
+}
+
+bool removeEditorSessionPackageFighterState(
+    FighterEditorSession& session,
+    int fighterIndex,
+    int stateIndex,
+    const std::string& replacementStateName,
+    std::string* error)
+{
+    FighterDefinition* fighter = nullptr;
+    if (!validSessionPackageFighter(session, fighterIndex, &fighter, error)) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *fighter;
     if (def.states.size() <= 1) {
         setEditorError(error, "editor cannot remove the only fighter state");
         return false;
@@ -2392,6 +2492,7 @@ bool removeEditorSessionState(
         replacement = waitIndex >= 0 ? "Wait" : def.states.front().name;
     }
     remapRemovedEditorFighterStateTargets(def, removedName, replacement);
+    session.selectedFighter = fighterIndex;
     session.selectedState = std::clamp(stateIndex, 0, static_cast<int>(def.states.size()) - 1);
     session.selectedSubaction = 0;
     session.selectedInterrupt = 0;

@@ -6179,6 +6179,8 @@ int main(int argc, char** argv) {
     const int editorInitialPackageFighterCount = static_cast<int>(editorFighterManagerSession.package.fighters.size());
     int editorDuplicatedFighterIndex = -1;
     int editorImportedFighterIndex = -1;
+    int editorPackageFighterStateIndex = -1;
+    int editorPackageFighterDuplicatedStateIndex = -1;
     int editorFighterTargetScriptIndex = -1;
     int editorFighterTargetInstructionIndex = -1;
     pf::PackageScriptInstruction editorFighterTargetInstruction;
@@ -6193,6 +6195,42 @@ int main(int argc, char** argv) {
             &editorDuplicatedFighterIndex,
             &packageError) &&
         editorDuplicatedFighterIndex == editorInitialPackageFighterCount &&
+        pf::createEditorSessionPackageFighterState(
+            editorFighterManagerSession,
+            editorDuplicatedFighterIndex,
+            "AltEditorState",
+            0,
+            &editorPackageFighterStateIndex,
+            &packageError) &&
+        editorPackageFighterStateIndex >= 0 &&
+        ([&]() {
+            editorFighterManagerSession.package.fighters[static_cast<size_t>(editorDuplicatedFighterIndex)]
+                .states[0].onAnimationFinishedState = "AltEditorState";
+            return true;
+        }()) &&
+        pf::renameEditorSessionPackageFighterState(
+            editorFighterManagerSession,
+            editorDuplicatedFighterIndex,
+            editorPackageFighterStateIndex,
+            "AltEditorRenamed",
+            &packageError) &&
+        editorFighterManagerSession.package.fighters[static_cast<size_t>(editorDuplicatedFighterIndex)]
+            .states[0].onAnimationFinishedState == "AltEditorRenamed" &&
+        pf::duplicateEditorSessionPackageFighterState(
+            editorFighterManagerSession,
+            editorDuplicatedFighterIndex,
+            editorPackageFighterStateIndex,
+            &editorPackageFighterDuplicatedStateIndex,
+            &packageError) &&
+        editorPackageFighterDuplicatedStateIndex >= 0 &&
+        pf::removeEditorSessionPackageFighterState(
+            editorFighterManagerSession,
+            editorDuplicatedFighterIndex,
+            editorPackageFighterStateIndex,
+            "Wait",
+            &packageError) &&
+        editorFighterManagerSession.package.fighters[static_cast<size_t>(editorDuplicatedFighterIndex)]
+            .states[0].onAnimationFinishedState == "Wait" &&
         pf::addEditorSessionPackageScript(
             editorFighterManagerSession,
             "EditorFighterTargetScript",
