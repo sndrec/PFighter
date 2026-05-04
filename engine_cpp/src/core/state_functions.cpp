@@ -2889,6 +2889,20 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             }
             break;
         }
+        case PackageScriptOp::SpawnObjectSetVar:
+        case PackageScriptOp::SpawnProjectileSetVar: {
+            const Vec2 position{
+                fighter.position.x + fighter.facing * fxFromFloat(0.75f),
+                fighter.position.y + fxFromFloat(0.7f) + instruction.intValue,
+            };
+            const Vec2 velocity{fighter.facing * instruction.fixValue, 0};
+            const int owner = static_cast<int>(&fighter - world.fighters.data());
+            const int spawnedIndex = instruction.op == PackageScriptOp::SpawnProjectileSetVar
+                ? spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, owner, position, fighter.facing, velocity)
+                : spawnGameObject(world, instruction.text, owner, position, fighter.facing, velocity);
+            setPackageVar(fighter, instruction.dst, spawnedIndex);
+            break;
+        }
         case PackageScriptOp::SpawnObjectFromVars:
         case PackageScriptOp::SpawnProjectileFromVars: {
             const Vec2 position{

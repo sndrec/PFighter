@@ -517,6 +517,8 @@ enum class PackageScriptOp : uint8_t {
     SpawnObjectFromVars,
     SpawnProjectile,
     SpawnProjectileFromVars,
+    SpawnObjectSetVar,
+    SpawnProjectileSetVar,
     DestroyObject,
     DestroyOwnedObjects,
     SkipIfVarLessThanImmediate,

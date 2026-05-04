@@ -7262,6 +7262,23 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, object.ownerFighter, position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
             }
+            case PackageScriptOp::SpawnObjectSetVar:
+            case PackageScriptOp::SpawnProjectileSetVar: {
+                const int ownerFighter = object.ownerFighter;
+                const int facing = object.facing;
+                const Vec2 position{object.position.x, object.position.y + instruction.intValue};
+                const Vec2 velocity{facing * instruction.fixValue, 0};
+                const int spawnedIndex = instruction.op == PackageScriptOp::SpawnProjectileSetVar
+                    ? spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, ownerFighter, position, facing, velocity)
+                    : spawnGameObject(world, instruction.text, ownerFighter, position, facing, velocity);
+                if (objectIndex < world.objects.size()) {
+                    GameObjectRuntime& currentObject = world.objects[objectIndex];
+                    if (instruction.dst >= 0 && instruction.dst < static_cast<int>(currentObject.packageVars.size())) {
+                        currentObject.packageVars[static_cast<size_t>(instruction.dst)] = spawnedIndex;
+                    }
+                }
+                return;
+            }
             case PackageScriptOp::SpawnObjectFromVars:
             case PackageScriptOp::SpawnProjectileFromVars: {
                 const Vec2 position{object.position.x + object.facing * instruction.fixValue, object.position.y + instruction.intValue};
