@@ -2851,6 +2851,17 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
                 instruction.dst,
                 packageVar(fighter, instruction.srcB));
             break;
+        case PackageScriptOp::CallIndexedObjectScriptFromVar: {
+            const int targetIndex = packageVar(fighter, instruction.srcA);
+            if (targetIndex >= 0 &&
+                targetIndex < static_cast<int>(world.objects.size()) &&
+                world.objects[static_cast<size_t>(targetIndex)].active)
+            {
+                runGameObjectPackageScript(world, targetIndex, instruction.text);
+                return;
+            }
+            break;
+        }
         case PackageScriptOp::SetVarFighterHeldObject:
             setPackageVar(fighter, instruction.dst, fighter.heldObject);
             break;

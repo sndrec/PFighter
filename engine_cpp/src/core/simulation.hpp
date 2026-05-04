@@ -501,6 +501,7 @@ bool absorbGameObject(World& world, int objectIndex, int fighterIndex);
 bool shieldBounceGameObject(World& world, int objectIndex, int fighterIndex, Vec2 normal);
 bool interactGameObjectWithFighter(World& world, int objectIndex, int fighterIndex);
 bool interactGameObjects(World& world, int objectIndex, int referenceObjectIndex);
+void runGameObjectPackageScript(World& world, int objectIndex, const std::string& scriptName);
 void changeGameObjectState(World& world, GameObjectRuntime& object, const std::string& stateName);
 void changeFighterState(World& world, FighterRuntime& fighter, const std::string& stateName, int lagFrames = 0, int blendFrames = kUseDefaultAnimationBlendFrames);
 WorldSnapshot saveWorld(const World& world);

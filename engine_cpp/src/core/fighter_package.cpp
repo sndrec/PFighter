@@ -345,6 +345,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarIndexedObjectVar:
     case PackageScriptOp::SetIndexedObjectVarImmediate:
     case PackageScriptOp::SetIndexedObjectVarFromVar:
+    case PackageScriptOp::CallIndexedObjectScriptFromVar:
         return true;
     }
     return false;
@@ -1712,6 +1713,18 @@ std::vector<std::string> fighterScriptNames(const std::vector<FighterDefinition>
     return names;
 }
 
+std::vector<std::string> objectScriptNames(const std::vector<GameObjectDefinition>& objects) {
+    std::vector<std::string> names;
+    for (const GameObjectDefinition& object : objects) {
+        for (const PackageScript& script : object.packageScripts) {
+            if (!hasName(names, script.name)) {
+                names.push_back(script.name);
+            }
+        }
+    }
+    return names;
+}
+
 void requireVariableIndex(int index, int variableCount, const char* label) {
     if (index < 0 || index >= variableCount) {
         throw std::runtime_error(std::string("fighter package script ") + label + " variable reference is invalid");
@@ -1725,6 +1738,7 @@ void validatePackageScriptInstruction(
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& scriptNames,
     const std::vector<std::string>& fighterScriptNames,
+    const std::vector<std::string>& objectScriptNames,
     const std::vector<std::string>& packageObjectNames,
     const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
@@ -1994,6 +2008,12 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script indexed object variable write is invalid");
         }
         break;
+    case PackageScriptOp::CallIndexedObjectScriptFromVar:
+        requireVariableIndex(instruction.srcA, variableCount, "object index source");
+        if ((!allowFighterContextReads && !allowObjectContextReads) || !hasName(objectScriptNames, instruction.text)) {
+            throw std::runtime_error("fighter package script indexed object script call is invalid");
+        }
+        break;
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:
         requireVariableIndex(instruction.dst, variableCount, "destination");
@@ -2200,6 +2220,7 @@ void validatePackageScripts(
     const std::vector<std::string>& fighterNames,
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& fighterScriptNames,
+    const std::vector<std::string>& objectScriptNames,
     const std::vector<std::string>& packageObjectNames,
     const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
@@ -2228,6 +2249,7 @@ void validatePackageScripts(
                 stateNames,
                 availableScriptNames,
                 fighterScriptNames,
+                objectScriptNames,
                 packageObjectNames,
                 packageObjects,
                 allowResolvableStateTargets,
@@ -2399,6 +2421,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     const std::vector<std::string> packageFighterNames = fighterNames(package);
     requireUniqueNonemptyNames(packageFighterNames, "fighter");
     const std::vector<std::string> packageFighterScriptNames = fighterScriptNames(package.fighters);
+    const std::vector<std::string> packageObjectScriptNames = objectScriptNames(package.objects);
     const std::vector<std::string> packageObjectNames = objectNames(package);
     requireUniqueNonemptyNames(packageObjectNames, "object");
     for (const FighterDefinition& fighter : package.fighters) {
@@ -2416,6 +2439,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageFighterNames,
             states,
             packageFighterScriptNames,
+            packageObjectScriptNames,
             packageObjectNames,
             package.objects,
             true,
@@ -2482,6 +2506,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             packageFighterNames,
             states,
             packageFighterScriptNames,
+            packageObjectScriptNames,
             packageObjectNames,
             package.objects,
             false,

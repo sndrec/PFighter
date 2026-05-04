@@ -7272,6 +7272,24 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetIndexedObjectVarFromVar:
                 setIndexedObjectVar(var(instruction.srcA), instruction.dst, var(instruction.srcB));
                 break;
+            case PackageScriptOp::CallIndexedObjectScriptFromVar: {
+                const int targetIndex = var(instruction.srcA);
+                if (targetIndex == static_cast<int>(objectIndex)) {
+                    const auto target = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
+                        return script.name == instruction.text;
+                    });
+                    ++frame.instructionIndex;
+                    if (target != def.packageScripts.end()) {
+                        scriptStack.push_back({&*target, 0});
+                    }
+                    continue;
+                }
+                if (validGameObjectIndex(world, targetIndex)) {
+                    runGameObjectPackageScript(world, targetIndex, instruction.text);
+                    return;
+                }
+                break;
+            }
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:
             case PackageScriptOp::SetVarStickX:
@@ -7544,6 +7562,13 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
     if (fn.name == "object_clear_fighter_reference") {
         clearGameObjectFighterReference(world, objectIndex, object.lastInteractionFighter);
     }
+}
+
+void runGameObjectPackageScript(World& world, int objectIndex, const std::string& scriptName) {
+    if (objectIndex < 0) {
+        return;
+    }
+    runGameObjectFunction(world, static_cast<size_t>(objectIndex), FunctionCall{"script:" + scriptName});
 }
 
 static void runGameObjectFunctions(World& world, size_t objectIndex, const std::vector<FunctionCall>& functions) {

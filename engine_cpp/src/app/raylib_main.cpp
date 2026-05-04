@@ -1202,6 +1202,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarIndexedObjectVar: return "IdxORead";
     case pf::PackageScriptOp::SetIndexedObjectVarImmediate: return "IdxOSet";
     case pf::PackageScriptOp::SetIndexedObjectVarFromVar: return "IdxOVar";
+    case pf::PackageScriptOp::CallIndexedObjectScriptFromVar: return "IdxOCall";
     }
     return "Op";
 }
@@ -1264,6 +1265,30 @@ static bool packageObjectExists(const pf::World& world, const std::string& objec
     return std::any_of(world.objectDefs.begin(), world.objectDefs.end(), [&](const pf::GameObjectDefinition& object) {
         return object.name == objectName;
     });
+}
+
+static bool packageObjectScriptExists(const pf::World& world, const std::string& scriptName) {
+    return std::any_of(world.objectDefs.begin(), world.objectDefs.end(), [&](const pf::GameObjectDefinition& object) {
+        return std::any_of(object.packageScripts.begin(), object.packageScripts.end(), [&](const pf::PackageScript& script) {
+            return script.name == scriptName;
+        });
+    });
+}
+
+static std::string packageObjectScriptTargetName(const pf::World& world, int selectedObjectDef) {
+    if (!world.objectDefs.empty()) {
+        const int selected = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        const pf::GameObjectDefinition& object = world.objectDefs[static_cast<size_t>(selected)];
+        if (!object.packageScripts.empty()) {
+            return object.packageScripts.front().name;
+        }
+    }
+    for (const pf::GameObjectDefinition& object : world.objectDefs) {
+        if (!object.packageScripts.empty()) {
+            return object.packageScripts.front().name;
+        }
+    }
+    return {};
 }
 
 static bool packageScriptOpIsSpawn(pf::PackageScriptOp op) {
@@ -1367,6 +1392,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarShieldBounceObjectFromVar:
     case pf::PackageScriptOp::SetVarInteractObjectFromVar:
     case pf::PackageScriptOp::SetVarInteractObjectsFromVars:
+    case pf::PackageScriptOp::CallIndexedObjectScriptFromVar:
         instruction.op = pf::PackageScriptOp::Nop;
         break;
     case pf::PackageScriptOp::SetVarImmediate:
@@ -1898,6 +1924,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetIndexedObjectVarFromVar:
         label += " object[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcB);
         break;
+    case pf::PackageScriptOp::CallIndexedObjectScriptFromVar:
+        label += " object[v" + std::to_string(instruction.srcA) + "].call " + instruction.text;
+        break;
     case pf::PackageScriptOp::Nop:
         break;
     }
@@ -2095,7 +2124,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetIndexedFighterVarFromVar: return pf::PackageScriptOp::SetVarIndexedObjectVar;
     case pf::PackageScriptOp::SetVarIndexedObjectVar: return pf::PackageScriptOp::SetIndexedObjectVarImmediate;
     case pf::PackageScriptOp::SetIndexedObjectVarImmediate: return pf::PackageScriptOp::SetIndexedObjectVarFromVar;
-    case pf::PackageScriptOp::SetIndexedObjectVarFromVar: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::SetIndexedObjectVarFromVar: return pf::PackageScriptOp::CallIndexedObjectScriptFromVar;
+    case pf::PackageScriptOp::CallIndexedObjectScriptFromVar: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
 }
@@ -2271,6 +2301,14 @@ static void normalizePackageInstruction(
     {
         instruction.text = packageScriptTargetName(def.packageScripts, 0);
     }
+    if (instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar &&
+        !packageObjectScriptExists(world, instruction.text))
+    {
+        instruction.text = packageObjectScriptTargetName(world, selectedObjectDef);
+        if (instruction.text.empty()) {
+            instruction.op = pf::PackageScriptOp::Nop;
+        }
+    }
     if (instruction.op == pf::PackageScriptOp::SetFighterCommandVarImmediate ||
         instruction.op == pf::PackageScriptOp::SetFighterCommandVarFromVar)
     {
@@ -2298,6 +2336,14 @@ static void normalizePackageInstruction(
          })))
     {
         instruction.text = packageScriptTargetName(def.packageScripts, 0);
+    }
+    if (instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar &&
+        !packageObjectScriptExists(world, instruction.text))
+    {
+        instruction.text = packageObjectScriptTargetName(world, selectedObjectDef);
+        if (instruction.text.empty()) {
+            instruction.op = pf::PackageScriptOp::Nop;
+        }
     }
     normalizePackageSpawnInstructionTarget(instruction, world, selectedObjectDef);
     normalizePackageObjectTargetInstruction(instruction, world, selectedObjectDef);
