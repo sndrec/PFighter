@@ -198,6 +198,36 @@ bool makeFighterEditorSessionTestWorld(
     FighterPackageDescriptor* descriptor = nullptr,
     std::string* error = nullptr);
 
+bool editorPackageFighterNameAvailable(
+    const FighterPackage& package,
+    const std::string& name,
+    int ignoredIndex = -1);
+std::string uniqueEditorPackageFighterName(
+    const FighterPackage& package,
+    const std::string& prefix);
+bool addEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    const FighterDefinition& fighter,
+    const std::string& requestedName = {},
+    int* addedFighterIndex = nullptr,
+    std::string* error = nullptr);
+bool duplicateEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& requestedName = {},
+    int* addedFighterIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& replacementFighterName = {},
+    std::string* error = nullptr);
+
 bool createEditorSessionState(
     FighterEditorSession& session,
     const std::string& requestedName = {},

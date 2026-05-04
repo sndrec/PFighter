@@ -6175,6 +6175,67 @@ int main(int argc, char** argv) {
             [](const pf::PackageScriptGraphLink& link) {
                 return link.fromSocket == 1;
             });
+    pf::FighterEditorSession editorFighterManagerSession = editorSession;
+    const int editorInitialPackageFighterCount = static_cast<int>(editorFighterManagerSession.package.fighters.size());
+    int editorDuplicatedFighterIndex = -1;
+    int editorImportedFighterIndex = -1;
+    int editorFighterTargetScriptIndex = -1;
+    int editorFighterTargetInstructionIndex = -1;
+    pf::PackageScriptInstruction editorFighterTargetInstruction;
+    editorFighterTargetInstruction.op = pf::PackageScriptOp::SpawnFighter;
+    editorFighterTargetInstruction.text = "SmokeAltCopy";
+    const bool editorSessionPackageFighterOk = editorSessionLoadBuildsGraphOk &&
+        editorInitialPackageFighterCount >= 2 &&
+        pf::duplicateEditorSessionPackageFighter(
+            editorFighterManagerSession,
+            1,
+            "SmokeAltCopy",
+            &editorDuplicatedFighterIndex,
+            &packageError) &&
+        editorDuplicatedFighterIndex == editorInitialPackageFighterCount &&
+        pf::addEditorSessionPackageScript(
+            editorFighterManagerSession,
+            "EditorFighterTargetScript",
+            8,
+            &editorFighterTargetScriptIndex,
+            &packageError) &&
+        pf::addEditorSessionPackageInstruction(
+            editorFighterManagerSession,
+            editorFighterTargetScriptIndex,
+            editorFighterTargetInstruction,
+            -1,
+            &editorFighterTargetInstructionIndex,
+            &packageError) &&
+        pf::renameEditorSessionPackageFighter(
+            editorFighterManagerSession,
+            editorDuplicatedFighterIndex,
+            "SmokeAltRenamed",
+            &packageError) &&
+        editorFighterManagerSession.rootFighter() &&
+        editorFighterManagerSession.rootFighter()->packageScripts[static_cast<size_t>(editorFighterTargetScriptIndex)]
+            .instructions[static_cast<size_t>(editorFighterTargetInstructionIndex)]
+            .text == "SmokeAltRenamed" &&
+        pf::addEditorSessionPackageFighter(
+            editorFighterManagerSession,
+            packageSourceWorld.fighterDefs[0],
+            "ImportedSmoke",
+            &editorImportedFighterIndex,
+            &packageError) &&
+        editorImportedFighterIndex == editorInitialPackageFighterCount + 1 &&
+        pf::removeEditorSessionPackageFighter(
+            editorFighterManagerSession,
+            editorImportedFighterIndex,
+            "SmokeAltRenamed",
+            &packageError) &&
+        pf::removeEditorSessionPackageFighter(
+            editorFighterManagerSession,
+            editorDuplicatedFighterIndex,
+            "SmokeAlt",
+            &packageError) &&
+        editorFighterManagerSession.package.fighters.size() == static_cast<size_t>(editorInitialPackageFighterCount) &&
+        editorFighterManagerSession.rootFighter()->packageScripts[static_cast<size_t>(editorFighterTargetScriptIndex)]
+            .instructions[static_cast<size_t>(editorFighterTargetInstructionIndex)]
+            .text == "SmokeAlt";
     int editorCreatedState = -1;
     const bool editorSessionCreateStateOk = editorSessionLoadBuildsGraphOk &&
         pf::createEditorSessionState(editorSession, "EditorSmokeState", 0, &editorCreatedState, &packageError) &&
@@ -8578,6 +8639,7 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_bytes_install_ok=" << runtimePackageBytesInstallOk
               << " fighter_editor_session_begin_ok=" << editorSessionBeginOk
               << " fighter_editor_session_load_builds_graph_ok=" << editorSessionLoadBuildsGraphOk
+              << " fighter_editor_session_package_fighter_ok=" << editorSessionPackageFighterOk
               << " fighter_editor_session_create_state_ok=" << editorSessionCreateStateOk
               << " fighter_editor_session_rename_state_ok=" << editorSessionRenameStateOk
               << " fighter_editor_session_remove_state_ok=" << editorSessionRemoveStateOk

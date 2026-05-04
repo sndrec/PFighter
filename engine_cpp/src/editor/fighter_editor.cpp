@@ -35,6 +35,27 @@ bool hasPackagedFighter(const std::vector<FighterDefinition>& fighters, const st
     });
 }
 
+void remapPackageFighterTargetRefs(FighterPackage& package, const std::string& oldName, const std::string& newName) {
+    for (FighterDefinition& fighter : package.fighters) {
+        for (PackageScript& script : fighter.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                if (packageScriptInstructionTargetsFighter(instruction) && instruction.text == oldName) {
+                    instruction.text = newName;
+                }
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                if (packageScriptInstructionTargetsFighter(instruction) && instruction.text == oldName) {
+                    instruction.text = newName;
+                }
+            }
+        }
+    }
+}
+
 std::vector<FighterDefinition> collectEditorPackageFighters(const World& world, const FighterDefinition& root) {
     std::vector<FighterDefinition> fighters;
     fighters.push_back(root);
@@ -2105,6 +2126,150 @@ bool makeFighterEditorSessionTestWorld(
     session.lastMessage = "OK";
     session.dirty = wasDirty;
     return true;
+}
+
+bool editorPackageFighterNameAvailable(const FighterPackage& package, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < package.fighters.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && package.fighters[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string uniqueEditorPackageFighterName(const FighterPackage& package, const std::string& prefix) {
+    if (editorPackageFighterNameAvailable(package, prefix)) {
+        return prefix;
+    }
+    for (int index = 1; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorPackageFighterNameAvailable(package, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+bool addEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    const FighterDefinition& fighter,
+    const std::string& requestedName,
+    int* addedFighterIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition added = fighter;
+    added.name = requestedName.empty()
+        ? uniqueEditorPackageFighterName(session.package, added.name.empty() ? "Fighter" : added.name)
+        : requestedName;
+    if (!editorPackageFighterNameAvailable(session.package, added.name)) {
+        setEditorError(error, "editor package fighter name is empty or already used");
+        return false;
+    }
+    for (PackageScript& script : added.packageScripts) {
+        if (script.graph.nodes.empty()) {
+            script.graph = makePackageScriptControlFlowGraph(script);
+        }
+    }
+    FighterPackage previous = session.package;
+    session.package.fighters.push_back(std::move(added));
+    collectEditorPackageAssets(session.package.fighters, session.package);
+    session.selectedFighter = static_cast<int>(session.package.fighters.size()) - 1;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedFighterIndex) {
+        *addedFighterIndex = session.selectedFighter;
+    }
+    return true;
+}
+
+bool duplicateEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& requestedName,
+    int* addedFighterIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    if (fighterIndex < 0 || fighterIndex >= static_cast<int>(session.package.fighters.size())) {
+        setEditorError(error, "editor package fighter index is invalid");
+        return false;
+    }
+    FighterDefinition copy = session.package.fighters[static_cast<size_t>(fighterIndex)];
+    const std::string name = requestedName.empty()
+        ? uniqueEditorPackageFighterName(session.package, copy.name + "Copy")
+        : requestedName;
+    return addEditorSessionPackageFighter(session, copy, name, addedFighterIndex, error);
+}
+
+bool renameEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    if (fighterIndex < 0 || fighterIndex >= static_cast<int>(session.package.fighters.size())) {
+        setEditorError(error, "editor package fighter index is invalid");
+        return false;
+    }
+    if (!editorPackageFighterNameAvailable(session.package, newName, fighterIndex)) {
+        setEditorError(error, "editor package fighter name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string oldName = session.package.fighters[static_cast<size_t>(fighterIndex)].name;
+    session.package.fighters[static_cast<size_t>(fighterIndex)].name = newName;
+    remapPackageFighterTargetRefs(session.package, oldName, newName);
+    session.selectedFighter = fighterIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionPackageFighter(
+    FighterEditorSession& session,
+    int fighterIndex,
+    const std::string& replacementFighterName,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    if (fighterIndex <= 0 || fighterIndex >= static_cast<int>(session.package.fighters.size())) {
+        setEditorError(error, "editor package fighter remove target is invalid");
+        return false;
+    }
+    const std::string removedName = session.package.fighters[static_cast<size_t>(fighterIndex)].name;
+    const std::string replacement = replacementFighterName.empty()
+        ? session.package.fighters.front().name
+        : replacementFighterName;
+    const auto replacementIt = std::find_if(
+        session.package.fighters.begin(),
+        session.package.fighters.end(),
+        [&](const FighterDefinition& fighter) {
+            return fighter.name == replacement;
+        });
+    if (replacement == removedName ||
+        replacementIt == session.package.fighters.end() ||
+        static_cast<int>(std::distance(session.package.fighters.begin(), replacementIt)) == fighterIndex)
+    {
+        setEditorError(error, "editor package fighter replacement is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    remapPackageFighterTargetRefs(session.package, removedName, replacement);
+    session.package.fighters.erase(session.package.fighters.begin() + fighterIndex);
+    session.selectedFighter = std::clamp(fighterIndex, 0, static_cast<int>(session.package.fighters.size()) - 1);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
 bool createEditorSessionState(
