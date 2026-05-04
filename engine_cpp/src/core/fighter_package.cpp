@@ -240,6 +240,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarObjectVelocityY:
     case PackageScriptOp::SetVarObjectAnimationFrame:
     case PackageScriptOp::SetVarObjectAnimationRate:
+    case PackageScriptOp::SetVarOwnedObjectCount:
     case PackageScriptOp::SetOwnerFighterVarImmediate:
     case PackageScriptOp::SetOwnerFighterVarFromVar:
     case PackageScriptOp::SetVarButtonDown:
@@ -1691,6 +1692,12 @@ void validatePackageScriptInstruction(
         requireVariableIndex(instruction.dst, variableCount, "destination");
         if (!allowObjectContextReads) {
             throw std::runtime_error("fighter package script object context read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetVarOwnedObjectCount:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!hasName(packageObjectNames, instruction.text)) {
+            throw std::runtime_error("fighter package script object target is invalid");
         }
         break;
     case PackageScriptOp::SetOwnerFighterVarImmediate:

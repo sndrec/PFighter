@@ -1097,6 +1097,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityY: return "ObjVelY";
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return "ObjAnimF";
     case pf::PackageScriptOp::SetVarObjectAnimationRate: return "ObjAnimR";
+    case pf::PackageScriptOp::SetVarOwnedObjectCount: return "OwnCnt";
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return "OwnSet";
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return "OwnVar";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
@@ -1207,6 +1208,11 @@ static bool packageScriptOpIsProjectileSpawn(pf::PackageScriptOp op) {
         op == pf::PackageScriptOp::SpawnProjectileFromVars;
 }
 
+static bool packageScriptOpTargetsAnyObject(pf::PackageScriptOp op) {
+    return op == pf::PackageScriptOp::SetVarOwnedObjectCount ||
+        op == pf::PackageScriptOp::DestroyOwnedObjects;
+}
+
 static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruction& instruction, int variableCount) {
     if (variableCount > 0) {
         return;
@@ -1265,6 +1271,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarObjectVelocityY:
     case pf::PackageScriptOp::SetVarObjectAnimationFrame:
     case pf::PackageScriptOp::SetVarObjectAnimationRate:
+    case pf::PackageScriptOp::SetVarOwnedObjectCount:
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
     case pf::PackageScriptOp::SetVarButtonDown:
@@ -1280,6 +1287,25 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     default:
         break;
+    }
+}
+
+static void normalizePackageObjectTargetInstruction(
+    pf::PackageScriptInstruction& instruction,
+    const pf::World& world,
+    int selectedObjectDef)
+{
+    if (!packageScriptOpTargetsAnyObject(instruction.op)) {
+        return;
+    }
+    if (world.objectDefs.empty()) {
+        instruction.op = pf::PackageScriptOp::Nop;
+        instruction.text.clear();
+        return;
+    }
+    if (!packageObjectExists(world, instruction.text)) {
+        const int objectIndex = std::clamp(selectedObjectDef, 0, static_cast<int>(world.objectDefs.size()) - 1);
+        instruction.text = world.objectDefs[static_cast<size_t>(objectIndex)].name;
     }
 }
 
@@ -1472,6 +1498,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarObjectAnimationRate:
         label += " v" + std::to_string(instruction.dst);
         break;
+    case pf::PackageScriptOp::SetVarOwnedObjectCount:
+        label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
+        break;
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
         label += " owner v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
         break;
@@ -1646,7 +1675,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterAirVelocityX: return pf::PackageScriptOp::SetVarFighterAirVelocityY;
     case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarFighterAnimationFrame;
     case pf::PackageScriptOp::SetVarFighterAnimationFrame: return pf::PackageScriptOp::SetVarFighterAnimationRate;
-    case pf::PackageScriptOp::SetVarFighterAnimationRate: return pf::PackageScriptOp::SetVarButtonDown;
+    case pf::PackageScriptOp::SetVarFighterAnimationRate: return pf::PackageScriptOp::SetVarOwnedObjectCount;
+    case pf::PackageScriptOp::SetVarOwnedObjectCount: return pf::PackageScriptOp::SetVarButtonDown;
     case pf::PackageScriptOp::SetVarButtonDown: return pf::PackageScriptOp::SetVarButtonPressed;
     case pf::PackageScriptOp::SetVarButtonPressed: return pf::PackageScriptOp::SetVarStickX;
     case pf::PackageScriptOp::SetVarStickX: return pf::PackageScriptOp::SetVarStickY;
@@ -1715,7 +1745,8 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityX: return pf::PackageScriptOp::SetVarObjectVelocityY;
     case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectAnimationFrame;
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return pf::PackageScriptOp::SetVarObjectAnimationRate;
-    case pf::PackageScriptOp::SetVarObjectAnimationRate: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
+    case pf::PackageScriptOp::SetVarObjectAnimationRate: return pf::PackageScriptOp::SetVarOwnedObjectCount;
+    case pf::PackageScriptOp::SetVarOwnedObjectCount: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return pf::PackageScriptOp::SetOwnerFighterVarFromVar;
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
@@ -1796,6 +1827,7 @@ static void normalizePackageInstruction(
         instruction.text = packageScriptTargetName(def.packageScripts, 0);
     }
     normalizePackageSpawnInstructionTarget(instruction, world, selectedObjectDef);
+    normalizePackageObjectTargetInstruction(instruction, world, selectedObjectDef);
     if (instruction.op == pf::PackageScriptOp::SwitchFighterDefinition && instruction.text.empty() && !world.fighterDefs.empty()) {
         instruction.text = packageFighterTargetName(world, currentFighterDef);
     }
@@ -1839,6 +1871,7 @@ static void normalizeObjectPackageInstruction(
         instruction.text = packageScriptTargetName(def.packageScripts, 0);
     }
     normalizePackageSpawnInstructionTarget(instruction, world, selectedObjectDef);
+    normalizePackageObjectTargetInstruction(instruction, world, selectedObjectDef);
 }
 
 static void remapRemovedPackageVariableRef(int& ref, int removedIndex, int variableCountAfterRemove) {
@@ -1994,7 +2027,8 @@ static void remapRemovedObjectScriptTarget(
     if ((instruction.op != pf::PackageScriptOp::SpawnObject &&
          instruction.op != pf::PackageScriptOp::SpawnObjectFromVars &&
          instruction.op != pf::PackageScriptOp::SpawnProjectile &&
-         instruction.op != pf::PackageScriptOp::SpawnProjectileFromVars) ||
+         instruction.op != pf::PackageScriptOp::SpawnProjectileFromVars &&
+         !packageScriptOpTargetsAnyObject(instruction.op)) ||
         instruction.text != removedObjectName)
     {
         return;

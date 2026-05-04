@@ -1271,6 +1271,24 @@ int spawnGameObjectOfKind(
     return spawnGameObject(world, objectName, ownerFighter, position, facing, velocity);
 }
 
+int countGameObjectsOwnedBy(const World& world, int ownerFighter, const std::string& objectName) {
+    if (ownerFighter < 0 || objectName.empty()) {
+        return 0;
+    }
+    int count = 0;
+    for (const GameObjectRuntime& object : world.objects) {
+        if (!object.active || object.ownerFighter != ownerFighter ||
+            object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size()))
+        {
+            continue;
+        }
+        if (world.objectDefs[static_cast<size_t>(object.objectDef)].name == objectName) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {
     if (ownerFighter < 0 || objectName.empty()) {
         return 0;
@@ -7023,6 +7041,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetVarObjectAnimationRate:
                 setVar(instruction.dst, object.animationRate);
+                break;
+            case PackageScriptOp::SetVarOwnedObjectCount:
+                setVar(instruction.dst, countGameObjectsOwnedBy(world, object.ownerFighter, instruction.text));
                 break;
             case PackageScriptOp::SetOwnerFighterVarImmediate:
                 setOwnerFighterVar(instruction.dst, instruction.intValue);

@@ -2661,6 +2661,12 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetOwnerFighterVarImmediate:
         case PackageScriptOp::SetOwnerFighterVarFromVar:
             break;
+        case PackageScriptOp::SetVarOwnedObjectCount:
+            setPackageVar(fighter, instruction.dst, countGameObjectsOwnedBy(
+                world,
+                static_cast<int>(&fighter - world.fighters.data()),
+                instruction.text));
+            break;
         case PackageScriptOp::SetVarButtonDown:
             setPackageVar(fighter, instruction.dst, (fighter.input.frames[0].buttons & instruction.intValue) != 0 ? 1 : 0);
             break;
