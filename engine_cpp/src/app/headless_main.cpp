@@ -4898,11 +4898,24 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarInteractObjectFromVar, 49, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarAbsorbObjectFromVar, 47, 1, -1, 0, 0, {}},
         },
+    }, {
+        "IndexedFighterCallScript",
+        8,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::CallIndexedFighterScriptFromVar, -1, 0, -1, 0, 0, "CompanionTargetScript"},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
     packageAltFighter.packageVariables = {{"AltSmokeVar", 42}};
-    packageAltFighter.packageScripts.clear();
+    packageAltFighter.packageScripts = {{
+        "CompanionTargetScript",
+        4,
+        {
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 31, 0, {}},
+        },
+    }};
     packageSourceWorld.objectDefs[1].packageVariables = {
         {"ObjectSmokeVar", 2},
         {"ObjectFrameVar", 0},
@@ -5437,6 +5450,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidIndexedFighterPositionWritePackage = sourcePackage;
     invalidIndexedFighterPositionWritePackage.fighters[0].packageScripts[18].instructions[13].srcB = 999;
     const bool invalidPackageIndexedFighterPositionWriteRejected = pf::writeFighterPackage(invalidIndexedFighterPositionWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidIndexedFighterCallWritePackage = sourcePackage;
+    invalidIndexedFighterCallWritePackage.fighters[0].packageScripts[20].instructions[1].text = "MissingScript";
+    const bool invalidPackageIndexedFighterCallWriteRejected = pf::writeFighterPackage(invalidIndexedFighterCallWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidSpawnObjectStoreTargetWritePackage = sourcePackage;
     invalidSpawnObjectStoreTargetWritePackage.fighters[0].packageScripts[19].instructions[0].text = "MissingObject";
     const bool invalidPackageSpawnObjectStoreTargetWriteRejected = pf::writeFighterPackage(invalidSpawnObjectStoreTargetWritePackage, &invalidPackageError).empty();
@@ -5768,7 +5784,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 59 &&
-        loadedPackage.fighters[0].packageScripts.size() == 20 &&
+        loadedPackage.fighters[0].packageScripts.size() == 21 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 45 &&
@@ -6443,6 +6459,23 @@ int main(int argc, char** argv) {
         packageIndexedFighterTargetPosition.x == pf::fxFromFloat(1.25f) &&
         packageIndexedFighterTargetPosition.y == pf::fxFromFloat(2.5f) &&
         packageIndexedFighterTargetFacing == -1;
+    pf::World packageIndexedFighterCallScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageIndexedFighterCallScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageIndexedFighterCallScriptWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
+        pf::spawnFighter(packageIndexedFighterCallScriptWorld, "SmokeAlt", {pf::fx(2), 0}, -1);
+        pf::runPackageScript(
+            packageIndexedFighterCallScriptWorld,
+            packageIndexedFighterCallScriptWorld.fighters[0],
+            "IndexedFighterCallScript");
+    }
+    const int packageIndexedFighterCallTargetVar =
+        packageIndexedFighterCallScriptWorld.fighters.size() > 2 &&
+            !packageIndexedFighterCallScriptWorld.fighters[2].packageVars.empty()
+        ? packageIndexedFighterCallScriptWorld.fighters[2].packageVars[0]
+        : -1;
+    const bool packageIndexedFighterCallScriptOk = packageShapeOk &&
+        packageIndexedFighterCallTargetVar == 73;
     pf::World packageDestroyOwnedScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageDestroyOwnedScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -7052,6 +7085,8 @@ int main(int argc, char** argv) {
               << " fighter_package_script_indexed_fighter_target_state=" << packageIndexedFighterTargetState
               << " fighter_package_script_indexed_fighter_target_pos=" << pf::toString(packageIndexedFighterTargetPosition)
               << " fighter_package_script_indexed_fighter_target_facing=" << packageIndexedFighterTargetFacing
+              << " fighter_package_script_indexed_fighter_call_ok=" << packageIndexedFighterCallScriptOk
+              << " fighter_package_script_indexed_fighter_call_target_var=" << packageIndexedFighterCallTargetVar
               << " fighter_package_script_destroy_owned_ok=" << packageDestroyOwnedScriptOk
               << " fighter_package_script_destroy_owned_velocity_count=" << packageDestroyOwnedVelocityCount
               << " fighter_package_script_destroy_owned_projectile_count=" << packageDestroyOwnedProjectileCount
@@ -7191,6 +7226,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_indexed_fighter_var_write_rejected=" << invalidPackageIndexedFighterVarWriteRejected
               << " fighter_package_invalid_indexed_fighter_var_from_var_write_rejected=" << invalidPackageIndexedFighterVarFromVarWriteRejected
               << " fighter_package_invalid_indexed_fighter_position_write_rejected=" << invalidPackageIndexedFighterPositionWriteRejected
+              << " fighter_package_invalid_indexed_fighter_call_write_rejected=" << invalidPackageIndexedFighterCallWriteRejected
               << " fighter_package_invalid_indexed_object_var_read_rejected=" << invalidPackageIndexedObjectVarReadRejected
               << " fighter_package_invalid_indexed_object_var_write_rejected=" << invalidPackageIndexedObjectVarWriteRejected
               << " fighter_package_invalid_indexed_object_var_from_var_write_rejected=" << invalidPackageIndexedObjectVarFromVarWriteRejected

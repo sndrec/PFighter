@@ -331,6 +331,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetAnimationFrame:
     case PackageScriptOp::SetAnimationFrameFromVar:
     case PackageScriptOp::SpawnFighterSetVar:
+    case PackageScriptOp::CallIndexedFighterScriptFromVar:
     case PackageScriptOp::SetVarIndexedFighterStateIndex:
     case PackageScriptOp::SetVarIndexedFighterPositionX:
     case PackageScriptOp::SetVarIndexedFighterPositionY:
@@ -1698,6 +1699,18 @@ std::vector<std::string> scriptNames(const std::vector<PackageScript>& scripts) 
     return names;
 }
 
+std::vector<std::string> fighterScriptNames(const std::vector<FighterDefinition>& fighters) {
+    std::vector<std::string> names;
+    for (const FighterDefinition& fighter : fighters) {
+        for (const PackageScript& script : fighter.packageScripts) {
+            if (!hasName(names, script.name)) {
+                names.push_back(script.name);
+            }
+        }
+    }
+    return names;
+}
+
 void requireVariableIndex(int index, int variableCount, const char* label) {
     if (index < 0 || index >= variableCount) {
         throw std::runtime_error(std::string("fighter package script ") + label + " variable reference is invalid");
@@ -1710,6 +1723,7 @@ void validatePackageScriptInstruction(
     const std::vector<std::string>& fighterNames,
     const std::vector<std::string>& stateNames,
     const std::vector<std::string>& scriptNames,
+    const std::vector<std::string>& fighterScriptNames,
     const std::vector<std::string>& packageObjectNames,
     const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
@@ -1911,6 +1925,12 @@ void validatePackageScriptInstruction(
             (instruction.op == PackageScriptOp::SetVarIndexedFighterVar && instruction.intValue < 0))
         {
             throw std::runtime_error("fighter package script indexed fighter variable read is invalid");
+        }
+        break;
+    case PackageScriptOp::CallIndexedFighterScriptFromVar:
+        requireVariableIndex(instruction.srcA, variableCount, "fighter index source");
+        if (!allowFighterContextReads || allowObjectContextReads || !hasName(fighterScriptNames, instruction.text)) {
+            throw std::runtime_error("fighter package script indexed fighter script call is invalid");
         }
         break;
     case PackageScriptOp::SetIndexedFighterStateFromVar:
@@ -2173,6 +2193,7 @@ void validatePackageScripts(
     int variableCount,
     const std::vector<std::string>& fighterNames,
     const std::vector<std::string>& stateNames,
+    const std::vector<std::string>& fighterScriptNames,
     const std::vector<std::string>& packageObjectNames,
     const std::vector<GameObjectDefinition>& packageObjects,
     bool allowResolvableStateTargets,
@@ -2200,6 +2221,7 @@ void validatePackageScripts(
                 fighterNames,
                 stateNames,
                 availableScriptNames,
+                fighterScriptNames,
                 packageObjectNames,
                 packageObjects,
                 allowResolvableStateTargets,
@@ -2370,6 +2392,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     }
     const std::vector<std::string> packageFighterNames = fighterNames(package);
     requireUniqueNonemptyNames(packageFighterNames, "fighter");
+    const std::vector<std::string> packageFighterScriptNames = fighterScriptNames(package.fighters);
     const std::vector<std::string> packageObjectNames = objectNames(package);
     requireUniqueNonemptyNames(packageObjectNames, "object");
     for (const FighterDefinition& fighter : package.fighters) {
@@ -2386,6 +2409,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             static_cast<int>(fighter.packageVariables.size()),
             packageFighterNames,
             states,
+            packageFighterScriptNames,
             packageObjectNames,
             package.objects,
             true,
@@ -2451,6 +2475,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             static_cast<int>(object.packageVariables.size()),
             packageFighterNames,
             states,
+            packageFighterScriptNames,
             packageObjectNames,
             package.objects,
             false,

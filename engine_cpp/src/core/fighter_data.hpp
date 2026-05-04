@@ -547,6 +547,7 @@ enum class PackageScriptOp : uint8_t {
     SetAnimationFrame,
     SetAnimationFrameFromVar,
     SpawnFighterSetVar,
+    CallIndexedFighterScriptFromVar,
     SetVarIndexedFighterStateIndex,
     SetVarIndexedFighterPositionX,
     SetVarIndexedFighterPositionY,

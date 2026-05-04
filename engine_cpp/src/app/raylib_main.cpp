@@ -1188,6 +1188,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
     case pf::PackageScriptOp::SpawnFighter: return "SpawnF";
     case pf::PackageScriptOp::SpawnFighterSetVar: return "SpawnFV";
+    case pf::PackageScriptOp::CallIndexedFighterScriptFromVar: return "IdxFCall";
     case pf::PackageScriptOp::SetVarIndexedFighterStateIndex: return "IdxFSt";
     case pf::PackageScriptOp::SetVarIndexedFighterPositionX: return "IdxFX";
     case pf::PackageScriptOp::SetVarIndexedFighterPositionY: return "IdxFY";
@@ -1421,6 +1422,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
     case pf::PackageScriptOp::SetVarIndexedFighterVar:
+    case pf::PackageScriptOp::CallIndexedFighterScriptFromVar:
     case pf::PackageScriptOp::SetVarIndexedFighterStateIndex:
     case pf::PackageScriptOp::SetVarIndexedFighterPositionX:
     case pf::PackageScriptOp::SetVarIndexedFighterPositionY:
@@ -1852,6 +1854,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SpawnFighterSetVar:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
+    case pf::PackageScriptOp::CallIndexedFighterScriptFromVar:
+        label += " fighter[v" + std::to_string(instruction.srcA) + "].call " + instruction.text;
+        break;
     case pf::PackageScriptOp::SetVarIndexedFighterStateIndex:
         label += " v" + std::to_string(instruction.dst) + " = fighter[v" + std::to_string(instruction.srcA) + "].state";
         break;
@@ -2072,7 +2077,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::CallScript: return pf::PackageScriptOp::SwitchFighterDefinition;
     case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::SpawnFighter;
     case pf::PackageScriptOp::SpawnFighter: return pf::PackageScriptOp::SpawnFighterSetVar;
-    case pf::PackageScriptOp::SpawnFighterSetVar: return pf::PackageScriptOp::SetVarIndexedFighterStateIndex;
+    case pf::PackageScriptOp::SpawnFighterSetVar: return pf::PackageScriptOp::CallIndexedFighterScriptFromVar;
+    case pf::PackageScriptOp::CallIndexedFighterScriptFromVar: return pf::PackageScriptOp::SetVarIndexedFighterStateIndex;
     case pf::PackageScriptOp::SetVarIndexedFighterStateIndex: return pf::PackageScriptOp::SetVarIndexedFighterPositionX;
     case pf::PackageScriptOp::SetVarIndexedFighterPositionX: return pf::PackageScriptOp::SetVarIndexedFighterPositionY;
     case pf::PackageScriptOp::SetVarIndexedFighterPositionY: return pf::PackageScriptOp::SetIndexedFighterStateFromVar;
@@ -2093,6 +2099,7 @@ static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
     return op != pf::PackageScriptOp::SwitchFighterDefinition &&
         op != pf::PackageScriptOp::SpawnFighter &&
         op != pf::PackageScriptOp::SpawnFighterSetVar &&
+        op != pf::PackageScriptOp::CallIndexedFighterScriptFromVar &&
         op != pf::PackageScriptOp::SetVarIndexedFighterStateIndex &&
         op != pf::PackageScriptOp::SetVarIndexedFighterPositionX &&
         op != pf::PackageScriptOp::SetVarIndexedFighterPositionY &&
@@ -2249,6 +2256,13 @@ static void normalizePackageInstruction(
     }
     if (instruction.op == pf::PackageScriptOp::SetVarFighterThrowFlag) {
         instruction.intValue = std::clamp(instruction.intValue, 0, 31);
+    }
+    if (instruction.op == pf::PackageScriptOp::CallIndexedFighterScriptFromVar &&
+        !std::any_of(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
+            return script.name == instruction.text;
+        }))
+    {
+        instruction.text = packageScriptTargetName(def.packageScripts, 0);
     }
     if (instruction.op == pf::PackageScriptOp::SetFighterCommandVarImmediate ||
         instruction.op == pf::PackageScriptOp::SetFighterCommandVarFromVar)

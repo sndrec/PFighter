@@ -7475,6 +7475,7 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SpawnFighter:
             case PackageScriptOp::SpawnFighterSetVar:
             case PackageScriptOp::SetVarIndexedFighterVar:
+            case PackageScriptOp::CallIndexedFighterScriptFromVar:
             case PackageScriptOp::SetVarIndexedFighterStateIndex:
             case PackageScriptOp::SetVarIndexedFighterPositionX:
             case PackageScriptOp::SetVarIndexedFighterPositionY:

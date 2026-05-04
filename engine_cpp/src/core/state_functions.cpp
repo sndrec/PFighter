@@ -2769,6 +2769,26 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
                 instruction.dst,
                 packageVar(fighter, instruction.srcB));
             break;
+        case PackageScriptOp::CallIndexedFighterScriptFromVar: {
+            const int targetIndex = packageVar(fighter, instruction.srcA);
+            const int currentIndex = static_cast<int>(&fighter - world.fighters.data());
+            if (targetIndex == currentIndex) {
+                const auto target = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
+                    return script.name == instruction.text;
+                });
+                ++frame.instructionIndex;
+                if (target != def.packageScripts.end()) {
+                    scriptStack.push_back({&*target, 0});
+                }
+                continue;
+            }
+            FighterRuntime* target = indexedFighter(targetIndex);
+            if (target) {
+                runPackageScript(world, *target, instruction.text);
+                return;
+            }
+            break;
+        }
         case PackageScriptOp::SetVarIndexedFighterStateIndex: {
             const FighterRuntime* target = indexedFighter(packageVar(fighter, instruction.srcA));
             setPackageVar(fighter, instruction.dst, target ? target->state : -1);
