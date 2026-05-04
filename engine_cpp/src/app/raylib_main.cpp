@@ -1108,6 +1108,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return "ObjAnimF";
     case pf::PackageScriptOp::SetVarObjectAnimationRate: return "ObjAnimR";
     case pf::PackageScriptOp::SetVarOwnedObjectCount: return "OwnCnt";
+    case pf::PackageScriptOp::SetVarOwnerFighterVar: return "OwnRead";
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return "OwnSet";
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return "OwnVar";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
@@ -1305,6 +1306,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarObjectAnimationFrame:
     case pf::PackageScriptOp::SetVarObjectAnimationRate:
     case pf::PackageScriptOp::SetVarOwnedObjectCount:
+    case pf::PackageScriptOp::SetVarOwnerFighterVar:
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
     case pf::PackageScriptOp::SetVarButtonDown:
@@ -1548,6 +1550,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         break;
     case pf::PackageScriptOp::SetVarOwnedObjectCount:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
+        break;
+    case pf::PackageScriptOp::SetVarOwnerFighterVar:
+        label += " v" + std::to_string(instruction.dst) + " owner v" + std::to_string(instruction.intValue);
         break;
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
         label += " owner v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
@@ -1821,7 +1826,8 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectAnimationFrame;
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return pf::PackageScriptOp::SetVarObjectAnimationRate;
     case pf::PackageScriptOp::SetVarObjectAnimationRate: return pf::PackageScriptOp::SetVarOwnedObjectCount;
-    case pf::PackageScriptOp::SetVarOwnedObjectCount: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
+    case pf::PackageScriptOp::SetVarOwnedObjectCount: return pf::PackageScriptOp::SetVarOwnerFighterVar;
+    case pf::PackageScriptOp::SetVarOwnerFighterVar: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return pf::PackageScriptOp::SetOwnerFighterVarFromVar;
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
