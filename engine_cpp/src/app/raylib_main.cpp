@@ -1164,6 +1164,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnProjectileFromVars: return "ProjV";
     case pf::PackageScriptOp::SpawnObjectSetVar: return "SpawnSV";
     case pf::PackageScriptOp::SpawnProjectileSetVar: return "ProjSV";
+    case pf::PackageScriptOp::SpawnObjectFromVarsSetVar: return "SpawnVSV";
+    case pf::PackageScriptOp::SpawnProjectileFromVarsSetVar: return "ProjVSV";
     case pf::PackageScriptOp::DestroyObject: return "KillObj";
     case pf::PackageScriptOp::DestroyOwnedObjects: return "KillOwn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
@@ -1251,13 +1253,16 @@ static bool packageScriptOpIsSpawn(pf::PackageScriptOp op) {
         op == pf::PackageScriptOp::SpawnProjectile ||
         op == pf::PackageScriptOp::SpawnProjectileFromVars ||
         op == pf::PackageScriptOp::SpawnObjectSetVar ||
-        op == pf::PackageScriptOp::SpawnProjectileSetVar;
+        op == pf::PackageScriptOp::SpawnProjectileSetVar ||
+        op == pf::PackageScriptOp::SpawnObjectFromVarsSetVar ||
+        op == pf::PackageScriptOp::SpawnProjectileFromVarsSetVar;
 }
 
 static bool packageScriptOpIsProjectileSpawn(pf::PackageScriptOp op) {
     return op == pf::PackageScriptOp::SpawnProjectile ||
         op == pf::PackageScriptOp::SpawnProjectileFromVars ||
-        op == pf::PackageScriptOp::SpawnProjectileSetVar;
+        op == pf::PackageScriptOp::SpawnProjectileSetVar ||
+        op == pf::PackageScriptOp::SpawnProjectileFromVarsSetVar;
 }
 
 static bool packageScriptOpTargetsAnyObject(pf::PackageScriptOp op) {
@@ -1326,6 +1331,12 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         instruction.op = pf::PackageScriptOp::SpawnObject;
         break;
     case pf::PackageScriptOp::SpawnProjectileSetVar:
+        instruction.op = pf::PackageScriptOp::SpawnProjectile;
+        break;
+    case pf::PackageScriptOp::SpawnObjectFromVarsSetVar:
+        instruction.op = pf::PackageScriptOp::SpawnObject;
+        break;
+    case pf::PackageScriptOp::SpawnProjectileFromVarsSetVar:
         instruction.op = pf::PackageScriptOp::SpawnProjectile;
         break;
     case pf::PackageScriptOp::SetVarImmediate:
@@ -1447,9 +1458,15 @@ static void normalizePackageSpawnInstructionTarget(
             return;
         }
 
-        instruction.op = instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars
-            ? pf::PackageScriptOp::SpawnObjectFromVars
-            : pf::PackageScriptOp::SpawnObject;
+        if (instruction.op == pf::PackageScriptOp::SpawnProjectileFromVars) {
+            instruction.op = pf::PackageScriptOp::SpawnObjectFromVars;
+        } else if (instruction.op == pf::PackageScriptOp::SpawnProjectileFromVarsSetVar) {
+            instruction.op = pf::PackageScriptOp::SpawnObjectFromVarsSetVar;
+        } else if (instruction.op == pf::PackageScriptOp::SpawnProjectileSetVar) {
+            instruction.op = pf::PackageScriptOp::SpawnObjectSetVar;
+        } else {
+            instruction.op = pf::PackageScriptOp::SpawnObject;
+        }
     }
 
     if (!packageObjectExists(world, instruction.text)) {
@@ -1733,6 +1750,11 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SpawnProjectileSetVar:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
+    case pf::PackageScriptOp::SpawnObjectFromVarsSetVar:
+    case pf::PackageScriptOp::SpawnProjectileFromVarsSetVar:
+        label += " v" + std::to_string(instruction.dst) + " " + instruction.text +
+            " v" + std::to_string(instruction.srcA) + "/v" + std::to_string(instruction.srcB);
+        break;
     case pf::PackageScriptOp::DestroyObject:
         break;
     case pf::PackageScriptOp::DestroyOwnedObjects:
@@ -1944,7 +1966,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnProjectile: return pf::PackageScriptOp::SpawnProjectileFromVars;
     case pf::PackageScriptOp::SpawnProjectileFromVars: return pf::PackageScriptOp::SpawnObjectSetVar;
     case pf::PackageScriptOp::SpawnObjectSetVar: return pf::PackageScriptOp::SpawnProjectileSetVar;
-    case pf::PackageScriptOp::SpawnProjectileSetVar: return pf::PackageScriptOp::DestroyOwnedObjects;
+    case pf::PackageScriptOp::SpawnProjectileSetVar: return pf::PackageScriptOp::SpawnObjectFromVarsSetVar;
+    case pf::PackageScriptOp::SpawnObjectFromVarsSetVar: return pf::PackageScriptOp::SpawnProjectileFromVarsSetVar;
+    case pf::PackageScriptOp::SpawnProjectileFromVarsSetVar: return pf::PackageScriptOp::DestroyOwnedObjects;
     case pf::PackageScriptOp::DestroyObject: return pf::PackageScriptOp::DestroyOwnedObjects;
     case pf::PackageScriptOp::DestroyOwnedObjects: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;

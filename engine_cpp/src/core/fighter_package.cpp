@@ -303,6 +303,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SpawnProjectileFromVars:
     case PackageScriptOp::SpawnObjectSetVar:
     case PackageScriptOp::SpawnProjectileSetVar:
+    case PackageScriptOp::SpawnObjectFromVarsSetVar:
+    case PackageScriptOp::SpawnProjectileFromVarsSetVar:
     case PackageScriptOp::DestroyObject:
     case PackageScriptOp::DestroyOwnedObjects:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
@@ -2001,6 +2003,22 @@ void validatePackageScriptInstruction(
         break;
     case PackageScriptOp::SpawnProjectileSetVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!objectHasKind(packageObjects, instruction.text, GameObjectKind::Projectile)) {
+            throw std::runtime_error("fighter package script projectile target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnObjectFromVarsSetVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
+        if (!hasName(packageObjectNames, instruction.text)) {
+            throw std::runtime_error("fighter package script object target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnProjectileFromVarsSetVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
         if (!objectHasKind(packageObjects, instruction.text, GameObjectKind::Projectile)) {
             throw std::runtime_error("fighter package script projectile target is invalid");
         }
