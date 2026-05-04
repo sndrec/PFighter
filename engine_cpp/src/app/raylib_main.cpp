@@ -7552,6 +7552,15 @@ static const char* editorSelectionKindName(pf::FighterEditorSelectionKind kind) 
     return "State";
 }
 
+static const char* packageScriptGraphNodeKindName(pf::PackageScriptGraphNodeKind kind) {
+    switch (kind) {
+    case pf::PackageScriptGraphNodeKind::Entry: return "Entry";
+    case pf::PackageScriptGraphNodeKind::Instruction: return "Instruction";
+    case pf::PackageScriptGraphNodeKind::Comment: return "Comment";
+    }
+    return "Node";
+}
+
 static const char* editorStateGroupFilterName(pf::FighterEditorStateGroupFilter filter) {
     switch (filter) {
     case pf::FighterEditorStateGroupFilter::All: return "All";
@@ -11040,6 +11049,83 @@ static void drawEditorInspectorWorkstation(
             }
             editor.status = "Editor: script budget failed: " + error;
         }
+        auto selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+            return node.id == editor.selectedPackageGraphNode;
+        });
+        if (selectedGraphNodeIt == script.graph.nodes.end() && !script.graph.nodes.empty()) {
+            editor.selectedPackageGraphNode = script.graph.entryNode >= 0 ? script.graph.entryNode : script.graph.nodes.front().id;
+            selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                return node.id == editor.selectedPackageGraphNode;
+            });
+        }
+        const float graphNodeY = rect.y + 114.0f;
+        if (selectedGraphNodeIt != script.graph.nodes.end()) {
+            const pf::PackageScriptGraphNode& graphNode = *selectedGraphNodeIt;
+            const std::string graphNodeLabel = "Graph node #" + std::to_string(graphNode.id) + " " +
+                packageScriptGraphNodeKindName(graphNode.kind) +
+                (graphNode.kind == pf::PackageScriptGraphNodeKind::Instruction
+                    ? " inst=" + std::to_string(graphNode.instructionIndex)
+                    : "");
+            DrawText(clippedText(graphNodeLabel, 11, rect.width - 20.0f).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(graphNodeY),
+                11,
+                RAYWHITE);
+            DrawText(("pos=(" + std::to_string(pf::fxToFloat(graphNode.position.x)) +
+                      ", " + std::to_string(pf::fxToFloat(graphNode.position.y)) + ")").c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(graphNodeY + 18.0f),
+                10,
+                Fade(RAYWHITE, 0.66f));
+            auto commitGraphNode = [&](pf::PackageScriptGraphNode edited, const std::string& message) -> bool {
+                std::string error;
+                if (pf::setEditorSessionPackageScriptGraphNode(session, editor.selectedPackageScript, edited.id, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+                editor.status = "Editor: graph node edit failed: " + error;
+                return false;
+            };
+            pf::PackageScriptGraphNode editedGraphNode = graphNode;
+            const float graphNodeButtonY = graphNodeY + 36.0f;
+            if (uiButton({rect.x + 10.0f, graphNodeButtonY, 38.0f, 22.0f}, "X-")) {
+                editedGraphNode.position.x -= pf::fx(16);
+                if (commitGraphNode(editedGraphNode, "Editor: moved graph node left")) return;
+            }
+            if (uiButton({rect.x + 54.0f, graphNodeButtonY, 38.0f, 22.0f}, "X+")) {
+                editedGraphNode.position.x += pf::fx(16);
+                if (commitGraphNode(editedGraphNode, "Editor: moved graph node right")) return;
+            }
+            if (uiButton({rect.x + 98.0f, graphNodeButtonY, 38.0f, 22.0f}, "Y-")) {
+                editedGraphNode.position.y -= pf::fx(16);
+                if (commitGraphNode(editedGraphNode, "Editor: moved graph node up")) return;
+            }
+            if (uiButton({rect.x + 142.0f, graphNodeButtonY, 38.0f, 22.0f}, "Y+")) {
+                editedGraphNode.position.y += pf::fx(16);
+                if (commitGraphNode(editedGraphNode, "Editor: moved graph node down")) return;
+            }
+            if (graphNode.kind == pf::PackageScriptGraphNodeKind::Instruction &&
+                graphNode.instructionIndex >= 0 &&
+                graphNode.instructionIndex < static_cast<int>(script.instructions.size()) &&
+                uiButton({rect.x + 188.0f, graphNodeButtonY, 62.0f, 22.0f}, "UseInst"))
+            {
+                editor.selectedPackageInstruction = graphNode.instructionIndex;
+                session.selectedPackageInstruction = graphNode.instructionIndex;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                return;
+            }
+            std::string renamedGraphNode;
+            if (uiTextField({rect.x + 256.0f, graphNodeButtonY, rect.width - 266.0f, 22.0f},
+                    "workstation-graph-node-label",
+                    editor,
+                    graphNode.label,
+                    renamedGraphNode,
+                    48))
+            {
+                editedGraphNode.label = renamedGraphNode;
+                if (commitGraphNode(editedGraphNode, "Editor: renamed graph node label")) return;
+            }
+        }
         auto bindSlot = [&](pf::FighterEditorStateCallbackSlot slot, const char* label) -> bool {
             std::string error;
             if (pf::bindEditorSessionPackageScriptCallback(session, session.selectedState, slot, script.name, &error)) {
@@ -11049,7 +11135,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: callback bind failed: " + error;
             return false;
         };
-        const float bindY = rect.y + 114.0f;
+        const float bindY = graphNodeY + 82.0f;
         DrawText("Bind selected script to state callback", static_cast<int>(rect.x + 10.0f), static_cast<int>(bindY), 11, Fade(RAYWHITE, 0.66f));
         if (uiButton({rect.x + 10.0f, bindY + 20.0f, 58.0f, 22.0f}, "Enter")) {
             if (bindSlot(pf::FighterEditorStateCallbackSlot::Enter, "enter")) return;
