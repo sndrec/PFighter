@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cmath>
+#include <fstream>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -7869,6 +7870,74 @@ static bool syncEditorSessionMutation(
     return true;
 }
 
+static bool writeEditorPackageBytesToFile(
+    const std::string& path,
+    const std::vector<uint8_t>& bytes,
+    std::string* error)
+{
+    if (path.empty()) {
+        if (error) {
+            *error = "editor package path is empty";
+        }
+        return false;
+    }
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        if (error) {
+            *error = "failed to open editor package for writing";
+        }
+        return false;
+    }
+    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    if (!file) {
+        if (error) {
+            *error = "failed to write editor package";
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool readEditorPackageBytesFromFile(
+    const std::string& path,
+    std::vector<uint8_t>& bytes,
+    std::string* error)
+{
+    if (path.empty()) {
+        if (error) {
+            *error = "editor package path is empty";
+        }
+        return false;
+    }
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        if (error) {
+            *error = "failed to open editor package for reading";
+        }
+        return false;
+    }
+    file.seekg(0, std::ios::end);
+    const std::streamsize size = file.tellg();
+    if (size < 0) {
+        if (error) {
+            *error = "failed to measure editor package";
+        }
+        return false;
+    }
+    file.seekg(0, std::ios::beg);
+    bytes.assign(static_cast<size_t>(size), uint8_t{0});
+    if (!bytes.empty()) {
+        file.read(reinterpret_cast<char*>(bytes.data()), size);
+        if (!file) {
+            if (error) {
+                *error = "failed to read editor package";
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
 static void drawEditorToolStrip(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -10579,6 +10648,7 @@ static void drawEditorDiagnosticsWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
     pf::FighterEditorSession& session,
+    int& selectedFighterDef,
     const pf::FighterRuntime& fighter,
     const pf::FighterDefinition& def,
     const pf::FighterState& state,
@@ -10595,6 +10665,14 @@ static void drawEditorDiagnosticsWorkstation(
         static_cast<int>(y + 22.0f),
         11,
         Fade(RAYWHITE, 0.66f));
+    std::string committedPackagePath;
+    const float pathX = rect.x + rect.width * 0.58f;
+    const float pathW = std::max(92.0f, rect.x + rect.width - pathX - 404.0f);
+    if (pathW >= 92.0f &&
+        uiTextField({pathX, y + 18.0f, pathW, 22.0f}, "workstation-package-path", editor, editor.packagePath, committedPackagePath, 96))
+    {
+        editor.packagePath = committedPackagePath;
+    }
     DrawText(clippedText("Selected: " + editorContextDetail(editor, session, def, state), 11, rect.width * 0.58f).c_str(),
         static_cast<int>(rect.x + 10.0f),
         static_cast<int>(y + 44.0f),
@@ -10627,7 +10705,7 @@ static void drawEditorDiagnosticsWorkstation(
             11,
             editor.lastPackageValid ? GREEN : RED);
     }
-    const Rectangle validateButton{rect.x + rect.width - 294.0f, y - 4.0f, 86.0f, 24.0f};
+    const Rectangle validateButton{rect.x + rect.width - 390.0f, y - 4.0f, 86.0f, 24.0f};
     if (uiButton(validateButton, "Validate")) {
         std::string error;
         const bool wasDirty = session.dirty;
@@ -10642,8 +10720,41 @@ static void drawEditorDiagnosticsWorkstation(
             editor.status = "Editor session validation failed: " + error;
         }
     }
-    if (uiButton({rect.x + rect.width - 198.0f, y - 4.0f, 86.0f, 24.0f}, "Top Test")) {
-        editor.status = "Editor: use the top Test action to launch the unsaved session";
+    if (uiButton({rect.x + rect.width - 294.0f, y - 4.0f, 86.0f, 24.0f}, "Save")) {
+        std::string error;
+        pf::FighterEditorPackageSnapshot snapshot;
+        if (!pf::exportFighterEditorSessionPackage(session, snapshot, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor package save failed: " + error;
+        } else if (!writeEditorPackageBytesToFile(editor.packagePath, snapshot.bytes, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor package save failed: " + error;
+        } else {
+            updateEditorPackageSummary(editor, snapshot.descriptor);
+            editor.status = "Editor: saved " + editor.packagePath +
+                " bytes=" + std::to_string(snapshot.bytes.size()) +
+                " checksum=" + std::to_string(snapshot.descriptor.checksum);
+        }
+    }
+    if (uiButton({rect.x + rect.width - 198.0f, y - 4.0f, 86.0f, 24.0f}, "Load")) {
+        std::string error;
+        std::vector<uint8_t> bytes;
+        if (!readEditorPackageBytesFromFile(editor.packagePath, bytes, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor package load failed: " + error;
+        } else if (!pf::loadFighterEditorSessionPackage(bytes, session, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor package load failed: " + error;
+        } else if (!syncEditorSessionToWorld(world, editor, session, selectedFighterDef, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor package load sync failed: " + error;
+        } else {
+            updateEditorPackageSummary(editor, session.lastDescriptor);
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+            editor.status = "Editor: loaded " + editor.packagePath +
+                " fighters=" + std::to_string(session.lastDescriptor.fighterNames.size()) +
+                " objects=" + std::to_string(session.lastDescriptor.objectNames.size());
+        }
     }
     if (uiButton({rect.x + rect.width - 102.0f, y - 4.0f, 86.0f, 24.0f}, "Reset Msg")) {
         editor.status = "Editor: ready";
@@ -10710,7 +10821,7 @@ static void drawEditorWorkstation(
         drawEditorLogicGraphWorkstation(world, editor, session, selectedFighterDef, def, layout.rightGraph);
     }
     drawEditorInspectorWorkstation(world, editor, session, selectedFighterDef, def, state, layout.rightInspector);
-    drawEditorDiagnosticsWorkstation(world, editor, session, fighter, def, state, layout.diagnostics);
+    drawEditorDiagnosticsWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.diagnostics);
 }
 
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
