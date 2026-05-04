@@ -4167,7 +4167,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         drawEcb(fighter, YELLOW);
         drawImportedEcbSources(def, fighter);
     }
-    if (editor.showHurtboxes && fighter.hsdHurtboxCapsules.empty()) {
+    if (editor.showHurtboxes && fighter.poseHurtboxCapsules.empty()) {
         for (const pf::HurtboxDefinition& hurt : def.hurtboxes) {
             pf::Vec3 base = fighter.bones[static_cast<size_t>(hurt.bone)].position;
             base.x += fighter.position.x;
@@ -4176,7 +4176,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         }
     }
     if (editor.showHurtboxes) {
-        for (const pf::Capsule& hurt : fighter.hsdHurtboxCapsules) {
+        for (const pf::Capsule& hurt : fighter.poseHurtboxCapsules) {
             drawCapsule(hurt.a, hurt.b, hurt.radius, GREEN);
         }
     }
@@ -13274,7 +13274,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
         DrawText("Selected subaction: none", 24, 164, 14, DARKGRAY);
     }
     DrawText(("Animation pose: " + std::to_string(fighter.hsdJointWorldPositions.size()) + " joints, " +
-              std::to_string(fighter.hsdHurtboxCapsules.size()) + " hurtboxes").c_str(), 24, 182, 14, DARKGRAY);
+              std::to_string(fighter.poseHurtboxCapsules.size()) + " hurtboxes").c_str(), 24, 182, 14, DARKGRAY);
 
     DrawRectangle(static_cast<int>(timelineX), static_cast<int>(timelineY), static_cast<int>(timelineWidth), static_cast<int>(timelineHeight), Fade(LIGHTGRAY, 0.65f));
     DrawRectangleLines(static_cast<int>(timelineX), static_cast<int>(timelineY), static_cast<int>(timelineWidth), static_cast<int>(timelineHeight), DARKGRAY);

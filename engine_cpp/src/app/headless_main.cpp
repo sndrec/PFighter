@@ -306,7 +306,7 @@ int main(int argc, char** argv) {
               << "\n";
     std::cout << "runtime_hsd_pose_joints=" << p1.hsdPose.joints.size()
               << " runtime_hsd_world_joints=" << p1.hsdJointWorldPositions.size()
-              << " runtime_native_pose_hurtboxes=" << p1.hsdHurtboxCapsules.size()
+              << " runtime_native_pose_hurtboxes=" << p1.poseHurtboxCapsules.size()
               << "\n";
 
     pf::loadWorld(world, rewindPoint);
@@ -2194,7 +2194,7 @@ int main(int argc, char** argv) {
             fighter.hsdBlendFromPose.joints.clear();
             fighter.hsdJointWorldTransforms.clear();
             fighter.hsdJointWorldPositions.clear();
-            fighter.hsdHurtboxCapsules.clear();
+            fighter.poseHurtboxCapsules.clear();
             fighter.hsdModelVisibilityDefaultStates.clear();
             fighter.hsdModelVisibilityStates.clear();
             fighter.hsdModelPartAnimations.clear();
@@ -2249,7 +2249,7 @@ int main(int argc, char** argv) {
             fighter.hsdBlendFromPose.joints.clear();
             fighter.hsdJointWorldTransforms.clear();
             fighter.hsdJointWorldPositions.clear();
-            fighter.hsdHurtboxCapsules.clear();
+            fighter.poseHurtboxCapsules.clear();
             fighter.hsdModelVisibilityDefaultStates.clear();
             fighter.hsdModelVisibilityStates.clear();
             fighter.hsdModelPartAnimations.clear();
@@ -4491,7 +4491,7 @@ int main(int argc, char** argv) {
 
     pf::World objectGrabDealtWorld = pf::makeTrainingWorld();
     objectGrabDealtWorld.fighters[1].position = {pf::fx(20), 0};
-    objectGrabDealtWorld.fighters[0].hsdHurtboxCapsules.clear();
+    objectGrabDealtWorld.fighters[0].poseHurtboxCapsules.clear();
     objectGrabDealtWorld.fighters[0].hurtboxStates.assign(
         objectGrabDealtWorld.fighterDefs[static_cast<size_t>(objectGrabDealtWorld.fighters[0].fighterDef)].hurtboxes.size(),
         pf::HurtboxState::Normal);
@@ -4507,7 +4507,7 @@ int main(int argc, char** argv) {
 
     pf::World objectGrabVictimWorld = pf::makeTrainingWorld();
     objectGrabVictimWorld.fighters[1].position = {pf::fx(20), 0};
-    objectGrabVictimWorld.fighters[0].hsdHurtboxCapsules.clear();
+    objectGrabVictimWorld.fighters[0].poseHurtboxCapsules.clear();
     objectGrabVictimWorld.fighters[0].hurtboxStates.assign(
         objectGrabVictimWorld.fighterDefs[static_cast<size_t>(objectGrabVictimWorld.fighters[0].fighterDef)].hurtboxes.size(),
         pf::HurtboxState::Normal);

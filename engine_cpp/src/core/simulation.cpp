@@ -3139,18 +3139,18 @@ static Vec3 extractMeleeAnimTranslation(const FighterDefinition& def, const Figh
 }
 
 static void evaluateNativePoseHurtboxes(const FighterDefinition& def, FighterRuntime& fighter) {
-    fighter.hsdHurtboxCapsules.clear();
+    fighter.poseHurtboxCapsules.clear();
     if (fighter.hsdJointWorldTransforms.empty()) {
         return;
     }
-    fighter.hsdHurtboxCapsules.reserve(def.hurtboxes.size());
+    fighter.poseHurtboxCapsules.reserve(def.hurtboxes.size());
     for (const HurtboxDefinition& hurtbox : def.hurtboxes) {
         if (hurtbox.joint < 0 || static_cast<size_t>(hurtbox.joint) >= fighter.hsdJointWorldTransforms.size()) {
             Capsule capsule;
             capsule.a = boneWorld(fighter, hurtbox.bone, hurtbox.startOffset);
             capsule.b = boneWorld(fighter, hurtbox.bone, hurtbox.endOffset);
             capsule.radius = hurtbox.radius;
-            fighter.hsdHurtboxCapsules.push_back(capsule);
+            fighter.poseHurtboxCapsules.push_back(capsule);
             continue;
         }
         const JointWorldTransform& transform = fighter.hsdJointWorldTransforms[static_cast<size_t>(hurtbox.joint)];
@@ -3158,7 +3158,7 @@ static void evaluateNativePoseHurtboxes(const FighterDefinition& def, FighterRun
         capsule.a = transformPoint(transform, hurtbox.startOffset);
         capsule.b = transformPoint(transform, hurtbox.endOffset);
         capsule.radius = hurtbox.radius;
-        fighter.hsdHurtboxCapsules.push_back(capsule);
+        fighter.poseHurtboxCapsules.push_back(capsule);
     }
 }
 
@@ -3166,7 +3166,7 @@ static void refreshHsdWorldPose(const FighterDefinition& def, FighterRuntime& fi
     if (!fighterAnimationSkeleton(def)) {
         fighter.hsdJointWorldTransforms.clear();
         fighter.hsdJointWorldPositions.clear();
-        fighter.hsdHurtboxCapsules.clear();
+        fighter.poseHurtboxCapsules.clear();
         return;
     }
     fighter.hsdJointWorldTransforms = fighterWorldTransforms(def, fighter);
@@ -3284,7 +3284,7 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         fighter.hsdTransNOffset = {};
         fighter.hsdJointWorldTransforms.clear();
         fighter.hsdJointWorldPositions.clear();
-        fighter.hsdHurtboxCapsules.clear();
+        fighter.poseHurtboxCapsules.clear();
     } else {
         refreshHsdWorldPose(def, fighter);
     }
@@ -8430,8 +8430,8 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
             if ((victim.grounded && !hitbox.def.hitGrounded) || (!victim.grounded && !hitbox.def.hitAirborne)) {
                 continue;
             }
-            const bool usePoseHurtboxes = !victim.hsdHurtboxCapsules.empty();
-            const size_t hurtboxCount = usePoseHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
+            const bool usePoseHurtboxes = !victim.poseHurtboxCapsules.empty();
+            const size_t hurtboxCount = usePoseHurtboxes ? victim.poseHurtboxCapsules.size() : victimDef.hurtboxes.size();
             if (victim.hurtboxStates.size() != hurtboxCount) {
                 HurtboxState fillState = HurtboxState::Normal;
                 if (!victim.hurtboxStates.empty() &&
@@ -8458,7 +8458,7 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                 }
             }
             if (usePoseHurtboxes) {
-                for (size_t hurtboxIndex = 0; hurtboxIndex < victim.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
+                for (size_t hurtboxIndex = 0; hurtboxIndex < victim.poseHurtboxCapsules.size(); ++hurtboxIndex) {
                     const HurtboxState capsuleState = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
                     const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
                     if (state == HurtboxState::Intangible) {
@@ -8470,7 +8470,7 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                     {
                         continue;
                     }
-                    if (capsuleCapsule(hitCapsule, victim.hsdHurtboxCapsules[hurtboxIndex])) {
+                    if (capsuleCapsule(hitCapsule, victim.poseHurtboxCapsules[hurtboxIndex])) {
                         attacker.fightersHitThisAction.push_back(static_cast<int>(victimIndex));
                         if (hitbox.def.isGrab) {
                             captureVictim(world, attackerIndex, victimIndex);
@@ -8539,8 +8539,8 @@ static bool fighterTouchesCapsule(World& world, size_t fighterIndex, const Capsu
     }
     FighterRuntime& fighter = world.fighters[fighterIndex];
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const bool usePoseHurtboxes = !fighter.hsdHurtboxCapsules.empty();
-    const size_t hurtboxCount = usePoseHurtboxes ? fighter.hsdHurtboxCapsules.size() : def.hurtboxes.size();
+    const bool usePoseHurtboxes = !fighter.poseHurtboxCapsules.empty();
+    const size_t hurtboxCount = usePoseHurtboxes ? fighter.poseHurtboxCapsules.size() : def.hurtboxes.size();
     if (fighter.hurtboxStates.size() != hurtboxCount) {
         HurtboxState fillState = HurtboxState::Normal;
         if (!fighter.hurtboxStates.empty() &&
@@ -8553,13 +8553,13 @@ static bool fighterTouchesCapsule(World& world, size_t fighterIndex, const Capsu
     }
 
     if (usePoseHurtboxes) {
-        for (size_t hurtboxIndex = 0; hurtboxIndex < fighter.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
+        for (size_t hurtboxIndex = 0; hurtboxIndex < fighter.poseHurtboxCapsules.size(); ++hurtboxIndex) {
             const HurtboxState capsuleState = hurtboxIndex < fighter.hurtboxStates.size() ? fighter.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
             const HurtboxState state = fighter.bodyCollisionState == HurtboxState::Normal ? capsuleState : fighter.bodyCollisionState;
             if (state == HurtboxState::Intangible) {
                 continue;
             }
-            if (capsuleCapsule(touchCapsule, fighter.hsdHurtboxCapsules[hurtboxIndex])) {
+            if (capsuleCapsule(touchCapsule, fighter.poseHurtboxCapsules[hurtboxIndex])) {
                 return true;
             }
         }
@@ -8667,8 +8667,8 @@ static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
                 }
             }
 
-            const bool usePoseHurtboxes = !victim.hsdHurtboxCapsules.empty();
-            const size_t hurtboxCount = usePoseHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
+            const bool usePoseHurtboxes = !victim.poseHurtboxCapsules.empty();
+            const size_t hurtboxCount = usePoseHurtboxes ? victim.poseHurtboxCapsules.size() : victimDef.hurtboxes.size();
             if (victim.hurtboxStates.size() != hurtboxCount) {
                 HurtboxState fillState = HurtboxState::Normal;
                 if (!victim.hurtboxStates.empty() &&
@@ -8681,7 +8681,7 @@ static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
             }
 
             if (usePoseHurtboxes) {
-                for (size_t hurtboxIndex = 0; hurtboxIndex < victim.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
+                for (size_t hurtboxIndex = 0; hurtboxIndex < victim.poseHurtboxCapsules.size(); ++hurtboxIndex) {
                     const HurtboxState capsuleState = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
                     const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
                     if (state == HurtboxState::Intangible) {
@@ -8693,7 +8693,7 @@ static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
                     {
                         continue;
                     }
-                    if (!capsuleCapsule(hitCapsule, victim.hsdHurtboxCapsules[hurtboxIndex])) {
+                    if (!capsuleCapsule(hitCapsule, victim.poseHurtboxCapsules[hurtboxIndex])) {
                         continue;
                     }
                     object.fightersHit.push_back(static_cast<int>(victimIndex));
@@ -9202,7 +9202,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.hsdTransNOffset = fighter.hsdTransNOffset;
         item.hsdJointWorldTransforms = fighter.hsdJointWorldTransforms;
         item.hsdJointWorldPositions = fighter.hsdJointWorldPositions;
-        item.hsdHurtboxCapsules = fighter.hsdHurtboxCapsules;
+        item.poseHurtboxCapsules = fighter.poseHurtboxCapsules;
         item.hsdModelVisibilityDefaultStates = fighter.hsdModelVisibilityDefaultStates;
         item.hsdModelVisibilityStates = fighter.hsdModelVisibilityStates;
         item.hsdModelPartAnimations = fighter.hsdModelPartAnimations;
@@ -9363,7 +9363,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.hsdTransNOffset = item.hsdTransNOffset;
         fighter.hsdJointWorldTransforms = item.hsdJointWorldTransforms;
         fighter.hsdJointWorldPositions = item.hsdJointWorldPositions;
-        fighter.hsdHurtboxCapsules = item.hsdHurtboxCapsules;
+        fighter.poseHurtboxCapsules = item.poseHurtboxCapsules;
         fighter.hsdModelVisibilityDefaultStates = item.hsdModelVisibilityDefaultStates;
         fighter.hsdModelVisibilityStates = item.hsdModelVisibilityStates;
         fighter.hsdModelPartAnimations = item.hsdModelPartAnimations;

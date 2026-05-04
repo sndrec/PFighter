@@ -300,7 +300,7 @@ struct FighterRuntime {
     Vec3 hsdTransNOffset = {};
     std::vector<JointWorldTransform> hsdJointWorldTransforms;
     std::vector<Vec3> hsdJointWorldPositions;
-    std::vector<Capsule> hsdHurtboxCapsules;
+    std::vector<Capsule> poseHurtboxCapsules;
     std::vector<int> hsdModelVisibilityDefaultStates;
     std::vector<int> hsdModelVisibilityStates;
     std::vector<int> hsdModelPartAnimations;
@@ -451,7 +451,7 @@ struct FighterSnapshot {
     Vec3 hsdTransNOffset = {};
     std::vector<JointWorldTransform> hsdJointWorldTransforms;
     std::vector<Vec3> hsdJointWorldPositions;
-    std::vector<Capsule> hsdHurtboxCapsules;
+    std::vector<Capsule> poseHurtboxCapsules;
     std::vector<int> hsdModelVisibilityDefaultStates;
     std::vector<int> hsdModelVisibilityStates;
     std::vector<int> hsdModelPartAnimations;

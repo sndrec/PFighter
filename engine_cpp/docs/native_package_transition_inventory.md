@@ -59,8 +59,8 @@ package load/save should operate on native authored data only.
   them through native accessors instead of interpreting HSD structures.
 - Imported hurtbox collision now populates `FighterDefinition::hurtboxes` with
   native joint/type/capsule data and runtime collision/grab/damage-region logic
-  reads those native hurtbox definitions. The live capsule cache is still named
-  `hsdHurtboxCapsules` and should be renamed later.
+  reads those native hurtbox definitions. The live pose-space capsule cache is
+  named `poseHurtboxCapsules`.
 - Environment collision/ledge values and imported ECB source bones are copied
   into native fighter fields during conversion; the debug ECB overlay reads the
   native metadata.
