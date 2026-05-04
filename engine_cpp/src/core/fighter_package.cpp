@@ -314,6 +314,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarAbsorbObjectFromVar:
     case PackageScriptOp::SetVarShieldBounceObjectFromVar:
     case PackageScriptOp::SetVarInteractObjectFromVar:
+    case PackageScriptOp::SetVarInteractObjectsFromVars:
     case PackageScriptOp::DestroyOwnedObjects:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
@@ -2048,6 +2049,11 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarInteractObjectFromVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarInteractObjectsFromVars:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
         break;
     case PackageScriptOp::DestroyOwnedObjects:
         if (!hasName(packageObjectNames, instruction.text)) {

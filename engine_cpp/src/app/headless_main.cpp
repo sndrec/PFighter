@@ -4660,6 +4660,7 @@ int main(int argc, char** argv) {
         {"ObjectAbsorbResult", 0},
         {"ObjectShieldBounceResult", 0},
         {"ObjectInteractResult", 0},
+        {"ObjectObjectInteractResult", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4874,6 +4875,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarThrowObjectFromVar, 45, 0, -1, pf::fxFromFloat(0.2f), pf::fxFromFloat(0.75f), {}},
             {pf::PackageScriptOp::SetVarReflectObjectFromVar, 46, 0, -1, 0, pf::fx(1), {}},
             {pf::PackageScriptOp::SetVarShieldBounceObjectFromVar, 48, 0, -1, 0, pf::fx(1), {}},
+            {pf::PackageScriptOp::SetVarInteractObjectsFromVars, 50, 0, 1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarInteractObjectFromVar, 49, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarAbsorbObjectFromVar, 47, 1, -1, 0, 0, {}},
         },
@@ -5435,6 +5437,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidObjectPossessionWritePackage = sourcePackage;
     invalidObjectPossessionWritePackage.fighters[0].packageScripts[19].instructions[12].dst = 999;
     const bool invalidPackageObjectPossessionWriteRejected = pf::writeFighterPackage(invalidObjectPossessionWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectObjectInteractWritePackage = sourcePackage;
+    invalidObjectObjectInteractWritePackage.fighters[0].packageScripts[19].instructions[18].srcB = 999;
+    const bool invalidPackageObjectObjectInteractWriteRejected = pf::writeFighterPackage(invalidObjectObjectInteractWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidIndexedObjectVarReadPackage = sourcePackage;
     invalidIndexedObjectVarReadPackage.fighters[0].packageScripts[19].instructions[3].srcA = 999;
     const bool invalidPackageIndexedObjectVarReadRejected = pf::writeFighterPackage(invalidIndexedObjectVarReadPackage, &invalidPackageError).empty();
@@ -5727,7 +5732,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 50 &&
+        loadedPackage.fighters[0].packageVariables.size() == 51 &&
         loadedPackage.fighters[0].packageScripts.size() == 20 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
@@ -6176,6 +6181,9 @@ int main(int argc, char** argv) {
     const int packageInteractResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 49
         ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[49]
         : 0;
+    const int packageObjectObjectInteractResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 50
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[50]
+        : 0;
     const int packageSpawnObjectTargetVar =
         packageSpawnObjectStoredIndex >= 0 &&
             packageSpawnObjectStoredIndex < static_cast<int>(packageSpawnObjectStoreScriptWorld.objects.size()) &&
@@ -6225,10 +6233,12 @@ int main(int argc, char** argv) {
         packageAbsorbResult == 1 &&
         packageShieldBounceResult == 1 &&
         packageInteractResult == 1 &&
+        packageObjectObjectInteractResult == 1 &&
         packageSpawnObjectStoreScriptWorld.fighters[0].heldObject == -1 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].ownerFighter == 0 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].heldByFighter == -1 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].lastInteractionFighter == 0 &&
+        packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].lastInteractionObject == -1 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].ownerFighter == 0 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].velocity.x == 0 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].velocity.y == 0 &&
@@ -7119,6 +7129,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_spawn_projectile_from_vars_store_kind_write_rejected=" << invalidPackageSpawnProjectileFromVarsStoreKindWriteRejected
               << " fighter_package_invalid_destroy_object_from_var_write_rejected=" << invalidPackageDestroyObjectFromVarWriteRejected
               << " fighter_package_invalid_object_possession_write_rejected=" << invalidPackageObjectPossessionWriteRejected
+              << " fighter_package_invalid_object_object_interact_write_rejected=" << invalidPackageObjectObjectInteractWriteRejected
               << " fighter_package_invalid_call_script_write_rejected=" << invalidPackageCallScriptWriteRejected
               << " fighter_package_invalid_subaction_call_script_write_rejected=" << invalidPackageSubactionCallScriptWriteRejected
               << " fighter_package_invalid_fighter_destroy_write_rejected=" << invalidPackageFighterDestroyWriteRejected

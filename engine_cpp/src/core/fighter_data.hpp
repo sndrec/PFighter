@@ -530,6 +530,7 @@ enum class PackageScriptOp : uint8_t {
     SetVarAbsorbObjectFromVar,
     SetVarShieldBounceObjectFromVar,
     SetVarInteractObjectFromVar,
+    SetVarInteractObjectsFromVars,
     DestroyOwnedObjects,
     SkipIfVarLessThanImmediate,
     SkipIfVarLessThanVar,

@@ -7422,6 +7422,11 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
                 return;
             }
+            case PackageScriptOp::SetVarInteractObjectsFromVars: {
+                const bool ok = interactGameObjects(world, var(instruction.srcA), var(instruction.srcB));
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
+                return;
+            }
             case PackageScriptOp::DestroyOwnedObjects:
                 destroyGameObjectsOwnedBy(world, object.ownerFighter, instruction.text);
                 if (!object.active) {

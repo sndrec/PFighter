@@ -3051,6 +3051,14 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             }
             break;
         }
+        case PackageScriptOp::SetVarInteractObjectsFromVars: {
+            const bool ok = interactGameObjects(
+                world,
+                packageVar(fighter, instruction.srcA),
+                packageVar(fighter, instruction.srcB));
+            setPackageVar(fighter, instruction.dst, ok ? 1 : 0);
+            break;
+        }
         case PackageScriptOp::DestroyOwnedObjects:
             destroyGameObjectsOwnedBy(world, static_cast<int>(&fighter - world.fighters.data()), instruction.text);
             break;
