@@ -3,6 +3,7 @@
 #include "core/animation_asset.hpp"
 #include "core/fighter_package.hpp"
 #include "core/replay.hpp"
+#include "core/state_functions.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -4736,6 +4737,14 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::DestroyOwnedObjects, -1, -1, -1, 0, 0, "PackageProjectileObject"},
             {pf::PackageScriptOp::SetVarOwnedObjectCount, 22, -1, -1, 0, 0, "PackageVelocityObject"},
         },
+    }, {
+        "PositionScript",
+        8,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 12, -1, -1, pf::fxFromFloat(0.5f), 0, {}},
+            {pf::PackageScriptOp::SetPositionX, -1, -1, -1, 0, pf::fxFromFloat(-0.75f), {}},
+            {pf::PackageScriptOp::SetPositionYFromVar, -1, 12, -1, 0, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -4784,6 +4793,8 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetOwnerFighterVarImmediate, 0, -1, -1, 17, 0, {}},
             {pf::PackageScriptOp::SetOwnerFighterVarFromVar, 1, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
+            {pf::PackageScriptOp::SetPositionX, -1, -1, -1, 0, pf::fxFromFloat(1.75f), {}},
+            {pf::PackageScriptOp::SetPositionYFromVar, -1, 12, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetAnimationRate, -1, -1, -1, 0, pf::fxFromFloat(0.25f), {}},
             {pf::PackageScriptOp::SetAnimationFrame, -1, -1, -1, 0, pf::fxFromFloat(2.25f), {}},
             {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 10, 0, {}},
@@ -5096,7 +5107,7 @@ int main(int argc, char** argv) {
     invalidSpawnFighterWritePackage.fighters[0].packageScripts[3].instructions[0].text = "MissingFighter";
     const bool invalidPackageSpawnFighterWriteRejected = pf::writeFighterPackage(invalidSpawnFighterWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidCallScriptWritePackage = sourcePackage;
-    invalidCallScriptWritePackage.fighters[0].packageScripts.back().instructions[0].text = "MissingScript";
+    invalidCallScriptWritePackage.fighters[0].packageScripts[9].instructions[0].text = "MissingScript";
     const bool invalidPackageCallScriptWriteRejected = pf::writeFighterPackage(invalidCallScriptWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidSubactionCallScriptWritePackage = sourcePackage;
     const int invalidSubactionCallScriptState = invalidSubactionCallScriptWritePackage.fighters[0].stateIndex("Wait");
@@ -5229,7 +5240,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 23 &&
-        loadedPackage.fighters[0].packageScripts.size() == 11 &&
+        loadedPackage.fighters[0].packageScripts.size() == 12 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 17 &&
@@ -5399,6 +5410,19 @@ int main(int argc, char** argv) {
         packageInputScriptWorld.fighters[0].packageVars[20] == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].packageVars[21] == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].facing == -1;
+    pf::World packagePositionScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packagePositionScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packagePositionScriptWorld.fighters[0].position = {pf::fxFromFloat(4.0f), pf::fxFromFloat(5.0f)};
+        packagePositionScriptWorld.fighters[0].previousPosition = packagePositionScriptWorld.fighters[0].position;
+        packagePositionScriptWorld.fighters[0].packageVars.clear();
+        pf::runPackageScript(packagePositionScriptWorld, packagePositionScriptWorld.fighters[0], "PositionScript");
+    }
+    const bool packagePositionWriteOk = packageShapeOk &&
+        packagePositionScriptWorld.fighters[0].position.x == pf::fxFromFloat(-0.75f) &&
+        packagePositionScriptWorld.fighters[0].previousPosition.x == pf::fxFromFloat(-0.75f) &&
+        packagePositionScriptWorld.fighters[0].position.y == pf::fxFromFloat(0.5f) &&
+        packagePositionScriptWorld.fighters[0].previousPosition.y == pf::fxFromFloat(0.5f);
     bool packageVarSpawnObjectOk = false;
     for (const pf::GameObjectRuntime& object : packageInputScriptWorld.objects) {
         if (object.objectDef >= 0 &&
@@ -5662,6 +5686,11 @@ int main(int argc, char** argv) {
         packageObjectScriptWorld.fighters[0].packageVars[0] == 17 &&
         packageObjectScriptWorld.fighters[0].packageVars[1] == 7;
     const pf::Fix packageObjectScriptVelX = packageObject ? packageObject->velocity.x : pf::Fix{-1};
+    const bool packageObjectPositionWriteOk = packageObject &&
+        packageObject->position.x == pf::fxFromFloat(1.75f) &&
+        packageObject->previousPosition.x == pf::fxFromFloat(1.75f) &&
+        packageObject->position.y == pf::fxFromFloat(-0.25f) &&
+        packageObject->previousPosition.y == pf::fxFromFloat(-0.25f);
     pf::World packageObjectStateScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectStateScriptWorld.objectDefs = loadedPackage.objects;
@@ -5793,6 +5822,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_animation_rate_ok=" << (packageInputScriptWorld.fighters[0].animationRate == pf::fxFromFloat(0.5f))
               << " fighter_package_script_animation_frame_ok=" << (packageInputScriptWorld.fighters[0].animationFrame == pf::fxFromFloat(1.0f))
               << " fighter_package_script_animation_read_ok=" << (packageInputScriptWorld.fighters[0].packageVars.size() > 21 && packageInputScriptWorld.fighters[0].packageVars[20] == pf::fxFromFloat(0.5f) && packageInputScriptWorld.fighters[0].packageVars[21] == pf::fxFromFloat(0.5f))
+              << " fighter_package_script_position_write_ok=" << packagePositionWriteOk
               << " fighter_package_script_interrupt_ok=" << packageInterruptScriptOk
               << " fighter_package_script_projectile_ok=" << packageProjectileScriptOk
               << " fighter_package_script_projectile_count=" << packageProjectileSpawnCount
@@ -5822,6 +5852,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_animation_rate_ok=" << (packageObject && packageObject->animationRate == pf::fxFromFloat(0.25f))
               << " fighter_package_object_script_animation_frame_ok=" << (packageObject && packageObject->animationFrame == pf::fxFromFloat(2.25f))
               << " fighter_package_object_script_animation_read_ok=" << (packageObject && packageObject->packageVars.size() > 15 && packageObject->packageVars[14] == pf::fxFromFloat(1.0f) && packageObject->packageVars[15] == pf::fxFromFloat(1.0f))
+              << " fighter_package_object_position_write_ok=" << packageObjectPositionWriteOk
               << " fighter_package_object_owned_object_count=" << (packageObject && packageObject->packageVars.size() > 16 ? packageObject->packageVars[16] : -1)
               << " fighter_package_object_owner_var_write_ok=" << packageObjectOwnerVarWriteOk
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar

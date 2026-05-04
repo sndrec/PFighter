@@ -2697,6 +2697,14 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetAirVelocityY:
             fighter.fighterVelocity.y = instruction.fixValue;
             break;
+        case PackageScriptOp::SetPositionX:
+            fighter.position.x = instruction.fixValue;
+            fighter.previousPosition.x = fighter.position.x;
+            break;
+        case PackageScriptOp::SetPositionY:
+            fighter.position.y = instruction.fixValue;
+            fighter.previousPosition.y = fighter.position.y;
+            break;
         case PackageScriptOp::SetAnimationRate:
             fighter.animationRate = instruction.fixValue;
             break;
@@ -2714,6 +2722,14 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             break;
         case PackageScriptOp::SetAirVelocityYFromVar:
             fighter.fighterVelocity.y = packageVar(fighter, instruction.srcA);
+            break;
+        case PackageScriptOp::SetPositionXFromVar:
+            fighter.position.x = packageVar(fighter, instruction.srcA);
+            fighter.previousPosition.x = fighter.position.x;
+            break;
+        case PackageScriptOp::SetPositionYFromVar:
+            fighter.position.y = packageVar(fighter, instruction.srcA);
+            fighter.previousPosition.y = fighter.position.y;
             break;
         case PackageScriptOp::SetAnimationRateFromVar:
             fighter.animationRate = packageVar(fighter, instruction.srcA);

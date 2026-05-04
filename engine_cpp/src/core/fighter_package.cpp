@@ -253,10 +253,14 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetGroundVelocity:
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
+    case PackageScriptOp::SetPositionX:
+    case PackageScriptOp::SetPositionY:
     case PackageScriptOp::SetFacing:
     case PackageScriptOp::SetGroundVelocityFromVar:
     case PackageScriptOp::SetAirVelocityXFromVar:
     case PackageScriptOp::SetAirVelocityYFromVar:
+    case PackageScriptOp::SetPositionXFromVar:
+    case PackageScriptOp::SetPositionYFromVar:
     case PackageScriptOp::SetFacingFromVar:
     case PackageScriptOp::ChangeState:
     case PackageScriptOp::SpawnObject:
@@ -1742,6 +1746,8 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetAirVelocityY:
     case PackageScriptOp::SetAnimationRate:
     case PackageScriptOp::SetAnimationFrame:
+    case PackageScriptOp::SetPositionX:
+    case PackageScriptOp::SetPositionY:
     case PackageScriptOp::SetFacing:
         break;
     case PackageScriptOp::SetGroundVelocityFromVar:
@@ -1749,6 +1755,8 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetAirVelocityYFromVar:
     case PackageScriptOp::SetAnimationRateFromVar:
     case PackageScriptOp::SetAnimationFrameFromVar:
+    case PackageScriptOp::SetPositionXFromVar:
+    case PackageScriptOp::SetPositionYFromVar:
     case PackageScriptOp::SetFacingFromVar:
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;

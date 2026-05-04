@@ -1110,12 +1110,16 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetGroundVelocity: return "GroundVel";
     case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
+    case pf::PackageScriptOp::SetPositionX: return "SetX";
+    case pf::PackageScriptOp::SetPositionY: return "SetY";
     case pf::PackageScriptOp::SetAnimationRate: return "AnimRate";
     case pf::PackageScriptOp::SetAnimationFrame: return "AnimFrm";
     case pf::PackageScriptOp::SetFacing: return "Facing";
     case pf::PackageScriptOp::SetGroundVelocityFromVar: return "GVelVar";
     case pf::PackageScriptOp::SetAirVelocityXFromVar: return "AirXVar";
     case pf::PackageScriptOp::SetAirVelocityYFromVar: return "AirYVar";
+    case pf::PackageScriptOp::SetPositionXFromVar: return "SetXVar";
+    case pf::PackageScriptOp::SetPositionYFromVar: return "SetYVar";
     case pf::PackageScriptOp::SetAnimationRateFromVar: return "AnimVar";
     case pf::PackageScriptOp::SetAnimationFrameFromVar: return "FrmVar";
     case pf::PackageScriptOp::SetFacingFromVar: return "FaceVar";
@@ -1227,6 +1231,12 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetAirVelocityYFromVar:
         instruction.op = pf::PackageScriptOp::SetAirVelocityY;
+        break;
+    case pf::PackageScriptOp::SetPositionXFromVar:
+        instruction.op = pf::PackageScriptOp::SetPositionX;
+        break;
+    case pf::PackageScriptOp::SetPositionYFromVar:
+        instruction.op = pf::PackageScriptOp::SetPositionY;
         break;
     case pf::PackageScriptOp::SetAnimationRateFromVar:
         instruction.op = pf::PackageScriptOp::SetAnimationRate;
@@ -1520,6 +1530,8 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetGroundVelocityFromVar:
     case pf::PackageScriptOp::SetAirVelocityXFromVar:
     case pf::PackageScriptOp::SetAirVelocityYFromVar:
+    case pf::PackageScriptOp::SetPositionXFromVar:
+    case pf::PackageScriptOp::SetPositionYFromVar:
     case pf::PackageScriptOp::SetAnimationRateFromVar:
     case pf::PackageScriptOp::SetAnimationFrameFromVar:
     case pf::PackageScriptOp::SetFacingFromVar:
@@ -1528,6 +1540,8 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetGroundVelocity:
     case pf::PackageScriptOp::SetAirVelocityX:
     case pf::PackageScriptOp::SetAirVelocityY:
+    case pf::PackageScriptOp::SetPositionX:
+    case pf::PackageScriptOp::SetPositionY:
     case pf::PackageScriptOp::SetAnimationRate:
     case pf::PackageScriptOp::SetAnimationFrame:
         label += " " + std::to_string(pf::fxToFloat(instruction.fixValue));
@@ -1686,7 +1700,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarShield: return pf::PackageScriptOp::SetGroundVelocity;
     case pf::PackageScriptOp::SetGroundVelocity: return pf::PackageScriptOp::SetAirVelocityX;
     case pf::PackageScriptOp::SetAirVelocityX: return pf::PackageScriptOp::SetAirVelocityY;
-    case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetAnimationRate;
+    case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetPositionX;
+    case pf::PackageScriptOp::SetPositionX: return pf::PackageScriptOp::SetPositionY;
+    case pf::PackageScriptOp::SetPositionY: return pf::PackageScriptOp::SetAnimationRate;
     case pf::PackageScriptOp::SetAnimationRate: return pf::PackageScriptOp::SetAnimationRateFromVar;
     case pf::PackageScriptOp::SetAnimationRateFromVar: return pf::PackageScriptOp::SetAnimationFrame;
     case pf::PackageScriptOp::SetAnimationFrame: return pf::PackageScriptOp::SetAnimationFrameFromVar;
@@ -1694,7 +1710,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetFacing: return pf::PackageScriptOp::SetGroundVelocityFromVar;
     case pf::PackageScriptOp::SetGroundVelocityFromVar: return pf::PackageScriptOp::SetAirVelocityXFromVar;
     case pf::PackageScriptOp::SetAirVelocityXFromVar: return pf::PackageScriptOp::SetAirVelocityYFromVar;
-    case pf::PackageScriptOp::SetAirVelocityYFromVar: return pf::PackageScriptOp::SetFacingFromVar;
+    case pf::PackageScriptOp::SetAirVelocityYFromVar: return pf::PackageScriptOp::SetPositionXFromVar;
+    case pf::PackageScriptOp::SetPositionXFromVar: return pf::PackageScriptOp::SetPositionYFromVar;
+    case pf::PackageScriptOp::SetPositionYFromVar: return pf::PackageScriptOp::SetFacingFromVar;
     case pf::PackageScriptOp::SetFacingFromVar: return pf::PackageScriptOp::ChangeState;
     case pf::PackageScriptOp::ChangeState: return pf::PackageScriptOp::SpawnObject;
     case pf::PackageScriptOp::SpawnObject: return pf::PackageScriptOp::SpawnObjectFromVars;
