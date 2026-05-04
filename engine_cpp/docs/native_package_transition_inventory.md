@@ -43,12 +43,13 @@ package load/save should operate on native authored data only.
   read/write/install paths do not serialize, deserialize, embed, or externally
   resolve imported HSD assets, and the reader still rejects old package bytes
   with nonzero imported asset counts.
-- `FighterImportProvenance` now preserves source file name, source asset name,
-  and importer warnings as debug metadata. Action indices are retained on native
-  clips and state animation references, and converted HSD action subactions keep
-  non-authoritative source action/command/code IDs for traceability. Imported
-  skeleton joints, animation clips, mesh textures, and mesh material batches also
-  retain source index metadata. Provenance does not need to be gameplay truth.
+- `FighterImportProvenance` now preserves the original fighter/costume DAT file
+  names, source asset name, and importer warnings as debug metadata. Action
+  indices are retained on native clips and state animation references, and
+  converted HSD action subactions keep non-authoritative source
+  action/command/code IDs for traceability. Imported skeleton joints, animation
+  clips, mesh textures, and mesh material batches also retain source index
+  metadata. Provenance does not need to be gameplay truth.
 - `engine_cpp/data/packages/` contains generated native packages for the full
   current Melee training roster. Runtime roster construction requires these
   packages by filename and fails loudly when one is missing.

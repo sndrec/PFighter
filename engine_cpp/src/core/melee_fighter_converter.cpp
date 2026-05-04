@@ -16,38 +16,39 @@ namespace pf {
 struct HsdFighterAssetSpec {
     const char* displayName;
     const char* fileName;
+    const char* sourceFileName;
     bool shieldSizeScalesWithHealth = true;
 };
 
 static const std::array<HsdFighterAssetSpec, 27>& meleeTrainingRoster() {
     static const std::array<HsdFighterAssetSpec, 27> roster{{
-        {"Mario", "mario_hsd.pfighter.bin"},
-        {"Donkey Kong", "donkey_kong_hsd.pfighter.bin"},
-        {"Link", "link_hsd.pfighter.bin"},
-        {"Samus", "samus_hsd.pfighter.bin"},
-        {"Yoshi", "yoshi_hsd.pfighter.bin", false},
-        {"Kirby", "kirby_hsd.pfighter.bin"},
-        {"Fox", "fox_hsd.pfighter.bin"},
-        {"Pikachu", "pikachu_hsd.pfighter.bin"},
-        {"Luigi", "luigi_hsd.pfighter.bin"},
-        {"Captain Falcon", "captain_falcon_hsd.pfighter.bin"},
-        {"Ness", "ness_hsd.pfighter.bin"},
-        {"Bowser", "bowser_hsd.pfighter.bin"},
-        {"Peach", "peach_hsd.pfighter.bin"},
-        {"Zelda", "zelda_hsd.pfighter.bin"},
-        {"Sheik", "sheik_hsd.pfighter.bin"},
-        {"Ice Climbers", "ice_climbers_hsd.pfighter.bin"},
-        {"Marth", "marth_hsd.pfighter.bin"},
-        {"Game & Watch", "game_and_watch_hsd.pfighter.bin"},
-        {"Falco", "falco_hsd.pfighter.bin"},
-        {"Ganondorf", "ganondorf_hsd.pfighter.bin"},
-        {"Young Link", "young_link_hsd.pfighter.bin"},
-        {"Dr. Mario", "dr_mario_hsd.pfighter.bin"},
-        {"Roy", "roy_hsd.pfighter.bin"},
-        {"Pichu", "pichu_hsd.pfighter.bin"},
-        {"Mewtwo", "mewtwo_hsd.pfighter.bin"},
-        {"Jigglypuff", "jigglypuff_hsd.pfighter.bin"},
-        {"Sandbag", "sandbag_hsd.pfighter.bin"},
+        {"Mario", "mario_hsd.pfighter.bin", "PlMr.dat+PlMrNr.dat"},
+        {"Donkey Kong", "donkey_kong_hsd.pfighter.bin", "PlDk.dat+PlDkNr.dat"},
+        {"Link", "link_hsd.pfighter.bin", "PlLk.dat+PlLkNr.dat"},
+        {"Samus", "samus_hsd.pfighter.bin", "PlSs.dat+PlSsNr.dat"},
+        {"Yoshi", "yoshi_hsd.pfighter.bin", "PlYs.dat+PlYsNr.dat", false},
+        {"Kirby", "kirby_hsd.pfighter.bin", "PlKb.dat+PlKbNr.dat"},
+        {"Fox", "fox_hsd.pfighter.bin", "PlFx.dat+PlFxNr.dat"},
+        {"Pikachu", "pikachu_hsd.pfighter.bin", "PlPk.dat+PlPkNr.dat"},
+        {"Luigi", "luigi_hsd.pfighter.bin", "PlLg.dat+PlLgNr.dat"},
+        {"Captain Falcon", "captain_falcon_hsd.pfighter.bin", "PlCa.dat+PlCaNr.dat"},
+        {"Ness", "ness_hsd.pfighter.bin", "PlNs.dat+PlNsNr.dat"},
+        {"Bowser", "bowser_hsd.pfighter.bin", "PlKp.dat+PlKpNr.dat"},
+        {"Peach", "peach_hsd.pfighter.bin", "PlPe.dat+PlPeNr.dat"},
+        {"Zelda", "zelda_hsd.pfighter.bin", "PlZd.dat+PlZdNr.dat"},
+        {"Sheik", "sheik_hsd.pfighter.bin", "PlSk.dat+PlSkNr.dat"},
+        {"Ice Climbers", "ice_climbers_hsd.pfighter.bin", "PlNn.dat+PlNnNr.dat"},
+        {"Marth", "marth_hsd.pfighter.bin", "PlMs.dat+PlMsNr.dat"},
+        {"Game & Watch", "game_and_watch_hsd.pfighter.bin", "PlGw.dat+PlGwNr.dat"},
+        {"Falco", "falco_hsd.pfighter.bin", "PlFc.dat+PlFcNr.dat"},
+        {"Ganondorf", "ganondorf_hsd.pfighter.bin", "PlGn.dat+PlGnNr.dat"},
+        {"Young Link", "young_link_hsd.pfighter.bin", "PlCl.dat+PlClNr.dat"},
+        {"Dr. Mario", "dr_mario_hsd.pfighter.bin", "PlDr.dat+PlDrNr.dat"},
+        {"Roy", "roy_hsd.pfighter.bin", "PlFe.dat+PlFeNr.dat"},
+        {"Pichu", "pichu_hsd.pfighter.bin", "PlPc.dat+PlPcNr.dat"},
+        {"Mewtwo", "mewtwo_hsd.pfighter.bin", "PlMt.dat+PlMtNr.dat"},
+        {"Jigglypuff", "jigglypuff_hsd.pfighter.bin", "PlPr.dat+PlPrNr.dat"},
+        {"Sandbag", "sandbag_hsd.pfighter.bin", "PlSb.dat+PlSbNr.dat"},
     }};
     return roster;
 }
@@ -85,6 +86,7 @@ static HsdFighterAssetSpec customFighterAssetSpec(
 {
     return HsdFighterAssetSpec{
         displayName.c_str(),
+        sourceFileName.c_str(),
         sourceFileName.c_str(),
         shieldSizeScalesWithHealth,
     };
@@ -469,7 +471,7 @@ static FighterDefinition makeImportedFighterDefinition(
 {
     FighterDefinition def = makeDebugRook();
     def.name = spec.displayName;
-    def.importProvenance.sourceFileName = spec.fileName;
+    def.importProvenance.sourceFileName = spec.sourceFileName;
     def.importProvenance.sourceAssetName = asset.name;
     def.properties.common = common;
     def.shield.maxHealth = common.startShieldHealthX260;
@@ -682,7 +684,7 @@ bool makeConvertedMeleeFighterPackage(
 
     return makeConvertedMeleeFighterPackageFromAssetBin(
         spec->displayName,
-        spec->fileName,
+        spec->sourceFileName,
         assetPath.string(),
         package,
         error);
