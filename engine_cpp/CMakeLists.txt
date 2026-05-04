@@ -13,12 +13,9 @@ set(PFIGHTER_RAYLIB_DIR "" CACHE PATH "Path to an extracted raylib package conta
 add_library(pfighter_core
     src/core/action.cpp
     src/core/animation.cpp
-    src/core/animation_asset.cpp
     src/core/fighter_data.cpp
     src/core/fighter_package.cpp
-    src/core/hsd_action_import.cpp
     src/core/math.cpp
-    src/core/melee_fighter_converter.cpp
     src/core/replay.cpp
     src/core/simulation.cpp
     src/core/state_functions.cpp
@@ -27,11 +24,20 @@ add_library(pfighter_core
 
 target_include_directories(pfighter_core PUBLIC src)
 
+add_library(pfighter_importer
+    src/core/animation_asset.cpp
+    src/core/hsd_action_import.cpp
+    src/core/melee_fighter_converter.cpp
+)
+
+target_link_libraries(pfighter_importer PUBLIC pfighter_core)
+target_include_directories(pfighter_importer PUBLIC src)
+
 add_executable(pfighter_headless src/app/headless_main.cpp)
 target_link_libraries(pfighter_headless PRIVATE pfighter_core)
 
 add_executable(pfighter_package_converter src/app/package_converter_main.cpp)
-target_link_libraries(pfighter_package_converter PRIVATE pfighter_core)
+target_link_libraries(pfighter_package_converter PRIVATE pfighter_importer)
 
 if(MINGW)
     get_filename_component(_pfighter_mingw_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)

@@ -11,9 +11,9 @@ package load/save should operate on native authored data only.
   HSDLib objects directly. It emits PFighter binary blobs with magic `PFHA`.
 - `engine_cpp/src/core/animation_asset.*` reads those `PFHA` blobs into
   `HsdFighterAnimationAsset`. Despite the name, this is no longer raw DAT data;
-  however it is still a separate imported asset type and it still lives in core.
-  Long term, this loader should sit behind importer/converter tooling rather
-  than normal gameplay construction.
+  however it is still a separate imported asset type. Its implementation is now
+  compiled into the importer/converter target rather than the runtime core
+  target.
 - `engine_cpp/src/core/hsd_action_import.hpp` is the explicit import-facing API
   for converting HSD action scripts into native `Subaction` arrays. The general
   `core/action.hpp`/`action.cpp` pair now exposes only native action unfolding.
@@ -25,6 +25,10 @@ package load/save should operate on native authored data only.
   import-to-native conversion path, including HSD action script decoding into
   native subactions. Runtime simulation no longer includes the HSD action import
   API.
+- `engine_cpp/CMakeLists.txt` now builds `pfighter_importer` from
+  `animation_asset.cpp`, `hsd_action_import.cpp`, and
+  `melee_fighter_converter.cpp`. Runtime executables link `pfighter_core`;
+  `pfighter_package_converter.exe` links the importer target.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.
@@ -124,12 +128,10 @@ package load/save should operate on native authored data only.
 
 ## First Migration Targets
 
-1. Move `animation_asset.*` and `hsd_action_import.*` out of the shared core
-   library and behind explicit importer/converter targets.
-2. Move the PFHA imported-asset structs in `animation_asset.*` behind a true
+1. Move the PFHA imported-asset structs in `animation_asset.*` behind a true
    converter/importer library boundary, leaving only renamed native authored
    package structs in shared runtime headers.
-3. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
+2. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
    rollback state, keeping serialization compatibility in mind.
-4. Expand import provenance for optional original joint/material/source-command
+3. Expand import provenance for optional original joint/material/source-command
    IDs without letting those IDs drive gameplay behavior.
