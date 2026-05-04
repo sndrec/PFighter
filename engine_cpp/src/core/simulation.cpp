@@ -2766,12 +2766,16 @@ static AerialAttackDirection aerialAttackDirection(const FighterRuntime& fighter
 }
 
 static bool hasActionClip(const FighterDefinition& def, int actionIndex) {
-    return authoredAnimationClipByActionIndex(def, actionIndex) != nullptr;
+    const AnimationClip* clip = authoredAnimationClipByActionIndex(def, actionIndex);
+    return clip != nullptr && !clip->generatedFallback;
 }
 
 static bool hasActionClipNamed(const FighterDefinition& def, const std::string& animation) {
     const std::string suffix = "_ACTION_" + animation + "_figatree";
     for (const AnimationClip& clip : authoredAnimationClips(def)) {
+        if (clip.generatedFallback) {
+            continue;
+        }
         if (clip.name.size() >= suffix.size() &&
             clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0)
         {
