@@ -6437,8 +6437,10 @@ int main(int argc, char** argv) {
         pf::moveEditorSessionSubaction(editorSession, 0, 0, 1, &editorMovedSubactionIndex, &packageError) &&
         editorMovedSubactionIndex == 1;
     pf::Subaction editorFrameInsertSubaction;
-    editorFrameInsertSubaction.type = pf::SubactionType::ClearHitboxes;
+    editorFrameInsertSubaction.type = pf::SubactionType::SetHurtboxState;
     editorFrameInsertSubaction.frames = 1;
+    editorFrameInsertSubaction.hurtboxIndex = -1;
+    editorFrameInsertSubaction.hurtboxState = pf::HurtboxState::Intangible;
     int editorFrameInsertSubactionIndex = -1;
     const bool editorSessionFrameSubactionOk = editorSessionMoveSubactionOk &&
         pf::addEditorSessionSubactionAtFrame(editorSession, 0, editorFrameInsertSubaction, 1, &editorFrameInsertSubactionIndex, &packageError) &&
@@ -6446,7 +6448,8 @@ int main(int argc, char** argv) {
         editorSession.rootFighter()->states[0].action.size() >= 4 &&
         editorSession.rootFighter()->states[0].action[0].type == pf::SubactionType::SyncTimer &&
         editorSession.rootFighter()->states[0].action[0].frames == 1 &&
-        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].type == pf::SubactionType::ClearHitboxes &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].type == pf::SubactionType::SetHurtboxState &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].hurtboxState == pf::HurtboxState::Intangible &&
         editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex + 1)].type == pf::SubactionType::SyncTimer &&
         editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex + 1)].frames == 2;
     pf::InterruptRule editorTempInterrupt;
@@ -6477,7 +6480,7 @@ int main(int argc, char** argv) {
         std::find(editorTimeline.subactionFrames.begin(), editorTimeline.subactionFrames.end(), 3) != editorTimeline.subactionFrames.end() &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
             return marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction &&
-                marker.subactionType == pf::SubactionType::ClearHitboxes &&
+                marker.subactionType == pf::SubactionType::SetHurtboxState &&
                 marker.frame == 1;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {

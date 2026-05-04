@@ -8452,9 +8452,9 @@ static void drawEditorTimelineWorkstation(
         editor.status = "Editor: add subaction failed: " + error;
         return false;
     };
-    const float actionX = std::max(rect.x + 236.0f, rect.x + rect.width - 398.0f);
+    const float actionX = std::max(rect.x + 236.0f, rect.x + rect.width - 450.0f);
     const float actionY = rect.y + 34.0f;
-        if (uiButton({actionX, actionY, 50.0f, 22.0f}, "+Sync")) {
+        if (uiButton({actionX, actionY, 48.0f, 22.0f}, "+Sync")) {
             pf::Subaction subaction;
             subaction.type = pf::SubactionType::SyncTimer;
             subaction.frames = 5;
@@ -8463,7 +8463,7 @@ static void drawEditorTimelineWorkstation(
                 return;
             }
         }
-    if (uiButton({actionX + 56.0f, actionY, 50.0f, 22.0f}, "+Hit")) {
+    if (uiButton({actionX + 54.0f, actionY, 42.0f, 22.0f}, "+Hit")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::CreateHitbox;
         subaction.frames = 3;
@@ -8479,7 +8479,20 @@ static void drawEditorTimelineWorkstation(
             return;
         }
     }
-    if (uiButton({actionX + 112.0f, actionY, 54.0f, 22.0f}, "+Clear")) {
+    if (uiButton({actionX + 102.0f, actionY, 48.0f, 22.0f}, "+Hurt")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SetHurtboxState;
+        subaction.frames = 1;
+        subaction.hurtboxIndex = def.hurtboxes.empty()
+            ? -1
+            : std::clamp(editor.selectedHurtbox, 0, static_cast<int>(def.hurtboxes.size()) - 1);
+        subaction.hurtboxState = pf::HurtboxState::Invincible;
+        if (addSubaction(subaction, "hurtbox state")) {
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+            return;
+        }
+    }
+    if (uiButton({actionX + 156.0f, actionY, 42.0f, 22.0f}, "+Clr")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::ClearHitboxes;
         subaction.frames = 1;
@@ -8488,7 +8501,7 @@ static void drawEditorTimelineWorkstation(
             return;
         }
     }
-    if (uiButton({actionX + 172.0f, actionY, 48.0f, 22.0f}, "+Call")) {
+    if (uiButton({actionX + 204.0f, actionY, 44.0f, 22.0f}, "+Call")) {
         if (def.packageScripts.empty()) {
             editor.status = "Editor: add a package script before adding script subactions";
         } else {
@@ -8502,7 +8515,7 @@ static void drawEditorTimelineWorkstation(
             }
         }
     }
-    if (uiButton({actionX + 226.0f, actionY, 48.0f, 22.0f}, "-Sub")) {
+    if (uiButton({actionX + 254.0f, actionY, 44.0f, 22.0f}, "-Sub")) {
         std::string error;
         if (pf::removeEditorSessionSubaction(session, session.selectedState, editor.selectedSubaction, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected subaction");
@@ -8511,7 +8524,7 @@ static void drawEditorTimelineWorkstation(
         }
         editor.status = "Editor: remove subaction failed: " + error;
     }
-    if (uiButton({actionX + 280.0f, actionY, 48.0f, 22.0f}, "+Int")) {
+    if (uiButton({actionX + 304.0f, actionY, 40.0f, 22.0f}, "+Int")) {
         pf::InterruptRule interrupt;
         interrupt.targetState = "Wait";
         interrupt.condition = pf::InterruptCondition::WaitInput;
@@ -8526,7 +8539,7 @@ static void drawEditorTimelineWorkstation(
         }
         editor.status = "Editor: add interrupt failed: " + error;
     }
-    if (uiButton({actionX + 334.0f, actionY, 48.0f, 22.0f}, "-Int")) {
+    if (uiButton({actionX + 350.0f, actionY, 40.0f, 22.0f}, "-Int")) {
         std::string error;
         if (pf::removeEditorSessionInterrupt(session, session.selectedState, editor.selectedInterrupt, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected interrupt");
