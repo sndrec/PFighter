@@ -4772,6 +4772,16 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
             {pf::PackageScriptOp::SetVarFromVar, 1, 0, -1, 0, 0, {}},
         },
+    }, {
+        "JumpResourceScript",
+        8,
+        {
+            {pf::PackageScriptOp::SetFighterJumpsUsed, -1, -1, -1, 1, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterJumpsUsed, 28, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::SetFighterJumpsUsedFromVar, -1, 0, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterJumpsRemaining, 29, -1, -1, 0, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -5194,6 +5204,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidFactWritePackage = sourcePackage;
     invalidFactWritePackage.fighters[0].packageScripts[4].instructions[0].dst = 999;
     const bool invalidPackageFactWriteRejected = pf::writeFighterPackage(invalidFactWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidJumpWritePackage = sourcePackage;
+    invalidJumpWritePackage.fighters[0].packageScripts[13].instructions[3].srcA = 999;
+    const bool invalidPackageJumpWriteRejected = pf::writeFighterPackage(invalidJumpWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidInputWritePackage = sourcePackage;
     invalidInputWritePackage.fighters[0].packageScripts[5].instructions[0].intValue = 1 << 15;
     const bool invalidPackageInputWriteRejected = pf::writeFighterPackage(invalidInputWritePackage, &invalidPackageError).empty();
@@ -5228,6 +5241,17 @@ int main(int argc, char** argv) {
         {},
     });
     const bool invalidPackageObjectInputWriteRejected = pf::writeFighterPackage(invalidObjectInputWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectJumpWritePackage = sourcePackage;
+    invalidObjectJumpWritePackage.objects[1].packageScripts[0].instructions.push_back({
+        pf::PackageScriptOp::SetFighterJumpsUsed,
+        -1,
+        -1,
+        -1,
+        1,
+        0,
+        {},
+    });
+    const bool invalidPackageObjectJumpWriteRejected = pf::writeFighterPackage(invalidObjectJumpWritePackage, &invalidPackageError).empty();
     pf::FighterPackage validObjectFighterContextWritePackage = sourcePackage;
     validObjectFighterContextWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SetVarFighterPercent,
@@ -5289,7 +5313,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 30 &&
-        loadedPackage.fighters[0].packageScripts.size() == 13 &&
+        loadedPackage.fighters[0].packageScripts.size() == 14 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 25 &&
@@ -5449,6 +5473,23 @@ int main(int argc, char** argv) {
         packageFactScriptWorld.fighters[0].packageVars[27] == -1 &&
         packageFactScriptWorld.fighters[0].packageVars[28] == 0 &&
         packageFactScriptWorld.fighters[0].packageVars[29] == 2;
+    pf::World packageJumpResourceScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageJumpResourceScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        const int waitIndex = packageJumpResourceScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            pf::FunctionCall scriptCall;
+            scriptCall.name = "script:JumpResourceScript";
+            packageJumpResourceScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+        }
+        packageJumpResourceScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageJumpResourceScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const bool packageJumpResourceScriptOk = packageShapeOk &&
+        packageJumpResourceScriptWorld.fighters[0].jumpsUsed == 2 &&
+        packageJumpResourceScriptWorld.fighters[0].packageVars.size() >= 30 &&
+        packageJumpResourceScriptWorld.fighters[0].packageVars[28] == 1 &&
+        packageJumpResourceScriptWorld.fighters[0].packageVars[29] == 0;
     pf::World packageInputScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageInputScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5933,6 +5974,8 @@ int main(int argc, char** argv) {
               << " fighter_package_script_fighter_facing=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 27 ? packageFactScriptWorld.fighters[0].packageVars[27] : -1)
               << " fighter_package_script_fighter_jumps_used=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 28 ? packageFactScriptWorld.fighters[0].packageVars[28] : -1)
               << " fighter_package_script_fighter_jumps_remaining=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 29 ? packageFactScriptWorld.fighters[0].packageVars[29] : -1)
+              << " fighter_package_script_jump_write_ok=" << packageJumpResourceScriptOk
+              << " fighter_package_script_jump_write_used=" << packageJumpResourceScriptWorld.fighters[0].jumpsUsed
               << " fighter_package_script_spawn_ok=" << (packageScriptSpawnCount > 0)
               << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
@@ -6006,12 +6049,14 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_fighter_destroy_write_rejected=" << invalidPackageFighterDestroyWriteRejected
               << " fighter_package_invalid_fighter_object_context_write_rejected=" << invalidPackageFighterObjectContextWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected
+              << " fighter_package_invalid_jump_write_rejected=" << invalidPackageJumpWriteRejected
               << " fighter_package_invalid_input_write_rejected=" << invalidPackageInputWriteRejected
               << " fighter_package_invalid_scale_write_rejected=" << invalidPackageScaleWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected
               << " fighter_package_invalid_object_input_write_rejected=" << invalidPackageObjectInputWriteRejected
+              << " fighter_package_invalid_object_jump_write_rejected=" << invalidPackageObjectJumpWriteRejected
               << " fighter_package_object_fighter_context_write_ok=" << packageObjectFighterContextWriteAccepted
               << " fighter_package_invalid_object_context_write_rejected=" << invalidPackageObjectContextWriteRejected
               << " fighter_package_invalid_object_owner_var_write_rejected=" << invalidPackageObjectOwnerVarWriteRejected

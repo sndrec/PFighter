@@ -228,6 +228,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFighterFacing:
     case PackageScriptOp::SetVarFighterJumpsUsed:
     case PackageScriptOp::SetVarFighterJumpsRemaining:
+    case PackageScriptOp::SetFighterJumpsUsed:
+    case PackageScriptOp::SetFighterJumpsUsedFromVar:
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:
     case PackageScriptOp::SetVarFighterPositionX:
@@ -1702,6 +1704,17 @@ void validatePackageScriptInstruction(
         if (!allowFighterContextReads) {
             throw std::runtime_error("fighter package script fighter context read is invalid");
         }
+        break;
+    case PackageScriptOp::SetFighterJumpsUsed:
+        if (!allowFighterContextReads || allowObjectContextReads || instruction.intValue < 0) {
+            throw std::runtime_error("fighter package script fighter jump write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetFighterJumpsUsedFromVar:
+        if (!allowFighterContextReads || allowObjectContextReads) {
+            throw std::runtime_error("fighter package script fighter jump write is invalid");
+        }
+        requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
     case PackageScriptOp::SetVarObjectOwner:
     case PackageScriptOp::SetVarObjectHeldBy:

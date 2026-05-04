@@ -7044,6 +7044,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 }
                 break;
             }
+            case PackageScriptOp::SetFighterJumpsUsed:
+            case PackageScriptOp::SetFighterJumpsUsedFromVar:
+                return;
             case PackageScriptOp::SetVarObjectOwner:
                 setVar(instruction.dst, object.ownerFighter);
                 break;

@@ -1085,6 +1085,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterFacing: return "FFace";
     case pf::PackageScriptOp::SetVarFighterJumpsUsed: return "FJumps";
     case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return "FJumpRem";
+    case pf::PackageScriptOp::SetFighterJumpsUsed: return "SetJumps";
+    case pf::PackageScriptOp::SetFighterJumpsUsedFromVar: return "JumpVar";
     case pf::PackageScriptOp::SetVarFighterPercent: return "Pct";
     case pf::PackageScriptOp::SetVarFighterShield: return "ShieldHp";
     case pf::PackageScriptOp::SetVarFighterPositionX: return "PosX";
@@ -1256,6 +1258,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetFacingFromVar:
         instruction.op = pf::PackageScriptOp::SetFacing;
+        break;
+    case pf::PackageScriptOp::SetFighterJumpsUsedFromVar:
+        instruction.op = pf::PackageScriptOp::SetFighterJumpsUsed;
         break;
     case pf::PackageScriptOp::SpawnObjectFromVars:
         instruction.op = pf::PackageScriptOp::SpawnObject;
@@ -1497,6 +1502,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::AddVarImmediate:
         label += " v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
         break;
+    case pf::PackageScriptOp::SetFighterJumpsUsed:
+        label += " " + std::to_string(instruction.intValue);
+        break;
     case pf::PackageScriptOp::SetVarFromVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA);
         break;
@@ -1565,6 +1573,7 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetAnimationRateFromVar:
     case pf::PackageScriptOp::SetAnimationFrameFromVar:
     case pf::PackageScriptOp::SetFacingFromVar:
+    case pf::PackageScriptOp::SetFighterJumpsUsedFromVar:
         label += " v" + std::to_string(instruction.srcA);
         break;
     case pf::PackageScriptOp::SetGroundVelocity:
@@ -1724,7 +1733,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterGrounded: return pf::PackageScriptOp::SetVarFighterFacing;
     case pf::PackageScriptOp::SetVarFighterFacing: return pf::PackageScriptOp::SetVarFighterJumpsUsed;
     case pf::PackageScriptOp::SetVarFighterJumpsUsed: return pf::PackageScriptOp::SetVarFighterJumpsRemaining;
-    case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return pf::PackageScriptOp::SetFighterJumpsUsed;
+    case pf::PackageScriptOp::SetFighterJumpsUsed: return pf::PackageScriptOp::SetFighterJumpsUsedFromVar;
+    case pf::PackageScriptOp::SetFighterJumpsUsedFromVar: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;

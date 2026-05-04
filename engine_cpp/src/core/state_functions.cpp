@@ -2567,6 +2567,10 @@ static void setPackageVar(FighterRuntime& fighter, int index, int32_t value) {
     fighter.packageVars[static_cast<size_t>(index)] = value;
 }
 
+static void setFighterJumpsUsed(const FighterDefinition& def, FighterRuntime& fighter, int value) {
+    fighter.jumpsUsed = std::clamp(value, 0, def.properties.maxJumps);
+}
+
 void runPackageScript(World& world, FighterRuntime& fighter, const std::string& scriptName) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const auto found = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const PackageScript& script) {
@@ -2643,6 +2647,12 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             break;
         case PackageScriptOp::SetVarFighterJumpsRemaining:
             setPackageVar(fighter, instruction.dst, std::max(0, def.properties.maxJumps - fighter.jumpsUsed));
+            break;
+        case PackageScriptOp::SetFighterJumpsUsed:
+            setFighterJumpsUsed(def, fighter, instruction.intValue);
+            break;
+        case PackageScriptOp::SetFighterJumpsUsedFromVar:
+            setFighterJumpsUsed(def, fighter, packageVar(fighter, instruction.srcA));
             break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
