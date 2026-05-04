@@ -1,5 +1,7 @@
 #include "core/action.hpp"
 
+#include "core/hsd_action_import.hpp"
+
 #include <algorithm>
 #include <cstdint>
 

@@ -14,6 +14,9 @@ package load/save should operate on native authored data only.
   however it is still a separate imported asset type and it still lives in core.
   Long term, this loader should sit behind importer/converter tooling rather
   than normal gameplay construction.
+- `engine_cpp/src/core/hsd_action_import.hpp` is the explicit import-facing API
+  for converting HSD action scripts into native `Subaction` arrays. The general
+  `core/action.hpp` API now exposes only native action unfolding.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.
@@ -115,9 +118,9 @@ package load/save should operate on native authored data only.
 
 ## First Migration Targets
 
-1. Move `animation_asset.*`, `action.cpp` HSD script decode helpers, and the
-   `cachedHsdFighterAsset` fallback out of normal core gameplay construction and
-   behind explicit importer/converter entry points.
+1. Move `animation_asset.*`, HSD script decode implementation, and the
+   `cachedHsdFighterAsset` importer helper out of core gameplay files and behind
+   explicit importer/converter targets.
 2. Move the explicit converter's `*_hsd.pfighter.bin` import path out of core
    gameplay files and into a converter/tooling boundary.
 3. Retire `FighterDefinition::hsdAsset`, `FighterDefinition::hasHsdAsset`, and

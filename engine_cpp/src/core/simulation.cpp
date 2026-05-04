@@ -1,6 +1,7 @@
 #include "core/simulation.hpp"
 
 #include "core/fighter_package.hpp"
+#include "core/hsd_action_import.hpp"
 #include "core/state_functions.hpp"
 
 #include <algorithm>
