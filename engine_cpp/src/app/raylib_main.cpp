@@ -5954,11 +5954,15 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Animation Preview", 24, 336, 16, BLACK);
+    if (def.authoredClips.empty() && def.authoredClipSource) {
+        def.authoredClips = *def.authoredClipSource;
+        def.authoredClipSource.reset();
+        editor.selectedAnimationClip = 0;
+        editor.status = "Editor: materialized native animation clips";
+    }
     std::vector<pf::AnimationClip>* authoredClips = &def.authoredClips;
-    const std::vector<pf::AnimationClip>* clips = def.hsdAsset && !def.hsdAsset->clips.empty()
-        ? &def.hsdAsset->clips
-        : authoredClips;
-    const bool showingAuthoredClips = clips == authoredClips;
+    const std::vector<pf::AnimationClip>* clips = authoredClips;
+    const bool showingAuthoredClips = true;
     if (clips->empty()) {
         DrawText("No animation clips on this fighter", 24, 364, 13, GRAY);
         if (uiButton({352.0f, 362.0f, 72.0f, 24.0f}, "+ Clip")) {
@@ -5985,7 +5989,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     const int maxFrame = std::max(0, static_cast<int>(pf::fxToFloat(selectedClip.frameCount)) - 1);
     editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, maxFrame);
 
-    DrawText(("Clips: " + std::to_string(clips->size()) + (clips == authoredClips ? " authored" : " imported")).c_str(), 24, 362, 13, DARKGRAY);
+    DrawText(("Clips: " + std::to_string(clips->size()) + " authored").c_str(), 24, 362, 13, DARKGRAY);
     DrawText(("Selected: action " + std::to_string(selectedClip.actionIndex) +
               " frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(maxFrame)).c_str(), 24, 382, 13, DARKGRAY);
     if (showingAuthoredClips && selectedAuthoredClip) {
@@ -6546,10 +6550,8 @@ static std::string editorClipActionName(const pf::AnimationClip& clip) {
 }
 
 static const std::vector<pf::AnimationClip>* editorStateAnimationClips(const pf::FighterDefinition& def) {
-    if (def.hsdAsset && !def.hsdAsset->clips.empty()) {
-        return &def.hsdAsset->clips;
-    }
-    return def.authoredClips.empty() ? nullptr : &def.authoredClips;
+    const std::vector<pf::AnimationClip>& clips = pf::authoredAnimationClips(def);
+    return clips.empty() ? nullptr : &clips;
 }
 
 static void assignEditorStateAnimation(pf::FighterState& state, const pf::AnimationClip& clip) {

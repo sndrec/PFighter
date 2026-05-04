@@ -1,6 +1,7 @@
 #include "editor/fighter_editor.hpp"
 
 #include "core/action.hpp"
+#include "core/simulation.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -1560,8 +1561,7 @@ void FighterEditor::clampToWorld(const World& world) {
             0,
             std::max(0, objectCallbackCount - 1));
     }
-    const bool useImportedClips = def.hsdAsset && !def.hsdAsset->clips.empty();
-    const std::vector<AnimationClip>& clips = useImportedClips ? def.hsdAsset->clips : def.authoredClips;
+    const std::vector<AnimationClip>& clips = authoredAnimationClips(def);
     const int clipCount = static_cast<int>(clips.size());
     selectedAnimationClip = std::clamp(selectedAnimationClip, 0, std::max(0, clipCount - 1));
     selectedAnimationJoint = std::clamp(
