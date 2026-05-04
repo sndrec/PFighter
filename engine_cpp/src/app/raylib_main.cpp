@@ -3621,10 +3621,18 @@ static void remapPackageScriptCallbackRefs(
     }
 }
 
+static bool packageInstructionCallsScriptName(const pf::PackageScriptInstruction& instruction, const std::string& scriptName) {
+    return instruction.text == scriptName &&
+        (instruction.op == pf::PackageScriptOp::CallScript ||
+         instruction.op == pf::PackageScriptOp::CallIndexedFighterScriptFromVar ||
+         instruction.op == pf::PackageScriptOp::CallOwnerFighterScript ||
+         instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar);
+}
+
 static void removePackageScriptInstructionRefs(std::vector<pf::PackageScript>& scripts, const std::string& scriptName) {
     for (pf::PackageScript& script : scripts) {
         for (pf::PackageScriptInstruction& instruction : script.instructions) {
-            if (instruction.op == pf::PackageScriptOp::CallScript && instruction.text == scriptName) {
+            if (packageInstructionCallsScriptName(instruction, scriptName)) {
                 instruction.op = pf::PackageScriptOp::Nop;
                 instruction.text.clear();
             }
@@ -3639,7 +3647,7 @@ static void remapPackageScriptInstructionRefs(
 {
     for (pf::PackageScript& script : scripts) {
         for (pf::PackageScriptInstruction& instruction : script.instructions) {
-            if (instruction.op == pf::PackageScriptOp::CallScript && instruction.text == oldScriptName) {
+            if (packageInstructionCallsScriptName(instruction, oldScriptName)) {
                 instruction.text = newScriptName;
             }
         }
@@ -3762,6 +3770,118 @@ static void remapObjectPackageScriptRefs(
     remapPackageScriptCallbackRefs(object.onGrabDealt, oldScriptName, newScriptName);
     remapPackageScriptCallbackRefs(object.onGrabbedForVictim, oldScriptName, newScriptName);
     remapPackageScriptCallbackRefs(object.onInteraction, oldScriptName, newScriptName);
+}
+
+static void removeCrossFighterPackageScriptRefs(pf::World& world, const std::string& scriptName) {
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallIndexedFighterScriptFromVar &&
+                    instruction.text == scriptName)
+                {
+                    instruction.op = pf::PackageScriptOp::Nop;
+                    instruction.text.clear();
+                }
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallOwnerFighterScript &&
+                    instruction.text == scriptName)
+                {
+                    instruction.op = pf::PackageScriptOp::Nop;
+                    instruction.text.clear();
+                }
+            }
+        }
+    }
+}
+
+static void remapCrossFighterPackageScriptRefs(
+    pf::World& world,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallIndexedFighterScriptFromVar &&
+                    instruction.text == oldScriptName)
+                {
+                    instruction.text = newScriptName;
+                }
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallOwnerFighterScript &&
+                    instruction.text == oldScriptName)
+                {
+                    instruction.text = newScriptName;
+                }
+            }
+        }
+    }
+}
+
+static void removeCrossObjectPackageScriptRefs(pf::World& world, const std::string& scriptName) {
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar &&
+                    instruction.text == scriptName)
+                {
+                    instruction.op = pf::PackageScriptOp::Nop;
+                    instruction.text.clear();
+                }
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar &&
+                    instruction.text == scriptName)
+                {
+                    instruction.op = pf::PackageScriptOp::Nop;
+                    instruction.text.clear();
+                }
+            }
+        }
+    }
+}
+
+static void remapCrossObjectPackageScriptRefs(
+    pf::World& world,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (pf::FighterDefinition& fighter : world.fighterDefs) {
+        for (pf::PackageScript& script : fighter.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar &&
+                    instruction.text == oldScriptName)
+                {
+                    instruction.text = newScriptName;
+                }
+            }
+        }
+    }
+    for (pf::GameObjectDefinition& object : world.objectDefs) {
+        for (pf::PackageScript& script : object.packageScripts) {
+            for (pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == pf::PackageScriptOp::CallIndexedObjectScriptFromVar &&
+                    instruction.text == oldScriptName)
+                {
+                    instruction.text = newScriptName;
+                }
+            }
+        }
+    }
 }
 
 static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
@@ -4098,6 +4218,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
             const std::string removed = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
             def.packageScripts.erase(def.packageScripts.begin() + editor.selectedPackageScript);
             removeFighterPackageScriptRefs(def, removed);
+            removeCrossFighterPackageScriptRefs(world, removed);
             editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(def.packageScripts.size()) - 1));
             editor.selectedPackageInstruction = 0;
             editor.status = "Editor: removed package script " + removed;
@@ -4212,6 +4333,7 @@ static void drawEditorLogicWorkspace(pf::World& world, pf::FighterEditor& editor
                 const std::string oldName = script->name;
                 script->name = renamedScript;
                 remapFighterPackageScriptRefs(def, oldName, script->name);
+                remapCrossFighterPackageScriptRefs(world, oldName, script->name);
                 editor.status = "Editor: renamed package script " + oldName + " to " + script->name;
             }
         }
@@ -5288,6 +5410,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                         const std::string oldName = script.name;
                         script.name = renamedScript;
                         remapObjectPackageScriptRefs(object, oldName, script.name);
+                        remapCrossObjectPackageScriptRefs(world, oldName, script.name);
                         editor.status = "Editor: renamed object package script " + oldName + " to " + script.name;
                     }
                 }
@@ -5523,6 +5646,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                     const std::string removed = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
                     object.packageScripts.erase(object.packageScripts.begin() + editor.selectedPackageScript);
                     removeObjectPackageScriptRefs(object, removed);
+                    removeCrossObjectPackageScriptRefs(world, removed);
                     editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, std::max(0, static_cast<int>(object.packageScripts.size()) - 1));
                     editor.selectedPackageInstruction = 0;
                     editor.status = "Editor: removed object package script " + removed;
