@@ -4813,8 +4813,8 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Package Assets", 24, 336, 16, BLACK);
     DrawText(("File: " + editor.packagePath).c_str(), 24, 360, 13, DARKGRAY);
-    const size_t assetBytes = def.hsdAsset ? def.hsdAsset->sourceBytes.size() : 0;
-    DrawText(("Embedded HSD bytes: " + std::to_string(assetBytes)).c_str(), 24, 382, 13, DARKGRAY);
+    DrawText(("Native clips: " + std::to_string(def.authoredClips.size()) +
+              " skeleton joints: " + std::to_string(def.authoredSkeleton.size())).c_str(), 24, 382, 13, DARKGRAY);
     DrawText(("Objects/articles in package: " + std::to_string(world.objectDefs.size())).c_str(), 24, 404, 13, DARKGRAY);
     DrawText(("Authored mesh batches: " + std::to_string(def.authoredMesh.batches.size())).c_str(), 24, 426, 13, DARKGRAY);
     if (editor.lastPackageBytes > 0) {
@@ -4823,7 +4823,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                   " checksum=" + std::to_string(editor.lastPackageChecksum)).c_str(), 24, 448, 12, DARKGRAY);
         DrawText(("Contents: fighters=" + std::to_string(editor.lastPackageFighters) +
                   " objects=" + std::to_string(editor.lastPackageObjects) +
-                  " assets=" + std::to_string(editor.lastPackageAssets)).c_str(), 24, 466, 12, DARKGRAY);
+                  " legacyHsdAssets=" + std::to_string(editor.lastPackageAssets)).c_str(), 24, 466, 12, DARKGRAY);
     } else {
         DrawText("Last package: none saved or loaded", 24, 448, 12, GRAY);
     }
