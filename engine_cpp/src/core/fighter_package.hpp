@@ -29,6 +29,35 @@ struct FighterPackageDescriptor {
     std::vector<std::string> assetNames;
 };
 
+struct FighterPackageCacheEntry {
+    FighterPackageDescriptor descriptor;
+    std::vector<uint8_t> bytes;
+};
+
+class FighterPackageCache {
+public:
+    bool store(
+        const std::vector<uint8_t>& bytes,
+        FighterPackageDescriptor* descriptor = nullptr,
+        std::string* error = nullptr);
+    bool storeExpected(
+        const std::vector<uint8_t>& bytes,
+        const FighterPackageDescriptor& expected,
+        FighterPackageDescriptor* descriptor = nullptr,
+        std::string* error = nullptr);
+    const FighterPackageCacheEntry* find(uint32_t checksum) const;
+    const FighterPackageDescriptor* descriptor(uint32_t checksum) const;
+    const std::vector<uint8_t>* packageBytes(uint32_t checksum) const;
+    bool contains(uint32_t checksum) const;
+    size_t size() const;
+
+private:
+    std::vector<FighterPackageCacheEntry> entries_;
+};
+
+bool fighterPackageDescriptorMatches(
+    const FighterPackageDescriptor& expected,
+    const FighterPackageDescriptor& actual);
 bool validateFighterPackage(const FighterPackage& package, std::string* error = nullptr);
 bool describeFighterPackage(
     const FighterPackage& package,

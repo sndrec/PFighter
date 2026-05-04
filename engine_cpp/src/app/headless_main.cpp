@@ -5918,6 +5918,25 @@ int main(int argc, char** argv) {
         packageBytesInstallWorld.fighterDefs[static_cast<size_t>(packageBytesInstallRoot)].name == loadedPackage.fighters[0].name &&
         packageBytesInstallDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
         packageBytesInstallDescriptor.byteSize == packageBytes.size();
+    pf::FighterPackageCache packageCache;
+    pf::FighterPackageDescriptor cachedPackageDescriptor;
+    const bool packageCacheStoreOk =
+        packageCache.storeExpected(packageBytes, packageBytesDescriptor, &cachedPackageDescriptor, &packageError) &&
+        packageCache.contains(packageBytesDescriptor.checksum) &&
+        packageCache.size() == 1 &&
+        pf::fighterPackageDescriptorMatches(packageBytesDescriptor, cachedPackageDescriptor);
+    const bool packageCacheDuplicateOk =
+        packageCache.store(packageBytes, nullptr, &packageError) &&
+        packageCache.size() == 1;
+    pf::World packageCacheInstallWorld = pf::makeTrainingWorld();
+    int packageCacheInstallRoot = -1;
+    pf::FighterPackageDescriptor packageCacheInstallDescriptor;
+    const bool packageCacheInstallOk =
+        pf::installCachedFighterPackage(packageCacheInstallWorld, packageCache, packageBytesDescriptor.checksum, &packageCacheInstallRoot, &packageCacheInstallDescriptor, &packageError) &&
+        packageCacheInstallRoot >= 0 &&
+        packageCacheInstallRoot < static_cast<int>(packageCacheInstallWorld.fighterDefs.size()) &&
+        packageCacheInstallWorld.fighterDefs[static_cast<size_t>(packageCacheInstallRoot)].name == loadedPackage.fighters[0].name &&
+        pf::fighterPackageDescriptorMatches(packageBytesDescriptor, packageCacheInstallDescriptor);
     pf::World runtimePackageInstallWorld = pf::makeTrainingWorld();
     int runtimePackageInstallRoot = -1;
     const bool runtimePackageInstallOk = runtimePackageLoaded &&
@@ -5956,6 +5975,24 @@ int main(int argc, char** argv) {
     pf::World invalidPackageBytesInstallWorld = pf::makeTrainingWorld();
     const bool invalidPackageBytesInstallRejected = invalidPackageMutated &&
         !pf::installFighterPackageBytes(invalidPackageBytesInstallWorld, invalidPackageBytes, nullptr, nullptr, &invalidPackageError);
+    pf::FighterPackageCache invalidPackageCache;
+    const bool invalidPackageCacheExpectedRejected = invalidPackageMutated &&
+        !invalidPackageCache.storeExpected(invalidPackageBytes, packageBytesDescriptor, nullptr, &invalidPackageError);
+    pf::FighterPackageDescriptor invalidCachedDescriptor;
+    const bool invalidPackageCacheStoreOk = invalidPackageMutated &&
+        invalidPackageCache.store(invalidPackageBytes, &invalidCachedDescriptor, &invalidPackageError);
+    pf::World invalidPackageCacheInstallWorld = pf::makeTrainingWorld();
+    const bool invalidPackageCacheInstallRejected = invalidPackageCacheStoreOk &&
+        !pf::installCachedFighterPackage(
+            invalidPackageCacheInstallWorld,
+            invalidPackageCache,
+            invalidCachedDescriptor.checksum,
+            nullptr,
+            nullptr,
+            &invalidPackageError);
+    pf::World missingPackageCacheInstallWorld = pf::makeTrainingWorld();
+    const bool missingPackageCacheInstallRejected =
+        !pf::installCachedFighterPackage(missingPackageCacheInstallWorld, packageCache, 0xFFFFFFFFu, nullptr, nullptr, &invalidPackageError);
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -7293,6 +7330,9 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()
               << " fighter_package_install_ok=" << packageInstallOk
               << " fighter_package_bytes_install_ok=" << packageBytesInstallOk
+              << " fighter_package_cache_store_ok=" << packageCacheStoreOk
+              << " fighter_package_cache_duplicate_ok=" << packageCacheDuplicateOk
+              << " fighter_package_cache_install_ok=" << packageCacheInstallOk
               << " fighter_package_runtime_install_ok=" << runtimePackageInstallOk
               << " fighter_package_runtime_bytes_install_ok=" << runtimePackageBytesInstallOk
               << " fighter_package_asset_ok=" << packageAssetOk
@@ -7454,6 +7494,10 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_bytes_descriptor_rejected=" << invalidPackageBytesDescriptorRejected
               << " fighter_package_invalid_install_rejected=" << invalidPackageInstallRejected
               << " fighter_package_invalid_bytes_install_rejected=" << invalidPackageBytesInstallRejected
+              << " fighter_package_invalid_cache_expected_rejected=" << invalidPackageCacheExpectedRejected
+              << " fighter_package_invalid_cache_store_ok=" << invalidPackageCacheStoreOk
+              << " fighter_package_invalid_cache_install_rejected=" << invalidPackageCacheInstallRejected
+              << " fighter_package_missing_cache_install_rejected=" << missingPackageCacheInstallRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected

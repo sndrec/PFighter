@@ -2927,6 +2927,101 @@ bool matchingPackageManifest(const FighterPackageDescriptor& manifest, const Fig
 
 } // namespace
 
+bool fighterPackageDescriptorMatches(
+    const FighterPackageDescriptor& expected,
+    const FighterPackageDescriptor& actual)
+{
+    return expected.name == actual.name &&
+        expected.version == actual.version &&
+        expected.byteSize == actual.byteSize &&
+        expected.checksum == actual.checksum &&
+        expected.rootFighterName == actual.rootFighterName &&
+        expected.fighterNames == actual.fighterNames &&
+        expected.objectNames == actual.objectNames &&
+        expected.assetNames == actual.assetNames;
+}
+
+const FighterPackageCacheEntry* FighterPackageCache::find(uint32_t checksum) const {
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const FighterPackageCacheEntry& entry) {
+        return entry.descriptor.checksum == checksum;
+    });
+    return found == entries_.end() ? nullptr : &*found;
+}
+
+const FighterPackageDescriptor* FighterPackageCache::descriptor(uint32_t checksum) const {
+    if (const FighterPackageCacheEntry* entry = find(checksum)) {
+        return &entry->descriptor;
+    }
+    return nullptr;
+}
+
+const std::vector<uint8_t>* FighterPackageCache::packageBytes(uint32_t checksum) const {
+    if (const FighterPackageCacheEntry* entry = find(checksum)) {
+        return &entry->bytes;
+    }
+    return nullptr;
+}
+
+bool FighterPackageCache::contains(uint32_t checksum) const {
+    return find(checksum) != nullptr;
+}
+
+size_t FighterPackageCache::size() const {
+    return entries_.size();
+}
+
+bool FighterPackageCache::store(
+    const std::vector<uint8_t>& bytes,
+    FighterPackageDescriptor* descriptorOut,
+    std::string* error)
+{
+    FighterPackageDescriptor described;
+    if (!describeFighterPackageBytes(bytes, described, error)) {
+        return false;
+    }
+
+    if (const FighterPackageCacheEntry* existing = find(described.checksum)) {
+        if (existing->bytes != bytes) {
+            return fail(error, "fighter package cache checksum collision");
+        }
+        if (descriptorOut) {
+            *descriptorOut = existing->descriptor;
+        }
+        if (error) {
+            error->clear();
+        }
+        return true;
+    }
+
+    FighterPackageCacheEntry entry;
+    entry.descriptor = std::move(described);
+    entry.bytes = bytes;
+    if (descriptorOut) {
+        *descriptorOut = entry.descriptor;
+    }
+    entries_.push_back(std::move(entry));
+    if (error) {
+        error->clear();
+    }
+    return true;
+}
+
+bool FighterPackageCache::storeExpected(
+    const std::vector<uint8_t>& bytes,
+    const FighterPackageDescriptor& expected,
+    FighterPackageDescriptor* descriptorOut,
+    std::string* error)
+{
+    FighterPackageDescriptor described;
+    if (!describeFighterPackageBytes(bytes, described, error)) {
+        return false;
+    }
+    if (!fighterPackageDescriptorMatches(expected, described)) {
+        return fail(error, "fighter package descriptor mismatch");
+    }
+    return store(bytes, descriptorOut, error);
+}
+
 bool validateFighterPackage(const FighterPackage& package, std::string* error) {
     try {
         validateFighterPackageReferences(package);

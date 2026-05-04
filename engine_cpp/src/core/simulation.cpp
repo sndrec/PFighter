@@ -1535,6 +1535,29 @@ bool installFighterPackageBytes(
     return installValidatedFighterPackage(world, package, rootFighterDef, error);
 }
 
+bool installCachedFighterPackage(
+    World& world,
+    const FighterPackageCache& cache,
+    uint32_t checksum,
+    int* rootFighterDef,
+    FighterPackageDescriptor* descriptor,
+    std::string* error,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+{
+    if (rootFighterDef) {
+        *rootFighterDef = -1;
+    }
+    if (descriptor) {
+        *descriptor = {};
+    }
+
+    const std::vector<uint8_t>* bytes = cache.packageBytes(checksum);
+    if (!bytes) {
+        return setPackageInstallError(error, "fighter package cache entry is missing");
+    }
+    return installFighterPackageBytes(world, *bytes, rootFighterDef, descriptor, error, hsdAssetPool);
+}
+
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {
     if (ownerFighter < 0 || objectName.empty()) {
         return 0;

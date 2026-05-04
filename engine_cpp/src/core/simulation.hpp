@@ -480,6 +480,7 @@ struct World {
 };
 
 struct FighterPackage;
+class FighterPackageCache;
 struct FighterPackageDescriptor;
 
 StageDefinition makeBattlefieldTrainingStage();
@@ -499,6 +500,14 @@ bool installFighterPackage(World& world, const FighterPackage& package, int* roo
 bool installFighterPackageBytes(
     World& world,
     const std::vector<uint8_t>& bytes,
+    int* rootFighterDef = nullptr,
+    FighterPackageDescriptor* descriptor = nullptr,
+    std::string* error = nullptr,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+bool installCachedFighterPackage(
+    World& world,
+    const FighterPackageCache& cache,
+    uint32_t checksum,
     int* rootFighterDef = nullptr,
     FighterPackageDescriptor* descriptor = nullptr,
     std::string* error = nullptr,
