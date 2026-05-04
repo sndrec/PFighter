@@ -17,6 +17,7 @@ struct FighterPackage {
     std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets;
 };
 
+bool validateFighterPackage(const FighterPackage& package, std::string* error = nullptr);
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error = nullptr);
 bool saveFighterPackage(const std::string& path, const FighterPackage& package, std::string* error = nullptr);
 bool readFighterPackage(

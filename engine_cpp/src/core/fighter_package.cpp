@@ -2842,6 +2842,18 @@ std::shared_ptr<const HsdFighterAnimationAsset> readHsdAsset(
 
 } // namespace
 
+bool validateFighterPackage(const FighterPackage& package, std::string* error) {
+    try {
+        validateFighterPackageReferences(package);
+        if (error) {
+            error->clear();
+        }
+        return true;
+    } catch (const std::exception& ex) {
+        return fail(error, ex.what());
+    }
+}
+
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error) {
     try {
         validateFighterPackageReferences(package);

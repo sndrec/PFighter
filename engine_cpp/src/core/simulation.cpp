@@ -1468,7 +1468,7 @@ bool installFighterPackage(World& world, const FighterPackage& package, int* roo
     }
 
     std::string validationError;
-    if (writeFighterPackage(package, &validationError).empty()) {
+    if (!validateFighterPackage(package, &validationError)) {
         return setPackageInstallError(error, validationError.empty() ? "fighter package validation failed" : validationError);
     }
 
