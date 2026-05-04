@@ -6732,8 +6732,18 @@ int main(int argc, char** argv) {
         editorSessionTestWorld.fighterDefs[static_cast<size_t>(editorSessionTestRoot)].name == editorSnapshot.descriptor.rootFighterName &&
         editorSessionTestWorld.fighterDefs[static_cast<size_t>(editorSessionTestWorld.fighters[1].fighterDef)].name == "Sandbag" &&
         pf::fighterPackageDescriptorMatches(editorSnapshot.descriptor, editorSessionTestDescriptor);
+    int editorDirtyTestVariableIndex = -1;
+    pf::World editorDirtyTestWorld;
+    const bool editorSessionTestWorldPreservesDirtyOk = editorSessionTestWorldOk &&
+        pf::addEditorSessionPackageVariable(editorSession, "DirtyTestProbe", 0, &editorDirtyTestVariableIndex, &packageError) &&
+        editorSession.dirty &&
+        pf::makeFighterEditorSessionTestWorld(editorSession, editorDirtyTestWorld, nullptr, nullptr, &packageError) &&
+        editorSession.dirty &&
+        editorDirtyTestWorld.fighters.size() >= 2 &&
+        editorDirtyTestWorld.fighterDefs[static_cast<size_t>(editorDirtyTestWorld.fighters[1].fighterDef)].name == "Sandbag";
     pf::FighterEditorSession blankEditorSession;
     const bool blankEditorSessionBeginOk =
+        editorSessionTestWorldPreservesDirtyOk &&
         pf::beginBlankFighterEditorSession("BlankSmoke", packageSourceWorld.fighterDefs[0].properties.common, blankEditorSession, &packageError);
     int blankEditorObjectIndex = -1;
     const bool blankEditorSessionObjectOk = blankEditorSessionBeginOk &&
@@ -8391,6 +8401,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_object_refs_removed_ok=" << editorSessionObjectRefsRemovedOk
               << " fighter_editor_session_export_ok=" << editorSessionExportOk
               << " fighter_editor_session_test_world_ok=" << editorSessionTestWorldOk
+              << " fighter_editor_session_test_world_preserves_dirty_ok=" << editorSessionTestWorldPreservesDirtyOk
               << " fighter_editor_blank_session_ok=" << blankEditorSessionBeginOk
               << " fighter_editor_blank_object_ok=" << blankEditorSessionObjectOk
               << " fighter_editor_blank_ecb_ok=" << blankEditorSessionEcbOk

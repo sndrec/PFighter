@@ -1984,12 +1984,14 @@ bool makeFighterEditorSessionTestWorld(
     FighterPackageDescriptor* descriptor,
     std::string* error)
 {
+    const bool wasDirty = session.dirty;
     FighterEditorPackageSnapshot snapshot;
     if (!exportFighterEditorSessionPackage(session, snapshot, error)) {
         return false;
     }
     FighterPackageDescriptor testDescriptor;
     if (!makePackageTestWorldFromBytes(world, snapshot.bytes, rootFighterDef, &testDescriptor, error)) {
+        session.dirty = wasDirty;
         session.lastMessage = error ? *error : "editor package test world failed";
         return false;
     }
@@ -1998,6 +2000,7 @@ bool makeFighterEditorSessionTestWorld(
     }
     session.lastDescriptor = testDescriptor;
     session.lastMessage = "OK";
+    session.dirty = wasDirty;
     return true;
 }
 
