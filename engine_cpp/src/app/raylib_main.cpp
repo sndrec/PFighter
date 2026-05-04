@@ -8625,6 +8625,311 @@ static pf::GameObjectKind nextGameObjectKind(pf::GameObjectKind kind) {
         : pf::GameObjectKind::Projectile;
 }
 
+static void drawEditorObjectBoxPanel(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    int objectIndex,
+    pf::GameObjectDefinition& object,
+    Rectangle rect)
+{
+    BeginScissorMode(
+        static_cast<int>(rect.x),
+        static_cast<int>(rect.y),
+        static_cast<int>(rect.width),
+        static_cast<int>(rect.height));
+    struct ScopedScissorEnd {
+        ~ScopedScissorEnd() { EndScissorMode(); }
+    } scissorEnd;
+
+    DrawText(("Boxes H" + std::to_string(object.hitboxes.size()) +
+              " Hu" + std::to_string(object.hurtboxes.size()) +
+              " T" + std::to_string(object.touchboxes.size())).c_str(),
+        static_cast<int>(rect.x),
+        static_cast<int>(rect.y),
+        11,
+        Fade(RAYWHITE, 0.72f));
+    constexpr float boxButtonW = 40.0f;
+    constexpr float boxButtonGap = 4.0f;
+    auto bx = [&](int col) {
+        return rect.x + static_cast<float>(col) * (boxButtonW + boxButtonGap);
+    };
+    if (uiButton({rect.x, rect.y + 18.0f, 48.0f, 22.0f}, "+Hit")) {
+        pf::HitboxDefinition hitbox;
+        hitbox.radius = pf::fxFromFloat(0.35f);
+        hitbox.damage = pf::fxFromFloat(3.0f);
+        hitbox.knockbackAngleDegrees = pf::fx(45);
+        hitbox.knockbackBase = pf::fx(20);
+        hitbox.knockbackGrowth = pf::fx(40);
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionObjectHitbox(session, objectIndex, hitbox, -1, &added, &error)) {
+            editor.selectedObjectHitbox = added;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object hitbox");
+            return;
+        }
+        editor.status = "Editor: add object hitbox failed: " + error;
+    }
+    if (uiButton({rect.x + 52.0f, rect.y + 18.0f, 52.0f, 22.0f}, "+Hu")) {
+        pf::GameObjectHurtboxDefinition hurtbox;
+        hurtbox.endOffset = {0, pf::fxFromFloat(0.7f), 0};
+        hurtbox.radius = pf::fxFromFloat(0.35f);
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionObjectHurtbox(session, objectIndex, hurtbox, -1, &added, &error)) {
+            editor.selectedObjectHurtbox = added;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object hurtbox");
+            return;
+        }
+        editor.status = "Editor: add object hurtbox failed: " + error;
+    }
+    if (uiButton({rect.x + 108.0f, rect.y + 18.0f, 54.0f, 22.0f}, "+T")) {
+        pf::GameObjectTouchboxDefinition touchbox;
+        touchbox.endOffset = {0, pf::fxFromFloat(0.8f), 0};
+        touchbox.radius = pf::fxFromFloat(0.45f);
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionObjectTouchbox(session, objectIndex, touchbox, -1, &added, &error)) {
+            editor.selectedObjectTouchbox = added;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object touchbox");
+            return;
+        }
+        editor.status = "Editor: add object touchbox failed: " + error;
+    }
+
+    float y = rect.y + 48.0f;
+    if (!object.hitboxes.empty()) {
+        editor.selectedObjectHitbox = std::clamp(editor.selectedObjectHitbox, 0, static_cast<int>(object.hitboxes.size()) - 1);
+        const pf::HitboxDefinition& hitbox = object.hitboxes[static_cast<size_t>(editor.selectedObjectHitbox)];
+        DrawText(("#H" + std::to_string(editor.selectedObjectHitbox) +
+                  " dmg=" + std::to_string(pf::fxToFloat(hitbox.damage)) +
+                  " r=" + std::to_string(pf::fxToFloat(hitbox.radius)) +
+                  " angle=" + std::to_string(pf::fxToFloat(hitbox.knockbackAngleDegrees))).c_str(),
+            static_cast<int>(rect.x),
+            static_cast<int>(y),
+            10,
+            RAYWHITE);
+        auto commitHitbox = [&](pf::HitboxDefinition edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionObjectHitbox(session, objectIndex, editor.selectedObjectHitbox, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: object hitbox edit failed: " + error;
+            return false;
+        };
+        pf::HitboxDefinition edited = hitbox;
+        const float by = y + 18.0f;
+        if (uiButton({bx(0), by, 34.0f, 22.0f}, "<")) {
+            editor.selectedObjectHitbox = wrappedIndex(editor.selectedObjectHitbox - 1, static_cast<int>(object.hitboxes.size()));
+            return;
+        }
+        if (uiButton({rect.x + 38.0f, by, 34.0f, 22.0f}, ">")) {
+            editor.selectedObjectHitbox = wrappedIndex(editor.selectedObjectHitbox + 1, static_cast<int>(object.hitboxes.size()));
+            return;
+        }
+        if (uiButton({bx(2), by, boxButtonW, 22.0f}, "D-")) {
+            edited.damage = std::max(pf::Fix{0}, edited.damage - pf::fx(1));
+            if (commitHitbox(edited, "Editor: lowered object hitbox damage")) return;
+        }
+        if (uiButton({bx(3), by, boxButtonW, 22.0f}, "D+")) {
+            edited.damage += pf::fx(1);
+            if (commitHitbox(edited, "Editor: raised object hitbox damage")) return;
+        }
+        if (uiButton({bx(0), by + 26.0f, boxButtonW, 22.0f}, "R-")) {
+            edited.radius = std::max(pf::fxFromFloat(0.05f), edited.radius - pf::fxFromFloat(0.05f));
+            if (commitHitbox(edited, "Editor: shrank object hitbox")) return;
+        }
+        if (uiButton({bx(1), by + 26.0f, boxButtonW, 22.0f}, "R+")) {
+            edited.radius += pf::fxFromFloat(0.05f);
+            if (commitHitbox(edited, "Editor: enlarged object hitbox")) return;
+        }
+        if (uiButton({bx(2), by + 26.0f, boxButtonW, 22.0f}, "X-")) {
+            edited.offset.x -= pf::fxFromFloat(0.1f);
+            if (commitHitbox(edited, "Editor: moved object hitbox backward")) return;
+        }
+        if (uiButton({bx(3), by + 26.0f, boxButtonW, 22.0f}, "X+")) {
+            edited.offset.x += pf::fxFromFloat(0.1f);
+            if (commitHitbox(edited, "Editor: moved object hitbox forward")) return;
+        }
+        if (uiButton({bx(0), by + 52.0f, boxButtonW, 22.0f}, "Y-")) {
+            edited.offset.y -= pf::fxFromFloat(0.1f);
+            if (commitHitbox(edited, "Editor: lowered object hitbox")) return;
+        }
+        if (uiButton({bx(1), by + 52.0f, boxButtonW, 22.0f}, "Y+")) {
+            edited.offset.y += pf::fxFromFloat(0.1f);
+            if (commitHitbox(edited, "Editor: raised object hitbox")) return;
+        }
+        if (uiButton({bx(2), by + 52.0f, boxButtonW, 22.0f}, "Gnd", hitbox.hitGrounded)) {
+            edited.hitGrounded = !edited.hitGrounded;
+            if (commitHitbox(edited, "Editor: toggled object hitbox grounded target")) return;
+        }
+        if (uiButton({bx(3), by + 52.0f, boxButtonW, 22.0f}, "Air", hitbox.hitAirborne)) {
+            edited.hitAirborne = !edited.hitAirborne;
+            if (commitHitbox(edited, "Editor: toggled object hitbox airborne target")) return;
+        }
+        if (uiButton({bx(0), by + 78.0f, 50.0f, 22.0f}, "-Hit")) {
+            std::string error;
+            if (pf::removeEditorSessionObjectHitbox(session, objectIndex, editor.selectedObjectHitbox, &error)) {
+                editor.selectedObjectHitbox = 0;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object hitbox");
+                return;
+            }
+            editor.status = "Editor: remove object hitbox failed: " + error;
+        }
+        y += 126.0f;
+    }
+    if (!object.hurtboxes.empty()) {
+        editor.selectedObjectHurtbox = std::clamp(editor.selectedObjectHurtbox, 0, static_cast<int>(object.hurtboxes.size()) - 1);
+        const pf::GameObjectHurtboxDefinition& hurtbox = object.hurtboxes[static_cast<size_t>(editor.selectedObjectHurtbox)];
+        DrawText(("#Hu" + std::to_string(editor.selectedObjectHurtbox) +
+                  " " + hurtboxStateName(hurtbox.state) +
+                  " r=" + std::to_string(pf::fxToFloat(hurtbox.radius))).c_str(),
+            static_cast<int>(rect.x),
+            static_cast<int>(y),
+            10,
+            RAYWHITE);
+        auto commitHurtbox = [&](pf::GameObjectHurtboxDefinition edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionObjectHurtbox(session, objectIndex, editor.selectedObjectHurtbox, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: object hurtbox edit failed: " + error;
+            return false;
+        };
+        pf::GameObjectHurtboxDefinition edited = hurtbox;
+        const float by = y + 18.0f;
+        if (uiButton({bx(0), by, 34.0f, 22.0f}, "<")) {
+            editor.selectedObjectHurtbox = wrappedIndex(editor.selectedObjectHurtbox - 1, static_cast<int>(object.hurtboxes.size()));
+            return;
+        }
+        if (uiButton({rect.x + 38.0f, by, 34.0f, 22.0f}, ">")) {
+            editor.selectedObjectHurtbox = wrappedIndex(editor.selectedObjectHurtbox + 1, static_cast<int>(object.hurtboxes.size()));
+            return;
+        }
+        if (uiButton({bx(2), by, boxButtonW, 22.0f}, "R-")) {
+            edited.radius = std::max(pf::fxFromFloat(0.05f), edited.radius - pf::fxFromFloat(0.05f));
+            if (commitHurtbox(edited, "Editor: shrank object hurtbox")) return;
+        }
+        if (uiButton({bx(3), by, boxButtonW, 22.0f}, "R+")) {
+            edited.radius += pf::fxFromFloat(0.05f);
+            if (commitHurtbox(edited, "Editor: enlarged object hurtbox")) return;
+        }
+        if (uiButton({bx(0), by + 26.0f, 54.0f, 22.0f}, "State")) {
+            edited.state = nextHurtboxState(edited.state);
+            if (commitHurtbox(edited, "Editor: changed object hurtbox state")) return;
+        }
+        if (uiButton({rect.x + 58.0f, by + 26.0f, 54.0f, 22.0f}, "-Hu")) {
+            std::string error;
+            if (pf::removeEditorSessionObjectHurtbox(session, objectIndex, editor.selectedObjectHurtbox, &error)) {
+                editor.selectedObjectHurtbox = 0;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object hurtbox");
+                return;
+            }
+            editor.status = "Editor: remove object hurtbox failed: " + error;
+        }
+        if (uiButton({bx(0), by + 52.0f, boxButtonW, 22.0f}, "X-")) {
+            edited.startOffset.x -= pf::fxFromFloat(0.1f);
+            edited.endOffset.x -= pf::fxFromFloat(0.1f);
+            if (commitHurtbox(edited, "Editor: moved object hurtbox backward")) return;
+        }
+        if (uiButton({bx(1), by + 52.0f, boxButtonW, 22.0f}, "X+")) {
+            edited.startOffset.x += pf::fxFromFloat(0.1f);
+            edited.endOffset.x += pf::fxFromFloat(0.1f);
+            if (commitHurtbox(edited, "Editor: moved object hurtbox forward")) return;
+        }
+        if (uiButton({bx(2), by + 52.0f, boxButtonW, 22.0f}, "Y-")) {
+            edited.startOffset.y -= pf::fxFromFloat(0.1f);
+            edited.endOffset.y -= pf::fxFromFloat(0.1f);
+            if (commitHurtbox(edited, "Editor: lowered object hurtbox")) return;
+        }
+        if (uiButton({bx(3), by + 52.0f, boxButtonW, 22.0f}, "Y+")) {
+            edited.startOffset.y += pf::fxFromFloat(0.1f);
+            edited.endOffset.y += pf::fxFromFloat(0.1f);
+            if (commitHurtbox(edited, "Editor: raised object hurtbox")) return;
+        }
+        y += 100.0f;
+    }
+    if (!object.touchboxes.empty()) {
+        editor.selectedObjectTouchbox = std::clamp(editor.selectedObjectTouchbox, 0, static_cast<int>(object.touchboxes.size()) - 1);
+        const pf::GameObjectTouchboxDefinition& touchbox = object.touchboxes[static_cast<size_t>(editor.selectedObjectTouchbox)];
+        DrawText(("#T" + std::to_string(editor.selectedObjectTouchbox) +
+                  " r=" + std::to_string(pf::fxToFloat(touchbox.radius)) +
+                  (touchbox.touchFighters ? " fighters" : "") +
+                  (touchbox.touchObjects ? " objects" : "")).c_str(),
+            static_cast<int>(rect.x),
+            static_cast<int>(y),
+            10,
+            RAYWHITE);
+        auto commitTouchbox = [&](pf::GameObjectTouchboxDefinition edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionObjectTouchbox(session, objectIndex, editor.selectedObjectTouchbox, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: object touchbox edit failed: " + error;
+            return false;
+        };
+        pf::GameObjectTouchboxDefinition edited = touchbox;
+        const float by = y + 18.0f;
+        if (uiButton({bx(0), by, 34.0f, 22.0f}, "<")) {
+            editor.selectedObjectTouchbox = wrappedIndex(editor.selectedObjectTouchbox - 1, static_cast<int>(object.touchboxes.size()));
+            return;
+        }
+        if (uiButton({rect.x + 38.0f, by, 34.0f, 22.0f}, ">")) {
+            editor.selectedObjectTouchbox = wrappedIndex(editor.selectedObjectTouchbox + 1, static_cast<int>(object.touchboxes.size()));
+            return;
+        }
+        if (uiButton({bx(2), by, boxButtonW, 22.0f}, "R-")) {
+            edited.radius = std::max(pf::fxFromFloat(0.05f), edited.radius - pf::fxFromFloat(0.05f));
+            if (commitTouchbox(edited, "Editor: shrank object touchbox")) return;
+        }
+        if (uiButton({bx(3), by, boxButtonW, 22.0f}, "R+")) {
+            edited.radius += pf::fxFromFloat(0.05f);
+            if (commitTouchbox(edited, "Editor: enlarged object touchbox")) return;
+        }
+        if (uiButton({bx(0), by + 26.0f, boxButtonW, 22.0f}, "Ftr", touchbox.touchFighters)) {
+            edited.touchFighters = !edited.touchFighters;
+            if (commitTouchbox(edited, "Editor: toggled object touchbox fighter contact")) return;
+        }
+        if (uiButton({bx(1), by + 26.0f, boxButtonW, 22.0f}, "Obj", touchbox.touchObjects)) {
+            edited.touchObjects = !edited.touchObjects;
+            if (commitTouchbox(edited, "Editor: toggled object touchbox object contact")) return;
+        }
+        if (uiButton({bx(2), by + 26.0f, 54.0f, 22.0f}, "-T")) {
+            std::string error;
+            if (pf::removeEditorSessionObjectTouchbox(session, objectIndex, editor.selectedObjectTouchbox, &error)) {
+                editor.selectedObjectTouchbox = 0;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object touchbox");
+                return;
+            }
+            editor.status = "Editor: remove object touchbox failed: " + error;
+        }
+        if (uiButton({bx(0), by + 52.0f, boxButtonW, 22.0f}, "X-")) {
+            edited.startOffset.x -= pf::fxFromFloat(0.1f);
+            edited.endOffset.x -= pf::fxFromFloat(0.1f);
+            if (commitTouchbox(edited, "Editor: moved object touchbox backward")) return;
+        }
+        if (uiButton({bx(1), by + 52.0f, boxButtonW, 22.0f}, "X+")) {
+            edited.startOffset.x += pf::fxFromFloat(0.1f);
+            edited.endOffset.x += pf::fxFromFloat(0.1f);
+            if (commitTouchbox(edited, "Editor: moved object touchbox forward")) return;
+        }
+        if (uiButton({bx(2), by + 52.0f, boxButtonW, 22.0f}, "Y-")) {
+            edited.startOffset.y -= pf::fxFromFloat(0.1f);
+            edited.endOffset.y -= pf::fxFromFloat(0.1f);
+            if (commitTouchbox(edited, "Editor: lowered object touchbox")) return;
+        }
+        if (uiButton({bx(3), by + 52.0f, boxButtonW, 22.0f}, "Y+")) {
+            edited.startOffset.y += pf::fxFromFloat(0.1f);
+            edited.endOffset.y += pf::fxFromFloat(0.1f);
+            if (commitTouchbox(edited, "Editor: raised object touchbox")) return;
+        }
+    }
+}
+
 static void drawEditorObjectWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -8716,10 +9021,31 @@ static void drawEditorObjectWorkstation(
 
     const float detailX = rect.x + 20.0f + objectListW;
     const float detailW = std::max(180.0f, rect.width - objectListW - 30.0f);
-    DrawText(("States " + std::to_string(object.states.size()) +
+    if (uiButton({detailX, listY - 3.0f, 58.0f, 22.0f}, "Logic", editor.objectPanel == pf::ObjectEditorPanel::Logic)) {
+        editor.objectPanel = pf::ObjectEditorPanel::Logic;
+        return;
+    }
+    if (uiButton({detailX + 64.0f, listY - 3.0f, 58.0f, 22.0f}, "Boxes", editor.objectPanel == pf::ObjectEditorPanel::Boxes)) {
+        editor.objectPanel = pf::ObjectEditorPanel::Boxes;
+        return;
+    }
+    if (editor.objectPanel == pf::ObjectEditorPanel::Boxes) {
+        drawEditorObjectBoxPanel(
+            world,
+            editor,
+            session,
+            selectedFighterDef,
+            editor.selectedObjectDef,
+            object,
+            {detailX, listY + 26.0f, detailW, std::max(90.0f, rect.y + rect.height - listY - 36.0f)});
+        return;
+    }
+    DrawText(clippedText("States " + std::to_string(object.states.size()) +
               "  Vars " + std::to_string(object.packageVariables.size()) +
-              "  Scripts " + std::to_string(object.packageScripts.size())).c_str(),
-        static_cast<int>(detailX),
+              "  Scripts " + std::to_string(object.packageScripts.size()),
+              11,
+              std::max(24.0f, detailW - 132.0f)).c_str(),
+        static_cast<int>(detailX + 132.0f),
         static_cast<int>(listY),
         11,
         Fade(RAYWHITE, 0.72f));
