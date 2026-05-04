@@ -93,6 +93,8 @@ package load/save should operate on native authored data only.
 - Current package format version is native-only and rejects packages that embed
   raw imported assets, set `hasHsdAsset`, use invalid old versions, or depend on
   HSD action/animation interpretation at package load time.
+- Runtime/editor package export now refuses HSD-backed fighter definitions. The
+  one-time converter owns imported-HSD conversion into native package data.
 
 ## Native Data Already Present But Incomplete
 

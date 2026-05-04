@@ -1671,23 +1671,33 @@ static void collectRuntimePackageObjectDependencies(FighterPackage& package, con
 
 bool makeNativePackageFighterDefinition(const FighterDefinition& source, FighterDefinition& out, std::string* error) {
     out = source;
-    if (source.hsdAsset && !validateImportedFighterConversionSource(source, *source.hsdAsset, error)) {
-        return false;
+    if (source.hsdAsset || source.hasHsdAsset) {
+        return failNativeConversion(
+            error,
+            "runtime native package export cannot convert imported HSD fighter data; run the fighter package converter first");
     }
+    if (out.authoredClips.empty() && source.authoredClipSource) {
+        out.authoredClips = *source.authoredClipSource;
+    }
+    if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty() && source.authoredMeshSource) {
+        out.authoredMesh = *source.authoredMeshSource;
+    }
+    if (out.modelPartAnimations.empty() && source.modelPartAnimationSource) {
+        out.modelPartAnimations = *source.modelPartAnimationSource;
+    }
+    out.authoredClipSource.reset();
+    out.authoredMeshSource.reset();
+    out.modelPartAnimationSource.reset();
+    return true;
+}
+
+static bool makeImportedNativePackageFighterDefinition(const FighterDefinition& source, FighterDefinition& out, std::string* error) {
+    out = source;
     if (!source.hsdAsset) {
-        if (out.authoredClips.empty() && source.authoredClipSource) {
-            out.authoredClips = *source.authoredClipSource;
-        }
-        if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty() && source.authoredMeshSource) {
-            out.authoredMesh = *source.authoredMeshSource;
-        }
-        if (out.modelPartAnimations.empty() && source.modelPartAnimationSource) {
-            out.modelPartAnimations = *source.modelPartAnimationSource;
-        }
-        out.authoredClipSource.reset();
-        out.authoredMeshSource.reset();
-        out.modelPartAnimationSource.reset();
-        return true;
+        return makeNativePackageFighterDefinition(source, out, error);
+    }
+    if (!validateImportedFighterConversionSource(source, *source.hsdAsset, error)) {
+        return false;
     }
 
     if (out.authoredSkeleton.empty()) {
@@ -1801,7 +1811,7 @@ bool makeConvertedMeleeFighterPackage(
         auto asset = std::make_shared<HsdFighterAnimationAsset>(loadHsdFighterAnimationAsset(assetPath.string()));
         FighterDefinition imported = makeImportedFighterDefinition(*spec, common, std::move(asset));
         FighterDefinition native;
-        if (!makeNativePackageFighterDefinition(imported, native, error)) {
+        if (!makeImportedNativePackageFighterDefinition(imported, native, error)) {
             return false;
         }
 
