@@ -20,6 +20,7 @@ add_library(pfighter_core
     src/core/replay.cpp
     src/core/simulation.cpp
     src/core/state_functions.cpp
+    src/editor/fighter_editor.cpp
 )
 
 target_include_directories(pfighter_core PUBLIC src)
@@ -127,7 +128,6 @@ if(PFIGHTER_BUILD_RAYLIB_APP)
     if(TARGET raylib OR raylib_FOUND)
         add_executable(pfighter_raylib
             src/app/raylib_main.cpp
-            src/editor/fighter_editor.cpp
         )
         target_link_libraries(pfighter_raylib PRIVATE pfighter_core raylib)
         target_compile_definitions(pfighter_raylib PRIVATE PFIGHTER_WITH_RAYLIB=1)

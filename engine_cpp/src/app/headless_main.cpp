@@ -4,6 +4,7 @@
 #include "core/fighter_package.hpp"
 #include "core/replay.hpp"
 #include "core/state_functions.hpp"
+#include "editor/fighter_editor.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -5993,6 +5994,88 @@ int main(int argc, char** argv) {
         runtimePackageBytesInstallWorld.fighterDefs[static_cast<size_t>(runtimePackageBytesInstallRoot)].name == loadedRuntimePackage.fighters[0].name &&
         runtimePackageBytesInstallDescriptor.checksum == pf::fighterPackageChecksum(runtimePackageBytes) &&
         runtimePackageBytesInstallDescriptor.byteSize == runtimePackageBytes.size();
+    pf::FighterEditorSession editorSession;
+    const bool editorSessionBeginOk =
+        pf::beginFighterEditorSessionFromWorld(packageSourceWorld, 0, editorSession, &packageError, "headless_editor_session");
+    int editorCreatedState = -1;
+    const bool editorSessionCreateStateOk = editorSessionBeginOk &&
+        pf::createEditorSessionState(editorSession, "EditorSmokeState", 0, &editorCreatedState, &packageError) &&
+        editorCreatedState >= 0;
+    const bool editorSessionRenameStateOk = editorSessionCreateStateOk &&
+        pf::renameEditorSessionState(editorSession, editorCreatedState, "EditorSmokeRenamed", &packageError);
+    if (editorSessionRenameStateOk) {
+        if (pf::FighterDefinition* root = editorSession.rootFighter()) {
+            root->states[0].onAnimationFinishedState = "EditorSmokeRenamed";
+            root->states[0].interrupts.push_back({"EditorSmokeRenamed", pf::InterruptCondition::WaitInput});
+            root->packageScripts.push_back({
+                "EditorStateScript",
+                64,
+                {{
+                    pf::PackageScriptOp::ChangeState,
+                    -1,
+                    -1,
+                    -1,
+                    0,
+                    0,
+                    "EditorSmokeRenamed",
+                }},
+            });
+        }
+    }
+    const bool editorSessionRemoveStateOk = editorSessionRenameStateOk &&
+        pf::removeEditorSessionState(editorSession, editorCreatedState, "Wait", &packageError);
+    const pf::FighterDefinition* editorRootAfterRemove = editorSession.rootFighter();
+    const bool editorSessionRemapOk = editorSessionRemoveStateOk &&
+        editorRootAfterRemove &&
+        editorRootAfterRemove->stateIndex("EditorSmokeRenamed") < 0 &&
+        editorRootAfterRemove->states[0].onAnimationFinishedState == "Wait" &&
+        !editorRootAfterRemove->states[0].interrupts.empty() &&
+        editorRootAfterRemove->states[0].interrupts.back().targetState == "Wait" &&
+        !editorRootAfterRemove->packageScripts.empty() &&
+        !editorRootAfterRemove->packageScripts.back().instructions.empty() &&
+        editorRootAfterRemove->packageScripts.back().instructions[0].text == "Wait";
+    int editorDuplicatedState = -1;
+    const bool editorSessionDuplicateStateOk = editorSessionRemapOk &&
+        pf::duplicateEditorSessionState(editorSession, 0, &editorDuplicatedState, &packageError) &&
+        editorDuplicatedState >= 0;
+    int editorObjectIndex = -1;
+    const bool editorSessionObjectOk = editorSessionDuplicateStateOk &&
+        pf::addEditorSessionObject(editorSession, "EditorSmokeProjectile", pf::GameObjectKind::Projectile, &editorObjectIndex, &packageError) &&
+        editorObjectIndex >= 0;
+    pf::FighterEditorPackageSnapshot editorSnapshot;
+    const bool editorSessionExportOk = editorSessionObjectOk &&
+        pf::exportFighterEditorSessionPackage(editorSession, editorSnapshot, &packageError) &&
+        !editorSnapshot.bytes.empty() &&
+        editorSnapshot.descriptor.name == "headless_editor_session" &&
+        editorSnapshot.descriptor.rootFighterName == packageSourceWorld.fighterDefs[0].name &&
+        std::find(editorSnapshot.descriptor.objectNames.begin(), editorSnapshot.descriptor.objectNames.end(), "EditorSmokeProjectile") != editorSnapshot.descriptor.objectNames.end();
+    pf::World editorSessionTestWorld;
+    int editorSessionTestRoot = -1;
+    pf::FighterPackageDescriptor editorSessionTestDescriptor;
+    const bool editorSessionTestWorldOk = editorSessionExportOk &&
+        pf::makeFighterEditorSessionTestWorld(editorSession, editorSessionTestWorld, &editorSessionTestRoot, &editorSessionTestDescriptor, &packageError) &&
+        editorSessionTestRoot >= 0 &&
+        editorSessionTestRoot < static_cast<int>(editorSessionTestWorld.fighterDefs.size()) &&
+        editorSessionTestWorld.fighters.size() >= 2 &&
+        editorSessionTestWorld.fighters[0].fighterDef == editorSessionTestRoot &&
+        editorSessionTestWorld.fighterDefs[static_cast<size_t>(editorSessionTestRoot)].name == editorSnapshot.descriptor.rootFighterName &&
+        editorSessionTestWorld.fighterDefs[static_cast<size_t>(editorSessionTestWorld.fighters[1].fighterDef)].name == "Sandbag" &&
+        pf::fighterPackageDescriptorMatches(editorSnapshot.descriptor, editorSessionTestDescriptor);
+    pf::FighterEditorSession blankEditorSession;
+    const bool blankEditorSessionBeginOk =
+        pf::beginBlankFighterEditorSession("BlankSmoke", packageSourceWorld.fighterDefs[0].properties.common, blankEditorSession, &packageError);
+    int blankEditorObjectIndex = -1;
+    const bool blankEditorSessionObjectOk = blankEditorSessionBeginOk &&
+        pf::addEditorSessionObject(blankEditorSession, "BlankSmokeProjectile", pf::GameObjectKind::Projectile, &blankEditorObjectIndex, &packageError) &&
+        blankEditorObjectIndex == 0;
+    pf::FighterEditorPackageSnapshot blankEditorSnapshot;
+    const bool blankEditorSessionExportOk = blankEditorSessionObjectOk &&
+        pf::exportFighterEditorSessionPackage(blankEditorSession, blankEditorSnapshot, &packageError) &&
+        blankEditorSnapshot.descriptor.rootFighterName == "BlankSmoke" &&
+        blankEditorSnapshot.descriptor.fighterNames.size() == 1 &&
+        blankEditorSnapshot.descriptor.objectNames.size() == 1 &&
+        blankEditorSnapshot.package.fighters[0].states.size() == 2 &&
+        blankEditorSnapshot.package.fighters[0].authoredClips.size() == 2;
     pf::FighterPackage invalidInstallPackage = sourcePackage;
     invalidInstallPackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     pf::World invalidPackageInstallWorld = pf::makeTrainingWorld();
@@ -7379,6 +7462,18 @@ int main(int argc, char** argv) {
               << " fighter_package_cache_test_world_ok=" << packageCacheTestWorldOk
               << " fighter_package_runtime_install_ok=" << runtimePackageInstallOk
               << " fighter_package_runtime_bytes_install_ok=" << runtimePackageBytesInstallOk
+              << " fighter_editor_session_begin_ok=" << editorSessionBeginOk
+              << " fighter_editor_session_create_state_ok=" << editorSessionCreateStateOk
+              << " fighter_editor_session_rename_state_ok=" << editorSessionRenameStateOk
+              << " fighter_editor_session_remove_state_ok=" << editorSessionRemoveStateOk
+              << " fighter_editor_session_remap_ok=" << editorSessionRemapOk
+              << " fighter_editor_session_duplicate_state_ok=" << editorSessionDuplicateStateOk
+              << " fighter_editor_session_object_ok=" << editorSessionObjectOk
+              << " fighter_editor_session_export_ok=" << editorSessionExportOk
+              << " fighter_editor_session_test_world_ok=" << editorSessionTestWorldOk
+              << " fighter_editor_blank_session_ok=" << blankEditorSessionBeginOk
+              << " fighter_editor_blank_object_ok=" << blankEditorSessionObjectOk
+              << " fighter_editor_blank_export_ok=" << blankEditorSessionExportOk
               << " fighter_package_asset_ok=" << packageAssetOk
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
