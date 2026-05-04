@@ -2331,16 +2331,29 @@ bool packageScriptGraphHasNode(const PackageScriptGraph& graph, int nodeId) {
     });
 }
 
+const PackageScriptGraphNode* packageScriptGraphNodeById(const PackageScriptGraph& graph, int nodeId) {
+    const auto found = std::find_if(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+    return found == graph.nodes.end() ? nullptr : &*found;
+}
+
 void validatePackageScriptGraph(const PackageScriptGraph& graph, int instructionCount) {
     if (graph.nodes.size() > kMaxScriptGraphNodes || graph.links.size() > kMaxScriptGraphLinks) {
         throw std::runtime_error("fighter package script graph size is invalid");
     }
-    if (graph.entryNode >= 0 && !packageScriptGraphHasNode(graph, graph.entryNode)) {
+    if (!graph.nodes.empty()) {
+        const PackageScriptGraphNode* entry = packageScriptGraphNodeById(graph, graph.entryNode);
+        if (!entry || entry->kind != PackageScriptGraphNodeKind::Entry) {
+            throw std::runtime_error("fighter package script graph entry is invalid");
+        }
+    } else if (graph.entryNode != -1) {
         throw std::runtime_error("fighter package script graph entry is invalid");
     }
 
     std::vector<int> seenNodeIds;
     seenNodeIds.reserve(graph.nodes.size());
+    int entryNodeCount = 0;
     for (const PackageScriptGraphNode& node : graph.nodes) {
         if (node.id < 0) {
             throw std::runtime_error("fighter package script graph node id is invalid");
@@ -2352,6 +2365,9 @@ void validatePackageScriptGraph(const PackageScriptGraph& graph, int instruction
         if (!validPackageScriptGraphNodeKind(node.kind)) {
             throw std::runtime_error("fighter package script graph node kind is invalid");
         }
+        if (node.kind == PackageScriptGraphNodeKind::Entry) {
+            ++entryNodeCount;
+        }
         if (node.kind == PackageScriptGraphNodeKind::Instruction) {
             if (node.instructionIndex < 0 || node.instructionIndex >= instructionCount) {
                 throw std::runtime_error("fighter package script graph instruction is invalid");
@@ -2360,14 +2376,24 @@ void validatePackageScriptGraph(const PackageScriptGraph& graph, int instruction
             throw std::runtime_error("fighter package script graph instruction is invalid");
         }
     }
+    if (!graph.nodes.empty() && entryNodeCount != 1) {
+        throw std::runtime_error("fighter package script graph entry is invalid");
+    }
 
-    for (const PackageScriptGraphLink& link : graph.links) {
+    for (size_t linkIndex = 0; linkIndex < graph.links.size(); ++linkIndex) {
+        const PackageScriptGraphLink& link = graph.links[linkIndex];
         if (!packageScriptGraphHasNode(graph, link.fromNode) ||
             !packageScriptGraphHasNode(graph, link.toNode) ||
             link.fromSocket < 0 ||
             link.toSocket < 0)
         {
             throw std::runtime_error("fighter package script graph link is invalid");
+        }
+        for (size_t previousIndex = 0; previousIndex < linkIndex; ++previousIndex) {
+            const PackageScriptGraphLink& previous = graph.links[previousIndex];
+            if (previous.fromNode == link.fromNode && previous.fromSocket == link.fromSocket) {
+                throw std::runtime_error("fighter package script graph link is duplicate");
+            }
         }
     }
 }

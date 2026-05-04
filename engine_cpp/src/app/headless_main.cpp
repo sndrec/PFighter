@@ -5782,6 +5782,13 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidScriptGraphLinkPackage = sourcePackage;
     invalidScriptGraphLinkPackage.objects[1].packageScripts[0].graph.links[0].toNode = 999;
     const bool invalidPackageScriptGraphLinkRejected = pf::writeFighterPackage(invalidScriptGraphLinkPackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScriptGraphEntryPackage = sourcePackage;
+    invalidScriptGraphEntryPackage.fighters[0].packageScripts[0].graph.entryNode = 1;
+    const bool invalidPackageScriptGraphEntryRejected = pf::writeFighterPackage(invalidScriptGraphEntryPackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScriptGraphDuplicateLinkPackage = sourcePackage;
+    invalidScriptGraphDuplicateLinkPackage.fighters[0].packageScripts[0].graph.links.push_back(
+        invalidScriptGraphDuplicateLinkPackage.fighters[0].packageScripts[0].graph.links[0]);
+    const bool invalidPackageScriptGraphDuplicateLinkRejected = pf::writeFighterPackage(invalidScriptGraphDuplicateLinkPackage, &invalidPackageError).empty();
     pf::FighterPackage invalidInteractionReadWritePackage = sourcePackage;
     invalidInteractionReadWritePackage.fighters[0].packageScripts[4].instructions[9].dst = 999;
     const bool invalidPackageInteractionReadWriteRejected = pf::writeFighterPackage(invalidInteractionReadWritePackage, &invalidPackageError).empty();
@@ -8680,6 +8687,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_logic_var_write_rejected=" << invalidPackageLogicVarWriteRejected
               << " fighter_package_invalid_script_graph_instruction_rejected=" << invalidPackageScriptGraphInstructionRejected
               << " fighter_package_invalid_script_graph_link_rejected=" << invalidPackageScriptGraphLinkRejected
+              << " fighter_package_invalid_script_graph_entry_rejected=" << invalidPackageScriptGraphEntryRejected
+              << " fighter_package_invalid_script_graph_duplicate_link_rejected=" << invalidPackageScriptGraphDuplicateLinkRejected
               << " fighter_package_invalid_interaction_read_write_rejected=" << invalidPackageInteractionReadWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected
