@@ -107,33 +107,33 @@ struct HsdActionScript {
     std::vector<HsdActionCommand> commands;
 };
 
-struct HsdModelPartAnimationSet {
+struct ModelPartAnimationSet {
     int startingBone = 0;
     std::vector<int> entries;
     std::vector<AnimationClip> animations;
 };
 
-struct HsdMeshTexture {
+struct FighterMeshTexture {
     int width = 0;
     int height = 0;
     std::vector<uint8_t> rgba;
 };
 
-struct HsdMeshVertexInfluence {
+struct FighterMeshVertexInfluence {
     int bone = -1;
     float weight = 0.0f;
 };
 
-struct HsdMeshVertex {
+struct FighterMeshVertex {
     Vec3 position;
     Vec3 normal;
     float u = 0.0f;
     float v = 0.0f;
     std::array<uint8_t, 4> color{255, 255, 255, 255};
-    std::array<HsdMeshVertexInfluence, 6> influences{};
+    std::array<FighterMeshVertexInfluence, 6> influences{};
 };
 
-struct HsdMeshBatch {
+struct FighterMeshBatch {
     int parentBone = -1;
     int singleBindBone = -1;
     int dobjIndex = -1;
@@ -150,13 +150,13 @@ struct HsdMeshBatch {
     int textureAlphaOperation = 0;
     float textureBlend = 0.0f;
     std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
-    std::vector<HsdMeshVertex> vertices;
+    std::vector<FighterMeshVertex> vertices;
 };
 
-struct HsdFighterMesh {
+struct FighterMesh {
     std::vector<std::array<float, 16>> inverseBindMatrices;
-    std::vector<HsdMeshTexture> textures;
-    std::vector<HsdMeshBatch> batches;
+    std::vector<FighterMeshTexture> textures;
+    std::vector<FighterMeshBatch> batches;
 };
 
 struct HsdFighterAnimationAsset {
@@ -164,8 +164,8 @@ struct HsdFighterAnimationAsset {
     std::vector<uint8_t> sourceBytes;
     std::vector<AnimationJoint> skeleton;
     std::vector<AnimationClip> clips;
-    std::vector<HsdModelPartAnimationSet> modelPartAnimations;
-    HsdFighterMesh mesh;
+    std::vector<ModelPartAnimationSet> modelPartAnimations;
+    FighterMesh mesh;
     bool hasShieldPose = false;
     AnimationPose shieldPose;
     HsdFighterBoneTable fighterBones;

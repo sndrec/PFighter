@@ -82,8 +82,7 @@ package load/save should operate on native authored data only.
   animation previews now read native authored data. If package-first roster data
   is still parked in source-backed native vectors, entering the assets or
   animation workspace materializes those vectors into direct editable fields.
-- Imported mesh status and editor controls still use the legacy `HsdMesh*`
-  struct names even though package data is native.
+- Imported mesh editor controls now use the native `FighterMesh*` struct names.
 - The timeline/subaction editor can show converted action subactions from
   persisted package data. `AttackHi3` has a headless package/editor gate that
   verifies native hitbox/subaction timeline markers and native clip references.
@@ -110,7 +109,7 @@ package load/save should operate on native authored data only.
 
 - Native skeleton, animation clips, mesh textures/material-ish batches, and
   hurtboxes have storage and serialization.
-- Native mesh storage is still named `HsdFighterMesh`/`HsdMesh*`, but package
+- Native mesh storage now uses `FighterMesh`/`FighterMesh*`, and package
   rendering now reads it through native authored mesh accessors.
 - Native metadata now exists for imported fighter bone roles, common-bone
   lookup, ECB source bones, shield pose, model-part animation sets, and import

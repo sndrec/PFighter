@@ -633,7 +633,7 @@ static unsigned int uploadColorAttribute(const std::vector<unsigned char>& data)
     return vbo;
 }
 
-static Texture2D loadTextureFromRgba(const pf::HsdMeshTexture& texture) {
+static Texture2D loadTextureFromRgba(const pf::FighterMeshTexture& texture) {
     Image image{};
     image.data = const_cast<uint8_t*>(texture.rgba.data());
     image.width = texture.width;
@@ -646,7 +646,7 @@ static Texture2D loadTextureFromRgba(const pf::HsdMeshTexture& texture) {
     return loaded;
 }
 
-static HsdRenderCache createHsdRenderCache(const pf::HsdFighterMesh& mesh) {
+static HsdRenderCache createHsdRenderCache(const pf::FighterMesh& mesh) {
     HsdRenderCache cache;
     cache.shader = LoadShaderFromMemory(hsdMeshVertexShader(), hsdMeshFragmentShader());
     cache.locMvp = GetShaderLocation(cache.shader, "mvp");
@@ -664,14 +664,14 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterMesh& mesh) {
     cache.boneUniformBuffer = createBoneUniformBuffer(cache.shader);
 
     cache.textures.reserve(mesh.textures.size());
-    for (const pf::HsdMeshTexture& texture : mesh.textures) {
+    for (const pf::FighterMeshTexture& texture : mesh.textures) {
         if (texture.width > 0 && texture.height > 0 && !texture.rgba.empty()) {
             cache.textures.push_back(loadTextureFromRgba(texture));
         }
     }
 
     cache.batches.reserve(mesh.batches.size());
-    for (const pf::HsdMeshBatch& source : mesh.batches) {
+    for (const pf::FighterMeshBatch& source : mesh.batches) {
         HsdRenderBatch batch;
         batch.parentBone = source.parentBone;
         batch.singleBindBone = source.singleBindBone;
@@ -708,7 +708,7 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterMesh& mesh) {
         bone1.reserve(source.vertices.size() * 2);
         weight1.reserve(source.vertices.size() * 2);
 
-        for (const pf::HsdMeshVertex& vertex : source.vertices) {
+        for (const pf::FighterMeshVertex& vertex : source.vertices) {
             positions.push_back(pf::fxToFloat(vertex.position.x));
             positions.push_back(pf::fxToFloat(vertex.position.y));
             positions.push_back(pf::fxToFloat(vertex.position.z));
@@ -747,8 +747,8 @@ static HsdRenderCache createHsdRenderCache(const pf::HsdFighterMesh& mesh) {
     return cache;
 }
 
-static HsdRenderCache& hsdRenderCache(const pf::HsdFighterMesh& mesh) {
-    static std::unordered_map<const pf::HsdFighterMesh*, std::unique_ptr<HsdRenderCache>> caches;
+static HsdRenderCache& hsdRenderCache(const pf::FighterMesh& mesh) {
+    static std::unordered_map<const pf::FighterMesh*, std::unique_ptr<HsdRenderCache>> caches;
     auto it = caches.find(&mesh);
     if (it == caches.end()) {
         it = caches.emplace(&mesh, std::make_unique<HsdRenderCache>(createHsdRenderCache(mesh))).first;
@@ -779,7 +779,7 @@ static bool isBatchVisible(const HsdRenderBatch& batch, const pf::FighterRuntime
 }
 
 static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+    const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
     if (mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
         return;
     }
@@ -2926,15 +2926,15 @@ static bool authoredJointNameAvailable(const pf::FighterDefinition& def, const s
     return true;
 }
 
-static pf::HsdFighterMesh makeEditorTriangleMesh() {
-    pf::HsdFighterMesh mesh;
-    pf::HsdMeshBatch batch;
+static pf::FighterMesh makeEditorTriangleMesh() {
+    pf::FighterMesh mesh;
+    pf::FighterMeshBatch batch;
     batch.parentBone = 0;
     batch.singleBindBone = 0;
     batch.materialColor = {160, 220, 255, 255};
 
     auto vertex = [](pf::Vec3 position) {
-        pf::HsdMeshVertex out;
+        pf::FighterMeshVertex out;
         out.position = position;
         out.normal = {0, 0, pf::fx(1)};
         out.influences[0] = {0, 1.0f};
@@ -2949,17 +2949,17 @@ static pf::HsdFighterMesh makeEditorTriangleMesh() {
     return mesh;
 }
 
-static int authoredMeshVertexCount(const pf::HsdFighterMesh& mesh) {
+static int authoredMeshVertexCount(const pf::FighterMesh& mesh) {
     int count = 0;
-    for (const pf::HsdMeshBatch& batch : mesh.batches) {
+    for (const pf::FighterMeshBatch& batch : mesh.batches) {
         count += static_cast<int>(batch.vertices.size());
     }
     return count;
 }
 
-static pf::HsdMeshVertex* authoredMeshVertexAt(pf::HsdFighterMesh& mesh, int vertexIndex) {
+static pf::FighterMeshVertex* authoredMeshVertexAt(pf::FighterMesh& mesh, int vertexIndex) {
     int cursor = 0;
-    for (pf::HsdMeshBatch& batch : mesh.batches) {
+    for (pf::FighterMeshBatch& batch : mesh.batches) {
         const int next = cursor + static_cast<int>(batch.vertices.size());
         if (vertexIndex >= cursor && vertexIndex < next) {
             return &batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
@@ -2969,10 +2969,10 @@ static pf::HsdMeshVertex* authoredMeshVertexAt(pf::HsdFighterMesh& mesh, int ver
     return nullptr;
 }
 
-static std::string authoredMeshVertexInfluenceSummary(const pf::HsdMeshVertex& vertex) {
+static std::string authoredMeshVertexInfluenceSummary(const pf::FighterMeshVertex& vertex) {
     std::string summary;
     int shown = 0;
-    for (const pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (const pf::FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.bone < 0 || influence.weight <= 0.0f) {
             continue;
         }
@@ -2989,14 +2989,14 @@ static std::string authoredMeshVertexInfluenceSummary(const pf::HsdMeshVertex& v
     return summary.empty() ? "none" : summary;
 }
 
-static pf::Vec2 authoredMeshSize(const pf::HsdFighterMesh& mesh) {
+static pf::Vec2 authoredMeshSize(const pf::FighterMesh& mesh) {
     bool haveVertex = false;
     pf::Fix minX = 0;
     pf::Fix maxX = 0;
     pf::Fix minY = 0;
     pf::Fix maxY = 0;
-    for (const pf::HsdMeshBatch& batch : mesh.batches) {
-        for (const pf::HsdMeshVertex& vertex : batch.vertices) {
+    for (const pf::FighterMeshBatch& batch : mesh.batches) {
+        for (const pf::FighterMeshVertex& vertex : batch.vertices) {
             if (!haveVertex) {
                 minX = maxX = vertex.position.x;
                 minY = maxY = vertex.position.y;
@@ -3012,17 +3012,17 @@ static pf::Vec2 authoredMeshSize(const pf::HsdFighterMesh& mesh) {
     return haveVertex ? pf::Vec2{maxX - minX, maxY - minY} : pf::Vec2{};
 }
 
-static void scaleAuthoredMesh(pf::HsdFighterMesh& mesh, pf::Fix scaleX, pf::Fix scaleY) {
-    for (pf::HsdMeshBatch& batch : mesh.batches) {
-        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+static void scaleAuthoredMesh(pf::FighterMesh& mesh, pf::Fix scaleX, pf::Fix scaleY) {
+    for (pf::FighterMeshBatch& batch : mesh.batches) {
+        for (pf::FighterMeshVertex& vertex : batch.vertices) {
             vertex.position.x = pf::fxMul(vertex.position.x, scaleX);
             vertex.position.y = pf::fxMul(vertex.position.y, scaleY);
         }
     }
 }
 
-static void nudgeAuthoredMeshVertex(pf::HsdFighterMesh& mesh, int vertexIndex, pf::Vec3 delta) {
-    pf::HsdMeshVertex* vertex = authoredMeshVertexAt(mesh, vertexIndex);
+static void nudgeAuthoredMeshVertex(pf::FighterMesh& mesh, int vertexIndex, pf::Vec3 delta) {
+    pf::FighterMeshVertex* vertex = authoredMeshVertexAt(mesh, vertexIndex);
     if (!vertex) {
         return;
     }
@@ -3031,9 +3031,9 @@ static void nudgeAuthoredMeshVertex(pf::HsdFighterMesh& mesh, int vertexIndex, p
     vertex->position.z += delta.z;
 }
 
-static void normalizeAuthoredMeshVertexInfluences(pf::HsdMeshVertex& vertex, int fallbackJoint) {
+static void normalizeAuthoredMeshVertexInfluences(pf::FighterMeshVertex& vertex, int fallbackJoint) {
     float sum = 0.0f;
-    for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (pf::FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.bone < 0 || influence.weight <= 0.0f) {
             influence = {};
             influence.bone = -1;
@@ -3046,19 +3046,19 @@ static void normalizeAuthoredMeshVertexInfluences(pf::HsdMeshVertex& vertex, int
         vertex.influences[0] = {fallbackJoint, 1.0f};
         return;
     }
-    for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (pf::FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.bone >= 0 && influence.weight > 0.0f) {
             influence.weight /= sum;
         }
     }
 }
 
-static void bindAuthoredMeshVertexToJoint(pf::HsdFighterMesh& mesh, int vertexIndex, int joint, int skeletonSize) {
+static void bindAuthoredMeshVertexToJoint(pf::FighterMesh& mesh, int vertexIndex, int joint, int skeletonSize) {
     int cursor = 0;
-    for (pf::HsdMeshBatch& batch : mesh.batches) {
+    for (pf::FighterMeshBatch& batch : mesh.batches) {
         const int next = cursor + static_cast<int>(batch.vertices.size());
         if (vertexIndex >= cursor && vertexIndex < next) {
-            pf::HsdMeshVertex& vertex = batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
+            pf::FighterMeshVertex& vertex = batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
             vertex.influences = {};
             vertex.influences[0] = {joint, 1.0f};
             batch.parentBone = skeletonSize > 1 ? -1 : joint;
@@ -3071,24 +3071,24 @@ static void bindAuthoredMeshVertexToJoint(pf::HsdFighterMesh& mesh, int vertexIn
 }
 
 static void blendAuthoredMeshVertexTowardJoint(
-    pf::HsdFighterMesh& mesh,
+    pf::FighterMesh& mesh,
     int vertexIndex,
     int joint,
     int skeletonSize,
     float amount)
 {
     int cursor = 0;
-    for (pf::HsdMeshBatch& batch : mesh.batches) {
+    for (pf::FighterMeshBatch& batch : mesh.batches) {
         const int next = cursor + static_cast<int>(batch.vertices.size());
         if (vertexIndex < cursor || vertexIndex >= next) {
             cursor = next;
             continue;
         }
 
-        pf::HsdMeshVertex& vertex = batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
-        pf::HsdMeshVertexInfluence* target = nullptr;
-        pf::HsdMeshVertexInfluence* empty = nullptr;
-        for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+        pf::FighterMeshVertex& vertex = batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
+        pf::FighterMeshVertexInfluence* target = nullptr;
+        pf::FighterMeshVertexInfluence* empty = nullptr;
+        for (pf::FighterMeshVertexInfluence& influence : vertex.influences) {
             if (influence.bone == joint) {
                 target = &influence;
             }
@@ -3113,23 +3113,23 @@ static void blendAuthoredMeshVertexTowardJoint(
     }
 }
 
-static void bindAuthoredMeshToJoint(pf::HsdFighterMesh& mesh, int joint) {
-    for (pf::HsdMeshBatch& batch : mesh.batches) {
+static void bindAuthoredMeshToJoint(pf::FighterMesh& mesh, int joint) {
+    for (pf::FighterMeshBatch& batch : mesh.batches) {
         batch.parentBone = joint;
         batch.singleBindBone = joint;
-        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+        for (pf::FighterMeshVertex& vertex : batch.vertices) {
             vertex.influences = {};
             vertex.influences[0] = {joint, 1.0f};
         }
     }
 }
 
-static int authoredMeshMaxInfluences(const pf::HsdFighterMesh& mesh) {
+static int authoredMeshMaxInfluences(const pf::FighterMesh& mesh) {
     int maxInfluences = 0;
-    for (const pf::HsdMeshBatch& batch : mesh.batches) {
-        for (const pf::HsdMeshVertex& vertex : batch.vertices) {
+    for (const pf::FighterMeshBatch& batch : mesh.batches) {
+        for (const pf::FighterMeshVertex& vertex : batch.vertices) {
             int vertexInfluences = 0;
-            for (const pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+            for (const pf::FighterMeshVertexInfluence& influence : vertex.influences) {
                 if (influence.weight > 0.0f && influence.bone >= 0) {
                     ++vertexInfluences;
                 }
@@ -3156,7 +3156,7 @@ static std::vector<pf::Vec3> authoredSkeletonBindPositions(const std::vector<pf:
 }
 
 static void autoWeightAuthoredMeshToSkeleton(
-    pf::HsdFighterMesh& mesh,
+    pf::FighterMesh& mesh,
     const std::vector<pf::AnimationJoint>& skeleton)
 {
     const std::vector<pf::Vec3> joints = authoredSkeletonBindPositions(skeleton);
@@ -3164,11 +3164,11 @@ static void autoWeightAuthoredMeshToSkeleton(
         return;
     }
 
-    for (pf::HsdMeshBatch& batch : mesh.batches) {
+    for (pf::FighterMeshBatch& batch : mesh.batches) {
         batch.parentBone = joints.size() > 1 ? -1 : 0;
         batch.singleBindBone = joints.size() > 1 ? -1 : 0;
         batch.hasEnvelopes = joints.size() > 1;
-        for (pf::HsdMeshVertex& vertex : batch.vertices) {
+        for (pf::FighterMeshVertex& vertex : batch.vertices) {
             int nearest = 0;
             int second = -1;
             float nearestDist = authoredMeshDistanceSquared(vertex.position, joints.front());
@@ -3238,11 +3238,11 @@ static void removeAuthoredSkeletonJoint(pf::FighterDefinition& def, int jointInd
             track.joint = remapRemovedAuthoredBone(track.joint, jointIndex, fallbackBone);
         }
     }
-    for (pf::HsdMeshBatch& batch : def.authoredMesh.batches) {
+    for (pf::FighterMeshBatch& batch : def.authoredMesh.batches) {
         batch.parentBone = remapRemovedAuthoredBone(batch.parentBone, jointIndex, fallbackBone);
         batch.singleBindBone = remapRemovedAuthoredBone(batch.singleBindBone, jointIndex, fallbackBone);
-        for (pf::HsdMeshVertex& vertex : batch.vertices) {
-            for (pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+        for (pf::FighterMeshVertex& vertex : batch.vertices) {
+            for (pf::FighterMeshVertexInfluence& influence : vertex.influences) {
                 influence.bone = remapRemovedAuthoredBone(influence.bone, jointIndex, fallbackBone);
             }
         }
@@ -4001,12 +4001,12 @@ static pf::Fix shieldRadius(const pf::FighterDefinition& def, const pf::FighterR
     return pf::fxMul(def.shield.startSizeHardShield, common.minShieldScaleX264 + pf::fxMul(pf::fx(1) - common.minShieldScaleX264, scaledHealth));
 }
 
-static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const pf::HsdMeshBatch& batch, const pf::HsdMeshVertex& vertex) {
+static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const pf::FighterMeshBatch& batch, const pf::FighterMeshVertex& vertex) {
     float blendedX = 0.0f;
     float blendedY = 0.0f;
     float blendedZ = 0.0f;
     float weightSum = 0.0f;
-    for (const pf::HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (const pf::FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.weight <= 0.0f ||
             influence.bone < 0 ||
             static_cast<size_t>(influence.bone) >= fighter.hsdJointWorldTransforms.size())
@@ -4033,8 +4033,8 @@ static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const
 }
 
 static void drawAuthoredMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
-    for (const pf::HsdMeshBatch& batch : mesh.batches) {
+    const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
+    for (const pf::FighterMeshBatch& batch : mesh.batches) {
         const Color color{batch.materialColor[0], batch.materialColor[1], batch.materialColor[2], batch.materialColor[3]};
         for (size_t i = 0; i + 2 < batch.vertices.size(); i += 3) {
             const pf::Vec3 a = authoredMeshVertexWorld(fighter, batch, batch.vertices[i]);
@@ -4055,8 +4055,8 @@ static bool authoredMeshVertexWorldAt(
     pf::Vec3& out)
 {
     int cursor = 0;
-    const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
-    for (const pf::HsdMeshBatch& batch : mesh.batches) {
+    const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
+    for (const pf::FighterMeshBatch& batch : mesh.batches) {
         const int next = cursor + static_cast<int>(batch.vertices.size());
         if (vertexIndex >= cursor && vertexIndex < next) {
             out = authoredMeshVertexWorld(fighter, batch, batch.vertices[static_cast<size_t>(vertexIndex - cursor)]);
@@ -4121,7 +4121,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     } else if (fighter.fighterInvisible) {
         // ftDrawCommon skips fighter model display when x221E_b5 is set.
     } else if (hasAnimationPose) {
-        const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+        const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
         if (!mesh.batches.empty()) {
             drawImportedMesh(def, fighter);
         } else {
@@ -4129,7 +4129,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
             drawAnimationSkeleton(def, fighter, color);
         }
     } else {
-        const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+        const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
         if (!mesh.batches.empty()) {
             drawAuthoredMesh(def, fighter);
         } else {
@@ -4992,7 +4992,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
             editor.selectedAuthoredMeshVertex,
             0,
             std::max(0, meshVerts - 1));
-        pf::HsdMeshVertex* selectedVertex = authoredMeshVertexAt(
+        pf::FighterMeshVertex* selectedVertex = authoredMeshVertexAt(
             def.authoredMesh,
             editor.selectedAuthoredMeshVertex);
         const int meshBind = def.authoredMesh.batches.front().singleBindBone;

@@ -18,13 +18,13 @@ static bool sameVec2(pf::Vec2 a, pf::Vec2 b) {
     return a.x == b.x && a.y == b.y;
 }
 
-static pf::HsdFighterMesh makeSmokeAuthoredMesh() {
-    pf::HsdFighterMesh mesh;
-    pf::HsdMeshBatch batch;
+static pf::FighterMesh makeSmokeAuthoredMesh() {
+    pf::FighterMesh mesh;
+    pf::FighterMeshBatch batch;
     batch.parentBone = 0;
     batch.singleBindBone = 0;
     auto vertex = [](pf::Vec3 position) {
-        pf::HsdMeshVertex out;
+        pf::FighterMeshVertex out;
         out.position = position;
         out.normal = {0, 0, pf::fx(1)};
         out.influences[0] = {0, 1.0f};

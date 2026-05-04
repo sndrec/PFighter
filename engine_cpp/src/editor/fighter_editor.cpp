@@ -1591,7 +1591,7 @@ void FighterEditor::clampToWorld(const World& world) {
         animationScrubFrame = 0;
     }
     int authoredMeshVertices = 0;
-    for (const HsdMeshBatch& batch : def.authoredMesh.batches) {
+    for (const FighterMeshBatch& batch : def.authoredMesh.batches) {
         authoredMeshVertices += static_cast<int>(batch.vertices.size());
     }
     selectedAuthoredMeshVertex = std::clamp(
@@ -1858,9 +1858,9 @@ bool hasEditorAnimationKeyFrame(const std::vector<AnimationKey>& keys, Fix frame
     return false;
 }
 
-HsdMeshVertex* editorAuthoredMeshVertexAt(HsdFighterMesh& mesh, int vertexIndex) {
+FighterMeshVertex* editorAuthoredMeshVertexAt(FighterMesh& mesh, int vertexIndex) {
     int cursor = 0;
-    for (HsdMeshBatch& batch : mesh.batches) {
+    for (FighterMeshBatch& batch : mesh.batches) {
         const int next = cursor + static_cast<int>(batch.vertices.size());
         if (vertexIndex >= cursor && vertexIndex < next) {
             return &batch.vertices[static_cast<size_t>(vertexIndex - cursor)];
@@ -1885,9 +1885,9 @@ std::vector<Vec3> editorAuthoredSkeletonBindPositions(const std::vector<Animatio
     return jointWorldTranslations(skeleton, pose);
 }
 
-void normalizeEditorAuthoredMeshVertexInfluences(HsdMeshVertex& vertex, int fallbackJoint) {
+void normalizeEditorAuthoredMeshVertexInfluences(FighterMeshVertex& vertex, int fallbackJoint) {
     float sum = 0.0f;
-    for (HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.bone < 0 || influence.weight <= 0.0f) {
             influence = {};
             influence.bone = -1;
@@ -1900,21 +1900,21 @@ void normalizeEditorAuthoredMeshVertexInfluences(HsdMeshVertex& vertex, int fall
         vertex.influences[0] = {fallbackJoint, 1.0f};
         return;
     }
-    for (HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.bone >= 0 && influence.weight > 0.0f) {
             influence.weight /= sum;
         }
     }
 }
 
-void bindEditorAuthoredMeshVertexToJoint(HsdFighterMesh& mesh, int vertexIndex, int joint, int skeletonSize) {
-    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(mesh, vertexIndex);
+void bindEditorAuthoredMeshVertexToJoint(FighterMesh& mesh, int vertexIndex, int joint, int skeletonSize) {
+    FighterMeshVertex* vertex = editorAuthoredMeshVertexAt(mesh, vertexIndex);
     if (!vertex) {
         return;
     }
     vertex->influences = {};
     vertex->influences[0] = {joint, 1.0f};
-    for (HsdMeshBatch& batch : mesh.batches) {
+    for (FighterMeshBatch& batch : mesh.batches) {
         batch.parentBone = skeletonSize > 1 ? -1 : joint;
         batch.singleBindBone = skeletonSize > 1 ? -1 : joint;
         batch.hasEnvelopes = skeletonSize > 1;
@@ -1922,19 +1922,19 @@ void bindEditorAuthoredMeshVertexToJoint(HsdFighterMesh& mesh, int vertexIndex, 
 }
 
 void blendEditorAuthoredMeshVertexTowardJoint(
-    HsdFighterMesh& mesh,
+    FighterMesh& mesh,
     int vertexIndex,
     int joint,
     int skeletonSize,
     float amount)
 {
-    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(mesh, vertexIndex);
+    FighterMeshVertex* vertex = editorAuthoredMeshVertexAt(mesh, vertexIndex);
     if (!vertex) {
         return;
     }
-    HsdMeshVertexInfluence* target = nullptr;
-    HsdMeshVertexInfluence* empty = nullptr;
-    for (HsdMeshVertexInfluence& influence : vertex->influences) {
+    FighterMeshVertexInfluence* target = nullptr;
+    FighterMeshVertexInfluence* empty = nullptr;
+    for (FighterMeshVertexInfluence& influence : vertex->influences) {
         if (influence.bone == joint) {
             target = &influence;
         }
@@ -1952,23 +1952,23 @@ void blendEditorAuthoredMeshVertexTowardJoint(
     }
     target->weight += amount;
     normalizeEditorAuthoredMeshVertexInfluences(*vertex, joint);
-    for (HsdMeshBatch& batch : mesh.batches) {
+    for (FighterMeshBatch& batch : mesh.batches) {
         batch.parentBone = skeletonSize > 1 ? -1 : joint;
         batch.singleBindBone = skeletonSize > 1 ? -1 : joint;
         batch.hasEnvelopes = skeletonSize > 1;
     }
 }
 
-void autoWeightEditorAuthoredMesh(HsdFighterMesh& mesh, const std::vector<AnimationJoint>& skeleton) {
+void autoWeightEditorAuthoredMesh(FighterMesh& mesh, const std::vector<AnimationJoint>& skeleton) {
     const std::vector<Vec3> joints = editorAuthoredSkeletonBindPositions(skeleton);
     if (joints.empty()) {
         return;
     }
-    for (HsdMeshBatch& batch : mesh.batches) {
+    for (FighterMeshBatch& batch : mesh.batches) {
         batch.parentBone = joints.size() > 1 ? -1 : 0;
         batch.singleBindBone = joints.size() > 1 ? -1 : 0;
         batch.hasEnvelopes = joints.size() > 1;
-        for (HsdMeshVertex& vertex : batch.vertices) {
+        for (FighterMeshVertex& vertex : batch.vertices) {
             int nearest = 0;
             int second = -1;
             float nearestDist = editorAuthoredMeshDistanceSquared(vertex.position, joints.front());
@@ -3910,14 +3910,14 @@ bool editorAuthoredClipActionIndexAvailable(const FighterDefinition& def, int ac
     return true;
 }
 
-HsdFighterMesh makeFighterEditorTriangleMesh() {
-    HsdFighterMesh mesh;
-    HsdMeshBatch batch;
+FighterMesh makeFighterEditorTriangleMesh() {
+    FighterMesh mesh;
+    FighterMeshBatch batch;
     batch.parentBone = 0;
     batch.singleBindBone = 0;
     batch.materialColor = {160, 220, 255, 255};
     auto vertex = [](Vec3 position) {
-        HsdMeshVertex out;
+        FighterMeshVertex out;
         out.position = position;
         out.normal = {0, 0, fx(1)};
         out.influences[0] = {0, 1.0f};
@@ -3932,9 +3932,9 @@ HsdFighterMesh makeFighterEditorTriangleMesh() {
     return mesh;
 }
 
-int editorAuthoredMeshVertexCount(const HsdFighterMesh& mesh) {
+int editorAuthoredMeshVertexCount(const FighterMesh& mesh) {
     int count = 0;
-    for (const HsdMeshBatch& batch : mesh.batches) {
+    for (const FighterMeshBatch& batch : mesh.batches) {
         count += static_cast<int>(batch.vertices.size());
     }
     return count;
@@ -4056,15 +4056,15 @@ bool addEditorSessionAuthoredJoint(
             }
         }
     }
-    for (HsdMeshBatch& batch : def.authoredMesh.batches) {
+    for (FighterMeshBatch& batch : def.authoredMesh.batches) {
         if (batch.parentBone >= index) {
             ++batch.parentBone;
         }
         if (batch.singleBindBone >= index) {
             ++batch.singleBindBone;
         }
-        for (HsdMeshVertex& vertex : batch.vertices) {
-            for (HsdMeshVertexInfluence& influence : vertex.influences) {
+        for (FighterMeshVertex& vertex : batch.vertices) {
+            for (FighterMeshVertexInfluence& influence : vertex.influences) {
                 if (influence.bone >= index) {
                     ++influence.bone;
                 }
@@ -4145,11 +4145,11 @@ bool removeEditorSessionAuthoredJoint(
             track.joint = remapRemovedAuthoredBone(track.joint, jointIndex, fallbackBone);
         }
     }
-    for (HsdMeshBatch& batch : def.authoredMesh.batches) {
+    for (FighterMeshBatch& batch : def.authoredMesh.batches) {
         batch.parentBone = remapRemovedAuthoredBone(batch.parentBone, jointIndex, fallbackBone);
         batch.singleBindBone = remapRemovedAuthoredBone(batch.singleBindBone, jointIndex, fallbackBone);
-        for (HsdMeshVertex& vertex : batch.vertices) {
-            for (HsdMeshVertexInfluence& influence : vertex.influences) {
+        for (FighterMeshVertex& vertex : batch.vertices) {
+            for (FighterMeshVertexInfluence& influence : vertex.influences) {
                 influence.bone = remapRemovedAuthoredBone(influence.bone, jointIndex, fallbackBone);
             }
         }
@@ -4466,7 +4466,7 @@ bool removeEditorSessionAuthoredKey(
 
 bool setEditorSessionAuthoredMesh(
     FighterEditorSession& session,
-    const HsdFighterMesh& mesh,
+    const FighterMesh& mesh,
     std::string* error)
 {
     FighterDefinition* selected = selectedSessionPackageFighter(session, error);
@@ -4489,8 +4489,8 @@ bool scaleEditorSessionAuthoredMesh(
         return false;
     }
     FighterPackage previous = session.package;
-    for (HsdMeshBatch& batch : selected->authoredMesh.batches) {
-        for (HsdMeshVertex& vertex : batch.vertices) {
+    for (FighterMeshBatch& batch : selected->authoredMesh.batches) {
+        for (FighterMeshVertex& vertex : batch.vertices) {
             vertex.position.x = fxMul(vertex.position.x, scaleX);
             vertex.position.y = fxMul(vertex.position.y, scaleY);
         }
@@ -4508,7 +4508,7 @@ bool nudgeEditorSessionAuthoredMeshVertex(
     if (!selected) {
         return false;
     }
-    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(selected->authoredMesh, vertexIndex);
+    FighterMeshVertex* vertex = editorAuthoredMeshVertexAt(selected->authoredMesh, vertexIndex);
     if (!vertex) {
         setEditorError(error, "editor authored mesh vertex index is invalid");
         return false;
@@ -4535,11 +4535,11 @@ bool bindEditorSessionAuthoredMeshToJoint(
         return false;
     }
     FighterPackage previous = session.package;
-    for (HsdMeshBatch& batch : def.authoredMesh.batches) {
+    for (FighterMeshBatch& batch : def.authoredMesh.batches) {
         batch.parentBone = jointIndex;
         batch.singleBindBone = jointIndex;
         batch.hasEnvelopes = false;
-        for (HsdMeshVertex& vertex : batch.vertices) {
+        for (FighterMeshVertex& vertex : batch.vertices) {
             vertex.influences = {};
             vertex.influences[0] = {jointIndex, 1.0f};
         }

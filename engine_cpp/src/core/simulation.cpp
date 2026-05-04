@@ -601,11 +601,11 @@ const AnimationClip* authoredAnimationClipByActionIndex(const FighterDefinition&
     return found == clips.end() ? nullptr : &*found;
 }
 
-const HsdFighterMesh& authoredFighterMesh(const FighterDefinition& def) {
+const FighterMesh& authoredFighterMesh(const FighterDefinition& def) {
     return def.authoredMeshSource ? *def.authoredMeshSource : def.authoredMesh;
 }
 
-const std::vector<HsdModelPartAnimationSet>& authoredModelPartAnimations(const FighterDefinition& def) {
+const std::vector<ModelPartAnimationSet>& authoredModelPartAnimations(const FighterDefinition& def) {
     return def.modelPartAnimationSource ? *def.modelPartAnimationSource : def.modelPartAnimations;
 }
 
@@ -637,12 +637,12 @@ static bool tryLoadNativePackageFighterDefinition(const NativeRosterFighterSpec&
         out.authoredClips.clear();
     }
     if (!out.authoredMesh.batches.empty() || !out.authoredMesh.textures.empty()) {
-        out.authoredMeshSource = std::make_shared<const HsdFighterMesh>(std::move(out.authoredMesh));
+        out.authoredMeshSource = std::make_shared<const FighterMesh>(std::move(out.authoredMesh));
         out.authoredMesh = {};
     }
     if (!out.modelPartAnimations.empty()) {
         out.modelPartAnimationSource =
-            std::make_shared<const std::vector<HsdModelPartAnimationSet>>(std::move(out.modelPartAnimations));
+            std::make_shared<const std::vector<ModelPartAnimationSet>>(std::move(out.modelPartAnimations));
         out.modelPartAnimations.clear();
     }
     cachedDefinitions.emplace(cacheKey, out);
@@ -780,9 +780,9 @@ StageDefinition makeBattlefieldTrainingStage() {
     throw std::runtime_error("missing or invalid binary Battlefield stage asset: engine_cpp/data/stages/battlefield_melee.pstage.bin");
 }
 
-static size_t modelVisibilityStateCount(const HsdFighterMesh& mesh) {
+static size_t modelVisibilityStateCount(const FighterMesh& mesh) {
     int maxIndex = -1;
-    for (const HsdMeshBatch& batch : mesh.batches) {
+    for (const FighterMeshBatch& batch : mesh.batches) {
         if (batch.hiddenByVisibilityTable && batch.modelPartIndex >= 0) {
             maxIndex = std::max(maxIndex, batch.modelPartIndex);
         }
@@ -791,7 +791,7 @@ static size_t modelVisibilityStateCount(const HsdFighterMesh& mesh) {
 }
 
 static void ensureModelVisibilityDefaults(const FighterDefinition& def, FighterRuntime& fighter) {
-    const HsdFighterMesh& mesh = authoredFighterMesh(def);
+    const FighterMesh& mesh = authoredFighterMesh(def);
     if (mesh.batches.empty()) {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
@@ -3071,7 +3071,7 @@ static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntim
     if (fighter.hsdModelPartAnimations.empty()) {
         return;
     }
-    const std::vector<HsdModelPartAnimationSet>& sets = authoredModelPartAnimations(def);
+    const std::vector<ModelPartAnimationSet>& sets = authoredModelPartAnimations(def);
     for (size_t partIndex = 0; partIndex < sets.size() && partIndex < fighter.hsdModelPartAnimations.size(); ++partIndex) {
         const int animIndex = fighter.hsdModelPartAnimations[partIndex];
         if (animIndex < 0 || static_cast<size_t>(animIndex) >= sets[partIndex].animations.size()) {

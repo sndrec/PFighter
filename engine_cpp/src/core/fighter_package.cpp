@@ -1542,7 +1542,7 @@ FighterImportProvenance readFighterImportProvenance(PackageReader& reader) {
     return provenance;
 }
 
-void writeModelPartAnimationSet(PackageWriter& writer, const HsdModelPartAnimationSet& set) {
+void writeModelPartAnimationSet(PackageWriter& writer, const ModelPartAnimationSet& set) {
     writer.writeI32(set.startingBone);
     writeVector(writer, set.entries, [&](int entry) {
         writer.writeI32(entry);
@@ -1552,8 +1552,8 @@ void writeModelPartAnimationSet(PackageWriter& writer, const HsdModelPartAnimati
     });
 }
 
-HsdModelPartAnimationSet readModelPartAnimationSet(PackageReader& reader) {
-    HsdModelPartAnimationSet set;
+ModelPartAnimationSet readModelPartAnimationSet(PackageReader& reader) {
+    ModelPartAnimationSet set;
     set.startingBone = reader.readI32();
     set.entries = readVector<int>(reader, kMaxMeshBatches, "model part entry", [&]() {
         return reader.readI32();
@@ -1592,57 +1592,57 @@ std::array<uint8_t, 4> readByteArray4(PackageReader& reader) {
     return values;
 }
 
-void writeMeshTexture(PackageWriter& writer, const HsdMeshTexture& texture) {
+void writeMeshTexture(PackageWriter& writer, const FighterMeshTexture& texture) {
     writer.writeI32(texture.width);
     writer.writeI32(texture.height);
     writer.writeBytes(texture.rgba);
 }
 
-HsdMeshTexture readMeshTexture(PackageReader& reader) {
-    HsdMeshTexture texture;
+FighterMeshTexture readMeshTexture(PackageReader& reader) {
+    FighterMeshTexture texture;
     texture.width = reader.readI32();
     texture.height = reader.readI32();
     texture.rgba = reader.readBytes(kMaxAssetBytes, "mesh texture bytes");
     return texture;
 }
 
-void writeMeshInfluence(PackageWriter& writer, const HsdMeshVertexInfluence& influence) {
+void writeMeshInfluence(PackageWriter& writer, const FighterMeshVertexInfluence& influence) {
     writer.writeI32(influence.bone);
     writer.writePod(influence.weight);
 }
 
-HsdMeshVertexInfluence readMeshInfluence(PackageReader& reader) {
-    HsdMeshVertexInfluence influence;
+FighterMeshVertexInfluence readMeshInfluence(PackageReader& reader) {
+    FighterMeshVertexInfluence influence;
     influence.bone = reader.readI32();
     influence.weight = reader.readPod<float>();
     return influence;
 }
 
-void writeMeshVertex(PackageWriter& writer, const HsdMeshVertex& vertex) {
+void writeMeshVertex(PackageWriter& writer, const FighterMeshVertex& vertex) {
     writeVec3(writer, vertex.position);
     writeVec3(writer, vertex.normal);
     writer.writePod(vertex.u);
     writer.writePod(vertex.v);
     writeByteArray4(writer, vertex.color);
-    for (const HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (const FighterMeshVertexInfluence& influence : vertex.influences) {
         writeMeshInfluence(writer, influence);
     }
 }
 
-HsdMeshVertex readMeshVertex(PackageReader& reader) {
-    HsdMeshVertex vertex;
+FighterMeshVertex readMeshVertex(PackageReader& reader) {
+    FighterMeshVertex vertex;
     vertex.position = readVec3(reader);
     vertex.normal = readVec3(reader);
     vertex.u = reader.readPod<float>();
     vertex.v = reader.readPod<float>();
     vertex.color = readByteArray4(reader);
-    for (HsdMeshVertexInfluence& influence : vertex.influences) {
+    for (FighterMeshVertexInfluence& influence : vertex.influences) {
         influence = readMeshInfluence(reader);
     }
     return vertex;
 }
 
-void writeMeshBatch(PackageWriter& writer, const HsdMeshBatch& batch) {
+void writeMeshBatch(PackageWriter& writer, const FighterMeshBatch& batch) {
     writer.writeI32(batch.parentBone);
     writer.writeI32(batch.singleBindBone);
     writer.writeI32(batch.dobjIndex);
@@ -1659,13 +1659,13 @@ void writeMeshBatch(PackageWriter& writer, const HsdMeshBatch& batch) {
     writer.writeI32(batch.textureAlphaOperation);
     writer.writePod(batch.textureBlend);
     writeByteArray4(writer, batch.materialColor);
-    writeVector(writer, batch.vertices, [&](const HsdMeshVertex& vertex) {
+    writeVector(writer, batch.vertices, [&](const FighterMeshVertex& vertex) {
         writeMeshVertex(writer, vertex);
     });
 }
 
-HsdMeshBatch readMeshBatch(PackageReader& reader) {
-    HsdMeshBatch batch;
+FighterMeshBatch readMeshBatch(PackageReader& reader) {
+    FighterMeshBatch batch;
     batch.parentBone = reader.readI32();
     batch.singleBindBone = reader.readI32();
     batch.dobjIndex = reader.readI32();
@@ -1682,33 +1682,33 @@ HsdMeshBatch readMeshBatch(PackageReader& reader) {
     batch.textureAlphaOperation = reader.readI32();
     batch.textureBlend = reader.readPod<float>();
     batch.materialColor = readByteArray4(reader);
-    batch.vertices = readVector<HsdMeshVertex>(reader, kMaxMeshVertices, "mesh vertex", [&]() {
+    batch.vertices = readVector<FighterMeshVertex>(reader, kMaxMeshVertices, "mesh vertex", [&]() {
         return readMeshVertex(reader);
     });
     return batch;
 }
 
-void writeFighterMesh(PackageWriter& writer, const HsdFighterMesh& mesh) {
+void writeFighterMesh(PackageWriter& writer, const FighterMesh& mesh) {
     writeVector(writer, mesh.inverseBindMatrices, [&](const std::array<float, 16>& matrix) {
         writeFloatArray16(writer, matrix);
     });
-    writeVector(writer, mesh.textures, [&](const HsdMeshTexture& texture) {
+    writeVector(writer, mesh.textures, [&](const FighterMeshTexture& texture) {
         writeMeshTexture(writer, texture);
     });
-    writeVector(writer, mesh.batches, [&](const HsdMeshBatch& batch) {
+    writeVector(writer, mesh.batches, [&](const FighterMeshBatch& batch) {
         writeMeshBatch(writer, batch);
     });
 }
 
-HsdFighterMesh readFighterMesh(PackageReader& reader) {
-    HsdFighterMesh mesh;
+FighterMesh readFighterMesh(PackageReader& reader) {
+    FighterMesh mesh;
     mesh.inverseBindMatrices = readVector<std::array<float, 16>>(reader, kMaxMeshMatrices, "mesh inverse bind matrix", [&]() {
         return readFloatArray16(reader);
     });
-    mesh.textures = readVector<HsdMeshTexture>(reader, kMaxMeshTextures, "mesh texture", [&]() {
+    mesh.textures = readVector<FighterMeshTexture>(reader, kMaxMeshTextures, "mesh texture", [&]() {
         return readMeshTexture(reader);
     });
-    mesh.batches = readVector<HsdMeshBatch>(reader, kMaxMeshBatches, "mesh batch", [&]() {
+    mesh.batches = readVector<FighterMeshBatch>(reader, kMaxMeshBatches, "mesh batch", [&]() {
         return readMeshBatch(reader);
     });
     return mesh;
@@ -1779,8 +1779,8 @@ bool validAuthoredMeshBone(int bone, size_t skeletonSize) {
     return bone < 0 || static_cast<size_t>(bone) < skeletonSize;
 }
 
-void validateAuthoredMeshData(const HsdFighterMesh& mesh, const std::vector<AnimationJoint>& skeleton) {
-    for (const HsdMeshTexture& texture : mesh.textures) {
+void validateAuthoredMeshData(const FighterMesh& mesh, const std::vector<AnimationJoint>& skeleton) {
+    for (const FighterMeshTexture& texture : mesh.textures) {
         if (texture.width < 0 || texture.height < 0) {
             throw std::runtime_error("fighter package authored mesh texture size is invalid");
         }
@@ -1790,7 +1790,7 @@ void validateAuthoredMeshData(const HsdFighterMesh& mesh, const std::vector<Anim
             throw std::runtime_error("fighter package authored mesh texture bytes are invalid");
         }
     }
-    for (const HsdMeshBatch& batch : mesh.batches) {
+    for (const FighterMeshBatch& batch : mesh.batches) {
         if (!validAuthoredMeshBone(batch.parentBone, skeleton.size()) ||
             !validAuthoredMeshBone(batch.singleBindBone, skeleton.size()))
         {
@@ -1805,9 +1805,9 @@ void validateAuthoredMeshData(const HsdFighterMesh& mesh, const std::vector<Anim
         if ((batch.vertices.size() % 3) != 0) {
             throw std::runtime_error("fighter package authored mesh batch triangle list is invalid");
         }
-        for (const HsdMeshVertex& vertex : batch.vertices) {
+        for (const FighterMeshVertex& vertex : batch.vertices) {
             float weightSum = 0.0f;
-            for (const HsdMeshVertexInfluence& influence : vertex.influences) {
+            for (const FighterMeshVertexInfluence& influence : vertex.influences) {
                 if (!std::isfinite(influence.weight) ||
                     !validAuthoredMeshBone(influence.bone, skeleton.size()) ||
                     influence.weight < 0.0f || influence.weight > 1.0f ||
@@ -2941,7 +2941,7 @@ void writeFighterDefinition(PackageWriter& writer, const FighterDefinition& figh
     writeVector(writer, fighter.authoredClips, [&](const AnimationClip& clip) {
         writeAnimationClip(writer, clip);
     });
-    writeVector(writer, fighter.modelPartAnimations, [&](const HsdModelPartAnimationSet& set) {
+    writeVector(writer, fighter.modelPartAnimations, [&](const ModelPartAnimationSet& set) {
         writeModelPartAnimationSet(writer, set);
     });
     writeFighterMesh(writer, fighter.authoredMesh);
@@ -2981,7 +2981,7 @@ FighterDefinition readFighterDefinition(PackageReader& reader) {
     fighter.authoredClips = readVector<AnimationClip>(reader, kMaxAnimationClips, "authored animation clip", [&]() {
         return readAnimationClip(reader);
     });
-    fighter.modelPartAnimations = readVector<HsdModelPartAnimationSet>(reader, kMaxAnimationClips, "model part animation set", [&]() {
+    fighter.modelPartAnimations = readVector<ModelPartAnimationSet>(reader, kMaxAnimationClips, "model part animation set", [&]() {
         return readModelPartAnimationSet(reader);
     });
     validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);

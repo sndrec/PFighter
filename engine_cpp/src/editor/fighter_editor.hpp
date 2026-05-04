@@ -554,8 +554,8 @@ int uniqueEditorAuthoredClipActionIndex(const FighterDefinition& def);
 bool editorAuthoredClipNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex = -1);
 bool editorAuthoredJointNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex = -1);
 bool editorAuthoredClipActionIndexAvailable(const FighterDefinition& def, int actionIndex, int ignoredIndex = -1);
-HsdFighterMesh makeFighterEditorTriangleMesh();
-int editorAuthoredMeshVertexCount(const HsdFighterMesh& mesh);
+FighterMesh makeFighterEditorTriangleMesh();
+int editorAuthoredMeshVertexCount(const FighterMesh& mesh);
 bool setEditorSessionAuthoredEcb(
     FighterEditorSession& session,
     const FighterEcbDefinition& ecb,
@@ -660,7 +660,7 @@ bool removeEditorSessionAuthoredKey(
     std::string* error = nullptr);
 bool setEditorSessionAuthoredMesh(
     FighterEditorSession& session,
-    const HsdFighterMesh& mesh,
+    const FighterMesh& mesh,
     std::string* error = nullptr);
 bool scaleEditorSessionAuthoredMesh(
     FighterEditorSession& session,

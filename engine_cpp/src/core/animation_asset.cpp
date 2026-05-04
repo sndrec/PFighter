@@ -199,8 +199,8 @@ AnimationClip readAnimationClip(BinaryReader& reader) {
     return clip;
 }
 
-HsdFighterMesh readFighterMesh(BinaryReader& reader) {
-    HsdFighterMesh mesh;
+FighterMesh readFighterMesh(BinaryReader& reader) {
+    FighterMesh mesh;
     const int32_t inverseBindCount = reader.readCount(kMaxInverseBindMatrices, "inverse bind matrix");
     mesh.inverseBindMatrices.reserve(static_cast<size_t>(inverseBindCount));
     for (int32_t i = 0; i < inverseBindCount; ++i) {
@@ -214,7 +214,7 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
     const int32_t textureCount = reader.readCount(kMaxTextures, "texture");
     mesh.textures.reserve(static_cast<size_t>(textureCount));
     for (int32_t i = 0; i < textureCount; ++i) {
-        HsdMeshTexture texture;
+        FighterMeshTexture texture;
         texture.width = reader.readI32();
         texture.height = reader.readI32();
         const int32_t byteCount = reader.readCount(kMaxTextureBytes, "texture");
@@ -225,7 +225,7 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
     const int32_t batchCount = reader.readCount(kMaxMeshBatches, "mesh batch");
     mesh.batches.reserve(static_cast<size_t>(batchCount));
     for (int32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex) {
-        HsdMeshBatch batch;
+        FighterMeshBatch batch;
         batch.parentBone = reader.readI32();
         batch.singleBindBone = reader.readI32();
         batch.dobjIndex = reader.readI32();
@@ -248,7 +248,7 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
         const int32_t vertexCount = reader.readCount(kMaxMeshVertices, "mesh vertex");
         batch.vertices.reserve(static_cast<size_t>(vertexCount));
         for (int32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-            HsdMeshVertex vertex;
+            FighterMeshVertex vertex;
             vertex.position = reader.readVec3();
             vertex.normal = reader.readVec3();
             vertex.u = reader.readF32();
@@ -256,7 +256,7 @@ HsdFighterMesh readFighterMesh(BinaryReader& reader) {
             for (uint8_t& channel : vertex.color) {
                 channel = reader.readU8();
             }
-            for (HsdMeshVertexInfluence& influence : vertex.influences) {
+            for (FighterMeshVertexInfluence& influence : vertex.influences) {
                 influence.bone = reader.readI32();
                 influence.weight = reader.readF32();
             }
@@ -401,7 +401,7 @@ HsdFighterAnimationAsset loadHsdFighterAnimationAssetFromBytes(const std::vector
     const int32_t modelPartCount = reader.readCount(kMaxModelPartSets, "model part set");
     asset.modelPartAnimations.reserve(static_cast<size_t>(modelPartCount));
     for (int32_t i = 0; i < modelPartCount; ++i) {
-        HsdModelPartAnimationSet set;
+        ModelPartAnimationSet set;
         set.startingBone = reader.readI32();
         const int32_t entryCount = reader.readCount(kMaxModelPartEntries, "model part entry");
         set.entries.reserve(static_cast<size_t>(entryCount));

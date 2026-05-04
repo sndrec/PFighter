@@ -825,10 +825,10 @@ struct FighterDefinition {
     std::vector<AnimationJoint> authoredSkeleton;
     std::vector<AnimationClip> authoredClips;
     std::shared_ptr<const std::vector<AnimationClip>> authoredClipSource;
-    std::vector<HsdModelPartAnimationSet> modelPartAnimations;
-    std::shared_ptr<const std::vector<HsdModelPartAnimationSet>> modelPartAnimationSource;
-    HsdFighterMesh authoredMesh;
-    std::shared_ptr<const HsdFighterMesh> authoredMeshSource;
+    std::vector<ModelPartAnimationSet> modelPartAnimations;
+    std::shared_ptr<const std::vector<ModelPartAnimationSet>> modelPartAnimationSource;
+    FighterMesh authoredMesh;
+    std::shared_ptr<const FighterMesh> authoredMeshSource;
     std::vector<PackageVariableDefinition> packageVariables;
     std::vector<PackageScript> packageScripts;
     std::vector<HurtboxDefinition> hurtboxes;
