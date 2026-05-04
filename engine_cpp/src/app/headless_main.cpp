@@ -5290,7 +5290,11 @@ int main(int argc, char** argv) {
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
         packageDescriptor.fighterNames.size() == sourcePackage.fighters.size() &&
         packageDescriptor.objectNames.size() == sourcePackage.objects.size() &&
-        packageDescriptor.assetNames.size() == sourcePackage.hsdAssets.size();
+        packageDescriptor.assetNames.size() == sourcePackage.hsdAssets.size() &&
+        packageDescriptor.fighterScriptNames.size() >= 24 &&
+        packageDescriptor.objectScriptNames.size() >= 20 &&
+        std::find(packageDescriptor.fighterScriptNames.begin(), packageDescriptor.fighterScriptNames.end(), "SmokeScript") != packageDescriptor.fighterScriptNames.end() &&
+        std::find(packageDescriptor.objectScriptNames.begin(), packageDescriptor.objectScriptNames.end(), "ObjectSmokeScript") != packageDescriptor.objectScriptNames.end();
     pf::FighterPackageDescriptor packageBytesDescriptor;
     const bool packageBytesDescriptorOk = pf::describeFighterPackageBytes(packageBytes, packageBytesDescriptor, &packageError) &&
         packageBytesDescriptor.name == packageDescriptor.name &&
@@ -5300,7 +5304,9 @@ int main(int argc, char** argv) {
         packageBytesDescriptor.rootFighterName == packageDescriptor.rootFighterName &&
         packageBytesDescriptor.fighterNames == packageDescriptor.fighterNames &&
         packageBytesDescriptor.objectNames == packageDescriptor.objectNames &&
-        packageBytesDescriptor.assetNames == packageDescriptor.assetNames;
+        packageBytesDescriptor.assetNames == packageDescriptor.assetNames &&
+        packageBytesDescriptor.fighterScriptNames == packageDescriptor.fighterScriptNames &&
+        packageBytesDescriptor.objectScriptNames == packageDescriptor.objectScriptNames;
     const pf::FighterPackage runtimePackage = pf::makeRuntimeFighterPackage(packageSourceWorld, 0, "headless_smoke_runtime");
     const std::vector<uint8_t> runtimePackageBytes = pf::writeFighterPackage(runtimePackage, &packageError);
     pf::FighterPackage loadedRuntimePackage;
@@ -5315,7 +5321,11 @@ int main(int argc, char** argv) {
         runtimePackageDescriptor.rootFighterName == runtimePackage.fighters[0].name &&
         runtimePackageDescriptor.fighterNames.size() == runtimePackage.fighters.size() &&
         runtimePackageDescriptor.objectNames.size() == runtimePackage.objects.size() &&
-        runtimePackageDescriptor.assetNames.size() == runtimePackage.hsdAssets.size();
+        runtimePackageDescriptor.assetNames.size() == runtimePackage.hsdAssets.size() &&
+        runtimePackageDescriptor.fighterScriptNames.size() >= 24 &&
+        runtimePackageDescriptor.objectScriptNames.size() >= 20 &&
+        std::find(runtimePackageDescriptor.fighterScriptNames.begin(), runtimePackageDescriptor.fighterScriptNames.end(), "SmokeScript") != runtimePackageDescriptor.fighterScriptNames.end() &&
+        std::find(runtimePackageDescriptor.objectScriptNames.begin(), runtimePackageDescriptor.objectScriptNames.end(), "ObjectSmokeScript") != runtimePackageDescriptor.objectScriptNames.end();
     pf::FighterPackageDescriptor runtimePackageBytesDescriptor;
     const bool runtimePackageBytesDescriptorOk = pf::describeFighterPackageBytes(runtimePackageBytes, runtimePackageBytesDescriptor, &packageError) &&
         runtimePackageBytesDescriptor.name == runtimePackageDescriptor.name &&
@@ -5325,7 +5335,9 @@ int main(int argc, char** argv) {
         runtimePackageBytesDescriptor.rootFighterName == runtimePackageDescriptor.rootFighterName &&
         runtimePackageBytesDescriptor.fighterNames == runtimePackageDescriptor.fighterNames &&
         runtimePackageBytesDescriptor.objectNames == runtimePackageDescriptor.objectNames &&
-        runtimePackageBytesDescriptor.assetNames == runtimePackageDescriptor.assetNames;
+        runtimePackageBytesDescriptor.assetNames == runtimePackageDescriptor.assetNames &&
+        runtimePackageBytesDescriptor.fighterScriptNames == runtimePackageDescriptor.fighterScriptNames &&
+        runtimePackageBytesDescriptor.objectScriptNames == runtimePackageDescriptor.objectScriptNames;
     pf::FighterPackage invalidReadPackage;
     std::string invalidPackageError;
     std::vector<uint8_t> invalidPackageBytes = packageBytes;

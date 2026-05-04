@@ -2873,6 +2873,8 @@ FighterPackageDescriptor makePackageDescriptor(const FighterPackage& package, co
     for (const std::shared_ptr<const HsdFighterAnimationAsset>& asset : package.hsdAssets) {
         out.assetNames.push_back(asset ? asset->name : std::string{});
     }
+    out.fighterScriptNames = fighterScriptNames(package.fighters);
+    out.objectScriptNames = objectScriptNames(package.objects);
     return out;
 }
 
@@ -2885,6 +2887,8 @@ void validatePackageDescriptorManifest(const FighterPackageDescriptor& descripto
     }
     requireUniqueNonemptyNames(descriptor.fighterNames, "manifest fighter");
     requireUniqueNonemptyNames(descriptor.objectNames, "manifest object");
+    requireUniqueNonemptyNames(descriptor.fighterScriptNames, "manifest fighter script");
+    requireUniqueNonemptyNames(descriptor.objectScriptNames, "manifest object script");
     if (descriptor.fighterNames.empty() || descriptor.rootFighterName != descriptor.fighterNames.front()) {
         throw std::runtime_error("fighter package manifest root fighter is invalid");
     }
@@ -2895,6 +2899,8 @@ void writePackageDescriptorManifest(PackageWriter& writer, const FighterPackageD
     writeStringVector(writer, descriptor.fighterNames);
     writeStringVector(writer, descriptor.objectNames);
     writeStringVector(writer, descriptor.assetNames);
+    writeStringVector(writer, descriptor.fighterScriptNames);
+    writeStringVector(writer, descriptor.objectScriptNames);
 }
 
 FighterPackageDescriptor readPackageDescriptorManifest(
@@ -2912,6 +2918,8 @@ FighterPackageDescriptor readPackageDescriptorManifest(
     descriptor.fighterNames = readStringVector(reader, kMaxFighters, "manifest fighter");
     descriptor.objectNames = readStringVector(reader, kMaxObjects, "manifest object");
     descriptor.assetNames = readStringVector(reader, kMaxAssets, "manifest asset");
+    descriptor.fighterScriptNames = readStringVector(reader, kMaxCallbacks, "manifest fighter script");
+    descriptor.objectScriptNames = readStringVector(reader, kMaxCallbacks, "manifest object script");
     validatePackageDescriptorManifest(descriptor);
     return descriptor;
 }
@@ -2922,7 +2930,9 @@ bool matchingPackageManifest(const FighterPackageDescriptor& manifest, const Fig
         manifest.rootFighterName == actual.rootFighterName &&
         manifest.fighterNames == actual.fighterNames &&
         manifest.objectNames == actual.objectNames &&
-        manifest.assetNames == actual.assetNames;
+        manifest.assetNames == actual.assetNames &&
+        manifest.fighterScriptNames == actual.fighterScriptNames &&
+        manifest.objectScriptNames == actual.objectScriptNames;
 }
 
 } // namespace
@@ -2938,7 +2948,9 @@ bool fighterPackageDescriptorMatches(
         expected.rootFighterName == actual.rootFighterName &&
         expected.fighterNames == actual.fighterNames &&
         expected.objectNames == actual.objectNames &&
-        expected.assetNames == actual.assetNames;
+        expected.assetNames == actual.assetNames &&
+        expected.fighterScriptNames == actual.fighterScriptNames &&
+        expected.objectScriptNames == actual.objectScriptNames;
 }
 
 const FighterPackageCacheEntry* FighterPackageCache::find(uint32_t checksum) const {

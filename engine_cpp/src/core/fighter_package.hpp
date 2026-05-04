@@ -27,6 +27,8 @@ struct FighterPackageDescriptor {
     std::vector<std::string> fighterNames;
     std::vector<std::string> objectNames;
     std::vector<std::string> assetNames;
+    std::vector<std::string> fighterScriptNames;
+    std::vector<std::string> objectScriptNames;
 };
 
 struct FighterPackageCacheEntry {
