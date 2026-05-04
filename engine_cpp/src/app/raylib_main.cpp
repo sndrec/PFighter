@@ -7543,6 +7543,7 @@ static const char* editorSelectionKindName(pf::FighterEditorSelectionKind kind) 
     case pf::FighterEditorSelectionKind::Subaction: return "Timeline subaction";
     case pf::FighterEditorSelectionKind::Interrupt: return "Interrupt window";
     case pf::FighterEditorSelectionKind::Callback: return "State callback";
+    case pf::FighterEditorSelectionKind::ObjectCallback: return "Object callback";
     case pf::FighterEditorSelectionKind::Script: return "Script";
     case pf::FighterEditorSelectionKind::Instruction: return "Graph instruction";
     case pf::FighterEditorSelectionKind::Variable: return "Package variable";
@@ -9390,15 +9391,21 @@ static bool drawEditorObjectCallbackStrip(
 
     const float stateButtonY = rect.y + 62.0f;
     const float eventButtonY = stateButtonY + 26.0f;
-    if (uiButton({rect.x, stateButtonY, 30.0f, 22.0f}, "S<")) {
+    if (uiButton({rect.x, stateButtonY, 24.0f, 22.0f}, "S<")) {
         editor.selectedObjectStateCallback = wrappedIndex(stateSlot - 1, 4);
+        editor.selectedObjectCallback = 0;
+        editor.selectedObjectCallbackEvent = false;
+        editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
         return true;
     }
-    if (uiButton({rect.x + 34.0f, stateButtonY, 30.0f, 22.0f}, "S>")) {
+    if (uiButton({rect.x + 28.0f, stateButtonY, 24.0f, 22.0f}, "S>")) {
         editor.selectedObjectStateCallback = wrappedIndex(stateSlot + 1, 4);
+        editor.selectedObjectCallback = 0;
+        editor.selectedObjectCallbackEvent = false;
+        editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
         return true;
     }
-    if (uiButton({rect.x + 68.0f, stateButtonY, 52.0f, 22.0f}, "BindS")) {
+    if (uiButton({rect.x + 56.0f, stateButtonY, 42.0f, 22.0f}, "BindS")) {
         if (object.states.empty()) {
             editor.status = "Editor: add an object state before binding a state callback";
         } else {
@@ -9411,13 +9418,23 @@ static bool drawEditorObjectCallbackStrip(
                     script.name,
                     &error))
             {
+                editor.selectedObjectCallback = 0;
+                editor.selectedObjectCallbackEvent = false;
+                editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
                 syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: bound object ") + objectStateCallbackLabel(stateSlot) + " callback");
                 return true;
             }
             editor.status = "Editor: object state callback bind failed: " + error;
         }
     }
-    if (uiButton({rect.x + 124.0f, stateButtonY, 34.0f, 22.0f}, "-S")) {
+    if (uiButton({rect.x + 102.0f, stateButtonY, 36.0f, 22.0f}, "UseS")) {
+        editor.selectedObjectCallback = 0;
+        editor.selectedObjectCallbackEvent = false;
+        editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
+        editor.status = std::string("Editor: selected object ") + objectStateCallbackLabel(stateSlot) + " callback";
+        return true;
+    }
+    if (uiButton({rect.x + 142.0f, stateButtonY, 28.0f, 22.0f}, "-S")) {
         if (object.states.empty()) {
             editor.status = "Editor: no object state callback to remove";
         } else {
@@ -9425,21 +9442,30 @@ static bool drawEditorObjectCallbackStrip(
             removePackageScriptCallbackRefs(calls, script.name);
             std::string error;
             if (pf::setEditorSessionObjectStateCallbacks(session, objectIndex, editor.selectedObjectState, stateCallbackSlot, calls, &error)) {
+                editor.selectedObjectCallback = 0;
+                editor.selectedObjectCallbackEvent = false;
+                editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
                 syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: removed object ") + objectStateCallbackLabel(stateSlot) + " callback");
                 return true;
             }
             editor.status = "Editor: object state callback remove failed: " + error;
         }
     }
-    if (uiButton({rect.x, eventButtonY, 30.0f, 22.0f}, "E<")) {
+    if (uiButton({rect.x, eventButtonY, 24.0f, 22.0f}, "E<")) {
         editor.selectedObjectEventCallback = wrappedIndex(eventSlot - 1, 21);
+        editor.selectedObjectCallback = 0;
+        editor.selectedObjectCallbackEvent = true;
+        editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
         return true;
     }
-    if (uiButton({rect.x + 34.0f, eventButtonY, 30.0f, 22.0f}, "E>")) {
+    if (uiButton({rect.x + 28.0f, eventButtonY, 24.0f, 22.0f}, "E>")) {
         editor.selectedObjectEventCallback = wrappedIndex(eventSlot + 1, 21);
+        editor.selectedObjectCallback = 0;
+        editor.selectedObjectCallbackEvent = true;
+        editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
         return true;
     }
-    if (uiButton({rect.x + 68.0f, eventButtonY, 52.0f, 22.0f}, "BindE")) {
+    if (uiButton({rect.x + 56.0f, eventButtonY, 42.0f, 22.0f}, "BindE")) {
         std::string error;
         if (pf::bindEditorSessionObjectPackageScriptEventCallback(
                 session,
@@ -9448,16 +9474,29 @@ static bool drawEditorObjectCallbackStrip(
                 script.name,
                 &error))
         {
+            editor.selectedObjectCallback = 0;
+            editor.selectedObjectCallbackEvent = true;
+            editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: bound object ") + objectEventCallbackLabel(eventSlot) + " callback");
             return true;
         }
         editor.status = "Editor: object event callback bind failed: " + error;
     }
-    if (uiButton({rect.x + 124.0f, eventButtonY, 34.0f, 22.0f}, "-E")) {
+    if (uiButton({rect.x + 102.0f, eventButtonY, 36.0f, 22.0f}, "UseE")) {
+        editor.selectedObjectCallback = 0;
+        editor.selectedObjectCallbackEvent = true;
+        editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
+        editor.status = std::string("Editor: selected object ") + objectEventCallbackLabel(eventSlot) + " callback";
+        return true;
+    }
+    if (uiButton({rect.x + 142.0f, eventButtonY, 28.0f, 22.0f}, "-E")) {
         std::vector<pf::FunctionCall> calls = objectEventCallbacks(object, eventSlot);
         removePackageScriptCallbackRefs(calls, script.name);
         std::string error;
         if (pf::setEditorSessionObjectEventCallbacks(session, objectIndex, eventCallbackSlot, calls, &error)) {
+            editor.selectedObjectCallback = 0;
+            editor.selectedObjectCallbackEvent = true;
+            editor.selectionKind = pf::FighterEditorSelectionKind::ObjectCallback;
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: removed object ") + objectEventCallbackLabel(eventSlot) + " callback");
             return true;
         }
@@ -10458,6 +10497,138 @@ static void drawEditorInspectorWorkstation(
         static_cast<int>(rect.y + 6.0f),
         11,
         Fade(RAYWHITE, 0.68f));
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::ObjectCallback) {
+        DrawText("Object Callback", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        if (session.package.objects.empty()) {
+            DrawText("No object definitions in this package", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, Fade(RAYWHITE, 0.62f));
+            return;
+        }
+        editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(session.package.objects.size()) - 1);
+        pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        const int stateSlot = wrappedIndex(editor.selectedObjectStateCallback, 4);
+        const int eventSlot = wrappedIndex(editor.selectedObjectEventCallback, 21);
+        if (!editor.selectedObjectCallbackEvent && object.states.empty()) {
+            DrawText("Selected object has no states for state callbacks", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 11, Fade(RAYWHITE, 0.62f));
+            return;
+        }
+        if (!object.states.empty()) {
+            editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+        }
+        std::vector<pf::FunctionCall>& calls = editor.selectedObjectCallbackEvent
+            ? objectEventCallbacks(object, eventSlot)
+            : objectStateCallbacks(object.states[static_cast<size_t>(editor.selectedObjectState)], stateSlot);
+        const std::string slotLabel = editor.selectedObjectCallbackEvent
+            ? std::string("event ") + objectEventCallbackLabel(eventSlot)
+            : std::string(objectStateCallbackLabel(stateSlot)) + " on " + object.states[static_cast<size_t>(editor.selectedObjectState)].name;
+        DrawText(clippedText(object.name + "  " + slotLabel, 11, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 62.0f),
+            11,
+            RAYWHITE);
+        DrawText(("Callbacks " + std::to_string(calls.size())).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 84.0f),
+            11,
+            Fade(RAYWHITE, 0.7f));
+        auto commitObjectCallbacks = [&](std::vector<pf::FunctionCall> edited, const std::string& message) -> bool {
+            std::string error;
+            if (editor.selectedObjectCallbackEvent) {
+                const auto slot = static_cast<pf::FighterEditorObjectEventCallbackSlot>(eventSlot);
+                if (pf::setEditorSessionObjectEventCallbacks(session, editor.selectedObjectDef, slot, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+            } else {
+                const auto slot = static_cast<pf::FighterEditorObjectStateCallbackSlot>(stateSlot);
+                if (pf::setEditorSessionObjectStateCallbacks(session, editor.selectedObjectDef, editor.selectedObjectState, slot, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+            }
+            editor.status = "Editor: object callback edit failed: " + error;
+            return false;
+        };
+        const float buttonY = rect.y + 108.0f;
+        if (uiButton({rect.x + 10.0f, buttonY, 54.0f, 22.0f}, "Prev")) {
+            if (!calls.empty()) {
+                editor.selectedObjectCallback = wrappedIndex(editor.selectedObjectCallback - 1, static_cast<int>(calls.size()));
+            }
+            return;
+        }
+        if (uiButton({rect.x + 70.0f, buttonY, 54.0f, 22.0f}, "Next")) {
+            if (!calls.empty()) {
+                editor.selectedObjectCallback = wrappedIndex(editor.selectedObjectCallback + 1, static_cast<int>(calls.size()));
+            }
+            return;
+        }
+        if (uiButton({rect.x + 130.0f, buttonY, 58.0f, 22.0f}, editor.selectedObjectCallbackEvent ? "State" : "Event")) {
+            editor.selectedObjectCallbackEvent = !editor.selectedObjectCallbackEvent;
+            editor.selectedObjectCallback = 0;
+            return;
+        }
+        if (uiButton({rect.x + 194.0f, buttonY, 58.0f, 22.0f}, "Slot<")) {
+            if (editor.selectedObjectCallbackEvent) {
+                editor.selectedObjectEventCallback = wrappedIndex(eventSlot - 1, 21);
+            } else {
+                editor.selectedObjectStateCallback = wrappedIndex(stateSlot - 1, 4);
+            }
+            editor.selectedObjectCallback = 0;
+            return;
+        }
+        if (uiButton({rect.x + 258.0f, buttonY, 58.0f, 22.0f}, "Slot>")) {
+            if (editor.selectedObjectCallbackEvent) {
+                editor.selectedObjectEventCallback = wrappedIndex(eventSlot + 1, 21);
+            } else {
+                editor.selectedObjectStateCallback = wrappedIndex(stateSlot + 1, 4);
+            }
+            editor.selectedObjectCallback = 0;
+            return;
+        }
+        if (calls.empty()) {
+            DrawText("No callbacks in this slot", static_cast<int>(rect.x + 10.0f), static_cast<int>(buttonY + 34.0f), 11, Fade(RAYWHITE, 0.62f));
+            if (uiButton({rect.x + 10.0f, buttonY + 58.0f, 86.0f, 22.0f}, "UseScript") &&
+                editor.selectedPackageScript >= 0 &&
+                editor.selectedPackageScript < static_cast<int>(object.packageScripts.size()))
+            {
+                std::vector<pf::FunctionCall> edited;
+                edited.push_back({"script:" + object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name});
+                if (commitObjectCallbacks(edited, "Editor: assigned object callback script")) return;
+            }
+            return;
+        }
+        editor.selectedObjectCallback = std::clamp(editor.selectedObjectCallback, 0, static_cast<int>(calls.size()) - 1);
+        const pf::FunctionCall& call = calls[static_cast<size_t>(editor.selectedObjectCallback)];
+        DrawText(clippedText("#" + std::to_string(editor.selectedObjectCallback) + "  " + call.name, 12, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(buttonY + 34.0f),
+            12,
+            Fade(RAYWHITE, 0.78f));
+        const float editY = buttonY + 60.0f;
+        if (uiButton({rect.x + 10.0f, editY, 76.0f, 22.0f}, "UseScript") &&
+            editor.selectedPackageScript >= 0 &&
+            editor.selectedPackageScript < static_cast<int>(object.packageScripts.size()))
+        {
+            std::vector<pf::FunctionCall> edited = calls;
+            edited[static_cast<size_t>(editor.selectedObjectCallback)].name =
+                "script:" + object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+            if (commitObjectCallbacks(edited, "Editor: retargeted object callback")) return;
+        }
+        if (uiButton({rect.x + 92.0f, editY, 68.0f, 22.0f}, "Remove")) {
+            std::vector<pf::FunctionCall> edited = calls;
+            edited.erase(edited.begin() + editor.selectedObjectCallback);
+            editor.selectedObjectCallback = std::clamp(editor.selectedObjectCallback, 0, std::max(0, static_cast<int>(edited.size()) - 1));
+            if (commitObjectCallbacks(edited, "Editor: removed object callback")) return;
+        }
+        if (!object.packageScripts.empty()) {
+            const int scriptIndex = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+            DrawText(clippedText("Selected object script: " + object.packageScripts[static_cast<size_t>(scriptIndex)].name, 10, rect.width - 20.0f).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(editY + 32.0f),
+                10,
+                Fade(RAYWHITE, 0.64f));
+        }
+        return;
+    }
     if (editor.workspace == pf::EditorWorkspace::Assets || editor.selectionKind == pf::FighterEditorSelectionKind::Object) {
         DrawText("Object / Article", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
         if (session.package.objects.empty()) {
@@ -11880,6 +12051,37 @@ static std::string editorContextDetail(
             }
         }
         return std::string("callback ") + stateCallbackSlotName(editor.selectedStateCallbackSlot) + " none";
+    case pf::FighterEditorSelectionKind::ObjectCallback:
+        if (editor.selectedObjectDef >= 0 && editor.selectedObjectDef < static_cast<int>(session.package.objects.size())) {
+            const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+            const int stateSlot = wrappedIndex(editor.selectedObjectStateCallback, 4);
+            const int eventSlot = wrappedIndex(editor.selectedObjectEventCallback, 21);
+            if (editor.selectedObjectCallbackEvent) {
+                pf::GameObjectDefinition objectCopy = object;
+                const std::vector<pf::FunctionCall>& calls = objectEventCallbacks(objectCopy, eventSlot);
+                std::string detail = "object callback event " + std::string(objectEventCallbackLabel(eventSlot)) +
+                    " object=" + object.name + " count=" + std::to_string(calls.size());
+                if (editor.selectedObjectCallback >= 0 && editor.selectedObjectCallback < static_cast<int>(calls.size())) {
+                    detail += " #" + std::to_string(editor.selectedObjectCallback) +
+                        " " + calls[static_cast<size_t>(editor.selectedObjectCallback)].name;
+                }
+                return detail;
+            }
+            if (editor.selectedObjectState >= 0 && editor.selectedObjectState < static_cast<int>(object.states.size())) {
+                pf::GameObjectStateDefinition stateCopy = object.states[static_cast<size_t>(editor.selectedObjectState)];
+                const std::vector<pf::FunctionCall>& calls = objectStateCallbacks(stateCopy, stateSlot);
+                std::string detail = "object callback " + std::string(objectStateCallbackLabel(stateSlot)) +
+                    " object=" + object.name +
+                    " state=" + object.states[static_cast<size_t>(editor.selectedObjectState)].name +
+                    " count=" + std::to_string(calls.size());
+                if (editor.selectedObjectCallback >= 0 && editor.selectedObjectCallback < static_cast<int>(calls.size())) {
+                    detail += " #" + std::to_string(editor.selectedObjectCallback) +
+                        " " + calls[static_cast<size_t>(editor.selectedObjectCallback)].name;
+                }
+                return detail;
+            }
+        }
+        return "object callback none";
     case pf::FighterEditorSelectionKind::Script:
         if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(def.packageScripts.size())) {
             const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];

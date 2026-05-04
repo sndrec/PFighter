@@ -78,6 +78,7 @@ enum class FighterEditorSelectionKind : uint8_t {
     Subaction,
     Interrupt,
     Callback,
+    ObjectCallback,
     Script,
     Instruction,
     Variable,
@@ -138,6 +139,8 @@ struct FighterEditor {
     int selectedObjectTouchbox = 0;
     int selectedObjectStateCallback = 0;
     int selectedObjectEventCallback = 0;
+    int selectedObjectCallback = 0;
+    bool selectedObjectCallbackEvent = false;
     ObjectEditorPanel objectPanel = ObjectEditorPanel::Logic;
     int selectedAnimationClip = 0;
     int selectedAnimationJoint = 0;

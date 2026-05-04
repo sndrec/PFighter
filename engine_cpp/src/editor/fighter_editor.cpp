@@ -1545,6 +1545,26 @@ void FighterEditor::clampToWorld(const World& world) {
             selectedObjectTouchbox,
             0,
             std::max(0, static_cast<int>(object.touchboxes.size()) - 1));
+        selectedObjectStateCallback = std::clamp(selectedObjectStateCallback, 0, 3);
+        selectedObjectEventCallback = std::clamp(selectedObjectEventCallback, 0, 20);
+        int objectCallbackCount = 0;
+        if (selectedObjectCallbackEvent) {
+            GameObjectDefinition objectCopy = object;
+            const std::vector<FunctionCall>* calls = objectEventCallbacks(
+                objectCopy,
+                static_cast<FighterEditorObjectEventCallbackSlot>(selectedObjectEventCallback));
+            objectCallbackCount = calls ? static_cast<int>(calls->size()) : 0;
+        } else if (!object.states.empty()) {
+            GameObjectStateDefinition stateCopy = object.states[static_cast<size_t>(selectedObjectState)];
+            const std::vector<FunctionCall>* calls = objectStateCallbacks(
+                stateCopy,
+                static_cast<FighterEditorObjectStateCallbackSlot>(selectedObjectStateCallback));
+            objectCallbackCount = calls ? static_cast<int>(calls->size()) : 0;
+        }
+        selectedObjectCallback = std::clamp(
+            selectedObjectCallback,
+            0,
+            std::max(0, objectCallbackCount - 1));
     }
     const bool useImportedClips = def.hsdAsset && !def.hsdAsset->clips.empty();
     const std::vector<AnimationClip>& clips = useImportedClips ? def.hsdAsset->clips : def.authoredClips;
