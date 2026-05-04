@@ -861,6 +861,8 @@ static FighterDefinition makeImportedFighterDefinition(
     def.hsdAsset = std::move(asset);
     def.hasHsdAsset = true;
     def.authoredSkeleton = def.hsdAsset->skeleton;
+    def.authoredClipSource = std::shared_ptr<const std::vector<AnimationClip>>(def.hsdAsset, &def.hsdAsset->clips);
+    def.authoredMeshSource = std::shared_ptr<const HsdFighterMesh>(def.hsdAsset, &def.hsdAsset->mesh);
     def.modelPartAnimations = def.hsdAsset->modelPartAnimations;
     def.fighterBones = def.hsdAsset->fighterBones;
     def.commonBoneLookup = def.hsdAsset->commonBoneLookup;
@@ -1747,6 +1749,9 @@ bool makeNativePackageFighterDefinition(const FighterDefinition& source, Fighter
 
     out.hasHsdAsset = false;
     out.hsdAsset.reset();
+    out.authoredClipSource.reset();
+    out.authoredMeshSource.reset();
+    out.modelPartAnimationSource.reset();
     return true;
 }
 
@@ -2497,16 +2502,24 @@ void unlockFighterEcb(FighterRuntime& fighter) {
 }
 
 static bool stateHasImportedAnimation(const FighterDefinition& def, const std::string& stateName) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
-        return true;
-    }
     const int index = def.stateIndex(stateName);
     if (index < 0) {
         return false;
     }
     const FighterState& state = def.states[static_cast<size_t>(index)];
-    return state.animationActionIndex >= 0 &&
-        findClipByActionIndex(*def.hsdAsset, state.animationActionIndex) != nullptr;
+    if (state.animationActionIndex >= 0 && authoredAnimationClipByActionIndex(def, state.animationActionIndex)) {
+        return true;
+    }
+    const std::string suffix = "_ACTION_" + state.animation + "_figatree";
+    for (const AnimationClip& clip : authoredAnimationClips(def)) {
+        if (clip.name == state.animation ||
+            (clip.name.size() >= suffix.size() &&
+             clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 static std::string resolveCliffActionState(const FighterDefinition& def, const FighterRuntime& fighter, const std::string& stateName) {
@@ -2746,15 +2759,12 @@ static AerialAttackDirection aerialAttackDirection(const FighterRuntime& fighter
 }
 
 static bool hasActionClip(const FighterDefinition& def, int actionIndex) {
-    return !def.hasHsdAsset || !def.hsdAsset || findClipByActionIndex(*def.hsdAsset, actionIndex) != nullptr;
+    return authoredAnimationClipByActionIndex(def, actionIndex) != nullptr;
 }
 
 static bool hasActionClipNamed(const FighterDefinition& def, const std::string& animation) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
-        return true;
-    }
     const std::string suffix = "_ACTION_" + animation + "_figatree";
-    for (const AnimationClip& clip : def.hsdAsset->clips) {
+    for (const AnimationClip& clip : authoredAnimationClips(def)) {
         if (clip.name.size() >= suffix.size() &&
             clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0)
         {
@@ -3078,7 +3088,6 @@ static bool conditionMet(const World& world, InterruptCondition condition, const
                    fighterCommandFlag(fighter, 0) &&
                    attackPressed &&
                    (def.name == "Link" || def.name == "Young Link") &&
-                   def.hasHsdAsset &&
                    hasActionClip(def, 295);
         case InterruptCondition::AttackHi4Pressed:
             return upSmashInput(fighter, common, attackPressed);
@@ -3407,24 +3416,15 @@ static const AnimationClip* clipForState(const FighterDefinition& def, const Fig
     const int actionIndex = actionIndexOverride >= 0
         ? actionIndexOverride
         : (state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation));
-    if (def.hasHsdAsset && def.hsdAsset && actionIndex >= 0) {
-        if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, actionIndex)) {
-            return clip;
-        }
-    }
     if (const AnimationClip* clip = authoredAnimationClipByActionIndex(def, actionIndex)) {
         return clip;
     }
-    if (def.hasHsdAsset && def.hsdAsset) {
-        const std::string suffix = "_ACTION_" + state.animation + "_figatree";
-        for (const AnimationClip& clip : def.hsdAsset->clips) {
-            if (clip.name.size() >= suffix.size() &&
-                clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0) {
-                return &clip;
-            }
-        }
-    }
+    const std::string suffix = "_ACTION_" + state.animation + "_figatree";
     for (const AnimationClip& clip : authoredAnimationClips(def)) {
+        if (clip.name.size() >= suffix.size() &&
+            clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0) {
+            return &clip;
+        }
         if (clip.name == state.animation) {
             return &clip;
         }
@@ -5846,7 +5846,7 @@ static void executeActionFrame(World& world, size_t fighterIndex, const FighterD
 }
 
 static int actionFrameForState(const FighterDefinition& def, const FighterState& state, const FighterRuntime& fighter) {
-    if (def.hasHsdAsset && def.hsdAsset && clipForState(def, state)) {
+    if (clipForState(def, state)) {
         return std::max(0, static_cast<int>(fxToFloat(fighter.animationFrame)));
     }
     return frameInState(fighter);
@@ -7076,15 +7076,15 @@ static Vec3 boneWorldByIndex(const FighterRuntime& fighter, int bone) {
     return {fighter.position.x, fighter.position.y, 0};
 }
 
-static bool isJointInSubtree(const HsdFighterAnimationAsset& asset, int joint, int root) {
+static bool isJointInSubtree(const FighterDefinition& def, int joint, int root) {
     if (joint < 0 || root < 0 ||
-        static_cast<size_t>(joint) >= asset.skeleton.size() ||
-        static_cast<size_t>(root) >= asset.skeleton.size())
+        static_cast<size_t>(joint) >= def.authoredSkeleton.size() ||
+        static_cast<size_t>(root) >= def.authoredSkeleton.size())
     {
         return false;
     }
-    for (int current = joint; current >= 0 && static_cast<size_t>(current) < asset.skeleton.size();
-         current = asset.skeleton[static_cast<size_t>(current)].parent)
+    for (int current = joint; current >= 0 && static_cast<size_t>(current) < def.authoredSkeleton.size();
+         current = def.authoredSkeleton[static_cast<size_t>(current)].parent)
     {
         if (current == root) {
             return true;
@@ -7094,11 +7094,11 @@ static bool isJointInSubtree(const HsdFighterAnimationAsset& asset, int joint, i
 }
 
 static void translateHsdJointSubtree(const FighterDefinition& def, FighterRuntime& fighter, int root, Vec3 delta) {
-    if (!def.hasHsdAsset || !def.hsdAsset || root < 0) {
+    if (root < 0) {
         return;
     }
     for (size_t i = 0; i < fighter.hsdJointWorldTransforms.size(); ++i) {
-        if (!isJointInSubtree(*def.hsdAsset, static_cast<int>(i), root)) {
+        if (!isJointInSubtree(def, static_cast<int>(i), root)) {
             continue;
         }
         JointWorldTransform& transform = fighter.hsdJointWorldTransforms[i];
