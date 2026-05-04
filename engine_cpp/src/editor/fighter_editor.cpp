@@ -498,6 +498,225 @@ bool hasFunctionCall(const std::vector<FunctionCall>& calls, const std::string& 
     });
 }
 
+bool validSessionObject(
+    FighterEditorSession& session,
+    int objectIndex,
+    GameObjectDefinition** object,
+    std::string* error)
+{
+    if (objectIndex < 0 || objectIndex >= static_cast<int>(session.package.objects.size())) {
+        setEditorError(error, "editor package object index is invalid");
+        return false;
+    }
+    if (object) {
+        *object = &session.package.objects[static_cast<size_t>(objectIndex)];
+    }
+    return true;
+}
+
+bool validSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    GameObjectDefinition** object,
+    GameObjectStateDefinition** state,
+    std::string* error)
+{
+    GameObjectDefinition* targetObject = nullptr;
+    if (!validSessionObject(session, objectIndex, &targetObject, error)) {
+        return false;
+    }
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(targetObject->states.size())) {
+        setEditorError(error, "editor package object state index is invalid");
+        return false;
+    }
+    if (object) {
+        *object = targetObject;
+    }
+    if (state) {
+        *state = &targetObject->states[static_cast<size_t>(stateIndex)];
+    }
+    return true;
+}
+
+bool packageScriptOpTargetsObjectName(PackageScriptOp op) {
+    switch (op) {
+    case PackageScriptOp::SpawnObject:
+    case PackageScriptOp::SpawnObjectFromVars:
+    case PackageScriptOp::SpawnObjectSetVar:
+    case PackageScriptOp::SpawnObjectFromVarsSetVar:
+    case PackageScriptOp::SpawnProjectile:
+    case PackageScriptOp::SpawnProjectileFromVars:
+    case PackageScriptOp::SpawnProjectileSetVar:
+    case PackageScriptOp::SpawnProjectileFromVarsSetVar:
+    case PackageScriptOp::DestroyOwnedObjects:
+    case PackageScriptOp::SetVarOwnedObjectCount:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool packageScriptOpIsProjectileSpawn(PackageScriptOp op) {
+    return op == PackageScriptOp::SpawnProjectile ||
+        op == PackageScriptOp::SpawnProjectileFromVars ||
+        op == PackageScriptOp::SpawnProjectileSetVar ||
+        op == PackageScriptOp::SpawnProjectileFromVarsSetVar;
+}
+
+void demoteProjectileInstruction(PackageScriptInstruction& instruction) {
+    switch (instruction.op) {
+    case PackageScriptOp::SpawnProjectile:
+        instruction.op = PackageScriptOp::SpawnObject;
+        break;
+    case PackageScriptOp::SpawnProjectileFromVars:
+        instruction.op = PackageScriptOp::SpawnObjectFromVars;
+        break;
+    case PackageScriptOp::SpawnProjectileSetVar:
+        instruction.op = PackageScriptOp::SpawnObjectSetVar;
+        break;
+    case PackageScriptOp::SpawnProjectileFromVarsSetVar:
+        instruction.op = PackageScriptOp::SpawnObjectFromVarsSetVar;
+        break;
+    default:
+        break;
+    }
+}
+
+void remapObjectInstructionTarget(
+    PackageScriptInstruction& instruction,
+    const std::string& oldName,
+    const std::string& newName,
+    GameObjectKind newKind)
+{
+    if (!packageScriptOpTargetsObjectName(instruction.op) || instruction.text != oldName) {
+        return;
+    }
+    if (newName.empty()) {
+        instruction.op = PackageScriptOp::Nop;
+        instruction.text.clear();
+        return;
+    }
+    instruction.text = newName;
+    if (newKind != GameObjectKind::Projectile && packageScriptOpIsProjectileSpawn(instruction.op)) {
+        demoteProjectileInstruction(instruction);
+    }
+}
+
+void remapObjectSubactionTarget(
+    Subaction& subaction,
+    const std::string& oldName,
+    const std::string& newName,
+    GameObjectKind newKind)
+{
+    if ((subaction.type != SubactionType::SpawnObject &&
+         subaction.type != SubactionType::SpawnProjectile) ||
+        subaction.objectName != oldName)
+    {
+        return;
+    }
+    if (newName.empty()) {
+        subaction.type = SubactionType::SyncTimer;
+        subaction.objectName.clear();
+        subaction.spawnVelocity = {};
+        subaction.spawnOffset = {};
+        subaction.frames = std::max(1, subaction.frames);
+        return;
+    }
+    subaction.objectName = newName;
+    if (newKind != GameObjectKind::Projectile && subaction.type == SubactionType::SpawnProjectile) {
+        subaction.type = SubactionType::SpawnObject;
+    }
+}
+
+void remapPackageObjectTargets(
+    FighterPackage& package,
+    const std::string& oldName,
+    const std::string& newName,
+    GameObjectKind newKind)
+{
+    for (FighterDefinition& fighter : package.fighters) {
+        for (FighterState& state : fighter.states) {
+            for (Subaction& subaction : state.action) {
+                remapObjectSubactionTarget(subaction, oldName, newName, newKind);
+            }
+        }
+        for (PackageScript& script : fighter.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                remapObjectInstructionTarget(instruction, oldName, newName, newKind);
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                remapObjectInstructionTarget(instruction, oldName, newName, newKind);
+            }
+        }
+    }
+}
+
+void remapObjectStateScriptTargets(
+    GameObjectDefinition& object,
+    const std::string& oldStateName,
+    const std::string& newStateName)
+{
+    for (PackageScript& script : object.packageScripts) {
+        for (PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.op == PackageScriptOp::ChangeState && instruction.text == oldStateName) {
+                instruction.text = newStateName;
+            }
+        }
+    }
+}
+
+std::vector<FunctionCall>* objectStateCallbacks(
+    GameObjectStateDefinition& state,
+    FighterEditorObjectStateCallbackSlot slot)
+{
+    switch (slot) {
+    case FighterEditorObjectStateCallbackSlot::Enter:
+        return &state.onEnter;
+    case FighterEditorObjectStateCallbackSlot::Frame:
+        return &state.onFrame;
+    case FighterEditorObjectStateCallbackSlot::Physics:
+        return &state.onPhysics;
+    case FighterEditorObjectStateCallbackSlot::Collision:
+        return &state.onCollision;
+    }
+    return nullptr;
+}
+
+std::vector<FunctionCall>* objectEventCallbacks(
+    GameObjectDefinition& object,
+    FighterEditorObjectEventCallbackSlot slot)
+{
+    switch (slot) {
+    case FighterEditorObjectEventCallbackSlot::Spawned: return &object.onSpawned;
+    case FighterEditorObjectEventCallbackSlot::Destroyed: return &object.onDestroyed;
+    case FighterEditorObjectEventCallbackSlot::PickedUp: return &object.onPickedUp;
+    case FighterEditorObjectEventCallbackSlot::Dropped: return &object.onDropped;
+    case FighterEditorObjectEventCallbackSlot::Thrown: return &object.onThrown;
+    case FighterEditorObjectEventCallbackSlot::DamageDealt: return &object.onDamageDealt;
+    case FighterEditorObjectEventCallbackSlot::DamageReceived: return &object.onDamageReceived;
+    case FighterEditorObjectEventCallbackSlot::Clanked: return &object.onClanked;
+    case FighterEditorObjectEventCallbackSlot::Reflected: return &object.onReflected;
+    case FighterEditorObjectEventCallbackSlot::Absorbed: return &object.onAbsorbed;
+    case FighterEditorObjectEventCallbackSlot::ShieldBounced: return &object.onShieldBounced;
+    case FighterEditorObjectEventCallbackSlot::HitShield: return &object.onHitShield;
+    case FighterEditorObjectEventCallbackSlot::EnteredAir: return &object.onEnteredAir;
+    case FighterEditorObjectEventCallbackSlot::EnteredHitlag: return &object.onEnteredHitlag;
+    case FighterEditorObjectEventCallbackSlot::ExitedHitlag: return &object.onExitedHitlag;
+    case FighterEditorObjectEventCallbackSlot::Accessory: return &object.onAccessory;
+    case FighterEditorObjectEventCallbackSlot::Touched: return &object.onTouched;
+    case FighterEditorObjectEventCallbackSlot::JumpedOn: return &object.onJumpedOn;
+    case FighterEditorObjectEventCallbackSlot::GrabDealt: return &object.onGrabDealt;
+    case FighterEditorObjectEventCallbackSlot::GrabbedForVictim: return &object.onGrabbedForVictim;
+    case FighterEditorObjectEventCallbackSlot::Interaction: return &object.onInteraction;
+    }
+    return nullptr;
+}
+
 } // namespace
 
 void FighterEditor::clampToWorld(const World& world) {
@@ -1111,22 +1330,19 @@ bool addEditorSessionObject(
     int* objectIndex,
     std::string* error)
 {
-    if (requestedName.empty()) {
-        setEditorError(error, "editor object name is invalid");
+    const std::string name = requestedName.empty() ? uniqueEditorObjectName(session.package) : requestedName;
+    if (!editorObjectNameAvailable(session.package, name)) {
+        setEditorError(error, "editor object name is empty or already used");
         return false;
     }
-    const bool exists = std::any_of(session.package.objects.begin(), session.package.objects.end(), [&](const GameObjectDefinition& object) {
-        return object.name == requestedName;
-    });
-    if (exists) {
-        setEditorError(error, "editor object name is already used");
+    FighterPackage previous = session.package;
+    session.package.objects.push_back(makeFighterEditorObjectDefinition(name, kind));
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
         return false;
     }
-    session.package.objects.push_back(makeFighterEditorObjectDefinition(requestedName, kind));
     if (objectIndex) {
         *objectIndex = static_cast<int>(session.package.objects.size()) - 1;
     }
-    session.dirty = true;
     return true;
 }
 
@@ -1785,6 +2001,550 @@ bool bindEditorSessionPackageScriptCallback(
         calls->push_back({callback});
     }
     session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+std::string uniqueEditorObjectName(const FighterPackage& package, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorObjectNameAvailable(package, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+std::string uniqueEditorObjectStateName(const GameObjectDefinition& object, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorObjectStateNameAvailable(object, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+bool editorObjectNameAvailable(const FighterPackage& package, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < package.objects.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && package.objects[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool editorObjectStateNameAvailable(const GameObjectDefinition& object, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < object.states.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && object.states[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool renameEditorSessionObject(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (!editorObjectNameAvailable(session.package, newName, objectIndex)) {
+        setEditorError(error, "editor object name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string oldName = object->name;
+    object->name = newName;
+    remapPackageObjectTargets(session.package, oldName, newName, object->kind);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObject(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& replacementObjectName,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    const std::string removedName = object->name;
+    std::string replacementName = replacementObjectName;
+    GameObjectKind replacementKind = GameObjectKind::Item;
+    if (!replacementName.empty()) {
+        if (replacementName == removedName) {
+            setEditorError(error, "editor replacement object cannot be the removed object");
+            return false;
+        }
+        const auto replacement = std::find_if(session.package.objects.begin(), session.package.objects.end(), [&](const GameObjectDefinition& candidate) {
+            return candidate.name == replacementName;
+        });
+        if (replacement == session.package.objects.end()) {
+            setEditorError(error, "editor replacement object is invalid");
+            return false;
+        }
+        replacementKind = replacement->kind;
+    }
+    FighterPackage previous = session.package;
+    remapPackageObjectTargets(session.package, removedName, replacementName, replacementKind);
+    session.package.objects.erase(session.package.objects.begin() + objectIndex);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectKind(
+    FighterEditorSession& session,
+    int objectIndex,
+    GameObjectKind kind,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->kind = kind;
+    remapPackageObjectTargets(session.package, object->name, object->name, kind);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectProperties(
+    FighterEditorSession& session,
+    int objectIndex,
+    int lifetimeFrames,
+    Fix gravity,
+    Fix terminalVelocity,
+    Fix maxDamage,
+    bool destroyOnHit,
+    bool destroyOnShield,
+    bool hitOwner,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->lifetimeFrames = lifetimeFrames;
+    object->gravity = gravity;
+    object->terminalVelocity = terminalVelocity;
+    object->maxDamage = maxDamage;
+    object->destroyOnHit = destroyOnHit;
+    object->destroyOnShield = destroyOnShield;
+    object->hitOwner = hitOwner;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool createEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& requestedName,
+    int sourceStateIndex,
+    int* createdStateIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    const std::string name = requestedName.empty() ? uniqueEditorObjectStateName(*object) : requestedName;
+    if (!editorObjectStateNameAvailable(*object, name)) {
+        setEditorError(error, "editor object state name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    GameObjectStateDefinition state;
+    state.name = name;
+    state.animationLengthFrames = 1;
+    state.loopAnimation = true;
+    if (sourceStateIndex >= 0 && sourceStateIndex < static_cast<int>(object->states.size())) {
+        state = object->states[static_cast<size_t>(sourceStateIndex)];
+        state.name = name;
+    }
+    object->states.push_back(std::move(state));
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (createdStateIndex) {
+        *createdStateIndex = static_cast<int>(session.package.objects[static_cast<size_t>(objectIndex)].states.size()) - 1;
+    }
+    return true;
+}
+
+bool duplicateEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int sourceStateIndex,
+    int* createdStateIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (object->states.empty()) {
+        setEditorError(error, "editor cannot clone a state from an empty object");
+        return false;
+    }
+    const int sourceIndex = sourceStateIndex >= 0
+        ? sourceStateIndex
+        : std::clamp(object->initialState, 0, static_cast<int>(object->states.size()) - 1);
+    if (sourceIndex < 0 || sourceIndex >= static_cast<int>(object->states.size())) {
+        setEditorError(error, "editor object clone source state is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    GameObjectStateDefinition clone = object->states[static_cast<size_t>(sourceIndex)];
+    clone.name = uniqueEditorObjectStateName(*object, clone.name + "Copy");
+    const int insertIndex = std::clamp(sourceIndex + 1, 0, static_cast<int>(object->states.size()));
+    object->states.insert(object->states.begin() + insertIndex, std::move(clone));
+    if (object->initialState >= insertIndex) {
+        ++object->initialState;
+    }
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (createdStateIndex) {
+        *createdStateIndex = insertIndex;
+    }
+    return true;
+}
+
+bool renameEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    GameObjectStateDefinition* state = nullptr;
+    if (!validSessionObjectState(session, objectIndex, stateIndex, &object, &state, error)) {
+        return false;
+    }
+    if (!editorObjectStateNameAvailable(*object, newName, stateIndex)) {
+        setEditorError(error, "editor object state name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string oldName = state->name;
+    state->name = newName;
+    remapObjectStateScriptTargets(*object, oldName, newName);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    const std::string& replacementStateName,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (object->states.size() <= 1) {
+        setEditorError(error, "editor cannot remove the only object state");
+        return false;
+    }
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(object->states.size())) {
+        setEditorError(error, "editor remove object state index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string removedName = object->states[static_cast<size_t>(stateIndex)].name;
+    object->states.erase(object->states.begin() + stateIndex);
+    std::string replacement = replacementStateName;
+    const auto replacementState = std::find_if(object->states.begin(), object->states.end(), [&](const GameObjectStateDefinition& state) {
+        return state.name == replacement;
+    });
+    if (replacement.empty() || replacementState == object->states.end()) {
+        const int replacementIndex = std::clamp(stateIndex, 0, static_cast<int>(object->states.size()) - 1);
+        replacement = object->states[static_cast<size_t>(replacementIndex)].name;
+    }
+    if (object->initialState == stateIndex) {
+        const auto initial = std::find_if(object->states.begin(), object->states.end(), [&](const GameObjectStateDefinition& state) {
+            return state.name == replacement;
+        });
+        object->initialState = initial == object->states.end()
+            ? 0
+            : static_cast<int>(std::distance(object->states.begin(), initial));
+    } else if (object->initialState > stateIndex) {
+        --object->initialState;
+    }
+    remapObjectStateScriptTargets(*object, removedName, replacement);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectStateTiming(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    int animationLengthFrames,
+    bool loopAnimation,
+    bool makeInitialState,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    GameObjectStateDefinition* state = nullptr;
+    if (!validSessionObjectState(session, objectIndex, stateIndex, &object, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->animationLengthFrames = animationLengthFrames;
+    state->loopAnimation = loopAnimation;
+    if (makeInitialState) {
+        object->initialState = stateIndex;
+    }
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectStateCallbacks(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    FighterEditorObjectStateCallbackSlot slot,
+    const std::vector<FunctionCall>& calls,
+    std::string* error)
+{
+    GameObjectStateDefinition* state = nullptr;
+    if (!validSessionObjectState(session, objectIndex, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    std::vector<FunctionCall>* target = objectStateCallbacks(*state, slot);
+    if (!target) {
+        setEditorError(error, "editor object state callback slot is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    *target = calls;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectEventCallbacks(
+    FighterEditorSession& session,
+    int objectIndex,
+    FighterEditorObjectEventCallbackSlot slot,
+    const std::vector<FunctionCall>& calls,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    std::vector<FunctionCall>* target = objectEventCallbacks(*object, slot);
+    if (!target) {
+        setEditorError(error, "editor object event callback slot is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    *target = calls;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionObjectHitbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    const HitboxDefinition& hitbox,
+    int insertIndex,
+    int* addedHitboxIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(object->hitboxes.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(object->hitboxes.size()));
+    object->hitboxes.insert(object->hitboxes.begin() + index, hitbox);
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedHitboxIndex) {
+        *addedHitboxIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionObjectHitbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hitboxIndex,
+    const HitboxDefinition& hitbox,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (hitboxIndex < 0 || hitboxIndex >= static_cast<int>(object->hitboxes.size())) {
+        setEditorError(error, "editor object hitbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->hitboxes[static_cast<size_t>(hitboxIndex)] = hitbox;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObjectHitbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hitboxIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (hitboxIndex < 0 || hitboxIndex >= static_cast<int>(object->hitboxes.size())) {
+        setEditorError(error, "editor object hitbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->hitboxes.erase(object->hitboxes.begin() + hitboxIndex);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionObjectHurtbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    const GameObjectHurtboxDefinition& hurtbox,
+    int insertIndex,
+    int* addedHurtboxIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(object->hurtboxes.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(object->hurtboxes.size()));
+    object->hurtboxes.insert(object->hurtboxes.begin() + index, hurtbox);
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedHurtboxIndex) {
+        *addedHurtboxIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionObjectHurtbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hurtboxIndex,
+    const GameObjectHurtboxDefinition& hurtbox,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (hurtboxIndex < 0 || hurtboxIndex >= static_cast<int>(object->hurtboxes.size())) {
+        setEditorError(error, "editor object hurtbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->hurtboxes[static_cast<size_t>(hurtboxIndex)] = hurtbox;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObjectHurtbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hurtboxIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (hurtboxIndex < 0 || hurtboxIndex >= static_cast<int>(object->hurtboxes.size())) {
+        setEditorError(error, "editor object hurtbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->hurtboxes.erase(object->hurtboxes.begin() + hurtboxIndex);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionObjectTouchbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    const GameObjectTouchboxDefinition& touchbox,
+    int insertIndex,
+    int* addedTouchboxIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(object->touchboxes.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(object->touchboxes.size()));
+    object->touchboxes.insert(object->touchboxes.begin() + index, touchbox);
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedTouchboxIndex) {
+        *addedTouchboxIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionObjectTouchbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int touchboxIndex,
+    const GameObjectTouchboxDefinition& touchbox,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (touchboxIndex < 0 || touchboxIndex >= static_cast<int>(object->touchboxes.size())) {
+        setEditorError(error, "editor object touchbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->touchboxes[static_cast<size_t>(touchboxIndex)] = touchbox;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionObjectTouchbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int touchboxIndex,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (touchboxIndex < 0 || touchboxIndex >= static_cast<int>(object->touchboxes.size())) {
+        setEditorError(error, "editor object touchbox index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->touchboxes.erase(object->touchboxes.begin() + touchboxIndex);
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 

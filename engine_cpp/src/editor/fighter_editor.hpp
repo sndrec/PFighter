@@ -40,6 +40,37 @@ enum class FighterEditorStateCallbackSlot : uint8_t {
     Airborne,
 };
 
+enum class FighterEditorObjectStateCallbackSlot : uint8_t {
+    Enter,
+    Frame,
+    Physics,
+    Collision,
+};
+
+enum class FighterEditorObjectEventCallbackSlot : uint8_t {
+    Spawned,
+    Destroyed,
+    PickedUp,
+    Dropped,
+    Thrown,
+    DamageDealt,
+    DamageReceived,
+    Clanked,
+    Reflected,
+    Absorbed,
+    ShieldBounced,
+    HitShield,
+    EnteredAir,
+    EnteredHitlag,
+    ExitedHitlag,
+    Accessory,
+    Touched,
+    JumpedOn,
+    GrabDealt,
+    GrabbedForVictim,
+    Interaction,
+};
+
 struct FighterEditorTimelineMarker {
     FighterEditorTimelineMarkerKind kind = FighterEditorTimelineMarkerKind::Subaction;
     int frame = 0;
@@ -329,6 +360,136 @@ bool bindEditorSessionPackageScriptCallback(
     int stateIndex,
     FighterEditorStateCallbackSlot slot,
     const std::string& scriptName,
+    std::string* error = nullptr);
+std::string uniqueEditorObjectName(const FighterPackage& package, const std::string& prefix = "Object");
+std::string uniqueEditorObjectStateName(const GameObjectDefinition& object, const std::string& prefix = "State");
+bool editorObjectNameAvailable(const FighterPackage& package, const std::string& name, int ignoredIndex = -1);
+bool editorObjectStateNameAvailable(const GameObjectDefinition& object, const std::string& name, int ignoredIndex = -1);
+bool renameEditorSessionObject(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionObject(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& replacementObjectName = {},
+    std::string* error = nullptr);
+bool setEditorSessionObjectKind(
+    FighterEditorSession& session,
+    int objectIndex,
+    GameObjectKind kind,
+    std::string* error = nullptr);
+bool setEditorSessionObjectProperties(
+    FighterEditorSession& session,
+    int objectIndex,
+    int lifetimeFrames,
+    Fix gravity,
+    Fix terminalVelocity,
+    Fix maxDamage,
+    bool destroyOnHit,
+    bool destroyOnShield,
+    bool hitOwner,
+    std::string* error = nullptr);
+bool createEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& requestedName = {},
+    int sourceStateIndex = -1,
+    int* createdStateIndex = nullptr,
+    std::string* error = nullptr);
+bool duplicateEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int sourceStateIndex,
+    int* createdStateIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectState(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    const std::string& replacementStateName = {},
+    std::string* error = nullptr);
+bool setEditorSessionObjectStateTiming(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    int animationLengthFrames,
+    bool loopAnimation,
+    bool makeInitialState,
+    std::string* error = nullptr);
+bool setEditorSessionObjectStateCallbacks(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    FighterEditorObjectStateCallbackSlot slot,
+    const std::vector<FunctionCall>& calls,
+    std::string* error = nullptr);
+bool setEditorSessionObjectEventCallbacks(
+    FighterEditorSession& session,
+    int objectIndex,
+    FighterEditorObjectEventCallbackSlot slot,
+    const std::vector<FunctionCall>& calls,
+    std::string* error = nullptr);
+bool addEditorSessionObjectHitbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    const HitboxDefinition& hitbox,
+    int insertIndex = -1,
+    int* addedHitboxIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionObjectHitbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hitboxIndex,
+    const HitboxDefinition& hitbox,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectHitbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hitboxIndex,
+    std::string* error = nullptr);
+bool addEditorSessionObjectHurtbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    const GameObjectHurtboxDefinition& hurtbox,
+    int insertIndex = -1,
+    int* addedHurtboxIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionObjectHurtbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hurtboxIndex,
+    const GameObjectHurtboxDefinition& hurtbox,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectHurtbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int hurtboxIndex,
+    std::string* error = nullptr);
+bool addEditorSessionObjectTouchbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    const GameObjectTouchboxDefinition& touchbox,
+    int insertIndex = -1,
+    int* addedTouchboxIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionObjectTouchbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int touchboxIndex,
+    const GameObjectTouchboxDefinition& touchbox,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectTouchbox(
+    FighterEditorSession& session,
+    int objectIndex,
+    int touchboxIndex,
     std::string* error = nullptr);
 
 } // namespace pf

@@ -6246,8 +6246,137 @@ int main(int argc, char** argv) {
         editorCallerScriptAfterRemove->instructions[0].op == pf::PackageScriptOp::Nop;
     const bool editorSessionRemoveVariableOk = editorSessionScriptRefsRemovedOk &&
         pf::removeEditorSessionPackageVariable(editorSession, editorAddedVariable, &packageError);
+    int editorArticleObjectIndex = -1;
+    const bool editorSessionAddArticleObjectOk = editorSessionRemoveVariableOk &&
+        pf::addEditorSessionObject(editorSession, "EditorArticleObject", pf::GameObjectKind::Projectile, &editorArticleObjectIndex, &packageError) &&
+        editorArticleObjectIndex >= 0;
+    pf::Subaction editorArticleSpawnSubaction;
+    editorArticleSpawnSubaction.type = pf::SubactionType::SpawnProjectile;
+    editorArticleSpawnSubaction.frames = 1;
+    editorArticleSpawnSubaction.objectName = "EditorArticleObject";
+    editorArticleSpawnSubaction.spawnVelocity = {pf::fxFromFloat(0.8f), pf::fxFromFloat(0.2f)};
+    int editorArticleSpawnSubactionIndex = -1;
+    const bool editorSessionAddArticleSpawnOk = editorSessionAddArticleObjectOk &&
+        pf::addEditorSessionSubaction(editorSession, 0, editorArticleSpawnSubaction, -1, &editorArticleSpawnSubactionIndex, &packageError) &&
+        editorArticleSpawnSubactionIndex >= 0;
+    const bool editorSessionRenameObjectOk = editorSessionAddArticleSpawnOk &&
+        pf::renameEditorSessionObject(editorSession, editorArticleObjectIndex, "EditorArticleRenamed", &packageError);
+    const pf::FighterDefinition* editorRootAfterObjectRename = editorSession.rootFighter();
+    const bool editorSessionObjectRemapOk = editorSessionRenameObjectOk &&
+        editorRootAfterObjectRename &&
+        editorRootAfterObjectRename->states[0].action[static_cast<size_t>(editorArticleSpawnSubactionIndex)].objectName == "EditorArticleRenamed";
+    const bool editorSessionObjectPropertiesOk = editorSessionObjectRemapOk &&
+        pf::setEditorSessionObjectProperties(
+            editorSession,
+            editorArticleObjectIndex,
+            45,
+            -pf::fxFromFloat(0.07f),
+            pf::fxFromFloat(2.5f),
+            pf::fxFromFloat(15.0f),
+            false,
+            true,
+            true,
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].lifetimeFrames == 45 &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].hitOwner;
+    int editorArticleStateIndex = -1;
+    const bool editorSessionCreateObjectStateOk = editorSessionObjectPropertiesOk &&
+        pf::createEditorSessionObjectState(editorSession, editorArticleObjectIndex, "EditorObjectState", 0, &editorArticleStateIndex, &packageError) &&
+        editorArticleStateIndex >= 0;
+    const bool editorSessionRenameObjectStateOk = editorSessionCreateObjectStateOk &&
+        pf::renameEditorSessionObjectState(editorSession, editorArticleObjectIndex, editorArticleStateIndex, "EditorObjectStateRenamed", &packageError);
+    const bool editorSessionObjectStateTimingOk = editorSessionRenameObjectStateOk &&
+        pf::setEditorSessionObjectStateTiming(editorSession, editorArticleObjectIndex, editorArticleStateIndex, 18, false, true, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].initialState == editorArticleStateIndex &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].states[static_cast<size_t>(editorArticleStateIndex)].animationLengthFrames == 18;
+    const bool editorSessionObjectCallbacksOk = editorSessionObjectStateTimingOk &&
+        pf::setEditorSessionObjectStateCallbacks(
+            editorSession,
+            editorArticleObjectIndex,
+            editorArticleStateIndex,
+            pf::FighterEditorObjectStateCallbackSlot::Frame,
+            {{std::string{"object_lifetime"}}},
+            &packageError) &&
+        pf::setEditorSessionObjectEventCallbacks(
+            editorSession,
+            editorArticleObjectIndex,
+            pf::FighterEditorObjectEventCallbackSlot::Spawned,
+            {{std::string{"object_lifetime"}}},
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].states[static_cast<size_t>(editorArticleStateIndex)].onFrame.size() == 1 &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].onSpawned.size() == 1;
+    if (editorSessionObjectCallbacksOk) {
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts.push_back({
+            "EditorObjectStateScript",
+            64,
+            {{
+                pf::PackageScriptOp::ChangeState,
+                -1,
+                -1,
+                -1,
+                0,
+                0,
+                "EditorObjectStateRenamed",
+            }},
+        });
+    }
+    const bool editorSessionRemoveObjectStateOk = editorSessionObjectCallbacksOk &&
+        pf::removeEditorSessionObjectState(editorSession, editorArticleObjectIndex, editorArticleStateIndex, "Idle", &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].initialState == 0 &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts.back().instructions[0].text == "Idle";
+    pf::HitboxDefinition editorObjectHitbox;
+    editorObjectHitbox.hitboxId = 11;
+    editorObjectHitbox.radius = pf::fxFromFloat(0.35f);
+    editorObjectHitbox.damage = pf::fxFromFloat(3.0f);
+    editorObjectHitbox.knockbackAngleDegrees = pf::fx(45);
+    editorObjectHitbox.knockbackBase = pf::fx(15);
+    editorObjectHitbox.knockbackGrowth = pf::fx(60);
+    int editorObjectHitboxIndex = -1;
+    const bool editorSessionObjectHitboxOk = editorSessionRemoveObjectStateOk &&
+        pf::addEditorSessionObjectHitbox(editorSession, editorArticleObjectIndex, editorObjectHitbox, -1, &editorObjectHitboxIndex, &packageError) &&
+        editorObjectHitboxIndex >= 0;
+    editorObjectHitbox.damage = pf::fxFromFloat(4.0f);
+    const bool editorSessionSetObjectHitboxOk = editorSessionObjectHitboxOk &&
+        pf::setEditorSessionObjectHitbox(editorSession, editorArticleObjectIndex, editorObjectHitboxIndex, editorObjectHitbox, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].hitboxes[static_cast<size_t>(editorObjectHitboxIndex)].damage == pf::fxFromFloat(4.0f);
+    pf::GameObjectHurtboxDefinition editorObjectHurtbox;
+    editorObjectHurtbox.radius = pf::fxFromFloat(0.4f);
+    int editorObjectHurtboxIndex = -1;
+    const bool editorSessionObjectHurtboxOk = editorSessionSetObjectHitboxOk &&
+        pf::addEditorSessionObjectHurtbox(editorSession, editorArticleObjectIndex, editorObjectHurtbox, -1, &editorObjectHurtboxIndex, &packageError) &&
+        editorObjectHurtboxIndex >= 0;
+    pf::GameObjectTouchboxDefinition editorObjectTouchbox;
+    editorObjectTouchbox.radius = pf::fxFromFloat(0.45f);
+    editorObjectTouchbox.touchObjects = false;
+    int editorObjectTouchboxIndex = -1;
+    const bool editorSessionObjectTouchboxOk = editorSessionObjectHurtboxOk &&
+        pf::addEditorSessionObjectTouchbox(editorSession, editorArticleObjectIndex, editorObjectTouchbox, -1, &editorObjectTouchboxIndex, &packageError) &&
+        editorObjectTouchboxIndex >= 0;
+    editorObjectTouchbox.touchObjects = true;
+    const bool editorSessionSetObjectTouchboxOk = editorSessionObjectTouchboxOk &&
+        pf::setEditorSessionObjectTouchbox(editorSession, editorArticleObjectIndex, editorObjectTouchboxIndex, editorObjectTouchbox, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].touchboxes[static_cast<size_t>(editorObjectTouchboxIndex)].touchObjects;
+    const bool editorSessionRemoveObjectBoxesOk = editorSessionSetObjectTouchboxOk &&
+        pf::removeEditorSessionObjectHitbox(editorSession, editorArticleObjectIndex, editorObjectHitboxIndex, &packageError) &&
+        pf::removeEditorSessionObjectHurtbox(editorSession, editorArticleObjectIndex, editorObjectHurtboxIndex, &packageError) &&
+        pf::removeEditorSessionObjectTouchbox(editorSession, editorArticleObjectIndex, editorObjectTouchboxIndex, &packageError);
+    const bool editorSessionObjectKindOk = editorSessionRemoveObjectBoxesOk &&
+        pf::setEditorSessionObjectKind(editorSession, editorArticleObjectIndex, pf::GameObjectKind::Item, &packageError);
+    const pf::FighterDefinition* editorRootAfterObjectKind = editorSession.rootFighter();
+    const bool editorSessionObjectKindRemapOk = editorSessionObjectKindOk &&
+        editorRootAfterObjectKind &&
+        editorRootAfterObjectKind->states[0].action[static_cast<size_t>(editorArticleSpawnSubactionIndex)].type == pf::SubactionType::SpawnObject;
+    const bool editorSessionRemoveObjectOk = editorSessionObjectKindRemapOk &&
+        pf::removeEditorSessionObject(editorSession, editorArticleObjectIndex, {}, &packageError);
+    const pf::FighterDefinition* editorRootAfterObjectRemove = editorSession.rootFighter();
+    const bool editorSessionObjectRefsRemovedOk = editorSessionRemoveObjectOk &&
+        editorRootAfterObjectRemove &&
+        editorRootAfterObjectRemove->states[0].action[static_cast<size_t>(editorArticleSpawnSubactionIndex)].type == pf::SubactionType::SyncTimer &&
+        std::none_of(editorSession.package.objects.begin(), editorSession.package.objects.end(), [](const pf::GameObjectDefinition& object) {
+            return object.name == "EditorArticleRenamed";
+        });
     pf::FighterEditorPackageSnapshot editorSnapshot;
-    const bool editorSessionExportOk = editorSessionRemoveVariableOk &&
+    const bool editorSessionExportOk = editorSessionObjectRefsRemovedOk &&
         pf::exportFighterEditorSessionPackage(editorSession, editorSnapshot, &packageError) &&
         !editorSnapshot.bytes.empty() &&
         editorSnapshot.descriptor.name == "headless_editor_session" &&
@@ -7702,6 +7831,26 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_remove_script_ok=" << editorSessionRemoveScriptOk
               << " fighter_editor_session_script_refs_removed_ok=" << editorSessionScriptRefsRemovedOk
               << " fighter_editor_session_remove_variable_ok=" << editorSessionRemoveVariableOk
+              << " fighter_editor_session_add_article_object_ok=" << editorSessionAddArticleObjectOk
+              << " fighter_editor_session_add_article_spawn_ok=" << editorSessionAddArticleSpawnOk
+              << " fighter_editor_session_rename_object_ok=" << editorSessionRenameObjectOk
+              << " fighter_editor_session_object_remap_ok=" << editorSessionObjectRemapOk
+              << " fighter_editor_session_object_properties_ok=" << editorSessionObjectPropertiesOk
+              << " fighter_editor_session_create_object_state_ok=" << editorSessionCreateObjectStateOk
+              << " fighter_editor_session_rename_object_state_ok=" << editorSessionRenameObjectStateOk
+              << " fighter_editor_session_object_state_timing_ok=" << editorSessionObjectStateTimingOk
+              << " fighter_editor_session_object_callbacks_ok=" << editorSessionObjectCallbacksOk
+              << " fighter_editor_session_remove_object_state_ok=" << editorSessionRemoveObjectStateOk
+              << " fighter_editor_session_object_hitbox_ok=" << editorSessionObjectHitboxOk
+              << " fighter_editor_session_set_object_hitbox_ok=" << editorSessionSetObjectHitboxOk
+              << " fighter_editor_session_object_hurtbox_ok=" << editorSessionObjectHurtboxOk
+              << " fighter_editor_session_object_touchbox_ok=" << editorSessionObjectTouchboxOk
+              << " fighter_editor_session_set_object_touchbox_ok=" << editorSessionSetObjectTouchboxOk
+              << " fighter_editor_session_remove_object_boxes_ok=" << editorSessionRemoveObjectBoxesOk
+              << " fighter_editor_session_object_kind_ok=" << editorSessionObjectKindOk
+              << " fighter_editor_session_object_kind_remap_ok=" << editorSessionObjectKindRemapOk
+              << " fighter_editor_session_remove_object_ok=" << editorSessionRemoveObjectOk
+              << " fighter_editor_session_object_refs_removed_ok=" << editorSessionObjectRefsRemovedOk
               << " fighter_editor_session_export_ok=" << editorSessionExportOk
               << " fighter_editor_session_test_world_ok=" << editorSessionTestWorldOk
               << " fighter_editor_blank_session_ok=" << blankEditorSessionBeginOk
