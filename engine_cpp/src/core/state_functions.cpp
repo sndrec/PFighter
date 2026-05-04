@@ -1609,11 +1609,9 @@ static void enterLandingAirWithLag(World& world, FighterRuntime& fighter, const 
 
     const FighterState& state = currentState(world, fighter);
     Fix clipLength = fx(state.animationLengthFrames);
-    if (def.hasHsdAsset && def.hsdAsset) {
-        if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, state.animationActionIndex)) {
-            if (clip->frameCount > 0) {
-                clipLength = clip->frameCount;
-            }
+    if (const AnimationClip* clip = authoredAnimationClipByActionIndex(def, state.animationActionIndex)) {
+        if (clip->frameCount > 0) {
+            clipLength = clip->frameCount;
         }
     }
     fighter.animationRate = fxDiv(clipLength + fxFromFloat(0.1f), fx(std::max(1, lag)));
@@ -2364,14 +2362,7 @@ static bool ledgeActionTransN(const World& world, const FighterRuntime& fighter,
     if (def.authoredSkeleton.empty() || state.animationActionIndex < 0) {
         return false;
     }
-    const AnimationClip* clip = nullptr;
-    for (const AnimationClip& candidate : def.authoredClips) {
-        if (candidate.actionIndex == state.animationActionIndex) {
-            clip = &candidate;
-            break;
-        }
-    }
-    if (clip) {
+    if (const AnimationClip* clip = authoredAnimationClipByActionIndex(def, state.animationActionIndex)) {
         const AnimationPose pose = evaluateClip(def.authoredSkeleton, *clip, animationFrameForState(fighter, state, *clip));
         if (pose.joints.size() > 1) {
             transN = scaleTransN(pose.joints[1].translation, def.properties.modelScale);

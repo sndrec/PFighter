@@ -789,6 +789,29 @@ static void importHsdActionScriptsAsNativeSubactions(FighterDefinition& def) {
     }
 }
 
+const std::vector<AnimationClip>& authoredAnimationClips(const FighterDefinition& def) {
+    return def.authoredClipSource ? *def.authoredClipSource : def.authoredClips;
+}
+
+const AnimationClip* authoredAnimationClipByActionIndex(const FighterDefinition& def, int actionIndex) {
+    if (actionIndex < 0) {
+        return nullptr;
+    }
+    const std::vector<AnimationClip>& clips = authoredAnimationClips(def);
+    const auto found = std::find_if(clips.begin(), clips.end(), [&](const AnimationClip& clip) {
+        return clip.actionIndex == actionIndex;
+    });
+    return found == clips.end() ? nullptr : &*found;
+}
+
+const HsdFighterMesh& authoredFighterMesh(const FighterDefinition& def) {
+    return def.authoredMeshSource ? *def.authoredMeshSource : def.authoredMesh;
+}
+
+const std::vector<HsdModelPartAnimationSet>& authoredModelPartAnimations(const FighterDefinition& def) {
+    return def.modelPartAnimationSource ? *def.modelPartAnimationSource : def.modelPartAnimations;
+}
+
 static void applyCommonStateTimings(FighterDefinition& def) {
     const int buryJumpIndex = def.stateIndex("BuryJump");
     if (buryJumpIndex >= 0) {
@@ -872,6 +895,13 @@ static bool tryLoadNativePackageFighterDefinition(const HsdFighterAssetSpec& spe
     if (packagePath.empty()) {
         return false;
     }
+    static std::unordered_map<std::string, FighterDefinition> cachedDefinitions;
+    const std::string cacheKey = packagePath.string();
+    if (const auto found = cachedDefinitions.find(cacheKey); found != cachedDefinitions.end()) {
+        out = found->second;
+        return true;
+    }
+
     FighterPackage package;
     std::string error;
     if (!loadFighterPackage(packagePath.string(), package, &error) || package.fighters.empty()) {
@@ -886,6 +916,20 @@ static bool tryLoadNativePackageFighterDefinition(const HsdFighterAssetSpec& spe
     if (out.hasHsdAsset || out.hsdAsset) {
         throw std::runtime_error("native fighter package " + packagePath.string() + " depends on imported HSD data");
     }
+    if (!out.authoredClips.empty()) {
+        out.authoredClipSource = std::make_shared<const std::vector<AnimationClip>>(std::move(out.authoredClips));
+        out.authoredClips.clear();
+    }
+    if (!out.authoredMesh.batches.empty() || !out.authoredMesh.textures.empty()) {
+        out.authoredMeshSource = std::make_shared<const HsdFighterMesh>(std::move(out.authoredMesh));
+        out.authoredMesh = {};
+    }
+    if (!out.modelPartAnimations.empty()) {
+        out.modelPartAnimationSource =
+            std::make_shared<const std::vector<HsdModelPartAnimationSet>>(std::move(out.modelPartAnimations));
+        out.modelPartAnimations.clear();
+    }
+    cachedDefinitions.emplace(cacheKey, out);
     return true;
 }
 
@@ -1029,12 +1073,13 @@ static size_t modelVisibilityStateCount(const HsdFighterMesh& mesh) {
 }
 
 static void ensureModelVisibilityDefaults(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (def.authoredMesh.batches.empty()) {
+    const HsdFighterMesh& mesh = authoredFighterMesh(def);
+    if (mesh.batches.empty()) {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
         return;
     }
-    const size_t count = modelVisibilityStateCount(def.authoredMesh);
+    const size_t count = modelVisibilityStateCount(mesh);
     if (fighter.hsdModelVisibilityDefaultStates.size() != count) {
         // HSDLib's renderer resets high-poly visibility groups to state 0.
         // Character-specific ftParts_80074A4C default overrides are ported separately.
@@ -1075,9 +1120,9 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighterDefIndex)];
     p1.shieldHealth = def.shield.maxHealth;
     initializePackageVars(def, p1);
-    if (!def.authoredMesh.batches.empty()) {
+    if (!authoredFighterMesh(def).batches.empty()) {
         ensureModelVisibilityDefaults(def, p1);
-        p1.hsdModelPartAnimations.assign(def.modelPartAnimations.size(), -1);
+        p1.hsdModelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
     }
     return p1;
 }
@@ -1333,10 +1378,10 @@ bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::s
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
     initializePackageVars(*found, fighter);
-    if (!found->authoredMesh.batches.empty()) {
+    if (!authoredFighterMesh(*found).batches.empty()) {
         ensureModelVisibilityDefaults(*found, fighter);
         fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelPartAnimations.assign(found->modelPartAnimations.size(), -1);
+        fighter.hsdModelPartAnimations.assign(authoredModelPartAnimations(*found).size(), -1);
     } else {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
@@ -1626,6 +1671,18 @@ bool makeNativePackageFighterDefinition(const FighterDefinition& source, Fighter
         return false;
     }
     if (!source.hsdAsset) {
+        if (out.authoredClips.empty() && source.authoredClipSource) {
+            out.authoredClips = *source.authoredClipSource;
+        }
+        if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty() && source.authoredMeshSource) {
+            out.authoredMesh = *source.authoredMeshSource;
+        }
+        if (out.modelPartAnimations.empty() && source.modelPartAnimationSource) {
+            out.modelPartAnimations = *source.modelPartAnimationSource;
+        }
+        out.authoredClipSource.reset();
+        out.authoredMeshSource.reset();
+        out.modelPartAnimationSource.reset();
         return true;
     }
 
@@ -2565,10 +2622,10 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.stateAnimationLengthOverride = lagFrames > 0 ? lagFrames : 0;
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
-    if (!def.authoredMesh.batches.empty()) {
+    if (!authoredFighterMesh(def).batches.empty()) {
         ensureModelVisibilityDefaults(def, fighter);
         fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelPartAnimations.assign(def.modelPartAnimations.size(), -1);
+        fighter.hsdModelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
     } else {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
@@ -3354,12 +3411,8 @@ static const AnimationClip* clipForState(const FighterDefinition& def, const Fig
             return clip;
         }
     }
-    if (actionIndex >= 0) {
-        for (const AnimationClip& clip : def.authoredClips) {
-            if (clip.actionIndex == actionIndex) {
-                return &clip;
-            }
-        }
+    if (const AnimationClip* clip = authoredAnimationClipByActionIndex(def, actionIndex)) {
+        return clip;
     }
     if (def.hasHsdAsset && def.hsdAsset) {
         const std::string suffix = "_ACTION_" + state.animation + "_figatree";
@@ -3370,7 +3423,7 @@ static const AnimationClip* clipForState(const FighterDefinition& def, const Fig
             }
         }
     }
-    for (const AnimationClip& clip : def.authoredClips) {
+    for (const AnimationClip& clip : authoredAnimationClips(def)) {
         if (clip.name == state.animation) {
             return &clip;
         }
@@ -3436,14 +3489,7 @@ static void applyShieldPose(const FighterDefinition& def, const FighterState& st
     }
 
     AnimationPose target = def.shieldPose;
-    const AnimationClip* guardClip = nullptr;
-    for (const AnimationClip& clip : def.authoredClips) {
-        if (clip.actionIndex == 38) {
-            guardClip = &clip;
-            break;
-        }
-    }
-    if (guardClip) {
+    if (const AnimationClip* guardClip = authoredAnimationClipByActionIndex(def, 38)) {
         const Fix stickBlend = std::clamp(fighter.guardPoseBlend, Fix{0}, fx(1));
         if (stickBlend > 0) {
             AnimationPose stickPose = evaluateClip(def.authoredSkeleton, *guardClip, fighter.guardPoseFrame);
@@ -3478,7 +3524,7 @@ static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntim
     if (fighter.hsdModelPartAnimations.empty()) {
         return;
     }
-    const std::vector<HsdModelPartAnimationSet>& sets = def.modelPartAnimations;
+    const std::vector<HsdModelPartAnimationSet>& sets = authoredModelPartAnimations(def);
     for (size_t partIndex = 0; partIndex < sets.size() && partIndex < fighter.hsdModelPartAnimations.size(); ++partIndex) {
         const int animIndex = fighter.hsdModelPartAnimations[partIndex];
         if (animIndex < 0 || static_cast<size_t>(animIndex) >= sets[partIndex].animations.size()) {
@@ -5700,8 +5746,8 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
     }
     if (sub.type == SubactionType::SetModelPartAnimation) {
         if (sub.modelPartIndex >= 0) {
-            if (fighter.hsdModelPartAnimations.size() != def.modelPartAnimations.size()) {
-                fighter.hsdModelPartAnimations.assign(def.modelPartAnimations.size(), -1);
+            if (fighter.hsdModelPartAnimations.size() != authoredModelPartAnimations(def).size()) {
+                fighter.hsdModelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
             }
             if (sub.modelPartIndex < static_cast<int>(fighter.hsdModelPartAnimations.size())) {
                 fighter.hsdModelPartAnimations[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartAnimation;

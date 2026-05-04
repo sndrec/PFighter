@@ -4665,6 +4665,15 @@ int main(int argc, char** argv) {
               << "\n";
 
     pf::World packageSourceWorld = world;
+    const auto packageHsdSource = std::find_if(
+        packageSourceWorld.fighterDefs.begin(),
+        packageSourceWorld.fighterDefs.end(),
+        [](const pf::FighterDefinition& def) {
+            return def.hasHsdAsset && def.hsdAsset;
+        });
+    if (packageHsdSource != packageSourceWorld.fighterDefs.end()) {
+        packageSourceWorld.fighterDefs[0] = *packageHsdSource;
+    }
     pf::FighterDefinition packageConversionMismatchProbe = packageSourceWorld.fighterDefs[0];
     packageConversionMismatchProbe.authoredSkeleton = {
         {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},

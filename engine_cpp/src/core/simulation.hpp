@@ -495,6 +495,10 @@ int spawnFighter(World& world, const std::string& fighterName, Vec2 position, in
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 int spawnGameObjectOfKind(World& world, const std::string& objectName, GameObjectKind requiredKind, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 int countGameObjectsOwnedBy(const World& world, int ownerFighter, const std::string& objectName);
+const std::vector<AnimationClip>& authoredAnimationClips(const FighterDefinition& def);
+const AnimationClip* authoredAnimationClipByActionIndex(const FighterDefinition& def, int actionIndex);
+const std::vector<HsdModelPartAnimationSet>& authoredModelPartAnimations(const FighterDefinition& def);
+const HsdFighterMesh& authoredFighterMesh(const FighterDefinition& def);
 FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source);
 bool makeNativePackageFighterDefinition(
     const FighterDefinition& source,
