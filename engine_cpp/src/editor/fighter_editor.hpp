@@ -357,6 +357,13 @@ bool addEditorSessionSubaction(
     int insertIndex = -1,
     int* addedSubactionIndex = nullptr,
     std::string* error = nullptr);
+bool addEditorSessionSubactionAtFrame(
+    FighterEditorSession& session,
+    int stateIndex,
+    const Subaction& subaction,
+    int targetFrame,
+    int* addedSubactionIndex = nullptr,
+    std::string* error = nullptr);
 bool setEditorSessionSubaction(
     FighterEditorSession& session,
     int stateIndex,

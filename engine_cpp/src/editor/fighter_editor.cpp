@@ -2755,6 +2755,94 @@ bool addEditorSessionSubaction(
     return true;
 }
 
+bool addEditorSessionSubactionAtFrame(
+    FighterEditorSession& session,
+    int stateIndex,
+    const Subaction& subaction,
+    int targetFrame,
+    int* addedSubactionIndex,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    targetFrame = std::max(0, targetFrame);
+    FighterPackage previous = session.package;
+
+    int currentFrame = 0;
+    int insertIndex = static_cast<int>(state->action.size());
+    for (int index = 0; index < static_cast<int>(state->action.size()); ++index) {
+        Subaction& existing = state->action[static_cast<size_t>(index)];
+        if (existing.type == SubactionType::SyncTimer) {
+            const int duration = std::max(0, existing.frames);
+            const int timerEndFrame = currentFrame + duration;
+            if (targetFrame <= timerEndFrame) {
+                if (targetFrame == currentFrame) {
+                    insertIndex = index;
+                    state->action.insert(state->action.begin() + insertIndex, subaction);
+                } else if (targetFrame == timerEndFrame) {
+                    insertIndex = index + 1;
+                    state->action.insert(state->action.begin() + insertIndex, subaction);
+                } else {
+                    Subaction after = existing;
+                    existing.frames = targetFrame - currentFrame;
+                    after.frames = timerEndFrame - targetFrame;
+                    insertIndex = index + 1;
+                    state->action.insert(state->action.begin() + insertIndex, subaction);
+                    state->action.insert(state->action.begin() + insertIndex + 1, after);
+                }
+                session.selectedState = stateIndex;
+                session.selectedSubaction = insertIndex;
+                if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+                    return false;
+                }
+                if (addedSubactionIndex) {
+                    *addedSubactionIndex = insertIndex;
+                }
+                return true;
+            }
+            currentFrame = timerEndFrame;
+            continue;
+        }
+        if (existing.type == SubactionType::AsyncTimer) {
+            currentFrame = std::max(currentFrame, std::max(0, existing.frames));
+            continue;
+        }
+        if (currentFrame >= targetFrame) {
+            insertIndex = index;
+            state->action.insert(state->action.begin() + insertIndex, subaction);
+            session.selectedState = stateIndex;
+            session.selectedSubaction = insertIndex;
+            if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+                return false;
+            }
+            if (addedSubactionIndex) {
+                *addedSubactionIndex = insertIndex;
+            }
+            return true;
+        }
+    }
+
+    if (currentFrame < targetFrame) {
+        Subaction pad;
+        pad.type = SubactionType::SyncTimer;
+        pad.frames = targetFrame - currentFrame;
+        state->action.push_back(pad);
+    }
+    state->action.push_back(subaction);
+    insertIndex = static_cast<int>(state->action.size()) - 1;
+    session.selectedState = stateIndex;
+    session.selectedSubaction = insertIndex;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedSubactionIndex) {
+        *addedSubactionIndex = insertIndex;
+    }
+    return true;
+}
+
 bool setEditorSessionSubaction(
     FighterEditorSession& session,
     int stateIndex,

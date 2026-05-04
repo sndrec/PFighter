@@ -6436,13 +6436,26 @@ int main(int argc, char** argv) {
     const bool editorSessionMoveSubactionOk = editorSessionMovePadSubactionOk &&
         pf::moveEditorSessionSubaction(editorSession, 0, 0, 1, &editorMovedSubactionIndex, &packageError) &&
         editorMovedSubactionIndex == 1;
+    pf::Subaction editorFrameInsertSubaction;
+    editorFrameInsertSubaction.type = pf::SubactionType::ClearHitboxes;
+    editorFrameInsertSubaction.frames = 1;
+    int editorFrameInsertSubactionIndex = -1;
+    const bool editorSessionFrameSubactionOk = editorSessionMoveSubactionOk &&
+        pf::addEditorSessionSubactionAtFrame(editorSession, 0, editorFrameInsertSubaction, 1, &editorFrameInsertSubactionIndex, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].action.size() >= 4 &&
+        editorSession.rootFighter()->states[0].action[0].type == pf::SubactionType::SyncTimer &&
+        editorSession.rootFighter()->states[0].action[0].frames == 1 &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].type == pf::SubactionType::ClearHitboxes &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex + 1)].type == pf::SubactionType::SyncTimer &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex + 1)].frames == 2;
     pf::InterruptRule editorTempInterrupt;
     editorTempInterrupt.targetState = "Wait";
     editorTempInterrupt.condition = pf::InterruptCondition::WaitInput;
     editorTempInterrupt.enableFrame = 3;
     editorTempInterrupt.disableFrame = 12;
     int editorInterruptIndex = -1;
-    const bool editorSessionAddInterruptOk = editorSessionMoveSubactionOk &&
+    const bool editorSessionAddInterruptOk = editorSessionFrameSubactionOk &&
         pf::addEditorSessionInterrupt(editorSession, 0, editorTempInterrupt, -1, &editorInterruptIndex, &packageError) &&
         editorInterruptIndex >= 0;
     editorTempInterrupt.condition = pf::InterruptCondition::AttackPressed;
@@ -6460,7 +6473,13 @@ int main(int argc, char** argv) {
         editorTimeline.animationLengthFrames == 72 &&
         editorTimeline.initialInterruptibleFrame == 5 &&
         editorTimeline.frameCount >= 72 &&
+        std::find(editorTimeline.subactionFrames.begin(), editorTimeline.subactionFrames.end(), 1) != editorTimeline.subactionFrames.end() &&
         std::find(editorTimeline.subactionFrames.begin(), editorTimeline.subactionFrames.end(), 3) != editorTimeline.subactionFrames.end() &&
+        std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction &&
+                marker.subactionType == pf::SubactionType::ClearHitboxes &&
+                marker.frame == 1;
+        }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
             return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox && marker.frame == 3;
         }) &&
@@ -8747,6 +8766,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_set_subaction_ok=" << editorSessionSetSubactionOk
               << " fighter_editor_session_move_pad_subaction_ok=" << editorSessionMovePadSubactionOk
               << " fighter_editor_session_move_subaction_ok=" << editorSessionMoveSubactionOk
+              << " fighter_editor_session_frame_subaction_ok=" << editorSessionFrameSubactionOk
               << " fighter_editor_session_add_interrupt_ok=" << editorSessionAddInterruptOk
               << " fighter_editor_session_set_interrupt_ok=" << editorSessionSetInterruptOk
               << " fighter_editor_session_timeline_ok=" << editorSessionTimelineOk

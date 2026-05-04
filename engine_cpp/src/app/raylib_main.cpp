@@ -8444,8 +8444,9 @@ static void drawEditorTimelineWorkstation(
     auto addSubaction = [&](pf::Subaction subaction, const std::string& label) -> bool {
         std::string error;
         int added = -1;
-        if (pf::addEditorSessionSubaction(session, session.selectedState, subaction, -1, &added, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " subaction");
+        const int targetFrame = std::clamp(liveFrame, 0, frameCount);
+        if (pf::addEditorSessionSubactionAtFrame(session, session.selectedState, subaction, targetFrame, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " subaction at frame " + std::to_string(targetFrame));
             return true;
         }
         editor.status = "Editor: add subaction failed: " + error;
