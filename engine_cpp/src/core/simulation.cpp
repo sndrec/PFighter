@@ -7362,6 +7362,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             }
             return owner.packageVars[static_cast<size_t>(index)];
         };
+        auto ownerInput = [&]() -> const InputBuffer* {
+            if (!validFighterIndex(world, object.ownerFighter)) {
+                return nullptr;
+            }
+            return &world.fighters[static_cast<size_t>(object.ownerFighter)].input;
+        };
         int budget = std::clamp(found->instructionBudget, 0, 1024);
         struct ScriptFrame {
             const PackageScript* script = nullptr;
@@ -7682,13 +7688,54 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             }
             case PackageScriptOp::SetVarButtonDown:
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, (input->frames[0].buttons & instruction.intValue) != 0 ? 1 : 0);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetVarButtonPressed:
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, input->justPressed(static_cast<uint16_t>(instruction.intValue)) ? 1 : 0);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetVarStickX:
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, input->frames[0].move.x);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetVarStickY:
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, input->frames[0].move.y);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetVarCStickX:
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, input->frames[0].cStick.x);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetVarCStickY:
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, input->frames[0].cStick.y);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetVarShield:
-                return;
+                if (const InputBuffer* input = ownerInput()) {
+                    setVar(instruction.dst, input->frames[0].shieldAnalog);
+                } else {
+                    setVar(instruction.dst, 0);
+                }
+                break;
             case PackageScriptOp::SetGroundVelocity:
             case PackageScriptOp::SetAirVelocityX:
                 object.velocity.x = instruction.fixValue;

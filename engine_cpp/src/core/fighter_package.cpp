@@ -2696,7 +2696,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             package.objects,
             false,
             false,
-            false,
+            true,
             true,
             true,
             true);

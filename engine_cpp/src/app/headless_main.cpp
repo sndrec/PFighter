@@ -5285,10 +5285,17 @@ int main(int argc, char** argv) {
         {"OwnerGroundVelocity", 0},
         {"OwnerAirVelocityX", 0},
         {"OwnerAirVelocityY", 0},
+        {"OwnerAttackDown", 0},
+        {"OwnerAttackPressed", 0},
+        {"OwnerStickX", 0},
+        {"OwnerStickY", 0},
+        {"OwnerCStickX", 0},
+        {"OwnerCStickY", 0},
+        {"OwnerShieldAnalog", 0},
     };
     packageOwnerContextObject.packageScripts = {{
         "OwnerContextScript",
-        16,
+        32,
         {
             {pf::PackageScriptOp::SetVarFighterPercent, 0, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterShield, 1, -1, -1, 0, 0, {}},
@@ -5297,6 +5304,13 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarFighterGroundVelocity, 4, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterAirVelocityX, 5, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterAirVelocityY, 6, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarButtonDown, 7, -1, -1, pf::ButtonAttack, 0, {}},
+            {pf::PackageScriptOp::SetVarButtonPressed, 8, -1, -1, pf::ButtonAttack, 0, {}},
+            {pf::PackageScriptOp::SetVarStickX, 9, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarStickY, 10, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarCStickX, 11, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarCStickY, 12, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarShield, 13, -1, -1, 0, 0, {}},
         },
     }};
     packageOwnerContextObject.onAccessory.clear();
@@ -5831,7 +5845,7 @@ int main(int argc, char** argv) {
         0,
         -1,
         -1,
-        pf::ButtonAttack,
+        0,
         0,
         {},
     });
@@ -8283,6 +8297,12 @@ int main(int argc, char** argv) {
     packageObjectOwnerContextWorld.fighters[0].position = {pf::fxFromFloat(-2.0f), pf::fxFromFloat(5.0f)};
     packageObjectOwnerContextWorld.fighters[0].groundVelocity = pf::fxFromFloat(0.75f);
     packageObjectOwnerContextWorld.fighters[0].fighterVelocity = {pf::fxFromFloat(-0.5f), pf::fxFromFloat(0.25f)};
+    packageObjectOwnerContextWorld.fighters[0].input.push({
+        {pf::fxFromFloat(0.4f), pf::fxFromFloat(-0.6f)},
+        {pf::fxFromFloat(-0.25f), pf::fxFromFloat(0.8f)},
+        pf::fxFromFloat(0.7f),
+        pf::ButtonAttack,
+    });
     const int packageObjectOwnerContextIndex = pf::spawnGameObject(
         packageObjectOwnerContextWorld,
         "PackageOwnerContextObject",
@@ -8295,14 +8315,21 @@ int main(int argc, char** argv) {
         ? &packageObjectOwnerContextWorld.objects[static_cast<size_t>(packageObjectOwnerContextIndex)]
         : nullptr;
     const bool packageObjectOwnerContextOk = packageObjectOwnerContext &&
-        packageObjectOwnerContext->packageVars.size() >= 7 &&
+        packageObjectOwnerContext->packageVars.size() >= 14 &&
         packageObjectOwnerContext->packageVars[0] == pf::fxFromFloat(33.0f) &&
         packageObjectOwnerContext->packageVars[1] == pf::fxFromFloat(44.0f) &&
         packageObjectOwnerContext->packageVars[2] == pf::fxFromFloat(-2.0f) &&
         packageObjectOwnerContext->packageVars[3] == pf::fxFromFloat(5.0f) &&
         packageObjectOwnerContext->packageVars[4] == pf::fxFromFloat(0.75f) &&
         packageObjectOwnerContext->packageVars[5] == pf::fxFromFloat(-0.5f) &&
-        packageObjectOwnerContext->packageVars[6] == pf::fxFromFloat(0.25f);
+        packageObjectOwnerContext->packageVars[6] == pf::fxFromFloat(0.25f) &&
+        packageObjectOwnerContext->packageVars[7] == 1 &&
+        packageObjectOwnerContext->packageVars[8] == 1 &&
+        packageObjectOwnerContext->packageVars[9] == pf::fxFromFloat(0.4f) &&
+        packageObjectOwnerContext->packageVars[10] == pf::fxFromFloat(-0.6f) &&
+        packageObjectOwnerContext->packageVars[11] == pf::fxFromFloat(-0.25f) &&
+        packageObjectOwnerContext->packageVars[12] == pf::fxFromFloat(0.8f) &&
+        packageObjectOwnerContext->packageVars[13] == pf::fxFromFloat(0.7f);
     pf::World packageObjectSpawnOffsetWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectSpawnOffsetWorld.objectDefs = loadedPackage.objects;
