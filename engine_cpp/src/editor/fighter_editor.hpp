@@ -329,6 +329,11 @@ bool setEditorSessionStateTiming(
     int defaultAnimationBlendFrames,
     int onAnimationFinishedBlendFrames,
     std::string* error = nullptr);
+bool setEditorSessionStateLoop(
+    FighterEditorSession& session,
+    int stateIndex,
+    bool loopAnimation,
+    std::string* error = nullptr);
 bool setEditorSessionStateAnimation(
     FighterEditorSession& session,
     int stateIndex,

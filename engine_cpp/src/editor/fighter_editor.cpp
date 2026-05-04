@@ -2671,6 +2671,22 @@ bool setEditorSessionStateTiming(
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
+bool setEditorSessionStateLoop(
+    FighterEditorSession& session,
+    int stateIndex,
+    bool loopAnimation,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->loopAnimation = loopAnimation;
+    session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
 bool setEditorSessionStateAnimation(
     FighterEditorSession& session,
     int stateIndex,

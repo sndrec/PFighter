@@ -8597,6 +8597,22 @@ static void drawEditorTimelineWorkstation(
     }
     DrawRectangleRec(ruler, {26, 31, 36, 255});
     DrawRectangleLinesEx(ruler, 1.0f, {74, 86, 98, 255});
+    const int stateLengthFrame = std::clamp(state.animationLengthFrames, 0, frameCount);
+    const float stateLengthX = ruler.x + ruler.width * static_cast<float>(stateLengthFrame) / static_cast<float>(frameCount);
+    DrawRectangleRec(
+        {ruler.x, ruler.y + 26.0f, std::max(2.0f, stateLengthX - ruler.x), 6.0f},
+        state.loopAnimation ? Fade(SKYBLUE, 0.72f) : Fade(RAYWHITE, 0.38f));
+    if (state.animationLengthFrames < frameCount) {
+        DrawRectangleRec(
+            {stateLengthX, ruler.y + 26.0f, std::max(0.0f, ruler.x + ruler.width - stateLengthX), 6.0f},
+            Fade(ORANGE, 0.28f));
+    }
+    DrawLine(static_cast<int>(stateLengthX), static_cast<int>(ruler.y + 22.0f), static_cast<int>(stateLengthX), static_cast<int>(ruler.y + rect.height - 52.0f), state.loopAnimation ? SKYBLUE : Fade(RAYWHITE, 0.5f));
+    DrawText((std::string(state.loopAnimation ? "loop " : "end ") + std::to_string(state.animationLengthFrames)).c_str(),
+        static_cast<int>(std::min(ruler.x + ruler.width - 54.0f, stateLengthX + 4.0f)),
+        static_cast<int>(ruler.y + 28.0f),
+        9,
+        state.loopAnimation ? SKYBLUE : Fade(RAYWHITE, 0.62f));
     for (int tick = 0; tick <= frameCount; tick += std::max(1, frameCount / 12)) {
         const float x = ruler.x + ruler.width * static_cast<float>(tick) / static_cast<float>(frameCount);
         DrawLine(static_cast<int>(x), static_cast<int>(ruler.y), static_cast<int>(x), static_cast<int>(ruler.y + rect.height - 52.0f), Fade(RAYWHITE, 0.18f));
@@ -11353,9 +11369,12 @@ static void drawEditorInspectorWorkstation(
     }
     const float y = rect.y + 138.0f;
     if (uiButton({rect.x + 10.0f, y, 76.0f, 24.0f}, "Loop", state.loopAnimation)) {
-        state.loopAnimation = !state.loopAnimation;
-        session.dirty = true;
-        syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled state loop flag");
+        std::string error;
+        if (pf::setEditorSessionStateLoop(session, session.selectedState, !state.loopAnimation, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled state loop flag");
+        } else {
+            editor.status = "Editor: state loop edit failed: " + error;
+        }
     }
     if (uiButton({rect.x + 92.0f, y, 76.0f, 24.0f}, "AnimPhys", state.useAnimPhysics)) {
         std::string error;

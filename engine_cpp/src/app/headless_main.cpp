@@ -6362,8 +6362,12 @@ int main(int argc, char** argv) {
             2,
             pf::kUseDefaultAnimationBlendFrames,
             &packageError);
+    const bool editorSessionLoopOk = editorSessionTimingOk &&
+        pf::setEditorSessionStateLoop(editorSession, 0, false, &packageError) &&
+        editorSession.rootFighter() &&
+        !editorSession.rootFighter()->states[0].loopAnimation;
     const bool editorSessionInvalidTimingRejected =
-        editorSessionTimingOk &&
+        editorSessionLoopOk &&
         !pf::setEditorSessionStateTiming(editorSession, 0, 0, 5, 2, pf::kUseDefaultAnimationBlendFrames, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->states[0].animationLengthFrames == 72;
@@ -8766,6 +8770,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_duplicate_state_ok=" << editorSessionDuplicateStateOk
               << " fighter_editor_session_object_ok=" << editorSessionObjectOk
               << " fighter_editor_session_timing_ok=" << editorSessionTimingOk
+              << " fighter_editor_session_loop_ok=" << editorSessionLoopOk
               << " fighter_editor_session_invalid_timing_rejected=" << editorSessionInvalidTimingRejected
               << " fighter_editor_session_state_animation_ok=" << editorSessionStateAnimationOk
               << " fighter_editor_session_collision_flags_ok=" << editorSessionCollisionFlagsOk
