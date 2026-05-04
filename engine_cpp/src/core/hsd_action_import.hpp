@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/fighter_data.hpp"
+#include "core/imported_fighter_asset.hpp"
 
 #include <vector>
 

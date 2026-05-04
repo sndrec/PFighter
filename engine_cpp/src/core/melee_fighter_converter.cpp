@@ -1,6 +1,7 @@
 #include "core/melee_fighter_converter.hpp"
 
 #include "core/hsd_action_import.hpp"
+#include "core/imported_fighter_asset.hpp"
 #include "core/simulation.hpp"
 
 #include <algorithm>

@@ -1,4 +1,4 @@
-#include "core/animation_asset.hpp"
+#include "core/imported_fighter_asset.hpp"
 
 #include <cstddef>
 #include <cstdint>

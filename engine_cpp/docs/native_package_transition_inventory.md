@@ -9,11 +9,15 @@ package load/save should operate on native authored data only.
 
 - `engine_cpp/tools/hsd_exporter/Program.cs` is the only source path that parses
   HSDLib objects directly. It emits PFighter binary blobs with magic `PFHA`.
-- `engine_cpp/src/core/animation_asset.*` reads those `PFHA` blobs into
+- `engine_cpp/src/core/imported_fighter_asset.hpp` and
+  `engine_cpp/src/core/animation_asset.cpp` read those `PFHA` blobs into
   `HsdFighterAnimationAsset`. Despite the name, this is no longer raw DAT data;
-  however it is still a separate imported asset type. Its implementation is now
-  compiled into the importer/converter target rather than the runtime core
-  target.
+  however it is still a separate imported asset type exposed only through the
+  importer/converter target rather than the runtime core target.
+- `engine_cpp/src/core/animation_asset.hpp` is now a shared native authored
+  asset header for fighter bone metadata, model-part animation sets, and native
+  mesh/material/texture records. Runtime code can include it without seeing the
+  imported fighter asset loader/type.
 - `engine_cpp/src/core/hsd_action_import.hpp` is the explicit import-facing API
   for converting HSD action scripts into native `Subaction` arrays. The general
   `core/action.hpp`/`action.cpp` pair now exposes only native action unfolding.
@@ -128,10 +132,7 @@ package load/save should operate on native authored data only.
 
 ## First Migration Targets
 
-1. Move the PFHA imported-asset structs in `animation_asset.*` behind a true
-   converter/importer library boundary, leaving only renamed native authored
-   package structs in shared runtime headers.
-2. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
+1. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
    rollback state, keeping serialization compatibility in mind.
-3. Expand import provenance for optional original joint/material/source-command
+2. Expand import provenance for optional original joint/material/source-command
    IDs without letting those IDs drive gameplay behavior.
