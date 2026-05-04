@@ -209,6 +209,18 @@ std::vector<T> readVector(PackageReader& reader, uint32_t maxCount, const char* 
     return values;
 }
 
+void writeStringVector(PackageWriter& writer, const std::vector<std::string>& values) {
+    writeVector(writer, values, [&](const std::string& value) {
+        writer.writeString(value);
+    });
+}
+
+std::vector<std::string> readStringVector(PackageReader& reader, uint32_t maxCount, const char* label) {
+    return readVector<std::string>(reader, maxCount, label, [&]() {
+        return reader.readString();
+    });
+}
+
 bool validPackageScriptOp(PackageScriptOp op) {
     switch (op) {
     case PackageScriptOp::Nop:
@@ -2840,6 +2852,79 @@ std::shared_ptr<const HsdFighterAnimationAsset> readHsdAsset(
     return nullptr;
 }
 
+FighterPackageDescriptor makePackageDescriptor(const FighterPackage& package, const std::vector<uint8_t>* bytes = nullptr) {
+    FighterPackageDescriptor out;
+    out.name = package.name;
+    out.version = package.version;
+    if (bytes) {
+        out.byteSize = bytes->size();
+        out.checksum = bytes->empty() ? 0 : fighterPackageChecksum(*bytes);
+    }
+    out.rootFighterName = package.fighters.empty() ? std::string{} : package.fighters.front().name;
+    out.fighterNames.reserve(package.fighters.size());
+    for (const FighterDefinition& fighter : package.fighters) {
+        out.fighterNames.push_back(fighter.name);
+    }
+    out.objectNames.reserve(package.objects.size());
+    for (const GameObjectDefinition& object : package.objects) {
+        out.objectNames.push_back(object.name);
+    }
+    out.assetNames.reserve(package.hsdAssets.size());
+    for (const std::shared_ptr<const HsdFighterAnimationAsset>& asset : package.hsdAssets) {
+        out.assetNames.push_back(asset ? asset->name : std::string{});
+    }
+    return out;
+}
+
+void validatePackageDescriptorManifest(const FighterPackageDescriptor& descriptor) {
+    if (descriptor.name.empty()) {
+        throw std::runtime_error("fighter package manifest name is invalid");
+    }
+    if (descriptor.version != kPackageVersion) {
+        throw std::runtime_error("fighter package manifest version is invalid");
+    }
+    requireUniqueNonemptyNames(descriptor.fighterNames, "manifest fighter");
+    requireUniqueNonemptyNames(descriptor.objectNames, "manifest object");
+    if (descriptor.fighterNames.empty() || descriptor.rootFighterName != descriptor.fighterNames.front()) {
+        throw std::runtime_error("fighter package manifest root fighter is invalid");
+    }
+}
+
+void writePackageDescriptorManifest(PackageWriter& writer, const FighterPackageDescriptor& descriptor) {
+    writer.writeString(descriptor.rootFighterName);
+    writeStringVector(writer, descriptor.fighterNames);
+    writeStringVector(writer, descriptor.objectNames);
+    writeStringVector(writer, descriptor.assetNames);
+}
+
+FighterPackageDescriptor readPackageDescriptorManifest(
+    PackageReader& reader,
+    const std::string& packageName,
+    uint32_t packageVersion,
+    const std::vector<uint8_t>& bytes)
+{
+    FighterPackageDescriptor descriptor;
+    descriptor.name = packageName;
+    descriptor.version = packageVersion;
+    descriptor.byteSize = bytes.size();
+    descriptor.checksum = bytes.empty() ? 0 : fighterPackageChecksum(bytes);
+    descriptor.rootFighterName = reader.readString();
+    descriptor.fighterNames = readStringVector(reader, kMaxFighters, "manifest fighter");
+    descriptor.objectNames = readStringVector(reader, kMaxObjects, "manifest object");
+    descriptor.assetNames = readStringVector(reader, kMaxAssets, "manifest asset");
+    validatePackageDescriptorManifest(descriptor);
+    return descriptor;
+}
+
+bool matchingPackageManifest(const FighterPackageDescriptor& manifest, const FighterPackageDescriptor& actual) {
+    return manifest.name == actual.name &&
+        manifest.version == actual.version &&
+        manifest.rootFighterName == actual.rootFighterName &&
+        manifest.fighterNames == actual.fighterNames &&
+        manifest.objectNames == actual.objectNames &&
+        manifest.assetNames == actual.assetNames;
+}
+
 } // namespace
 
 bool validateFighterPackage(const FighterPackage& package, std::string* error) {
@@ -2865,39 +2950,50 @@ bool describeFighterPackage(
         return false;
     }
 
-    FighterPackageDescriptor out;
-    out.name = package.name;
-    out.version = package.version;
-    out.byteSize = bytes.size();
-    out.checksum = bytes.empty() ? 0 : fighterPackageChecksum(bytes);
-    out.rootFighterName = package.fighters.empty() ? std::string{} : package.fighters.front().name;
-    out.fighterNames.reserve(package.fighters.size());
-    for (const FighterDefinition& fighter : package.fighters) {
-        out.fighterNames.push_back(fighter.name);
-    }
-    out.objectNames.reserve(package.objects.size());
-    for (const GameObjectDefinition& object : package.objects) {
-        out.objectNames.push_back(object.name);
-    }
-    out.assetNames.reserve(package.hsdAssets.size());
-    for (const std::shared_ptr<const HsdFighterAnimationAsset>& asset : package.hsdAssets) {
-        out.assetNames.push_back(asset ? asset->name : std::string{});
-    }
-    descriptor = std::move(out);
+    descriptor = makePackageDescriptor(package, &bytes);
     if (error) {
         error->clear();
     }
     return true;
 }
 
+bool describeFighterPackageBytes(
+    const std::vector<uint8_t>& bytes,
+    FighterPackageDescriptor& descriptor,
+    std::string* error)
+{
+    try {
+        PackageReader reader(bytes);
+        reader.readMagic("PFFP");
+        const uint32_t formatVersion = reader.readU32();
+        if (formatVersion != kPackageVersion) {
+            descriptor = {};
+            return fail(error, "unsupported fighter package version");
+        }
+        const std::string packageName = reader.readString();
+        const uint32_t packageVersion = reader.readU32();
+        descriptor = readPackageDescriptorManifest(reader, packageName, packageVersion, bytes);
+        if (error) {
+            error->clear();
+        }
+        return true;
+    } catch (const std::exception& ex) {
+        descriptor = {};
+        return fail(error, ex.what());
+    }
+}
+
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error) {
     try {
         validateFighterPackageReferences(package);
+        const FighterPackageDescriptor manifest = makePackageDescriptor(package);
+        validatePackageDescriptorManifest(manifest);
         PackageWriter writer;
         writer.writeMagic("PFFP");
         writer.writeU32(kPackageVersion);
         writer.writeString(package.name);
         writer.writeU32(package.version);
+        writePackageDescriptorManifest(writer, manifest);
         writeVector(writer, package.hsdAssets, [&](const std::shared_ptr<const HsdFighterAnimationAsset>& asset) {
             writeHsdAsset(writer, asset);
         });
@@ -2949,6 +3045,7 @@ bool readFighterPackage(
         FighterPackage loaded;
         loaded.name = reader.readString();
         loaded.version = reader.readU32();
+        const FighterPackageDescriptor manifest = readPackageDescriptorManifest(reader, loaded.name, loaded.version, bytes);
         const uint32_t assetCount = reader.readCount(kMaxAssets, "asset");
         loaded.hsdAssets.reserve(assetCount);
         for (uint32_t i = 0; i < assetCount; ++i) {
@@ -2962,6 +3059,10 @@ bool readFighterPackage(
         });
         reader.requireFinished();
         validateFighterPackageReferences(loaded);
+        const FighterPackageDescriptor actual = makePackageDescriptor(loaded);
+        if (!matchingPackageManifest(manifest, actual)) {
+            return fail(error, "fighter package manifest does not match package contents");
+        }
         package = std::move(loaded);
         return true;
     } catch (const std::exception& ex) {

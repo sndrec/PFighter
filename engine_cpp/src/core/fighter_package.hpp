@@ -35,6 +35,10 @@ bool describeFighterPackage(
     FighterPackageDescriptor& descriptor,
     const std::vector<uint8_t>& bytes = {},
     std::string* error = nullptr);
+bool describeFighterPackageBytes(
+    const std::vector<uint8_t>& bytes,
+    FighterPackageDescriptor& descriptor,
+    std::string* error = nullptr);
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error = nullptr);
 bool saveFighterPackage(const std::string& path, const FighterPackage& package, std::string* error = nullptr);
 bool readFighterPackage(
