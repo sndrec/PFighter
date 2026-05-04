@@ -2152,11 +2152,10 @@ bool beginBlankFighterEditorSession(
 bool loadFighterEditorSessionPackage(
     const std::vector<uint8_t>& bytes,
     FighterEditorSession& session,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
     FighterPackage package;
-    if (!readFighterPackage(bytes, package, error, hsdAssetPool)) {
+    if (!readFighterPackage(bytes, package, error)) {
         return false;
     }
     if (package.fighters.empty()) {

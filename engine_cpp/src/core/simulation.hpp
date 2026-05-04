@@ -503,31 +503,27 @@ bool installFighterPackageBytes(
     const std::vector<uint8_t>& bytes,
     int* rootFighterDef = nullptr,
     FighterPackageDescriptor* descriptor = nullptr,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 bool installCachedFighterPackage(
     World& world,
     const FighterPackageCache& cache,
     uint32_t checksum,
     int* rootFighterDef = nullptr,
     FighterPackageDescriptor* descriptor = nullptr,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 bool makePackageTestWorldFromBytes(
     World& world,
     const std::vector<uint8_t>& bytes,
     int* rootFighterDef = nullptr,
     FighterPackageDescriptor* descriptor = nullptr,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 bool makeCachedPackageTestWorld(
     World& world,
     const FighterPackageCache& cache,
     uint32_t checksum,
     int* rootFighterDef = nullptr,
     FighterPackageDescriptor* descriptor = nullptr,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 bool destroyGameObjectByIndex(World& world, int objectIndex);
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName);
 bool pickUpGameObject(World& world, int objectIndex, int fighterIndex);

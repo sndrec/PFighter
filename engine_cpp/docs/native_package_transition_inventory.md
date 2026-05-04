@@ -16,8 +16,10 @@ package load/save should operate on native authored data only.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.
-- `FighterPackage` still has `hsdAssets`, and package serialization embeds
-  `HsdFighterAnimationAsset::sourceBytes` for those assets.
+- `FighterPackage` still has a legacy `hsdAssets` field in memory so old
+  dependent package shapes can be rejected, but package read/write/install
+  paths no longer serialize, deserialize, embed, or externally resolve imported
+  HSD assets.
 
 ## Runtime Gameplay Dependencies To Remove Or Convert
 
@@ -29,10 +31,10 @@ package load/save should operate on native authored data only.
   `def.hsdAsset->skeleton` in simulation, state functions, headless checks, and
   raylib preview/rendering. This must become native `authoredClips` and
   `authoredSkeleton`.
-- Hurtbox collision still uses `def.hsdAsset->hurtboxes` and live
-  `hsdHurtboxCapsules` when imported data is present. Native packages need the
-  converted capsules in `FighterDefinition::hurtboxes` and runtime hurtbox
-  evaluation must not special-case imported HSD assets.
+- Imported hurtbox collision now populates `FighterDefinition::hurtboxes` with
+  native joint/type/capsule data and runtime collision/grab/damage-region logic
+  reads those native hurtbox definitions. The live capsule cache is still named
+  `hsdHurtboxCapsules` and should be renamed later.
 - Environment collision/ledge values are imported from
   `def.hsdAsset->environmentCollision` during fighter construction, but the
   debug ECB overlay still reads the imported collision bones directly.
@@ -49,7 +51,8 @@ package load/save should operate on native authored data only.
 
 ## Editor Dependencies To Remove Or Convert
 
-- Editor package snapshots collect `fighter.hsdAsset` into `package.hsdAssets`.
+- Editor package snapshots native-convert imported fighters and clear
+  `package.hsdAssets`; package loads no longer accept an external HSD asset pool.
 - Clip lists prefer imported clips when `def.hsdAsset` exists, so converted
   Melee animations are not purely edited through `authoredClips`.
 - Imported mesh status and preview paths read `def.hsdAsset->mesh` separately
@@ -60,19 +63,16 @@ package load/save should operate on native authored data only.
 
 ## Package Format Dependencies To Remove
 
-- `FighterPackage` stores `std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets`.
-- `writeFighterPackage` writes all `package.hsdAssets` and `writeHsdAsset`
-  serializes `asset->sourceBytes` into the package. This violates the hard
-  requirement for no embedded imported/raw asset blob.
-- `readFighterPackage` can rebuild an imported asset from embedded bytes via
-  `loadHsdFighterAnimationAssetFromBytes`, or resolve it from an external
-  `hsdAssetPool`. Both are out-of-date package paths.
-- `FighterDefinition` serialization writes `hasHsdAsset`, an asset index, and
-  an asset name. Native packages should reject this legacy dependency rather
-  than support it.
-- Package validation skips authored animation reference validation whenever
-  `fighter.hasHsdAsset` is set and counts imported hurtboxes for subaction
-  validation.
+- `FighterPackage` still stores
+  `std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets`, but
+  validation rejects non-empty vectors and the writer emits an asset count of
+  zero.
+- `readFighterPackage` rejects nonzero imported asset counts and rejects fighter
+  records that set `hasHsdAsset`, asset index, or asset name. It no longer
+  accepts an external `hsdAssetPool`.
+- Package validation checks native authored animation references and native
+  hurtbox-index references. Imported HSD-dependent packages are rejected by
+  write/read/install/test-world paths.
 
 ## Native Data Already Present But Incomplete
 
@@ -92,9 +92,10 @@ package load/save should operate on native authored data only.
    `FighterDefinition` fields immediately after import.
 2. Add native metadata fields for fighter bone roles, common-bone lookup,
    model-part animation sets, shield pose, and import provenance.
-3. Switch package write/read/validation to reject `hasHsdAsset` and embedded
-   imported bytes.
-4. Switch runtime animation, hurtbox, bone lookup, shield pose, and render paths
-   to read native fields only.
+3. Continue moving imported roster construction behind an explicit conversion
+   boundary without duplicating the full Melee animation payload in runtime
+   memory.
+4. Switch runtime animation, bone lookup, shield pose, and render paths to read
+   native fields only.
 5. Keep `HSDRaw` and `HsdFighterAnimationAsset` parsing isolated to exporter or
    explicit conversion utilities until the names can be retired.

@@ -2779,11 +2779,7 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
     });
 }
 
-FighterDefinition readFighterDefinition(
-    PackageReader& reader,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
-{
-    (void)hsdAssetPool;
+FighterDefinition readFighterDefinition(PackageReader& reader) {
     FighterDefinition fighter;
     fighter.name = reader.readString();
     fighter.properties = readFighterProperties(reader);
@@ -3278,10 +3274,8 @@ bool saveFighterPackage(const std::string& path, const FighterPackage& package, 
 bool readFighterPackage(
     const std::vector<uint8_t>& bytes,
     FighterPackage& package,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
-    (void)hsdAssetPool;
     try {
         PackageReader reader(bytes);
         reader.readMagic("PFFP");
@@ -3298,9 +3292,8 @@ bool readFighterPackage(
         if (assetCount != 0) {
             return fail(error, "fighter package imported HSD assets are not supported");
         }
-        loaded.hsdAssets.reserve(assetCount);
         loaded.fighters = readVector<FighterDefinition>(reader, kMaxFighters, "fighter", [&]() {
-            return readFighterDefinition(reader, loaded.hsdAssets);
+            return readFighterDefinition(reader);
         });
         loaded.objects = readVector<GameObjectDefinition>(reader, kMaxObjects, "object", [&]() {
             return readGameObjectDefinition(reader);
@@ -3321,8 +3314,7 @@ bool readFighterPackage(
 bool loadFighterPackage(
     const std::string& path,
     FighterPackage& package,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
     std::ifstream file(path, std::ios::binary);
     if (!file) {
@@ -3341,7 +3333,7 @@ bool loadFighterPackage(
             return fail(error, "failed to read fighter package");
         }
     }
-    return readFighterPackage(bytes, package, error, hsdAssetPool);
+    return readFighterPackage(bytes, package, error);
 }
 
 uint32_t fighterPackageChecksum(const std::vector<uint8_t>& bytes) {

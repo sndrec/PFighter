@@ -241,8 +241,7 @@ bool beginBlankFighterEditorSession(
 bool loadFighterEditorSessionPackage(
     const std::vector<uint8_t>& bytes,
     FighterEditorSession& session,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 bool exportFighterEditorSessionPackage(
     FighterEditorSession& session,
     FighterEditorPackageSnapshot& snapshot,

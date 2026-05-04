@@ -75,13 +75,11 @@ bool saveFighterPackage(const std::string& path, const FighterPackage& package, 
 bool readFighterPackage(
     const std::vector<uint8_t>& bytes,
     FighterPackage& package,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 bool loadFighterPackage(
     const std::string& path,
     FighterPackage& package,
-    std::string* error = nullptr,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
+    std::string* error = nullptr);
 uint32_t fighterPackageChecksum(const std::vector<uint8_t>& bytes);
 
 } // namespace pf

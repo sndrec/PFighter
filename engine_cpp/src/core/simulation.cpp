@@ -1672,8 +1672,7 @@ bool installFighterPackageBytes(
     const std::vector<uint8_t>& bytes,
     int* rootFighterDef,
     FighterPackageDescriptor* descriptor,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
     if (rootFighterDef) {
         *rootFighterDef = -1;
@@ -1684,7 +1683,7 @@ bool installFighterPackageBytes(
 
     FighterPackage package;
     std::string packageError;
-    if (!readFighterPackage(bytes, package, &packageError, hsdAssetPool)) {
+    if (!readFighterPackage(bytes, package, &packageError)) {
         return setPackageInstallError(error, packageError.empty() ? "fighter package read failed" : packageError);
     }
 
@@ -1701,8 +1700,7 @@ bool installCachedFighterPackage(
     uint32_t checksum,
     int* rootFighterDef,
     FighterPackageDescriptor* descriptor,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
     if (rootFighterDef) {
         *rootFighterDef = -1;
@@ -1715,7 +1713,7 @@ bool installCachedFighterPackage(
     if (!bytes) {
         return setPackageInstallError(error, "fighter package cache entry is missing");
     }
-    return installFighterPackageBytes(world, *bytes, rootFighterDef, descriptor, error, hsdAssetPool);
+    return installFighterPackageBytes(world, *bytes, rootFighterDef, descriptor, error);
 }
 
 bool makePackageTestWorldFromBytes(
@@ -1723,8 +1721,7 @@ bool makePackageTestWorldFromBytes(
     const std::vector<uint8_t>& bytes,
     int* rootFighterDef,
     FighterPackageDescriptor* descriptor,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
     if (rootFighterDef) {
         *rootFighterDef = -1;
@@ -1739,7 +1736,7 @@ bool makePackageTestWorldFromBytes(
 
     int installedRoot = -1;
     FighterPackageDescriptor installedDescriptor;
-    if (!installFighterPackageBytes(testWorld, bytes, &installedRoot, &installedDescriptor, error, hsdAssetPool)) {
+    if (!installFighterPackageBytes(testWorld, bytes, &installedRoot, &installedDescriptor, error)) {
         return false;
     }
     resetTrainingFighter(testWorld, 0, installedRoot, {-fx(2), 0}, 1);
@@ -1763,8 +1760,7 @@ bool makeCachedPackageTestWorld(
     uint32_t checksum,
     int* rootFighterDef,
     FighterPackageDescriptor* descriptor,
-    std::string* error,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+    std::string* error)
 {
     if (rootFighterDef) {
         *rootFighterDef = -1;
@@ -1779,7 +1775,7 @@ bool makeCachedPackageTestWorld(
 
     int installedRoot = -1;
     FighterPackageDescriptor installedDescriptor;
-    if (!installCachedFighterPackage(testWorld, cache, checksum, &installedRoot, &installedDescriptor, error, hsdAssetPool)) {
+    if (!installCachedFighterPackage(testWorld, cache, checksum, &installedRoot, &installedDescriptor, error)) {
         return false;
     }
     resetTrainingFighter(testWorld, 0, installedRoot, {-fx(2), 0}, 1);
