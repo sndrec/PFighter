@@ -7889,13 +7889,11 @@ static void launchEditorTestWorld(
         editor.status = "Editor test failed: package validation failed: " + packageError;
         return;
     }
-    const int sandbagFighterDef = fighterDefByName(world, "Sandbag", 0);
-    world = pf::makeTrainingWorld(0, sandbagFighterDef);
     int testFighterIndex = -1;
     pf::FighterPackageDescriptor testDescriptor;
-    if (!pf::installFighterPackageBytes(world, packageBytes, &testFighterIndex, &testDescriptor, &packageError)) {
+    if (!pf::makePackageTestWorldFromBytes(world, packageBytes, &testFighterIndex, &testDescriptor, &packageError)) {
         updateEditorPackageFailure(editor, packageError);
-        editor.status = "Editor test failed: package byte install failed: " + editor.lastPackageMessage;
+        editor.status = "Editor test failed: package test world failed: " + editor.lastPackageMessage;
         return;
     }
     updateEditorPackageSummary(editor, testDescriptor);

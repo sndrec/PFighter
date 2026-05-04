@@ -5937,6 +5937,30 @@ int main(int argc, char** argv) {
         packageCacheInstallRoot < static_cast<int>(packageCacheInstallWorld.fighterDefs.size()) &&
         packageCacheInstallWorld.fighterDefs[static_cast<size_t>(packageCacheInstallRoot)].name == loadedPackage.fighters[0].name &&
         pf::fighterPackageDescriptorMatches(packageBytesDescriptor, packageCacheInstallDescriptor);
+    pf::World packageBytesTestWorld;
+    int packageBytesTestRoot = -1;
+    pf::FighterPackageDescriptor packageBytesTestDescriptor;
+    const bool packageBytesTestWorldOk =
+        pf::makePackageTestWorldFromBytes(packageBytesTestWorld, packageBytes, &packageBytesTestRoot, &packageBytesTestDescriptor, &packageError) &&
+        packageBytesTestRoot >= 0 &&
+        packageBytesTestRoot < static_cast<int>(packageBytesTestWorld.fighterDefs.size()) &&
+        packageBytesTestWorld.fighters.size() >= 2 &&
+        packageBytesTestWorld.fighters[0].fighterDef == packageBytesTestRoot &&
+        packageBytesTestWorld.fighterDefs[static_cast<size_t>(packageBytesTestRoot)].name == loadedPackage.fighters[0].name &&
+        packageBytesTestWorld.fighterDefs[static_cast<size_t>(packageBytesTestWorld.fighters[1].fighterDef)].name == "Sandbag" &&
+        pf::fighterPackageDescriptorMatches(packageBytesDescriptor, packageBytesTestDescriptor);
+    pf::World packageCacheTestWorld;
+    int packageCacheTestRoot = -1;
+    pf::FighterPackageDescriptor packageCacheTestDescriptor;
+    const bool packageCacheTestWorldOk =
+        pf::makeCachedPackageTestWorld(packageCacheTestWorld, packageCache, packageBytesDescriptor.checksum, &packageCacheTestRoot, &packageCacheTestDescriptor, &packageError) &&
+        packageCacheTestRoot >= 0 &&
+        packageCacheTestRoot < static_cast<int>(packageCacheTestWorld.fighterDefs.size()) &&
+        packageCacheTestWorld.fighters.size() >= 2 &&
+        packageCacheTestWorld.fighters[0].fighterDef == packageCacheTestRoot &&
+        packageCacheTestWorld.fighterDefs[static_cast<size_t>(packageCacheTestRoot)].name == loadedPackage.fighters[0].name &&
+        packageCacheTestWorld.fighterDefs[static_cast<size_t>(packageCacheTestWorld.fighters[1].fighterDef)].name == "Sandbag" &&
+        pf::fighterPackageDescriptorMatches(packageBytesDescriptor, packageCacheTestDescriptor);
     pf::World runtimePackageInstallWorld = pf::makeTrainingWorld();
     int runtimePackageInstallRoot = -1;
     const bool runtimePackageInstallOk = runtimePackageLoaded &&
@@ -5993,6 +6017,12 @@ int main(int argc, char** argv) {
     pf::World missingPackageCacheInstallWorld = pf::makeTrainingWorld();
     const bool missingPackageCacheInstallRejected =
         !pf::installCachedFighterPackage(missingPackageCacheInstallWorld, packageCache, 0xFFFFFFFFu, nullptr, nullptr, &invalidPackageError);
+    pf::World invalidPackageTestWorld;
+    const bool invalidPackageTestWorldRejected = invalidPackageMutated &&
+        !pf::makePackageTestWorldFromBytes(invalidPackageTestWorld, invalidPackageBytes, nullptr, nullptr, &invalidPackageError);
+    pf::World missingPackageCacheTestWorld;
+    const bool missingPackageCacheTestWorldRejected =
+        !pf::makeCachedPackageTestWorld(missingPackageCacheTestWorld, packageCache, 0xFFFFFFFFu, nullptr, nullptr, &invalidPackageError);
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -7333,6 +7363,8 @@ int main(int argc, char** argv) {
               << " fighter_package_cache_store_ok=" << packageCacheStoreOk
               << " fighter_package_cache_duplicate_ok=" << packageCacheDuplicateOk
               << " fighter_package_cache_install_ok=" << packageCacheInstallOk
+              << " fighter_package_bytes_test_world_ok=" << packageBytesTestWorldOk
+              << " fighter_package_cache_test_world_ok=" << packageCacheTestWorldOk
               << " fighter_package_runtime_install_ok=" << runtimePackageInstallOk
               << " fighter_package_runtime_bytes_install_ok=" << runtimePackageBytesInstallOk
               << " fighter_package_asset_ok=" << packageAssetOk
@@ -7498,6 +7530,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_cache_store_ok=" << invalidPackageCacheStoreOk
               << " fighter_package_invalid_cache_install_rejected=" << invalidPackageCacheInstallRejected
               << " fighter_package_missing_cache_install_rejected=" << missingPackageCacheInstallRejected
+              << " fighter_package_invalid_test_world_rejected=" << invalidPackageTestWorldRejected
+              << " fighter_package_missing_cache_test_world_rejected=" << missingPackageCacheTestWorldRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected

@@ -1459,6 +1459,16 @@ static int upsertGameObjectDefinition(std::vector<GameObjectDefinition>& defs, c
     return static_cast<int>(defs.size()) - 1;
 }
 
+static int fighterDefinitionIndexByName(const World& world, const std::string& name, int fallback) {
+    const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const FighterDefinition& candidate) {
+        return candidate.name == name;
+    });
+    if (found == world.fighterDefs.end()) {
+        return fallback;
+    }
+    return static_cast<int>(std::distance(world.fighterDefs.begin(), found));
+}
+
 static bool installValidatedFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef, std::string* error) {
     if (rootFighterDef) {
         *rootFighterDef = -1;
@@ -1556,6 +1566,85 @@ bool installCachedFighterPackage(
         return setPackageInstallError(error, "fighter package cache entry is missing");
     }
     return installFighterPackageBytes(world, *bytes, rootFighterDef, descriptor, error, hsdAssetPool);
+}
+
+bool makePackageTestWorldFromBytes(
+    World& world,
+    const std::vector<uint8_t>& bytes,
+    int* rootFighterDef,
+    FighterPackageDescriptor* descriptor,
+    std::string* error,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+{
+    if (rootFighterDef) {
+        *rootFighterDef = -1;
+    }
+    if (descriptor) {
+        *descriptor = {};
+    }
+
+    World testWorld = makeTrainingWorld();
+    const int sandbagFighterDef = fighterDefinitionIndexByName(testWorld, "Sandbag", 0);
+    resetTrainingFighter(testWorld, 1, sandbagFighterDef, {fx(2), 0}, -1);
+
+    int installedRoot = -1;
+    FighterPackageDescriptor installedDescriptor;
+    if (!installFighterPackageBytes(testWorld, bytes, &installedRoot, &installedDescriptor, error, hsdAssetPool)) {
+        return false;
+    }
+    resetTrainingFighter(testWorld, 0, installedRoot, {-fx(2), 0}, 1);
+
+    world = std::move(testWorld);
+    if (rootFighterDef) {
+        *rootFighterDef = installedRoot;
+    }
+    if (descriptor) {
+        *descriptor = std::move(installedDescriptor);
+    }
+    if (error) {
+        error->clear();
+    }
+    return true;
+}
+
+bool makeCachedPackageTestWorld(
+    World& world,
+    const FighterPackageCache& cache,
+    uint32_t checksum,
+    int* rootFighterDef,
+    FighterPackageDescriptor* descriptor,
+    std::string* error,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+{
+    if (rootFighterDef) {
+        *rootFighterDef = -1;
+    }
+    if (descriptor) {
+        *descriptor = {};
+    }
+
+    World testWorld = makeTrainingWorld();
+    const int sandbagFighterDef = fighterDefinitionIndexByName(testWorld, "Sandbag", 0);
+    resetTrainingFighter(testWorld, 1, sandbagFighterDef, {fx(2), 0}, -1);
+
+    int installedRoot = -1;
+    FighterPackageDescriptor installedDescriptor;
+    if (!installCachedFighterPackage(testWorld, cache, checksum, &installedRoot, &installedDescriptor, error, hsdAssetPool)) {
+        return false;
+    }
+    resetTrainingFighter(testWorld, 0, installedRoot, {-fx(2), 0}, 1);
+
+    world = std::move(testWorld);
+    if (rootFighterDef) {
+        *rootFighterDef = installedRoot;
+    }
+    if (descriptor) {
+        *descriptor = std::move(installedDescriptor);
+    }
+    if (error) {
+        error->clear();
+    }
+    return true;
 }
 
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {
