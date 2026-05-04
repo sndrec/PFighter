@@ -437,6 +437,100 @@ bool setEditorSessionObjectEventCallbacks(
     FighterEditorObjectEventCallbackSlot slot,
     const std::vector<FunctionCall>& calls,
     std::string* error = nullptr);
+std::string uniqueEditorObjectPackageVariableName(const GameObjectDefinition& object, const std::string& prefix = "var");
+std::string uniqueEditorObjectPackageScriptName(const GameObjectDefinition& object, const std::string& prefix = "Script");
+bool editorObjectPackageVariableNameAvailable(const GameObjectDefinition& object, const std::string& name, int ignoredIndex = -1);
+bool editorObjectPackageScriptNameAvailable(const GameObjectDefinition& object, const std::string& name, int ignoredIndex = -1);
+bool addEditorSessionObjectPackageVariable(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& requestedName = {},
+    int32_t initialValue = 0,
+    int* addedVariableIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionObjectPackageVariable(
+    FighterEditorSession& session,
+    int objectIndex,
+    int variableIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectPackageVariable(
+    FighterEditorSession& session,
+    int objectIndex,
+    int variableIndex,
+    std::string* error = nullptr);
+bool addEditorSessionObjectPackageScript(
+    FighterEditorSession& session,
+    int objectIndex,
+    const std::string& requestedName = {},
+    int instructionBudget = 64,
+    int* addedScriptIndex = nullptr,
+    std::string* error = nullptr);
+bool duplicateEditorSessionObjectPackageScript(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int* addedScriptIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionObjectPackageScript(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectPackageScript(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    std::string* error = nullptr);
+bool setEditorSessionObjectPackageScriptBudget(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int instructionBudget,
+    std::string* error = nullptr);
+bool addEditorSessionObjectPackageInstruction(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const PackageScriptInstruction& instruction,
+    int insertIndex = -1,
+    int* addedInstructionIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionObjectPackageInstruction(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int instructionIndex,
+    const PackageScriptInstruction& instruction,
+    std::string* error = nullptr);
+bool removeEditorSessionObjectPackageInstruction(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int instructionIndex,
+    std::string* error = nullptr);
+bool moveEditorSessionObjectPackageInstruction(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    int instructionIndex,
+    int delta,
+    int* movedInstructionIndex = nullptr,
+    std::string* error = nullptr);
+bool bindEditorSessionObjectPackageScriptStateCallback(
+    FighterEditorSession& session,
+    int objectIndex,
+    int stateIndex,
+    FighterEditorObjectStateCallbackSlot slot,
+    const std::string& scriptName,
+    std::string* error = nullptr);
+bool bindEditorSessionObjectPackageScriptEventCallback(
+    FighterEditorSession& session,
+    int objectIndex,
+    FighterEditorObjectEventCallbackSlot slot,
+    const std::string& scriptName,
+    std::string* error = nullptr);
 bool addEditorSessionObjectHitbox(
     FighterEditorSession& session,
     int objectIndex,

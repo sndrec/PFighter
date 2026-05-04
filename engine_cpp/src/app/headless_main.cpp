@@ -6302,28 +6302,210 @@ int main(int argc, char** argv) {
             editorArticleObjectIndex,
             pf::FighterEditorObjectEventCallbackSlot::Spawned,
             {{std::string{"object_lifetime"}}},
-            &packageError) &&
+        &packageError) &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].states[static_cast<size_t>(editorArticleStateIndex)].onFrame.size() == 1 &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].onSpawned.size() == 1;
-    if (editorSessionObjectCallbacksOk) {
-        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts.push_back({
-            "EditorObjectStateScript",
-            64,
-            {{
-                pf::PackageScriptOp::ChangeState,
-                -1,
-                -1,
-                -1,
-                0,
-                0,
-                "EditorObjectStateRenamed",
-            }},
-        });
-    }
-    const bool editorSessionRemoveObjectStateOk = editorSessionObjectCallbacksOk &&
+    int editorObjectVariable = -1;
+    const bool editorSessionAddObjectVariableOk = editorSessionObjectCallbacksOk &&
+        pf::addEditorSessionObjectPackageVariable(editorSession, editorArticleObjectIndex, "EditorObjectVar", 5, &editorObjectVariable, &packageError) &&
+        editorObjectVariable >= 0;
+    const bool editorSessionRenameObjectVariableOk = editorSessionAddObjectVariableOk &&
+        pf::renameEditorSessionObjectPackageVariable(editorSession, editorArticleObjectIndex, editorObjectVariable, "EditorObjectVarRenamed", &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageVariables[static_cast<size_t>(editorObjectVariable)].name == "EditorObjectVarRenamed";
+    int editorObjectLogicScript = -1;
+    const bool editorSessionAddObjectScriptOk = editorSessionRenameObjectVariableOk &&
+        pf::addEditorSessionObjectPackageScript(editorSession, editorArticleObjectIndex, "EditorObjectLogicScript", 64, &editorObjectLogicScript, &packageError) &&
+        editorObjectLogicScript >= 0;
+    const bool editorSessionObjectScriptBudgetOk = editorSessionAddObjectScriptOk &&
+        pf::setEditorSessionObjectPackageScriptBudget(editorSession, editorArticleObjectIndex, editorObjectLogicScript, 96, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].instructionBudget == 96;
+    pf::PackageScriptInstruction editorObjectSetVarInstruction;
+    editorObjectSetVarInstruction.op = pf::PackageScriptOp::SetVarImmediate;
+    editorObjectSetVarInstruction.dst = editorObjectVariable;
+    editorObjectSetVarInstruction.intValue = 13;
+    int editorObjectSetVarInstructionIndex = -1;
+    const bool editorSessionAddObjectInstructionOk = editorSessionObjectScriptBudgetOk &&
+        pf::addEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            editorObjectSetVarInstruction,
+            -1,
+            &editorObjectSetVarInstructionIndex,
+            &packageError) &&
+        editorObjectSetVarInstructionIndex == 0;
+    int editorObjectNopInstructionIndex = -1;
+    const bool editorSessionAddSecondObjectInstructionOk = editorSessionAddObjectInstructionOk &&
+        pf::addEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            editorNopInstruction,
+            -1,
+            &editorObjectNopInstructionIndex,
+            &packageError) &&
+        editorObjectNopInstructionIndex == 1;
+    int editorMovedObjectInstructionIndex = -1;
+    const bool editorSessionMoveObjectInstructionOk = editorSessionAddSecondObjectInstructionOk &&
+        pf::moveEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            1,
+            -1,
+            &editorMovedObjectInstructionIndex,
+            &packageError) &&
+        editorMovedObjectInstructionIndex == 0;
+    pf::PackageScriptInstruction editorInvalidObjectInstruction = editorObjectSetVarInstruction;
+    editorInvalidObjectInstruction.dst = 9999;
+    const bool editorSessionInvalidObjectInstructionRejected = editorSessionMoveObjectInstructionOk &&
+        !pf::setEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            1,
+            editorInvalidObjectInstruction,
+            &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].instructions[1].dst == editorObjectVariable;
+    int editorObjectCallerScript = -1;
+    const bool editorSessionAddObjectCallerScriptOk = editorSessionInvalidObjectInstructionRejected &&
+        pf::addEditorSessionObjectPackageScript(editorSession, editorArticleObjectIndex, "EditorObjectCallerScript", 64, &editorObjectCallerScript, &packageError) &&
+        editorObjectCallerScript >= 0;
+    pf::PackageScriptInstruction editorObjectCallInstruction;
+    editorObjectCallInstruction.op = pf::PackageScriptOp::CallScript;
+    editorObjectCallInstruction.text = "EditorObjectLogicScript";
+    int editorObjectCallInstructionIndex = -1;
+    const bool editorSessionAddObjectCallInstructionOk = editorSessionAddObjectCallerScriptOk &&
+        pf::addEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectCallerScript,
+            editorObjectCallInstruction,
+            -1,
+            &editorObjectCallInstructionIndex,
+            &packageError) &&
+        editorObjectCallInstructionIndex == 0;
+    pf::PackageScriptInstruction editorIndexedObjectCallInstruction;
+    editorIndexedObjectCallInstruction.op = pf::PackageScriptOp::CallIndexedObjectScriptFromVar;
+    editorIndexedObjectCallInstruction.srcA = editorObjectVariable;
+    editorIndexedObjectCallInstruction.text = "EditorObjectLogicScript";
+    int editorIndexedObjectCallInstructionIndex = -1;
+    const bool editorSessionAddIndexedObjectCallInstructionOk = editorSessionAddObjectCallInstructionOk &&
+        pf::addEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectCallerScript,
+            editorIndexedObjectCallInstruction,
+            -1,
+            &editorIndexedObjectCallInstructionIndex,
+            &packageError) &&
+        editorIndexedObjectCallInstructionIndex == 1;
+    const bool editorSessionBindObjectScriptCallbacksOk = editorSessionAddIndexedObjectCallInstructionOk &&
+        pf::bindEditorSessionObjectPackageScriptStateCallback(
+            editorSession,
+            editorArticleObjectIndex,
+            editorArticleStateIndex,
+            pf::FighterEditorObjectStateCallbackSlot::Frame,
+            "EditorObjectLogicScript",
+            &packageError) &&
+        pf::bindEditorSessionObjectPackageScriptEventCallback(
+            editorSession,
+            editorArticleObjectIndex,
+            pf::FighterEditorObjectEventCallbackSlot::Spawned,
+            "EditorObjectLogicScript",
+            &packageError);
+    const bool editorSessionRenameObjectScriptOk = editorSessionBindObjectScriptCallbacksOk &&
+        pf::renameEditorSessionObjectPackageScript(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            "EditorObjectLogicRenamed",
+            &packageError);
+    const pf::GameObjectDefinition& editorArticleAfterObjectScriptRename =
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)];
+    const bool editorSessionObjectScriptRemapOk = editorSessionRenameObjectScriptOk &&
+        std::any_of(
+            editorArticleAfterObjectScriptRename.states[static_cast<size_t>(editorArticleStateIndex)].onFrame.begin(),
+            editorArticleAfterObjectScriptRename.states[static_cast<size_t>(editorArticleStateIndex)].onFrame.end(),
+            [](const pf::FunctionCall& call) {
+                return call.name == "script:EditorObjectLogicRenamed";
+            }) &&
+        std::any_of(
+            editorArticleAfterObjectScriptRename.onSpawned.begin(),
+            editorArticleAfterObjectScriptRename.onSpawned.end(),
+            [](const pf::FunctionCall& call) {
+                return call.name == "script:EditorObjectLogicRenamed";
+            }) &&
+        editorArticleAfterObjectScriptRename.packageScripts[static_cast<size_t>(editorObjectCallerScript)].instructions[0].text == "EditorObjectLogicRenamed" &&
+        editorArticleAfterObjectScriptRename.packageScripts[static_cast<size_t>(editorObjectCallerScript)].instructions[1].text == "EditorObjectLogicRenamed";
+    int editorClonedObjectScript = -1;
+    const bool editorSessionCloneObjectScriptOk = editorSessionObjectScriptRemapOk &&
+        pf::duplicateEditorSessionObjectPackageScript(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectLogicScript,
+            &editorClonedObjectScript,
+            &packageError) &&
+        editorClonedObjectScript >= 0;
+    const bool editorSessionRemoveClonedObjectScriptOk = editorSessionCloneObjectScriptOk &&
+        pf::removeEditorSessionObjectPackageScript(editorSession, editorArticleObjectIndex, editorClonedObjectScript, &packageError);
+    int editorObjectStateScript = -1;
+    const bool editorSessionAddObjectStateScriptOk = editorSessionRemoveClonedObjectScriptOk &&
+        pf::addEditorSessionObjectPackageScript(editorSession, editorArticleObjectIndex, "EditorObjectStateScript", 64, &editorObjectStateScript, &packageError) &&
+        editorObjectStateScript >= 0;
+    pf::PackageScriptInstruction editorObjectChangeStateInstruction;
+    editorObjectChangeStateInstruction.op = pf::PackageScriptOp::ChangeState;
+    editorObjectChangeStateInstruction.text = "EditorObjectStateRenamed";
+    int editorObjectChangeStateInstructionIndex = -1;
+    const bool editorSessionAddObjectStateInstructionOk = editorSessionAddObjectStateScriptOk &&
+        pf::addEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectStateScript,
+            editorObjectChangeStateInstruction,
+            -1,
+            &editorObjectChangeStateInstructionIndex,
+            &packageError) &&
+        editorObjectChangeStateInstructionIndex == 0;
+    const bool editorSessionRemoveObjectStateOk = editorSessionAddObjectStateInstructionOk &&
         pf::removeEditorSessionObjectState(editorSession, editorArticleObjectIndex, editorArticleStateIndex, "Idle", &packageError) &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].initialState == 0 &&
-        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts.back().instructions[0].text == "Idle";
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectStateScript)].instructions[0].text == "Idle";
+    const bool editorSessionRemoveObjectScriptOk = editorSessionRemoveObjectStateOk &&
+        pf::removeEditorSessionObjectPackageScript(editorSession, editorArticleObjectIndex, editorObjectLogicScript, &packageError);
+    const pf::GameObjectDefinition& editorArticleAfterObjectScriptRemove =
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)];
+    const auto editorObjectCallerScriptAfterRemove = std::find_if(
+        editorArticleAfterObjectScriptRemove.packageScripts.begin(),
+        editorArticleAfterObjectScriptRemove.packageScripts.end(),
+        [](const pf::PackageScript& script) {
+            return script.name == "EditorObjectCallerScript";
+        });
+    const int editorObjectCallerScriptAfterRemoveIndex =
+        editorObjectCallerScriptAfterRemove == editorArticleAfterObjectScriptRemove.packageScripts.end()
+            ? -1
+            : static_cast<int>(std::distance(editorArticleAfterObjectScriptRemove.packageScripts.begin(), editorObjectCallerScriptAfterRemove));
+    const bool editorSessionObjectScriptRefsRemovedOk = editorSessionRemoveObjectScriptOk &&
+        editorObjectCallerScriptAfterRemove != editorArticleAfterObjectScriptRemove.packageScripts.end() &&
+        editorObjectCallerScriptAfterRemove->instructions.size() >= 2 &&
+        std::none_of(
+            editorArticleAfterObjectScriptRemove.onSpawned.begin(),
+            editorArticleAfterObjectScriptRemove.onSpawned.end(),
+            [](const pf::FunctionCall& call) {
+                return call.name == "script:EditorObjectLogicRenamed";
+            }) &&
+        editorObjectCallerScriptAfterRemove->instructions[0].op == pf::PackageScriptOp::Nop &&
+        editorObjectCallerScriptAfterRemove->instructions[1].op == pf::PackageScriptOp::Nop;
+    const bool editorSessionRemoveObjectInstructionOk = editorSessionObjectScriptRefsRemovedOk &&
+        pf::removeEditorSessionObjectPackageInstruction(
+            editorSession,
+            editorArticleObjectIndex,
+            editorObjectCallerScriptAfterRemoveIndex,
+            1,
+            &packageError);
+    const bool editorSessionRemoveObjectVariableOk = editorSessionRemoveObjectInstructionOk &&
+        pf::removeEditorSessionObjectPackageVariable(editorSession, editorArticleObjectIndex, editorObjectVariable, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageVariables.empty();
     pf::HitboxDefinition editorObjectHitbox;
     editorObjectHitbox.hitboxId = 11;
     editorObjectHitbox.radius = pf::fxFromFloat(0.35f);
@@ -6332,7 +6514,7 @@ int main(int argc, char** argv) {
     editorObjectHitbox.knockbackBase = pf::fx(15);
     editorObjectHitbox.knockbackGrowth = pf::fx(60);
     int editorObjectHitboxIndex = -1;
-    const bool editorSessionObjectHitboxOk = editorSessionRemoveObjectStateOk &&
+    const bool editorSessionObjectHitboxOk = editorSessionRemoveObjectVariableOk &&
         pf::addEditorSessionObjectHitbox(editorSession, editorArticleObjectIndex, editorObjectHitbox, -1, &editorObjectHitboxIndex, &packageError) &&
         editorObjectHitboxIndex >= 0;
     editorObjectHitbox.damage = pf::fxFromFloat(4.0f);
@@ -7840,7 +8022,29 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_rename_object_state_ok=" << editorSessionRenameObjectStateOk
               << " fighter_editor_session_object_state_timing_ok=" << editorSessionObjectStateTimingOk
               << " fighter_editor_session_object_callbacks_ok=" << editorSessionObjectCallbacksOk
+              << " fighter_editor_session_add_object_variable_ok=" << editorSessionAddObjectVariableOk
+              << " fighter_editor_session_rename_object_variable_ok=" << editorSessionRenameObjectVariableOk
+              << " fighter_editor_session_add_object_script_ok=" << editorSessionAddObjectScriptOk
+              << " fighter_editor_session_object_script_budget_ok=" << editorSessionObjectScriptBudgetOk
+              << " fighter_editor_session_add_object_instruction_ok=" << editorSessionAddObjectInstructionOk
+              << " fighter_editor_session_add_second_object_instruction_ok=" << editorSessionAddSecondObjectInstructionOk
+              << " fighter_editor_session_move_object_instruction_ok=" << editorSessionMoveObjectInstructionOk
+              << " fighter_editor_session_invalid_object_instruction_rejected=" << editorSessionInvalidObjectInstructionRejected
+              << " fighter_editor_session_add_object_caller_script_ok=" << editorSessionAddObjectCallerScriptOk
+              << " fighter_editor_session_add_object_call_instruction_ok=" << editorSessionAddObjectCallInstructionOk
+              << " fighter_editor_session_add_indexed_object_call_instruction_ok=" << editorSessionAddIndexedObjectCallInstructionOk
+              << " fighter_editor_session_bind_object_script_callbacks_ok=" << editorSessionBindObjectScriptCallbacksOk
+              << " fighter_editor_session_rename_object_script_ok=" << editorSessionRenameObjectScriptOk
+              << " fighter_editor_session_object_script_remap_ok=" << editorSessionObjectScriptRemapOk
+              << " fighter_editor_session_clone_object_script_ok=" << editorSessionCloneObjectScriptOk
+              << " fighter_editor_session_remove_cloned_object_script_ok=" << editorSessionRemoveClonedObjectScriptOk
+              << " fighter_editor_session_add_object_state_script_ok=" << editorSessionAddObjectStateScriptOk
+              << " fighter_editor_session_add_object_state_instruction_ok=" << editorSessionAddObjectStateInstructionOk
               << " fighter_editor_session_remove_object_state_ok=" << editorSessionRemoveObjectStateOk
+              << " fighter_editor_session_remove_object_script_ok=" << editorSessionRemoveObjectScriptOk
+              << " fighter_editor_session_object_script_refs_removed_ok=" << editorSessionObjectScriptRefsRemovedOk
+              << " fighter_editor_session_remove_object_instruction_ok=" << editorSessionRemoveObjectInstructionOk
+              << " fighter_editor_session_remove_object_variable_ok=" << editorSessionRemoveObjectVariableOk
               << " fighter_editor_session_object_hitbox_ok=" << editorSessionObjectHitboxOk
               << " fighter_editor_session_set_object_hitbox_ok=" << editorSessionSetObjectHitboxOk
               << " fighter_editor_session_object_hurtbox_ok=" << editorSessionObjectHurtboxOk
