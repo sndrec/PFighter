@@ -11080,6 +11080,117 @@ static void drawEditorInspectorWorkstation(
                 editor.status = "Editor: object variable edit failed: " + error;
             }
         }
+        if (!object.packageScripts.empty()) {
+            editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+            pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+            const float scriptInspectY = objectVarY + 54.0f;
+            std::string renamedScript;
+            DrawText("Object Script", static_cast<int>(rect.x + 10.0f), static_cast<int>(scriptInspectY), 11, Fade(RAYWHITE, 0.7f));
+            if (uiTextField({rect.x + 90.0f, scriptInspectY - 5.0f, rect.width - 100.0f, 22.0f},
+                    "workstation-object-script-name",
+                    editor,
+                    script.name,
+                    renamedScript,
+                    64))
+            {
+                std::string error;
+                const std::string oldName = script.name;
+                if (pf::renameEditorSessionObjectPackageScript(session, editor.selectedObjectDef, editor.selectedPackageScript, renamedScript, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed object script " + oldName + " to " + renamedScript);
+                    return;
+                }
+                editor.status = "Editor: rename object script failed: " + error;
+            }
+            DrawText(("Instructions " + std::to_string(script.instructions.size()) +
+                      "  Graph nodes " + std::to_string(script.graph.nodes.size()) +
+                      "  Links " + std::to_string(script.graph.links.size())).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(scriptInspectY + 26.0f),
+                10,
+                Fade(RAYWHITE, 0.66f));
+            if (uiButton({rect.x + rect.width - 146.0f, scriptInspectY + 20.0f, 68.0f, 22.0f}, "Budget-")) {
+                std::string error;
+                if (pf::setEditorSessionObjectPackageScriptBudget(session, editor.selectedObjectDef, editor.selectedPackageScript, std::max(1, script.instructionBudget - 8), &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lowered object script instruction budget");
+                    return;
+                }
+                editor.status = "Editor: object script budget failed: " + error;
+            }
+            if (uiButton({rect.x + rect.width - 72.0f, scriptInspectY + 20.0f, 62.0f, 22.0f}, "Budget+")) {
+                std::string error;
+                if (pf::setEditorSessionObjectPackageScriptBudget(session, editor.selectedObjectDef, editor.selectedPackageScript, script.instructionBudget + 8, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: raised object script instruction budget");
+                    return;
+                }
+                editor.status = "Editor: object script budget failed: " + error;
+            }
+            auto selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                return node.id == editor.selectedPackageGraphNode;
+            });
+            if (selectedGraphNodeIt == script.graph.nodes.end() && !script.graph.nodes.empty()) {
+                editor.selectedPackageGraphNode = script.graph.entryNode >= 0 ? script.graph.entryNode : script.graph.nodes.front().id;
+                selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                    return node.id == editor.selectedPackageGraphNode;
+                });
+            }
+            const float graphNodeY = scriptInspectY + 54.0f;
+            if (selectedGraphNodeIt != script.graph.nodes.end()) {
+                const pf::PackageScriptGraphNode& graphNode = *selectedGraphNodeIt;
+                const std::string graphNodeLabel = "Graph node #" + std::to_string(graphNode.id) + " " +
+                    packageScriptGraphNodeKindName(graphNode.kind) +
+                    (graphNode.kind == pf::PackageScriptGraphNodeKind::Instruction
+                        ? " inst=" + std::to_string(graphNode.instructionIndex)
+                        : "");
+                DrawText(clippedText(graphNodeLabel, 10, rect.width - 20.0f).c_str(),
+                    static_cast<int>(rect.x + 10.0f),
+                    static_cast<int>(graphNodeY),
+                    10,
+                    RAYWHITE);
+                DrawText(("pos=(" + std::to_string(pf::fxToFloat(graphNode.position.x)) +
+                          ", " + std::to_string(pf::fxToFloat(graphNode.position.y)) + ")").c_str(),
+                    static_cast<int>(rect.x + 10.0f),
+                    static_cast<int>(graphNodeY + 16.0f),
+                    10,
+                    Fade(RAYWHITE, 0.62f));
+                auto commitObjectGraphNode = [&](pf::PackageScriptGraphNode edited, const std::string& message) -> bool {
+                    std::string error;
+                    if (pf::setEditorSessionObjectPackageScriptGraphNode(session, editor.selectedObjectDef, editor.selectedPackageScript, edited.id, edited, &error)) {
+                        syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                        return true;
+                    }
+                    editor.status = "Editor: object graph node edit failed: " + error;
+                    return false;
+                };
+                pf::PackageScriptGraphNode editedGraphNode = graphNode;
+                const float graphNodeButtonY = graphNodeY + 34.0f;
+                if (uiButton({rect.x + 10.0f, graphNodeButtonY, 36.0f, 22.0f}, "X-")) {
+                    editedGraphNode.position.x -= pf::fx(16);
+                    if (commitObjectGraphNode(editedGraphNode, "Editor: moved object graph node left")) return;
+                }
+                if (uiButton({rect.x + 52.0f, graphNodeButtonY, 36.0f, 22.0f}, "X+")) {
+                    editedGraphNode.position.x += pf::fx(16);
+                    if (commitObjectGraphNode(editedGraphNode, "Editor: moved object graph node right")) return;
+                }
+                if (uiButton({rect.x + 94.0f, graphNodeButtonY, 36.0f, 22.0f}, "Y-")) {
+                    editedGraphNode.position.y -= pf::fx(16);
+                    if (commitObjectGraphNode(editedGraphNode, "Editor: moved object graph node up")) return;
+                }
+                if (uiButton({rect.x + 136.0f, graphNodeButtonY, 36.0f, 22.0f}, "Y+")) {
+                    editedGraphNode.position.y += pf::fx(16);
+                    if (commitObjectGraphNode(editedGraphNode, "Editor: moved object graph node down")) return;
+                }
+                if (graphNode.kind == pf::PackageScriptGraphNodeKind::Instruction &&
+                    graphNode.instructionIndex >= 0 &&
+                    graphNode.instructionIndex < static_cast<int>(script.instructions.size()) &&
+                    uiButton({rect.x + 184.0f, graphNodeButtonY, 62.0f, 22.0f}, "UseInst"))
+                {
+                    editor.selectedPackageInstruction = graphNode.instructionIndex;
+                    session.selectedPackageInstruction = graphNode.instructionIndex;
+                    editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                    return;
+                }
+            }
+        }
         return;
     }
     if (editor.workspace == pf::EditorWorkspace::Animation || editor.selectionKind == pf::FighterEditorSelectionKind::Animation) {
