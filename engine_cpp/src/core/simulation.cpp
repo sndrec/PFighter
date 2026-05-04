@@ -7321,6 +7321,45 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 currentObject.packageVars[static_cast<size_t>(variableIndex)] = value;
             }
         };
+        auto ensureFighterPackageVars = [&](FighterRuntime& target) {
+            if (target.fighterDef < 0 || target.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+                return;
+            }
+            const FighterDefinition& targetDef = world.fighterDefs[static_cast<size_t>(target.fighterDef)];
+            if (target.packageVars.size() == targetDef.packageVariables.size()) {
+                return;
+            }
+            const size_t oldSize = target.packageVars.size();
+            target.packageVars.resize(targetDef.packageVariables.size());
+            for (size_t i = oldSize; i < targetDef.packageVariables.size(); ++i) {
+                target.packageVars[i] = targetDef.packageVariables[i].initialValue;
+            }
+        };
+        auto indexedFighter = [&](int fighterIndex) -> FighterRuntime* {
+            if (!validFighterIndex(world, fighterIndex)) {
+                return nullptr;
+            }
+            FighterRuntime& target = world.fighters[static_cast<size_t>(fighterIndex)];
+            if (target.fighterDef < 0 || target.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+                return nullptr;
+            }
+            ensureFighterPackageVars(target);
+            return &target;
+        };
+        auto indexedFighterVar = [&](int fighterIndex, int variableIndex) -> int32_t {
+            FighterRuntime* target = indexedFighter(fighterIndex);
+            if (!target || variableIndex < 0 || variableIndex >= static_cast<int>(target->packageVars.size())) {
+                return 0;
+            }
+            return target->packageVars[static_cast<size_t>(variableIndex)];
+        };
+        auto setIndexedFighterVar = [&](int fighterIndex, int variableIndex, int32_t value) {
+            FighterRuntime* target = indexedFighter(fighterIndex);
+            if (!target || variableIndex < 0 || variableIndex >= static_cast<int>(target->packageVars.size())) {
+                return;
+            }
+            target->packageVars[static_cast<size_t>(variableIndex)] = value;
+        };
         auto setOwnerFighterVar = [&](int index, int32_t value) {
             if (!validFighterIndex(world, object.ownerFighter) || index < 0) {
                 return;
@@ -7660,6 +7699,68 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     return;
                 }
                 break;
+            case PackageScriptOp::SetVarIndexedFighterVar:
+                setVar(instruction.dst, indexedFighterVar(var(instruction.srcA), instruction.intValue));
+                break;
+            case PackageScriptOp::SetIndexedFighterVarImmediate:
+                setIndexedFighterVar(var(instruction.srcA), instruction.dst, instruction.intValue);
+                break;
+            case PackageScriptOp::SetIndexedFighterVarFromVar:
+                setIndexedFighterVar(var(instruction.srcA), instruction.dst, var(instruction.srcB));
+                break;
+            case PackageScriptOp::CallIndexedFighterScriptFromVar: {
+                const int targetIndex = var(instruction.srcA);
+                if (FighterRuntime* target = indexedFighter(targetIndex)) {
+                    runPackageScript(world, *target, instruction.text);
+                    return;
+                }
+                break;
+            }
+            case PackageScriptOp::SetVarIndexedFighterStateIndex: {
+                const FighterRuntime* target = indexedFighter(var(instruction.srcA));
+                setVar(instruction.dst, target ? target->state : -1);
+                break;
+            }
+            case PackageScriptOp::SetVarIndexedFighterPositionX: {
+                const FighterRuntime* target = indexedFighter(var(instruction.srcA));
+                setVar(instruction.dst, target ? target->position.x : 0);
+                break;
+            }
+            case PackageScriptOp::SetVarIndexedFighterPositionY: {
+                const FighterRuntime* target = indexedFighter(var(instruction.srcA));
+                setVar(instruction.dst, target ? target->position.y : 0);
+                break;
+            }
+            case PackageScriptOp::SetIndexedFighterStateFromVar: {
+                FighterRuntime* target = indexedFighter(var(instruction.dst));
+                if (target) {
+                    const FighterDefinition& targetDef = world.fighterDefs[static_cast<size_t>(target->fighterDef)];
+                    const int stateIndex = var(instruction.srcA);
+                    if (stateIndex >= 0 && stateIndex < static_cast<int>(targetDef.states.size())) {
+                        changeFighterState(world, *target, targetDef.states[static_cast<size_t>(stateIndex)].name);
+                        return;
+                    }
+                }
+                break;
+            }
+            case PackageScriptOp::SetIndexedFighterPositionFromVars: {
+                FighterRuntime* target = indexedFighter(var(instruction.dst));
+                if (target) {
+                    target->position = {var(instruction.srcA), var(instruction.srcB)};
+                    target->previousPosition = target->position;
+                    const FighterDefinition& targetDef = world.fighterDefs[static_cast<size_t>(target->fighterDef)];
+                    calculateEcb(targetDef, *target, true);
+                }
+                break;
+            }
+            case PackageScriptOp::SetIndexedFighterFacingFromVar: {
+                FighterRuntime* target = indexedFighter(var(instruction.dst));
+                if (target) {
+                    target->facing = var(instruction.srcA) < 0 ? -1 : 1;
+                    target->hsdPoseFacing = target->facing;
+                }
+                break;
+            }
             case PackageScriptOp::SetVarIndexedObjectVar:
                 setVar(instruction.dst, indexedObjectVar(var(instruction.srcA), instruction.intValue));
                 break;
@@ -7949,19 +8050,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 };
                 const int spawnedIndex = spawnFighter(world, instruction.text, position, object.facing);
                 setCurrentObjectVarAfterEvent(instruction.dst, spawnedIndex);
-                return;
+                break;
             }
             case PackageScriptOp::SwitchFighterDefinition:
-            case PackageScriptOp::SetVarIndexedFighterVar:
-            case PackageScriptOp::CallIndexedFighterScriptFromVar:
-            case PackageScriptOp::SetVarIndexedFighterStateIndex:
-            case PackageScriptOp::SetVarIndexedFighterPositionX:
-            case PackageScriptOp::SetVarIndexedFighterPositionY:
-            case PackageScriptOp::SetIndexedFighterVarImmediate:
-            case PackageScriptOp::SetIndexedFighterVarFromVar:
-            case PackageScriptOp::SetIndexedFighterStateFromVar:
-            case PackageScriptOp::SetIndexedFighterPositionFromVars:
-            case PackageScriptOp::SetIndexedFighterFacingFromVar:
                 return;
             }
             ++frame.instructionIndex;
