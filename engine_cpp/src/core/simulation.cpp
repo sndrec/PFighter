@@ -7934,9 +7934,24 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 }
                 continue;
             }
+            case PackageScriptOp::SpawnFighter: {
+                const Vec2 position{
+                    object.position.x + object.facing * instruction.fixValue,
+                    object.position.y,
+                };
+                spawnFighter(world, instruction.text, position, object.facing);
+                return;
+            }
+            case PackageScriptOp::SpawnFighterSetVar: {
+                const Vec2 position{
+                    object.position.x + object.facing * instruction.fixValue,
+                    object.position.y,
+                };
+                const int spawnedIndex = spawnFighter(world, instruction.text, position, object.facing);
+                setCurrentObjectVarAfterEvent(instruction.dst, spawnedIndex);
+                return;
+            }
             case PackageScriptOp::SwitchFighterDefinition:
-            case PackageScriptOp::SpawnFighter:
-            case PackageScriptOp::SpawnFighterSetVar:
             case PackageScriptOp::SetVarIndexedFighterVar:
             case PackageScriptOp::CallIndexedFighterScriptFromVar:
             case PackageScriptOp::SetVarIndexedFighterStateIndex:

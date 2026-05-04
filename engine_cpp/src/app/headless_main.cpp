@@ -5316,6 +5316,19 @@ int main(int argc, char** argv) {
     packageOwnerContextObject.onAccessory.clear();
     packageOwnerContextObject.onSpawned = {{std::string{"script:OwnerContextScript"}}};
     packageSourceWorld.objectDefs.push_back(packageOwnerContextObject);
+    pf::GameObjectDefinition packageFighterSpawnerObject = packageVelocityObject;
+    packageFighterSpawnerObject.name = "PackageFighterSpawnerObject";
+    packageFighterSpawnerObject.packageVariables = {{"SpawnedFighter", -1}};
+    packageFighterSpawnerObject.packageScripts = {{
+        "ObjectSpawnFighterScript",
+        4,
+        {
+            {pf::PackageScriptOp::SpawnFighterSetVar, 0, -1, -1, 0, pf::fxFromFloat(1.25f), "SmokeAlt"},
+        },
+    }};
+    packageFighterSpawnerObject.onAccessory.clear();
+    packageFighterSpawnerObject.onSpawned = {{std::string{"script:ObjectSpawnFighterScript"}}};
+    packageSourceWorld.objectDefs.push_back(packageFighterSpawnerObject);
     pf::FighterPackage sourcePackage;
     sourcePackage.name = "headless_smoke_package";
     sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
@@ -5825,7 +5838,7 @@ int main(int argc, char** argv) {
         -1,
         0,
         pf::fxFromFloat(1.0f),
-        "SmokeAlt",
+        "MissingFighter",
     });
     const bool invalidPackageObjectSpawnFighterStoreWriteRejected = pf::writeFighterPackage(invalidObjectSpawnFighterStoreWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectIndexedFighterVarWritePackage = sourcePackage;
@@ -8330,6 +8343,34 @@ int main(int argc, char** argv) {
         packageObjectOwnerContext->packageVars[11] == pf::fxFromFloat(-0.25f) &&
         packageObjectOwnerContext->packageVars[12] == pf::fxFromFloat(0.8f) &&
         packageObjectOwnerContext->packageVars[13] == pf::fxFromFloat(0.7f);
+    pf::World packageObjectSpawnFighterWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectSpawnFighterWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageObjectSpawnFighterWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
+        packageObjectSpawnFighterWorld.objectDefs = loadedPackage.objects;
+    }
+    const int packageObjectSpawnFighterIndex = pf::spawnGameObject(
+        packageObjectSpawnFighterWorld,
+        "PackageFighterSpawnerObject",
+        0,
+        {pf::fxFromFloat(-1.0f), pf::fx(3)},
+        1,
+        {});
+    const pf::GameObjectRuntime* packageObjectSpawnFighter = packageObjectSpawnFighterIndex >= 0 &&
+            packageObjectSpawnFighterIndex < static_cast<int>(packageObjectSpawnFighterWorld.objects.size())
+        ? &packageObjectSpawnFighterWorld.objects[static_cast<size_t>(packageObjectSpawnFighterIndex)]
+        : nullptr;
+    const int packageObjectSpawnFighterStoredIndex = packageObjectSpawnFighter &&
+            !packageObjectSpawnFighter->packageVars.empty()
+        ? packageObjectSpawnFighter->packageVars[0]
+        : -1;
+    const bool packageObjectSpawnFighterOk = packageShapeOk &&
+        packageObjectSpawnFighterWorld.fighters.size() == 3 &&
+        packageObjectSpawnFighterStoredIndex == 2 &&
+        packageObjectSpawnFighterWorld.fighters[2].fighterDef >= 0 &&
+        packageObjectSpawnFighterWorld.fighters[2].fighterDef < static_cast<int>(packageObjectSpawnFighterWorld.fighterDefs.size()) &&
+        packageObjectSpawnFighterWorld.fighterDefs[static_cast<size_t>(packageObjectSpawnFighterWorld.fighters[2].fighterDef)].name == "SmokeAlt" &&
+        packageObjectSpawnFighterWorld.fighters[2].position.x == pf::fxFromFloat(0.25f);
     pf::World packageObjectSpawnOffsetWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectSpawnOffsetWorld.objectDefs = loadedPackage.objects;
@@ -8661,6 +8702,8 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_script_call_ok=" << packageObjectOwnerScriptCallOk
               << " fighter_package_object_owner_script_call_var=" << (packageObjectOwnerScriptCallWorld.fighters[0].packageVars.empty() ? -1 : packageObjectOwnerScriptCallWorld.fighters[0].packageVars[0])
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
+              << " fighter_package_object_spawn_fighter_ok=" << packageObjectSpawnFighterOk
+              << " fighter_package_object_spawn_fighter_var=" << packageObjectSpawnFighterStoredIndex
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_validation_rejected=" << invalidPackageValidationRejected

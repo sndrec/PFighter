@@ -2297,13 +2297,13 @@ void validatePackageScriptInstruction(
         }
         break;
     case PackageScriptOp::SpawnFighter:
-        if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
+        if ((!allowFighterTargets && !allowObjectContextReads) || !hasName(fighterNames, instruction.text)) {
             throw std::runtime_error("fighter package script fighter target is invalid");
         }
         break;
     case PackageScriptOp::SpawnFighterSetVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");
-        if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
+        if ((!allowFighterTargets && !allowObjectContextReads) || !hasName(fighterNames, instruction.text)) {
             throw std::runtime_error("fighter package script fighter target is invalid");
         }
         break;
