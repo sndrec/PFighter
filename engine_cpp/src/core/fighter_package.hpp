@@ -2,6 +2,7 @@
 
 #include "core/simulation.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -17,7 +18,23 @@ struct FighterPackage {
     std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets;
 };
 
+struct FighterPackageDescriptor {
+    std::string name;
+    uint32_t version = 0;
+    size_t byteSize = 0;
+    uint32_t checksum = 0;
+    std::string rootFighterName;
+    std::vector<std::string> fighterNames;
+    std::vector<std::string> objectNames;
+    std::vector<std::string> assetNames;
+};
+
 bool validateFighterPackage(const FighterPackage& package, std::string* error = nullptr);
+bool describeFighterPackage(
+    const FighterPackage& package,
+    FighterPackageDescriptor& descriptor,
+    const std::vector<uint8_t>& bytes = {},
+    std::string* error = nullptr);
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error = nullptr);
 bool saveFighterPackage(const std::string& path, const FighterPackage& package, std::string* error = nullptr);
 bool readFighterPackage(

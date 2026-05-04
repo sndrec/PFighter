@@ -5281,12 +5281,31 @@ int main(int argc, char** argv) {
     pf::FighterPackage loadedPackage;
     const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
     const bool packageValidated = pf::validateFighterPackage(sourcePackage, &packageError);
+    pf::FighterPackageDescriptor packageDescriptor;
+    const bool packageDescriptorOk = pf::describeFighterPackage(sourcePackage, packageDescriptor, packageBytes, &packageError) &&
+        packageDescriptor.name == sourcePackage.name &&
+        packageDescriptor.version == 1 &&
+        packageDescriptor.byteSize == packageBytes.size() &&
+        packageDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
+        packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
+        packageDescriptor.fighterNames.size() == sourcePackage.fighters.size() &&
+        packageDescriptor.objectNames.size() == sourcePackage.objects.size() &&
+        packageDescriptor.assetNames.size() == sourcePackage.hsdAssets.size();
     const pf::FighterPackage runtimePackage = pf::makeRuntimeFighterPackage(packageSourceWorld, 0, "headless_smoke_runtime");
     const std::vector<uint8_t> runtimePackageBytes = pf::writeFighterPackage(runtimePackage, &packageError);
     pf::FighterPackage loadedRuntimePackage;
     const bool runtimePackageLoaded = !runtimePackageBytes.empty() &&
         pf::readFighterPackage(runtimePackageBytes, loadedRuntimePackage, &packageError);
     const bool runtimePackageValidated = pf::validateFighterPackage(runtimePackage, &packageError);
+    pf::FighterPackageDescriptor runtimePackageDescriptor;
+    const bool runtimePackageDescriptorOk = pf::describeFighterPackage(runtimePackage, runtimePackageDescriptor, runtimePackageBytes, &packageError) &&
+        runtimePackageDescriptor.name == runtimePackage.name &&
+        runtimePackageDescriptor.byteSize == runtimePackageBytes.size() &&
+        runtimePackageDescriptor.checksum == pf::fighterPackageChecksum(runtimePackageBytes) &&
+        runtimePackageDescriptor.rootFighterName == runtimePackage.fighters[0].name &&
+        runtimePackageDescriptor.fighterNames.size() == runtimePackage.fighters.size() &&
+        runtimePackageDescriptor.objectNames.size() == runtimePackage.objects.size() &&
+        runtimePackageDescriptor.assetNames.size() == runtimePackage.hsdAssets.size();
     pf::FighterPackage invalidReadPackage;
     std::string invalidPackageError;
     std::vector<uint8_t> invalidPackageBytes = packageBytes;
@@ -5886,6 +5905,9 @@ int main(int argc, char** argv) {
         !pf::installFighterPackage(invalidPackageInstallWorld, invalidInstallPackage, nullptr, &invalidPackageError);
     const bool invalidPackageValidationRejected =
         !pf::validateFighterPackage(invalidInstallPackage, &invalidPackageError);
+    pf::FighterPackageDescriptor invalidPackageDescriptor;
+    const bool invalidPackageDescriptorRejected =
+        !pf::describeFighterPackage(invalidInstallPackage, invalidPackageDescriptor, {}, &invalidPackageError);
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -7208,11 +7230,13 @@ int main(int argc, char** argv) {
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
               << " fighter_package_validated=" << packageValidated
+              << " fighter_package_descriptor_ok=" << packageDescriptorOk
               << " fighter_package_shape_ok=" << packageShapeOk
               << " fighter_package_runtime_bytes=" << runtimePackageBytes.size()
               << " fighter_package_runtime_checksum=" << pf::fighterPackageChecksum(runtimePackageBytes)
               << " fighter_package_runtime_loaded=" << runtimePackageLoaded
               << " fighter_package_runtime_validated=" << runtimePackageValidated
+              << " fighter_package_runtime_descriptor_ok=" << runtimePackageDescriptorOk
               << " fighter_package_runtime_closure_ok=" << runtimePackageClosureOk
               << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
@@ -7374,6 +7398,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_validation_rejected=" << invalidPackageValidationRejected
+              << " fighter_package_invalid_descriptor_rejected=" << invalidPackageDescriptorRejected
               << " fighter_package_invalid_install_rejected=" << invalidPackageInstallRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected

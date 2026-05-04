@@ -2854,6 +2854,42 @@ bool validateFighterPackage(const FighterPackage& package, std::string* error) {
     }
 }
 
+bool describeFighterPackage(
+    const FighterPackage& package,
+    FighterPackageDescriptor& descriptor,
+    const std::vector<uint8_t>& bytes,
+    std::string* error)
+{
+    if (!validateFighterPackage(package, error)) {
+        descriptor = {};
+        return false;
+    }
+
+    FighterPackageDescriptor out;
+    out.name = package.name;
+    out.version = package.version;
+    out.byteSize = bytes.size();
+    out.checksum = bytes.empty() ? 0 : fighterPackageChecksum(bytes);
+    out.rootFighterName = package.fighters.empty() ? std::string{} : package.fighters.front().name;
+    out.fighterNames.reserve(package.fighters.size());
+    for (const FighterDefinition& fighter : package.fighters) {
+        out.fighterNames.push_back(fighter.name);
+    }
+    out.objectNames.reserve(package.objects.size());
+    for (const GameObjectDefinition& object : package.objects) {
+        out.objectNames.push_back(object.name);
+    }
+    out.assetNames.reserve(package.hsdAssets.size());
+    for (const std::shared_ptr<const HsdFighterAnimationAsset>& asset : package.hsdAssets) {
+        out.assetNames.push_back(asset ? asset->name : std::string{});
+    }
+    descriptor = std::move(out);
+    if (error) {
+        error->clear();
+    }
+    return true;
+}
+
 std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::string* error) {
     try {
         validateFighterPackageReferences(package);
