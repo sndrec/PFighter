@@ -475,6 +475,8 @@ enum class PackageScriptOp : uint8_t {
     SetVarObjectLastFighter,
     SetVarObjectLastObject,
     SetVarObjectDamage,
+    SetObjectDamage,
+    SetObjectDamageFromVar,
     SetVarObjectHitlag,
     SetVarObjectGroundSegment,
     SetVarObjectPositionX,

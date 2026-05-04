@@ -1116,6 +1116,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectLastFighter: return "ObjLastF";
     case pf::PackageScriptOp::SetVarObjectLastObject: return "ObjLastO";
     case pf::PackageScriptOp::SetVarObjectDamage: return "ObjDmg";
+    case pf::PackageScriptOp::SetObjectDamage: return "ObjDmgSet";
+    case pf::PackageScriptOp::SetObjectDamageFromVar: return "ObjDmgVar";
     case pf::PackageScriptOp::SetVarObjectHitlag: return "ObjHitlg";
     case pf::PackageScriptOp::SetVarObjectGroundSegment: return "ObjFloor";
     case pf::PackageScriptOp::SetVarObjectPositionX: return "ObjPosX";
@@ -1285,6 +1287,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetFighterThrowFlagFromVar:
         instruction.op = pf::PackageScriptOp::SetFighterThrowFlagImmediate;
+        break;
+    case pf::PackageScriptOp::SetObjectDamageFromVar:
+        instruction.op = pf::PackageScriptOp::SetObjectDamage;
         break;
     case pf::PackageScriptOp::SpawnObjectFromVars:
         instruction.op = pf::PackageScriptOp::SpawnObject;
@@ -1610,6 +1615,12 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetFighterThrowFlagFromVar:
         label += " throw" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA);
         break;
+    case pf::PackageScriptOp::SetObjectDamage:
+        label += " " + std::to_string(pf::fxToFloat(instruction.fixValue));
+        break;
+    case pf::PackageScriptOp::SetObjectDamageFromVar:
+        label += " = v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::SetVarOwnedObjectCount:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
@@ -1903,7 +1914,9 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectGrabVictim: return pf::PackageScriptOp::SetVarObjectLastFighter;
     case pf::PackageScriptOp::SetVarObjectLastFighter: return pf::PackageScriptOp::SetVarObjectLastObject;
     case pf::PackageScriptOp::SetVarObjectLastObject: return pf::PackageScriptOp::SetVarObjectDamage;
-    case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetVarObjectHitlag;
+    case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetObjectDamage;
+    case pf::PackageScriptOp::SetObjectDamage: return pf::PackageScriptOp::SetObjectDamageFromVar;
+    case pf::PackageScriptOp::SetObjectDamageFromVar: return pf::PackageScriptOp::SetVarObjectHitlag;
     case pf::PackageScriptOp::SetVarObjectHitlag: return pf::PackageScriptOp::SetVarObjectGroundSegment;
     case pf::PackageScriptOp::SetVarObjectGroundSegment: return pf::PackageScriptOp::SetVarObjectPositionX;
     case pf::PackageScriptOp::SetVarObjectPositionX: return pf::PackageScriptOp::SetVarObjectPositionY;

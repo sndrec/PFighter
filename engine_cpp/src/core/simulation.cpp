@@ -7136,6 +7136,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarObjectDamage:
                 setVar(instruction.dst, object.damageTaken);
                 break;
+            case PackageScriptOp::SetObjectDamage:
+                object.damageTaken = instruction.fixValue;
+                break;
+            case PackageScriptOp::SetObjectDamageFromVar:
+                object.damageTaken = var(instruction.srcA);
+                break;
             case PackageScriptOp::SetVarObjectHitlag:
                 setVar(instruction.dst, object.hitlag);
                 break;
