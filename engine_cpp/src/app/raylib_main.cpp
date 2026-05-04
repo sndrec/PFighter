@@ -11498,6 +11498,106 @@ static std::string editorSelectedGraphDiagnostic(const pf::FighterEditor& editor
     return "Graph: " + error;
 }
 
+static std::string editorDiagnosticContextHint(
+    const pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    const pf::FighterDefinition& def,
+    const pf::FighterState& state,
+    const std::string& message)
+{
+    if (message.empty() || message == "OK") {
+        return {};
+    }
+    for (int fighterIndex = 0; fighterIndex < static_cast<int>(session.package.fighters.size()); ++fighterIndex) {
+        const pf::FighterDefinition& fighter = session.package.fighters[static_cast<size_t>(fighterIndex)];
+        if (!fighter.name.empty() && containsCaseInsensitive(message, fighter.name)) {
+            return "Context hint: fighter #" + std::to_string(fighterIndex) + " " + fighter.name;
+        }
+    }
+    for (int stateIndex = 0; stateIndex < static_cast<int>(def.states.size()); ++stateIndex) {
+        const pf::FighterState& candidate = def.states[static_cast<size_t>(stateIndex)];
+        if (!candidate.name.empty() && containsCaseInsensitive(message, candidate.name)) {
+            return "Context hint: state #" + std::to_string(stateIndex) + " " + candidate.name;
+        }
+    }
+    for (int scriptIndex = 0; scriptIndex < static_cast<int>(def.packageScripts.size()); ++scriptIndex) {
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(scriptIndex)];
+        if (!script.name.empty() && containsCaseInsensitive(message, script.name)) {
+            return "Context hint: script #" + std::to_string(scriptIndex) + " " + script.name;
+        }
+    }
+    for (int variableIndex = 0; variableIndex < static_cast<int>(def.packageVariables.size()); ++variableIndex) {
+        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(variableIndex)];
+        if (!variable.name.empty() && containsCaseInsensitive(message, variable.name)) {
+            return "Context hint: variable #" + std::to_string(variableIndex) + " " + variable.name;
+        }
+    }
+    for (int objectIndex = 0; objectIndex < static_cast<int>(session.package.objects.size()); ++objectIndex) {
+        const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(objectIndex)];
+        if (!object.name.empty() && containsCaseInsensitive(message, object.name)) {
+            return "Context hint: object #" + std::to_string(objectIndex) + " " + object.name;
+        }
+    }
+
+    const std::string lowerMessage = lowerAscii(message);
+    if (lowerMessage.find("script graph") != std::string::npos &&
+        editor.selectedPackageScript >= 0 &&
+        editor.selectedPackageScript < static_cast<int>(def.packageScripts.size()))
+    {
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        return "Context hint: selected script graph #" + std::to_string(editor.selectedPackageScript) +
+            " " + script.name + " nodes=" + std::to_string(script.graph.nodes.size());
+    }
+    if (lowerMessage.find("script") != std::string::npos &&
+        editor.selectedPackageScript >= 0 &&
+        editor.selectedPackageScript < static_cast<int>(def.packageScripts.size()))
+    {
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        std::string hint = "Context hint: selected script #" + std::to_string(editor.selectedPackageScript) + " " + script.name;
+        if (editor.selectedPackageInstruction >= 0 && editor.selectedPackageInstruction < static_cast<int>(script.instructions.size())) {
+            hint += " instruction #" + std::to_string(editor.selectedPackageInstruction) + " " +
+                packageInstructionLabel(script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)]);
+        }
+        return hint;
+    }
+    if ((lowerMessage.find("subaction") != std::string::npos ||
+         lowerMessage.find("hitbox") != std::string::npos ||
+         lowerMessage.find("hurtbox") != std::string::npos) &&
+        editor.selectedSubaction >= 0 &&
+        editor.selectedSubaction < static_cast<int>(state.action.size()))
+    {
+        const pf::Subaction& subaction = state.action[static_cast<size_t>(editor.selectedSubaction)];
+        return "Context hint: selected timeline subaction #" + std::to_string(editor.selectedSubaction) +
+            " " + subactionTypeName(subaction.type);
+    }
+    if (lowerMessage.find("interrupt") != std::string::npos &&
+        editor.selectedInterrupt >= 0 &&
+        editor.selectedInterrupt < static_cast<int>(state.interrupts.size()))
+    {
+        const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
+        return "Context hint: selected interrupt #" + std::to_string(editor.selectedInterrupt) +
+            " " + interruptConditionName(interrupt.condition) + " -> " + interrupt.targetState;
+    }
+    if (lowerMessage.find("state") != std::string::npos) {
+        return "Context hint: selected state #" + std::to_string(session.selectedState) + " " + state.name;
+    }
+    if (lowerMessage.find("object") != std::string::npos &&
+        editor.selectedObjectDef >= 0 &&
+        editor.selectedObjectDef < static_cast<int>(session.package.objects.size()))
+    {
+        const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        return "Context hint: selected object #" + std::to_string(editor.selectedObjectDef) + " " + object.name;
+    }
+    if (lowerMessage.find("variable") != std::string::npos &&
+        editor.selectedPackageVariable >= 0 &&
+        editor.selectedPackageVariable < static_cast<int>(def.packageVariables.size()))
+    {
+        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+        return "Context hint: selected variable #" + std::to_string(editor.selectedPackageVariable) + " " + variable.name;
+    }
+    return "Context hint: " + editorContextDetail(editor, session, def, state);
+}
+
 static void drawEditorDiagnosticsWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -11558,6 +11658,15 @@ static void drawEditorDiagnosticsWorkstation(
             static_cast<int>(y + 66.0f),
             11,
             editor.lastPackageValid ? GREEN : RED);
+    }
+    const std::string diagnosticMessage = editor.lastPackageValid ? graphDiagnostic : editor.lastPackageMessage;
+    const std::string contextHint = editorDiagnosticContextHint(editor, session, def, state, diagnosticMessage);
+    if (!contextHint.empty()) {
+        DrawText(clippedText(contextHint, 11, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(y + 88.0f),
+            11,
+            Fade(YELLOW, 0.82f));
     }
     const Rectangle validateButton{rect.x + rect.width - 390.0f, y - 4.0f, 86.0f, 24.0f};
     if (uiButton(validateButton, "Validate")) {
