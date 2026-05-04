@@ -6345,7 +6345,13 @@ int main(int argc, char** argv) {
         !pf::setEditorSessionStateTiming(editorSession, 0, 0, 5, 2, pf::kUseDefaultAnimationBlendFrames, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->states[0].animationLengthFrames == 72;
-    const bool editorSessionCollisionFlagsOk = editorSessionInvalidTimingRejected &&
+    const bool editorSessionStateAnimationOk = editorSessionInvalidTimingRejected &&
+        pf::setEditorSessionStateAnimation(editorSession, 0, "Wait", 0, 72, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].animation == "Wait" &&
+        editorSession.rootFighter()->states[0].animationActionIndex == 0 &&
+        editorSession.rootFighter()->states[0].animationLengthFrames == 72;
+    const bool editorSessionCollisionFlagsOk = editorSessionStateAnimationOk &&
         pf::setEditorSessionStateCollisionFlags(
             editorSession,
             0,
@@ -6391,8 +6397,17 @@ int main(int argc, char** argv) {
     const bool editorSessionAddHitboxSubactionOk = editorSessionAddRemoveSubactionOk &&
         pf::addEditorSessionSubaction(editorSession, 0, editorHitboxSubaction, 0, &editorHitboxSubactionIndex, &packageError) &&
         editorHitboxSubactionIndex == 0;
+    editorHitboxSubaction.frames = 4;
+    editorHitboxSubaction.hitbox.damage = pf::fxFromFloat(6.0f);
+    editorHitboxSubaction.hitbox.radius = pf::fxFromFloat(0.4f);
+    const bool editorSessionSetSubactionOk = editorSessionAddHitboxSubactionOk &&
+        pf::setEditorSessionSubaction(editorSession, 0, editorHitboxSubactionIndex, editorHitboxSubaction, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorHitboxSubactionIndex)].frames == 4 &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorHitboxSubactionIndex)].hitbox.damage == pf::fxFromFloat(6.0f) &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorHitboxSubactionIndex)].hitbox.radius == pf::fxFromFloat(0.4f);
     int editorMovePadSubactionIndex = -1;
-    const bool editorSessionMovePadSubactionOk = editorSessionAddHitboxSubactionOk &&
+    const bool editorSessionMovePadSubactionOk = editorSessionSetSubactionOk &&
         pf::addEditorSessionSubaction(editorSession, 0, editorTempSubaction, -1, &editorMovePadSubactionIndex, &packageError) &&
         editorMovePadSubactionIndex >= 1;
     int editorMovedSubactionIndex = -1;
@@ -6408,8 +6423,17 @@ int main(int argc, char** argv) {
     const bool editorSessionAddInterruptOk = editorSessionMoveSubactionOk &&
         pf::addEditorSessionInterrupt(editorSession, 0, editorTempInterrupt, -1, &editorInterruptIndex, &packageError) &&
         editorInterruptIndex >= 0;
+    editorTempInterrupt.condition = pf::InterruptCondition::AttackPressed;
+    editorTempInterrupt.enableFrame = 4;
+    editorTempInterrupt.disableFrame = 14;
+    const bool editorSessionSetInterruptOk = editorSessionAddInterruptOk &&
+        pf::setEditorSessionInterrupt(editorSession, 0, editorInterruptIndex, editorTempInterrupt, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].interrupts[static_cast<size_t>(editorInterruptIndex)].condition == pf::InterruptCondition::AttackPressed &&
+        editorSession.rootFighter()->states[0].interrupts[static_cast<size_t>(editorInterruptIndex)].enableFrame == 4 &&
+        editorSession.rootFighter()->states[0].interrupts[static_cast<size_t>(editorInterruptIndex)].disableFrame == 14;
     pf::FighterEditorStateTimeline editorTimeline;
-    const bool editorSessionTimelineOk = editorSessionAddInterruptOk &&
+    const bool editorSessionTimelineOk = editorSessionSetInterruptOk &&
         pf::buildEditorSessionStateTimeline(editorSession, 0, editorTimeline, &packageError) &&
         editorTimeline.animationLengthFrames == 72 &&
         editorTimeline.initialInterruptibleFrame == 5 &&
@@ -6419,10 +6443,10 @@ int main(int argc, char** argv) {
             return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox && marker.frame == 3;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
-            return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable && marker.frame == 3;
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable && marker.frame == 4;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
-            return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable && marker.frame == 12;
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable && marker.frame == 14;
         });
     const bool editorSessionRemoveInterruptOk = editorSessionTimelineOk &&
         pf::removeEditorSessionInterrupt(editorSession, 0, editorInterruptIndex, &packageError);
@@ -6434,8 +6458,12 @@ int main(int argc, char** argv) {
         pf::renameEditorSessionPackageVariable(editorSession, editorAddedVariable, "EditorVarRenamed", &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->packageVariables[static_cast<size_t>(editorAddedVariable)].name == "EditorVarRenamed";
+    const bool editorSessionSetVariableInitialOk = editorSessionRenameVariableOk &&
+        pf::setEditorSessionPackageVariableInitialValue(editorSession, editorAddedVariable, 17, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageVariables[static_cast<size_t>(editorAddedVariable)].initialValue == 17;
     int editorLogicScriptIndex = -1;
-    const bool editorSessionAddScriptOk = editorSessionRenameVariableOk &&
+    const bool editorSessionAddScriptOk = editorSessionSetVariableInitialOk &&
         pf::addEditorSessionPackageScript(editorSession, "EditorLogicScript", 64, &editorLogicScriptIndex, &packageError) &&
         editorLogicScriptIndex >= 0;
     pf::PackageScriptInstruction editorSetVarInstruction;
@@ -6696,8 +6724,11 @@ int main(int argc, char** argv) {
     const bool editorSessionRenameObjectVariableOk = editorSessionAddObjectVariableOk &&
         pf::renameEditorSessionObjectPackageVariable(editorSession, editorArticleObjectIndex, editorObjectVariable, "EditorObjectVarRenamed", &packageError) &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageVariables[static_cast<size_t>(editorObjectVariable)].name == "EditorObjectVarRenamed";
+    const bool editorSessionSetObjectVariableInitialOk = editorSessionRenameObjectVariableOk &&
+        pf::setEditorSessionObjectPackageVariableInitialValue(editorSession, editorArticleObjectIndex, editorObjectVariable, 19, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageVariables[static_cast<size_t>(editorObjectVariable)].initialValue == 19;
     int editorObjectLogicScript = -1;
-    const bool editorSessionAddObjectScriptOk = editorSessionRenameObjectVariableOk &&
+    const bool editorSessionAddObjectScriptOk = editorSessionSetObjectVariableInitialOk &&
         pf::addEditorSessionObjectPackageScript(editorSession, editorArticleObjectIndex, "EditorObjectLogicScript", 64, &editorObjectLogicScript, &packageError) &&
         editorObjectLogicScript >= 0;
     const bool editorSessionObjectScriptBudgetOk = editorSessionAddObjectScriptOk &&
@@ -8686,17 +8717,21 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_object_ok=" << editorSessionObjectOk
               << " fighter_editor_session_timing_ok=" << editorSessionTimingOk
               << " fighter_editor_session_invalid_timing_rejected=" << editorSessionInvalidTimingRejected
+              << " fighter_editor_session_state_animation_ok=" << editorSessionStateAnimationOk
               << " fighter_editor_session_collision_flags_ok=" << editorSessionCollisionFlagsOk
               << " fighter_editor_session_callbacks_ok=" << editorSessionCallbacksOk
               << " fighter_editor_session_add_remove_subaction_ok=" << editorSessionAddRemoveSubactionOk
               << " fighter_editor_session_add_hitbox_subaction_ok=" << editorSessionAddHitboxSubactionOk
+              << " fighter_editor_session_set_subaction_ok=" << editorSessionSetSubactionOk
               << " fighter_editor_session_move_pad_subaction_ok=" << editorSessionMovePadSubactionOk
               << " fighter_editor_session_move_subaction_ok=" << editorSessionMoveSubactionOk
               << " fighter_editor_session_add_interrupt_ok=" << editorSessionAddInterruptOk
+              << " fighter_editor_session_set_interrupt_ok=" << editorSessionSetInterruptOk
               << " fighter_editor_session_timeline_ok=" << editorSessionTimelineOk
               << " fighter_editor_session_remove_interrupt_ok=" << editorSessionRemoveInterruptOk
               << " fighter_editor_session_add_variable_ok=" << editorSessionAddVariableOk
               << " fighter_editor_session_rename_variable_ok=" << editorSessionRenameVariableOk
+              << " fighter_editor_session_set_variable_initial_ok=" << editorSessionSetVariableInitialOk
               << " fighter_editor_session_add_script_ok=" << editorSessionAddScriptOk
               << " fighter_editor_session_add_instruction_ok=" << editorSessionAddInstructionOk
               << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
@@ -8731,6 +8766,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_object_callbacks_ok=" << editorSessionObjectCallbacksOk
               << " fighter_editor_session_add_object_variable_ok=" << editorSessionAddObjectVariableOk
               << " fighter_editor_session_rename_object_variable_ok=" << editorSessionRenameObjectVariableOk
+              << " fighter_editor_session_set_object_variable_initial_ok=" << editorSessionSetObjectVariableInitialOk
               << " fighter_editor_session_add_object_script_ok=" << editorSessionAddObjectScriptOk
               << " fighter_editor_session_object_script_budget_ok=" << editorSessionObjectScriptBudgetOk
               << " fighter_editor_session_add_object_instruction_ok=" << editorSessionAddObjectInstructionOk

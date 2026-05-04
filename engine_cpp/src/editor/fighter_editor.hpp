@@ -71,6 +71,30 @@ enum class FighterEditorObjectEventCallbackSlot : uint8_t {
     Interaction,
 };
 
+enum class FighterEditorSelectionKind : uint8_t {
+    State,
+    Subaction,
+    Interrupt,
+    Script,
+    Instruction,
+    Variable,
+    Object,
+    Animation,
+    Viewport,
+};
+
+enum class FighterEditorStateGroupFilter : uint8_t {
+    All,
+    Ground,
+    Air,
+    Attack,
+    Special,
+    Throw,
+    Ledge,
+    Damage,
+    Other,
+};
+
 struct FighterEditorTimelineMarker {
     FighterEditorTimelineMarkerKind kind = FighterEditorTimelineMarkerKind::Subaction;
     int frame = 0;
@@ -96,6 +120,7 @@ struct FighterEditor {
     int selectedPackageVariable = 0;
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;
+    FighterEditorSelectionKind selectionKind = FighterEditorSelectionKind::State;
     int selectedObjectDef = 0;
     int selectedObjectState = 0;
     int selectedObjectHitbox = 0;
@@ -112,11 +137,19 @@ struct FighterEditor {
     int selectedAuthoredMeshVertex = 0;
     int selectedHurtbox = 0;
     bool showBoxes = true;
+    bool showModel = true;
+    bool showHitboxes = true;
+    bool showHurtboxes = true;
+    bool showEcb = true;
+    bool showLedgeBoxes = true;
+    bool showSkeleton = true;
     bool paused = false;
     bool sideView = false;
     bool testMode = false;
     bool animationPreviewActive = false;
     EditorWorkspace workspace = EditorWorkspace::Moveset;
+    FighterEditorStateGroupFilter stateGroupFilter = FighterEditorStateGroupFilter::All;
+    std::string stateSearch;
     std::string packagePath = "editor_last.pfpkg";
     std::string lastPackageName;
     size_t lastPackageBytes = 0;
@@ -293,6 +326,13 @@ bool setEditorSessionStateTiming(
     int defaultAnimationBlendFrames,
     int onAnimationFinishedBlendFrames,
     std::string* error = nullptr);
+bool setEditorSessionStateAnimation(
+    FighterEditorSession& session,
+    int stateIndex,
+    const std::string& animation,
+    int animationActionIndex,
+    int animationLengthFrames,
+    std::string* error = nullptr);
 bool setEditorSessionStateCollisionFlags(
     FighterEditorSession& session,
     int stateIndex,
@@ -317,6 +357,12 @@ bool addEditorSessionSubaction(
     int insertIndex = -1,
     int* addedSubactionIndex = nullptr,
     std::string* error = nullptr);
+bool setEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    int subactionIndex,
+    const Subaction& subaction,
+    std::string* error = nullptr);
 bool removeEditorSessionSubaction(
     FighterEditorSession& session,
     int stateIndex,
@@ -335,6 +381,12 @@ bool addEditorSessionInterrupt(
     const InterruptRule& interrupt,
     int insertIndex = -1,
     int* addedInterruptIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionInterrupt(
+    FighterEditorSession& session,
+    int stateIndex,
+    int interruptIndex,
+    const InterruptRule& interrupt,
     std::string* error = nullptr);
 bool removeEditorSessionInterrupt(
     FighterEditorSession& session,
@@ -355,6 +407,11 @@ bool renameEditorSessionPackageVariable(
     FighterEditorSession& session,
     int variableIndex,
     const std::string& newName,
+    std::string* error = nullptr);
+bool setEditorSessionPackageVariableInitialValue(
+    FighterEditorSession& session,
+    int variableIndex,
+    int32_t initialValue,
     std::string* error = nullptr);
 bool removeEditorSessionPackageVariable(
     FighterEditorSession& session,
@@ -691,6 +748,12 @@ bool renameEditorSessionObjectPackageVariable(
     int objectIndex,
     int variableIndex,
     const std::string& newName,
+    std::string* error = nullptr);
+bool setEditorSessionObjectPackageVariableInitialValue(
+    FighterEditorSession& session,
+    int objectIndex,
+    int variableIndex,
+    int32_t initialValue,
     std::string* error = nullptr);
 bool removeEditorSessionObjectPackageVariable(
     FighterEditorSession& session,

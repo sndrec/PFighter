@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cmath>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -952,16 +953,54 @@ static pf::BoneId nextEditorBone(pf::BoneId bone) {
     return static_cast<pf::BoneId>(next);
 }
 
+struct EditorToolActionRects {
+    Rectangle newState{};
+    Rectangle cloneState{};
+    Rectangle deleteState{};
+    Rectangle test{};
+    Rectangle play{};
+    Rectangle boxes{};
+    Rectangle side{};
+};
+
+static EditorToolActionRects editorToolActionRects() {
+    const float y = 48.0f;
+    const float gap = 8.0f;
+    const std::array<float, 7> widths{74.0f, 74.0f, 74.0f, 74.0f, 76.0f, 76.0f, 76.0f};
+    float totalWidth = 0.0f;
+    for (float width : widths) {
+        totalWidth += width;
+    }
+    totalWidth += gap * static_cast<float>(widths.size() - 1);
+    float x = std::max(8.0f, static_cast<float>(GetScreenWidth()) - totalWidth - 12.0f);
+
+    EditorToolActionRects rects;
+    rects.newState = {x, y, widths[0], 26.0f};
+    x += widths[0] + gap;
+    rects.cloneState = {x, y, widths[1], 26.0f};
+    x += widths[1] + gap;
+    rects.deleteState = {x, y, widths[2], 26.0f};
+    x += widths[2] + gap;
+    rects.test = {x, y, widths[3], 26.0f};
+    x += widths[3] + gap;
+    rects.play = {x, y, widths[4], 26.0f};
+    x += widths[4] + gap;
+    rects.boxes = {x, y, widths[5], 26.0f};
+    x += widths[5] + gap;
+    rects.side = {x, y, widths[6], 26.0f};
+    return rects;
+}
+
 static Rectangle editorTestButtonRect() {
-    return {444.0f, 22.0f, 74.0f, 28.0f};
+    return editorToolActionRects().test;
 }
 
 static Rectangle editorNewStateButtonRect() {
-    return {318.0f, 22.0f, 54.0f, 28.0f};
+    return editorToolActionRects().newState;
 }
 
 static Rectangle editorDeleteStateButtonRect() {
-    return {380.0f, 22.0f, 56.0f, 28.0f};
+    return editorToolActionRects().deleteState;
 }
 
 static void duplicateEditorState(pf::World& world, pf::FighterEditor& editor);
@@ -2738,7 +2777,8 @@ static int visibleListStart(int selected, int itemCount, int visibleRows) {
 static void drawPackageScriptBlockGraph(
     const pf::PackageScript& script,
     pf::FighterEditor& editor,
-    Rectangle rect)
+    Rectangle rect,
+    pf::FighterEditorSession* session = nullptr)
 {
     DrawRectangleRec(rect, Fade(LIGHTGRAY, 0.52f));
     DrawRectangleLinesEx(rect, 1.0f, Fade(DARKGRAY, 0.8f));
@@ -2771,6 +2811,10 @@ static void drawPackageScriptBlockGraph(
         }
         if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             editor.selectedPackageInstruction = instructionIndex;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+            if (session) {
+                session->selectedPackageInstruction = instructionIndex;
+            }
         }
     }
 }
@@ -4069,12 +4113,14 @@ static void drawEditorSelectedAuthoredJoint(const pf::World& world, const pf::Fi
     DrawSphereWires(jointPosition, 0.16f, 12, 8, BLACK);
 }
 
-static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, bool boxes) {
+static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, const pf::FighterEditor& editor) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
     const bool hasAnimationPose = !fighter.hsdJointWorldPositions.empty() && animationSkeletonForDrawing(def) != nullptr;
     const bool hasImportedPose = def.hsdAsset && hasAnimationPose;
-    if (fighter.fighterInvisible) {
+    if (!editor.showModel) {
+        // Keep debug volumes visible when the mesh/model layer is hidden.
+    } else if (fighter.fighterInvisible) {
         // ftDrawCommon skips fighter model display when x221E_b5 is set.
     } else if (hasImportedPose) {
         if (!def.hsdAsset->mesh.batches.empty()) {
@@ -4099,7 +4145,8 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         }
     }
 
-    if (!def.hasHsdAsset && (!hasAnimationPose || boxes)) {
+    const bool drawDebug = editor.showBoxes;
+    if (!def.hasHsdAsset && (!hasAnimationPose || (drawDebug && editor.showSkeleton))) {
         for (int i = 0; i < pf::kBoneCount; ++i) {
             pf::Vec3 bone = fighter.bones[static_cast<size_t>(i)].position;
             bone.x += fighter.position.x;
@@ -4121,30 +4168,38 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         DrawSphereWires(toRay(center), pf::fxToFloat(shieldRadius(def, fighter)), 18, 10, VIOLET);
     }
 
-    if (!boxes) {
+    if (!drawDebug) {
         return;
     }
 
-    drawEcb(fighter, YELLOW);
-    drawImportedEcbSources(def, fighter);
-    if (!def.hasHsdAsset) {
+    if (editor.showEcb) {
+        drawEcb(fighter, YELLOW);
+        drawImportedEcbSources(def, fighter);
+    }
+    if (editor.showHurtboxes && !def.hasHsdAsset) {
         for (const pf::HurtboxDefinition& hurt : def.hurtboxes) {
             pf::Vec3 base = fighter.bones[static_cast<size_t>(hurt.bone)].position;
             base.x += fighter.position.x;
             base.y += fighter.position.y;
-            drawCapsule(base + hurt.startOffset, base + hurt.endOffset, hurt.radius, BLUE);
+            drawCapsule(base + hurt.startOffset, base + hurt.endOffset, hurt.radius, GREEN);
         }
     }
-    for (const pf::Capsule& hurt : fighter.hsdHurtboxCapsules) {
-        drawCapsule(hurt.a, hurt.b, hurt.radius, GREEN);
+    if (editor.showHurtboxes) {
+        for (const pf::Capsule& hurt : fighter.hsdHurtboxCapsules) {
+            drawCapsule(hurt.a, hurt.b, hurt.radius, GREEN);
+        }
     }
-    drawAnimationSkeleton(def, fighter, DARKGREEN);
-    for (const pf::ActiveHitbox& hit : fighter.activeHitboxes) {
-        drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+    if (editor.showSkeleton) {
+        drawAnimationSkeleton(def, fighter, DARKGREEN);
+    }
+    if (editor.showHitboxes) {
+        for (const pf::ActiveHitbox& hit : fighter.activeHitboxes) {
+            drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+        }
     }
 }
 
-static void drawGameObjects(const pf::World& world, bool boxes) {
+static void drawGameObjects(const pf::World& world, const pf::FighterEditor& editor) {
     for (const pf::GameObjectRuntime& object : world.objects) {
         if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
             continue;
@@ -4153,25 +4208,31 @@ static void drawGameObjects(const pf::World& world, bool boxes) {
         const Color color = def.kind == pf::GameObjectKind::Projectile ? MAROON : BROWN;
         DrawSphere(toRayGround(object.position), def.kind == pf::GameObjectKind::Projectile ? 0.14f : 0.24f, color);
         DrawSphereWires(toRayGround(object.position), def.kind == pf::GameObjectKind::Projectile ? 0.16f : 0.27f, 10, 6, BLACK);
-        if (!boxes) {
+        if (!editor.showBoxes) {
             continue;
         }
-        for (const pf::ActiveHitbox& hit : object.activeHitboxes) {
-            drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+        if (editor.showHitboxes) {
+            for (const pf::ActiveHitbox& hit : object.activeHitboxes) {
+                drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+            }
         }
-        for (const pf::GameObjectHurtboxDefinition& hurtbox : def.hurtboxes) {
-            drawCapsule(
-                {object.position.x + hurtbox.startOffset.x, object.position.y + hurtbox.startOffset.y, hurtbox.startOffset.z},
-                {object.position.x + hurtbox.endOffset.x, object.position.y + hurtbox.endOffset.y, hurtbox.endOffset.z},
-                hurtbox.radius,
-                BLUE);
+        if (editor.showHurtboxes) {
+            for (const pf::GameObjectHurtboxDefinition& hurtbox : def.hurtboxes) {
+                drawCapsule(
+                    {object.position.x + hurtbox.startOffset.x, object.position.y + hurtbox.startOffset.y, hurtbox.startOffset.z},
+                    {object.position.x + hurtbox.endOffset.x, object.position.y + hurtbox.endOffset.y, hurtbox.endOffset.z},
+                    hurtbox.radius,
+                    GREEN);
+            }
         }
-        for (const pf::GameObjectTouchboxDefinition& touchbox : def.touchboxes) {
-            drawCapsule(
-                {object.position.x + touchbox.startOffset.x, object.position.y + touchbox.startOffset.y, touchbox.startOffset.z},
-                {object.position.x + touchbox.endOffset.x, object.position.y + touchbox.endOffset.y, touchbox.endOffset.z},
-                touchbox.radius,
-                SKYBLUE);
+        if (editor.showHurtboxes) {
+            for (const pf::GameObjectTouchboxDefinition& touchbox : def.touchboxes) {
+                drawCapsule(
+                    {object.position.x + touchbox.startOffset.x, object.position.y + touchbox.startOffset.y, touchbox.startOffset.z},
+                    {object.position.x + touchbox.endOffset.x, object.position.y + touchbox.endOffset.y, touchbox.endOffset.z},
+                    touchbox.radius,
+                    SKYBLUE);
+            }
         }
     }
 }
@@ -7444,6 +7505,3214 @@ static std::vector<int> editorSubactionFirstFrames(const std::vector<pf::Subacti
     return frames;
 }
 
+struct EditorWorkstationLayout {
+    Rectangle toolStrip{};
+    Rectangle leftBrowser{};
+    Rectangle viewport{};
+    Rectangle timeline{};
+    Rectangle rightGraph{};
+    Rectangle rightInspector{};
+    Rectangle diagnostics{};
+};
+
+static std::string clippedText(std::string text, int fontSize, float maxWidth) {
+    while (!text.empty() && MeasureText(text.c_str(), fontSize) > static_cast<int>(maxWidth)) {
+        text.pop_back();
+    }
+    return text;
+}
+
+static std::string lowerAscii(std::string text) {
+    for (char& c : text) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return text;
+}
+
+static bool containsCaseInsensitive(const std::string& haystack, const std::string& needle) {
+    if (needle.empty()) {
+        return true;
+    }
+    return lowerAscii(haystack).find(lowerAscii(needle)) != std::string::npos;
+}
+
+static const char* editorSelectionKindName(pf::FighterEditorSelectionKind kind) {
+    switch (kind) {
+    case pf::FighterEditorSelectionKind::State: return "State";
+    case pf::FighterEditorSelectionKind::Subaction: return "Timeline subaction";
+    case pf::FighterEditorSelectionKind::Interrupt: return "Interrupt window";
+    case pf::FighterEditorSelectionKind::Script: return "Script";
+    case pf::FighterEditorSelectionKind::Instruction: return "Graph instruction";
+    case pf::FighterEditorSelectionKind::Variable: return "Package variable";
+    case pf::FighterEditorSelectionKind::Object: return "Object/article";
+    case pf::FighterEditorSelectionKind::Animation: return "Animation";
+    case pf::FighterEditorSelectionKind::Viewport: return "Viewport";
+    }
+    return "State";
+}
+
+static const char* editorStateGroupFilterName(pf::FighterEditorStateGroupFilter filter) {
+    switch (filter) {
+    case pf::FighterEditorStateGroupFilter::All: return "All";
+    case pf::FighterEditorStateGroupFilter::Ground: return "Ground";
+    case pf::FighterEditorStateGroupFilter::Air: return "Air";
+    case pf::FighterEditorStateGroupFilter::Attack: return "Attack";
+    case pf::FighterEditorStateGroupFilter::Special: return "Special";
+    case pf::FighterEditorStateGroupFilter::Throw: return "Throw";
+    case pf::FighterEditorStateGroupFilter::Ledge: return "Ledge";
+    case pf::FighterEditorStateGroupFilter::Damage: return "Damage";
+    case pf::FighterEditorStateGroupFilter::Other: return "Other";
+    }
+    return "All";
+}
+
+static bool stateNameContainsAny(const std::string& lowerName, std::initializer_list<const char*> needles) {
+    for (const char* needle : needles) {
+        if (lowerName.find(needle) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static pf::FighterEditorStateGroupFilter classifyEditorStateGroup(const pf::FighterState& state) {
+    const std::string name = lowerAscii(state.name + " " + state.animation);
+    if (stateNameContainsAny(name, {"damage", "down", "bury", "ice", "sleep", "capture", "rebound"})) {
+        return pf::FighterEditorStateGroupFilter::Damage;
+    }
+    if (stateNameContainsAny(name, {"cliff", "ledge"})) {
+        return pf::FighterEditorStateGroupFilter::Ledge;
+    }
+    if (stateNameContainsAny(name, {"throw", "catch", "capture"})) {
+        return pf::FighterEditorStateGroupFilter::Throw;
+    }
+    if (stateNameContainsAny(name, {"special", "appeal"})) {
+        return pf::FighterEditorStateGroupFilter::Special;
+    }
+    if (stateNameContainsAny(name, {"attack", "smash", "guardattack", "sword", "jab"})) {
+        return pf::FighterEditorStateGroupFilter::Attack;
+    }
+    if (stateNameContainsAny(name, {"fall", "jump", "air", "escapeair", "pass"})) {
+        return pf::FighterEditorStateGroupFilter::Air;
+    }
+    if (stateNameContainsAny(name, {"wait", "walk", "dash", "run", "turn", "squat", "landing", "guard", "escape", "ottotto", "missfoot"})) {
+        return pf::FighterEditorStateGroupFilter::Ground;
+    }
+    return pf::FighterEditorStateGroupFilter::Other;
+}
+
+static EditorWorkstationLayout editorWorkstationLayout() {
+    const float screenW = static_cast<float>(GetScreenWidth());
+    const float screenH = static_cast<float>(GetScreenHeight());
+    const float toolY = 44.0f;
+    const float toolH = 38.0f;
+    const float diagnosticsH = std::clamp(screenH * 0.16f, 116.0f, 168.0f);
+    const float timelineH = std::clamp(screenH * 0.22f, 150.0f, 230.0f);
+    float leftW = std::clamp(screenW * 0.18f, 210.0f, 320.0f);
+    float rightW = std::clamp(screenW * 0.28f, 320.0f, 500.0f);
+    if (leftW + rightW + 280.0f > screenW) {
+        rightW = std::max(260.0f, screenW - leftW - 280.0f);
+    }
+    if (leftW + rightW + 280.0f > screenW) {
+        leftW = std::max(180.0f, screenW - rightW - 280.0f);
+    }
+    const float contentY = toolY + toolH;
+    const float contentBottom = screenH - diagnosticsH;
+    const float centerW = std::max(240.0f, screenW - leftW - rightW);
+    const float centerH = std::max(160.0f, contentBottom - contentY - timelineH);
+    const float rightH = std::max(160.0f, contentBottom - contentY);
+    const float graphH = std::max(150.0f, rightH * 0.48f);
+
+    EditorWorkstationLayout out;
+    out.toolStrip = {0.0f, toolY, screenW, toolH};
+    out.leftBrowser = {0.0f, contentY, leftW, std::max(160.0f, contentBottom - contentY)};
+    out.viewport = {leftW, contentY, centerW, centerH};
+    out.timeline = {leftW, contentY + centerH, centerW, timelineH};
+    out.rightGraph = {leftW + centerW, contentY, rightW, graphH};
+    out.rightInspector = {leftW + centerW, contentY + graphH, rightW, std::max(120.0f, rightH - graphH)};
+    out.diagnostics = {0.0f, screenH - diagnosticsH, screenW, diagnosticsH};
+    return out;
+}
+
+static void drawPanelChrome(Rectangle rect, const std::string& title) {
+    DrawRectangleRec(rect, {18, 23, 28, 226});
+    DrawRectangleLinesEx(rect, 1.0f, {64, 75, 86, 255});
+    DrawRectangleRec({rect.x, rect.y, rect.width, 24.0f}, {28, 35, 42, 242});
+    DrawText(title.c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 6.0f), 13, RAYWHITE);
+}
+
+static void drawWorkstationRow(Rectangle rect, const std::string& label, bool active, Color accent = BLUE) {
+    const Vector2 mouse = GetMousePosition();
+    const bool hovered = CheckCollisionPointRec(mouse, rect);
+    DrawRectangleRec(rect, active ? Fade(accent, 0.46f) : (hovered ? Fade(RAYWHITE, 0.13f) : Fade(RAYWHITE, 0.05f)));
+    DrawRectangleLinesEx(rect, 1.0f, active ? accent : Fade(DARKGRAY, 0.65f));
+    DrawText(clippedText(label, 12, rect.width - 10.0f).c_str(), static_cast<int>(rect.x + 6.0f), static_cast<int>(rect.y + 7.0f), 12, RAYWHITE);
+}
+
+static void scrubEditorSelectedState(pf::World& world, pf::FighterEditor& editor, int frame) {
+    if (world.fighters.empty()) {
+        return;
+    }
+    editor.clampToWorld(world);
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (def.states.empty()) {
+        return;
+    }
+    editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+    pf::changeFighterState(world, fighter, state.name, 0, pf::kDisableAnimationBlendFrames);
+    fighter.internalFrame = std::max(0, frame);
+    fighter.lastStateChangeFrame = world.frame - fighter.internalFrame;
+    fighter.animationFrame = pf::fx(fighter.internalFrame);
+    if (state.animationActionIndex >= 0) {
+        pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), state.animationActionIndex, fighter.animationFrame);
+    }
+    pf::calculateEcb(def, fighter, true);
+    editor.animationPreviewActive = true;
+    editor.paused = true;
+    editor.status = "Editor: scrubbed " + state.name + " to frame " + std::to_string(fighter.internalFrame);
+}
+
+static void prepareEditorEditPreview(pf::World& world, pf::FighterEditor& editor, bool advanceFrame) {
+    if (editor.testMode || world.fighters.empty()) {
+        return;
+    }
+    editor.clampToWorld(world);
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (def.states.empty()) {
+        return;
+    }
+
+    editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+    const bool stateChanged = fighter.state < 0 ||
+        fighter.state >= static_cast<int>(def.states.size()) ||
+        def.states[static_cast<size_t>(fighter.state)].name != state.name;
+    const int frameCount = std::max(1, state.animationLengthFrames);
+    int previewFrame = stateChanged ? 0 : std::clamp(fighter.internalFrame, 0, std::max(0, frameCount - 1));
+    if (advanceFrame && !stateChanged) {
+        if (previewFrame + 1 >= frameCount) {
+            previewFrame = state.loopAnimation ? 0 : frameCount - 1;
+            if (!state.loopAnimation) {
+                editor.paused = true;
+            }
+        } else {
+            ++previewFrame;
+        }
+    }
+    if (stateChanged) {
+        pf::changeFighterState(world, fighter, state.name, 0, pf::kDisableAnimationBlendFrames);
+    }
+
+    fighter.position = {};
+    fighter.previousPosition = {};
+    fighter.facing = 1;
+    fighter.hsdPoseFacing = 1;
+    fighter.fighterVelocity = {};
+    fighter.knockbackVelocity = {};
+    fighter.groundVelocity = {};
+    fighter.groundKnockbackVelocity = {};
+    fighter.internalFrame = previewFrame;
+    fighter.lastStateChangeFrame = world.frame - fighter.internalFrame;
+    fighter.animationFrame = pf::fx(fighter.internalFrame);
+    fighter.lastActionFrameExecuted = -1;
+    if (state.animationActionIndex >= 0) {
+        pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), state.animationActionIndex, fighter.animationFrame);
+    } else {
+        pf::calculateEcb(def, fighter, true);
+    }
+}
+
+static void drawWorldScene3D(
+    const pf::World& world,
+    const pf::FighterEditor& editor,
+    bool editorEditMode)
+{
+    DrawGrid(40, 10.0f);
+    if (!editorEditMode) {
+        for (const pf::StageSegment& segment : world.stage.segments) {
+            DrawLine3D(toRayGround(segment.start), toRayGround(segment.end), segment.type == pf::SegmentType::Solid ? BLACK : DARKGREEN);
+        }
+    }
+    if (!editorEditMode && editor.showBoxes && editor.showLedgeBoxes && !world.fighters.empty()) {
+        for (const pf::StageLedge& ledge : world.stage.ledges) {
+            const Vector3 ledgePos = toRayGround(ledge.position);
+            DrawSphere(ledgePos, 0.12f, PURPLE);
+            DrawLine3D(ledgePos, {ledgePos.x + 0.45f * static_cast<float>(ledge.direction), ledgePos.y, ledgePos.z}, PURPLE);
+            drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[0].fighterDef)], world.fighters[0], ledge, Fade(ORANGE, 0.45f));
+            if (world.fighters.size() > 1) {
+                drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)], world.fighters[1], ledge, Fade(SKYBLUE, 0.45f));
+            }
+        }
+    }
+    if (editorEditMode) {
+        if (editor.selectedFighter >= 0 && editor.selectedFighter < static_cast<int>(world.fighters.size())) {
+            drawFighter(world, world.fighters[static_cast<size_t>(editor.selectedFighter)], ORANGE, editor);
+        }
+    } else {
+        if (!world.fighters.empty()) {
+            drawFighter(world, world.fighters[0], ORANGE, editor);
+        }
+        if (world.fighters.size() > 1) {
+            drawFighter(world, world.fighters[1], SKYBLUE, editor);
+        }
+        drawGameObjects(world, editor);
+    }
+    if (editorEditMode) {
+        drawEditorSelectedAuthoredMeshVertex(world, editor);
+        drawEditorSelectedAuthoredJoint(world, editor);
+    }
+}
+
+static void syncEditorSelectionFromSession(pf::FighterEditor& editor, const pf::FighterEditorSession& session) {
+    editor.selectedState = session.selectedState;
+    editor.selectedSubaction = session.selectedSubaction;
+    editor.selectedInterrupt = session.selectedInterrupt;
+    editor.selectedPackageScript = session.selectedPackageScript;
+    editor.selectedPackageInstruction = session.selectedPackageInstruction;
+}
+
+static bool ensureEditorSessionFromWorld(
+    const pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    bool& sessionActive,
+    int rootFighterDef,
+    std::string* error = nullptr)
+{
+    if (sessionActive && session.rootFighter()) {
+        syncEditorSelectionFromSession(editor, session);
+        return true;
+    }
+    if (!pf::beginFighterEditorSessionFromWorld(world, rootFighterDef, session, error)) {
+        sessionActive = false;
+        return false;
+    }
+    session.selectedState = editor.selectedState;
+    session.selectedSubaction = editor.selectedSubaction;
+    session.selectedInterrupt = editor.selectedInterrupt;
+    session.selectedPackageScript = editor.selectedPackageScript;
+    session.selectedPackageInstruction = editor.selectedPackageInstruction;
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+    sessionActive = true;
+    return true;
+}
+
+static bool syncEditorSessionToWorld(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    std::string* error = nullptr)
+{
+    const bool wasDirty = session.dirty;
+    pf::FighterEditorPackageSnapshot snapshot;
+    if (!pf::exportFighterEditorSessionPackage(session, snapshot, error)) {
+        session.dirty = wasDirty;
+        return false;
+    }
+
+    int installedRoot = -1;
+    pf::FighterPackageDescriptor descriptor;
+    if (!pf::installFighterPackageBytes(world, snapshot.bytes, &installedRoot, &descriptor, error)) {
+        session.dirty = wasDirty;
+        return false;
+    }
+    if (installedRoot < 0) {
+        if (error) {
+            *error = "editor session installed without a root fighter";
+        }
+        session.dirty = wasDirty;
+        return false;
+    }
+
+    selectedFighterDef = installedRoot;
+    editor.selectedFighter = std::clamp(editor.selectedFighter, 0, std::max(0, static_cast<int>(world.fighters.size()) - 1));
+    if (!world.fighters.empty()) {
+        pf::FighterRuntime& preview = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+        const pf::Vec2 position = preview.position;
+        const int facing = preview.facing;
+        pf::resetTrainingFighter(world, static_cast<size_t>(editor.selectedFighter), installedRoot, position, facing);
+    }
+    updateEditorPackageSummary(editor, descriptor);
+    session.lastDescriptor = descriptor;
+    session.lastBytes = snapshot.bytes;
+    session.lastMessage = "OK";
+    session.dirty = wasDirty;
+    syncEditorSelectionFromSession(editor, session);
+    return true;
+}
+
+static bool syncEditorSessionMutation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    const std::string& successMessage)
+{
+    std::string error;
+    if (!syncEditorSessionToWorld(world, editor, session, selectedFighterDef, &error)) {
+        updateEditorPackageFailure(editor, error);
+        editor.status = "Editor session sync failed: " + error;
+        return false;
+    }
+    editor.status = successMessage;
+    return true;
+}
+
+static void drawEditorToolStrip(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    Rectangle rect)
+{
+    DrawRectangleRec(rect, {15, 19, 23, 246});
+    DrawLine(0, static_cast<int>(rect.y + rect.height), GetScreenWidth(), static_cast<int>(rect.y + rect.height), {55, 66, 76, 255});
+    DrawText("PFighter Workstation", 12, static_cast<int>(rect.y + 11.0f), 15, RAYWHITE);
+    const EditorToolActionRects actions = editorToolActionRects();
+    const std::array<pf::EditorWorkspace, 5> workspaces{
+        pf::EditorWorkspace::Moveset,
+        pf::EditorWorkspace::Logic,
+        pf::EditorWorkspace::Assets,
+        pf::EditorWorkspace::Animation,
+        pf::EditorWorkspace::TestLab,
+    };
+    const float tabStart = 156.0f;
+    const float tabGap = 6.0f;
+    const float tabAvailable = actions.newState.x - tabStart - 12.0f;
+    if (tabAvailable >= 264.0f) {
+        const float tabWidth = std::clamp((tabAvailable - tabGap * 4.0f) / 5.0f, 48.0f, 90.0f);
+        float x = tabStart;
+        for (pf::EditorWorkspace workspace : workspaces) {
+            const Rectangle tab{x, rect.y + 6.0f, tabWidth, 26.0f};
+            if (uiButton(tab, workspaceName(workspace), editor.workspace == workspace)) {
+                editor.workspace = workspace;
+                editor.status = std::string("Editor workspace: ") + workspaceName(workspace);
+            }
+            x += tabWidth + tabGap;
+        }
+    } else {
+        DrawText(workspaceName(editor.workspace), static_cast<int>(tabStart), static_cast<int>(rect.y + 11.0f), 13, Fade(RAYWHITE, 0.76f));
+    }
+    if (uiButton(actions.newState, "New")) {
+        std::string error;
+        int created = -1;
+        if (pf::createEditorSessionState(session, {}, session.selectedState, &created, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: created session state " + session.rootFighter()->states[static_cast<size_t>(created)].name);
+        } else {
+            editor.status = "Editor: create state failed: " + error;
+        }
+    }
+    if (uiButton(actions.cloneState, "Clone")) {
+        std::string error;
+        int created = -1;
+        if (pf::duplicateEditorSessionState(session, session.selectedState, &created, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned session state " + session.rootFighter()->states[static_cast<size_t>(created)].name);
+        } else {
+            editor.status = "Editor: clone state failed: " + error;
+        }
+    }
+    if (uiButton(actions.deleteState, "Delete")) {
+        std::string error;
+        const std::string removed = session.rootFighter() && session.selectedState >= 0 && session.selectedState < static_cast<int>(session.rootFighter()->states.size())
+            ? session.rootFighter()->states[static_cast<size_t>(session.selectedState)].name
+            : std::string{"state"};
+        if (pf::removeEditorSessionState(session, session.selectedState, {}, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed session state " + removed);
+        } else {
+            editor.status = "Editor: remove state failed: " + error;
+        }
+    }
+
+    uiButton(actions.test, editor.testMode ? "Return" : "Test", editor.testMode);
+    if (uiButton(actions.play, editor.paused ? "Play" : "Pause", !editor.paused)) {
+        editor.paused = !editor.paused;
+    }
+    if (uiButton(actions.boxes, "Boxes", editor.showBoxes)) {
+        editor.showBoxes = !editor.showBoxes;
+    }
+    if (uiButton(actions.side, "Side", editor.sideView)) {
+        editor.sideView = !editor.sideView;
+    }
+}
+
+static void drawEditorViewportOverlayControls(pf::FighterEditor& editor, Rectangle rect) {
+    const float buttonW = 58.0f;
+    const float buttonH = 22.0f;
+    const float gap = 6.0f;
+    float x = rect.x + 12.0f;
+    float y = rect.y + 50.0f;
+    const float right = rect.x + rect.width - 12.0f;
+    auto toggleButton = [&](const char* label, bool& value) {
+        if (x + buttonW > right) {
+            x = rect.x + 12.0f;
+            y += buttonH + gap;
+        }
+        if (uiButton({x, y, buttonW, buttonH}, label, value)) {
+            value = !value;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Viewport;
+        }
+        x += buttonW + gap;
+    };
+
+    toggleButton("Debug", editor.showBoxes);
+    toggleButton("Model", editor.showModel);
+    toggleButton("Hit", editor.showHitboxes);
+    toggleButton("Hurt", editor.showHurtboxes);
+    toggleButton("ECB", editor.showEcb);
+    toggleButton("Ledge", editor.showLedgeBoxes);
+    toggleButton("Bones", editor.showSkeleton);
+}
+
+static void drawEditorStateBrowserWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    const pf::FighterDefinition& def,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "States");
+    DrawText(clippedText(def.name, 14, rect.width - 22.0f).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 14, RAYWHITE);
+    std::string committedSearch;
+    if (uiTextField({rect.x + 10.0f, rect.y + 58.0f, rect.width - 20.0f, 24.0f}, "state-search", editor, editor.stateSearch, committedSearch, 48)) {
+        editor.stateSearch = committedSearch;
+    }
+    if (editor.stateSearch.empty()) {
+        DrawText("Search states", static_cast<int>(rect.x + 18.0f), static_cast<int>(rect.y + 65.0f), 12, Fade(RAYWHITE, 0.55f));
+    }
+    const std::array<pf::FighterEditorStateGroupFilter, 9> groupFilters{
+        pf::FighterEditorStateGroupFilter::All,
+        pf::FighterEditorStateGroupFilter::Ground,
+        pf::FighterEditorStateGroupFilter::Air,
+        pf::FighterEditorStateGroupFilter::Attack,
+        pf::FighterEditorStateGroupFilter::Special,
+        pf::FighterEditorStateGroupFilter::Throw,
+        pf::FighterEditorStateGroupFilter::Ledge,
+        pf::FighterEditorStateGroupFilter::Damage,
+        pf::FighterEditorStateGroupFilter::Other,
+    };
+    const auto currentGroupIt = std::find(groupFilters.begin(), groupFilters.end(), editor.stateGroupFilter);
+    const int currentGroupIndex = currentGroupIt == groupFilters.end()
+        ? 0
+        : static_cast<int>(std::distance(groupFilters.begin(), currentGroupIt));
+    if (uiButton({rect.x + 10.0f, rect.y + 88.0f, 26.0f, 22.0f}, "<")) {
+        editor.stateGroupFilter = groupFilters[static_cast<size_t>(wrappedIndex(currentGroupIndex - 1, static_cast<int>(groupFilters.size())))];
+    }
+    if (uiButton({rect.x + rect.width - 36.0f, rect.y + 88.0f, 26.0f, 22.0f}, ">")) {
+        editor.stateGroupFilter = groupFilters[static_cast<size_t>(wrappedIndex(currentGroupIndex + 1, static_cast<int>(groupFilters.size())))];
+    }
+    DrawText(("Group: " + std::string(editorStateGroupFilterName(editor.stateGroupFilter))).c_str(),
+        static_cast<int>(rect.x + 44.0f),
+        static_cast<int>(rect.y + 94.0f),
+        11,
+        Fade(RAYWHITE, 0.68f));
+
+    std::vector<int> visibleStates;
+    for (int i = 0; i < static_cast<int>(def.states.size()); ++i) {
+        const pf::FighterState& state = def.states[static_cast<size_t>(i)];
+        const std::string searchText = state.name + " " + state.animation;
+        const pf::FighterEditorStateGroupFilter group = classifyEditorStateGroup(state);
+        if (containsCaseInsensitive(searchText, editor.stateSearch) &&
+            (editor.stateGroupFilter == pf::FighterEditorStateGroupFilter::All || editor.stateGroupFilter == group))
+        {
+            visibleStates.push_back(i);
+        }
+    }
+
+    const int rowCount = std::max(1, static_cast<int>((rect.height - 152.0f) / 43.0f));
+    int selectedVisible = 0;
+    for (int i = 0; i < static_cast<int>(visibleStates.size()); ++i) {
+        if (visibleStates[static_cast<size_t>(i)] == editor.selectedState) {
+            selectedVisible = i;
+            break;
+        }
+    }
+    const int start = visibleListStart(selectedVisible, static_cast<int>(visibleStates.size()), rowCount);
+    for (int row = 0; row < std::min(rowCount, static_cast<int>(visibleStates.size())); ++row) {
+        const int stateIndex = visibleStates[static_cast<size_t>(start + row)];
+        const pf::FighterState& state = def.states[static_cast<size_t>(stateIndex)];
+        const Rectangle rowRect{rect.x + 10.0f, rect.y + 118.0f + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
+        const bool active = stateIndex == editor.selectedState;
+        drawWorkstationRow(rowRect, std::to_string(stateIndex) + "  " + state.name, active, SKYBLUE);
+        DrawText((std::string(editorStateGroupFilterName(classifyEditorStateGroup(state))) + "  " +
+                  std::to_string(state.animationLengthFrames) + "f  " + state.animation).c_str(),
+            static_cast<int>(rowRect.x + 6.0f),
+            static_cast<int>(rowRect.y + 21.0f),
+            10,
+            Fade(RAYWHITE, 0.68f));
+        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            editor.selectedState = stateIndex;
+            editor.selectedSubaction = 0;
+            editor.selectedInterrupt = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+            session.selectedState = stateIndex;
+            session.selectedSubaction = 0;
+            session.selectedInterrupt = 0;
+            session.clamp();
+            previewEditorSelectedState(world, editor, def);
+        }
+    }
+    if (visibleStates.empty()) {
+        DrawText("No matching states", static_cast<int>(rect.x + 12.0f), static_cast<int>(rect.y + 100.0f), 13, Fade(RAYWHITE, 0.65f));
+    }
+    DrawText((std::to_string(visibleStates.size()) + " shown / " + std::to_string(def.states.size()) + " total").c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + rect.height - 24.0f),
+        11,
+        Fade(RAYWHITE, 0.62f));
+}
+
+static void drawEditorTimelineWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    const pf::FighterRuntime& fighter,
+    const pf::FighterDefinition& def,
+    const pf::FighterState& state,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "Timeline");
+    const pf::UnfoldedAction actionFrames = pf::unfoldAction(state.action);
+    const std::vector<int> subactionFrames = editorSubactionFirstFrames(state.action);
+    const int frameCount = std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
+    const int liveFrame = pf::currentState(world, fighter).name == state.name ? pf::frameInState(fighter) : 0;
+    const Rectangle ruler{rect.x + 136.0f, rect.y + 38.0f, rect.width - 156.0f, 24.0f};
+    DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 35.0f), 13, RAYWHITE);
+    DrawText(("Frame " + std::to_string(std::clamp(liveFrame, 0, frameCount)) + " / " + std::to_string(frameCount)).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + 54.0f),
+        11,
+        Fade(RAYWHITE, 0.68f));
+    auto addSubaction = [&](pf::Subaction subaction, const std::string& label) -> bool {
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionSubaction(session, session.selectedState, subaction, -1, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " subaction");
+            return true;
+        }
+        editor.status = "Editor: add subaction failed: " + error;
+        return false;
+    };
+    const float actionX = std::max(rect.x + 236.0f, rect.x + rect.width - 398.0f);
+    const float actionY = rect.y + 34.0f;
+        if (uiButton({actionX, actionY, 50.0f, 22.0f}, "+Sync")) {
+            pf::Subaction subaction;
+            subaction.type = pf::SubactionType::SyncTimer;
+            subaction.frames = 5;
+            if (addSubaction(subaction, "sync timer")) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                return;
+            }
+        }
+    if (uiButton({actionX + 56.0f, actionY, 50.0f, 22.0f}, "+Hit")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::CreateHitbox;
+        subaction.frames = 3;
+        subaction.hitbox.hitboxId = static_cast<int>(state.action.size());
+        subaction.hitbox.damage = pf::fxFromFloat(3.0f);
+        subaction.hitbox.radius = pf::fxFromFloat(0.45f);
+        subaction.hitbox.offset = {pf::fxFromFloat(0.85f), pf::fxFromFloat(1.2f), 0};
+        subaction.hitbox.knockbackAngleDegrees = pf::fx(45);
+        subaction.hitbox.knockbackBase = pf::fx(20);
+        subaction.hitbox.knockbackGrowth = pf::fx(60);
+        if (addSubaction(subaction, "hitbox")) {
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+            return;
+        }
+    }
+    if (uiButton({actionX + 112.0f, actionY, 54.0f, 22.0f}, "+Clear")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::ClearHitboxes;
+        subaction.frames = 1;
+        if (addSubaction(subaction, "clear hitboxes")) {
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+            return;
+        }
+    }
+    if (uiButton({actionX + 172.0f, actionY, 48.0f, 22.0f}, "+Call")) {
+        if (def.packageScripts.empty()) {
+            editor.status = "Editor: add a package script before adding script subactions";
+        } else {
+            pf::Subaction subaction;
+            subaction.type = pf::SubactionType::CallScript;
+            subaction.frames = 1;
+            subaction.objectName = packageScriptTargetName(def.packageScripts, editor.selectedPackageScript);
+            if (addSubaction(subaction, "script call")) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                return;
+            }
+        }
+    }
+    if (uiButton({actionX + 226.0f, actionY, 48.0f, 22.0f}, "-Sub")) {
+        std::string error;
+        if (pf::removeEditorSessionSubaction(session, session.selectedState, editor.selectedSubaction, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected subaction");
+            editor.selectionKind = state.action.empty() ? pf::FighterEditorSelectionKind::State : pf::FighterEditorSelectionKind::Subaction;
+            return;
+        }
+        editor.status = "Editor: remove subaction failed: " + error;
+    }
+    if (uiButton({actionX + 280.0f, actionY, 48.0f, 22.0f}, "+Int")) {
+        pf::InterruptRule interrupt;
+        interrupt.targetState = "Wait";
+        interrupt.condition = pf::InterruptCondition::WaitInput;
+        interrupt.enableFrame = std::max(0, liveFrame);
+        interrupt.disableFrame = 0;
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionInterrupt(session, session.selectedState, interrupt, -1, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added Wait interrupt");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+            return;
+        }
+        editor.status = "Editor: add interrupt failed: " + error;
+    }
+    if (uiButton({actionX + 334.0f, actionY, 48.0f, 22.0f}, "-Int")) {
+        std::string error;
+        if (pf::removeEditorSessionInterrupt(session, session.selectedState, editor.selectedInterrupt, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected interrupt");
+            editor.selectionKind = state.interrupts.empty() ? pf::FighterEditorSelectionKind::State : pf::FighterEditorSelectionKind::Interrupt;
+            return;
+        }
+        editor.status = "Editor: remove interrupt failed: " + error;
+    }
+    DrawRectangleRec(ruler, {26, 31, 36, 255});
+    DrawRectangleLinesEx(ruler, 1.0f, {74, 86, 98, 255});
+    for (int tick = 0; tick <= frameCount; tick += std::max(1, frameCount / 12)) {
+        const float x = ruler.x + ruler.width * static_cast<float>(tick) / static_cast<float>(frameCount);
+        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y), static_cast<int>(x), static_cast<int>(ruler.y + rect.height - 52.0f), Fade(RAYWHITE, 0.18f));
+        DrawText(std::to_string(tick).c_str(), static_cast<int>(x + 3.0f), static_cast<int>(ruler.y + 6.0f), 9, Fade(RAYWHITE, 0.56f));
+    }
+
+    const std::array<const char*, 5> lanes{"Subactions", "Hitboxes", "Hurtboxes", "Callbacks", "Interrupts"};
+    for (int lane = 0; lane < static_cast<int>(lanes.size()); ++lane) {
+        const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
+        DrawText(lanes[static_cast<size_t>(lane)], static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 5.0f), 11, Fade(RAYWHITE, 0.72f));
+        DrawRectangleRec({ruler.x, y, ruler.width, 18.0f}, lane % 2 == 0 ? Fade(RAYWHITE, 0.06f) : Fade(RAYWHITE, 0.035f));
+    }
+
+    for (int frame = 0; frame < static_cast<int>(actionFrames.size()); ++frame) {
+        for (const pf::Subaction& subaction : actionFrames[static_cast<size_t>(frame)]) {
+            int lane = 0;
+            if (subaction.type == pf::SubactionType::CreateHitbox || subaction.type == pf::SubactionType::CreateThrowHitbox) lane = 1;
+            else if (subaction.type == pf::SubactionType::SetHurtboxState || subaction.type == pf::SubactionType::SetBodyCollisionState) lane = 2;
+            else if (subaction.type == pf::SubactionType::CallScript) lane = 3;
+            else if (subaction.type == pf::SubactionType::SetInterruptible) lane = 4;
+            const float x = ruler.x + ruler.width * static_cast<float>(frame) / static_cast<float>(frameCount);
+            const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
+            DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, 14, subactionMarkerColor(subaction));
+        }
+    }
+    for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {
+        const pf::InterruptRule& rule = state.interrupts[static_cast<size_t>(interruptIndex)];
+        const int startFrame = std::clamp(rule.enableFrame, 0, frameCount);
+        const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
+        const float x = ruler.x + ruler.width * static_cast<float>(startFrame) / static_cast<float>(frameCount);
+        const float w = std::max(3.0f, ruler.width * static_cast<float>(endFrame - startFrame) / static_cast<float>(frameCount));
+        DrawRectangleRec({x, rect.y + 70.0f + 4.0f * 24.0f + 3.0f, w, 12.0f}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
+    }
+    if (state.initialInterruptibleFrame > 0) {
+        const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(state.initialInterruptibleFrame, 0, frameCount)) / static_cast<float>(frameCount);
+        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y + 24.0f), static_cast<int>(x), static_cast<int>(rect.y + rect.height - 12.0f), GREEN);
+    }
+    if (!state.action.empty() && editor.selectedSubaction >= 0 && editor.selectedSubaction < static_cast<int>(subactionFrames.size())) {
+        const int frame = subactionFrames[static_cast<size_t>(editor.selectedSubaction)];
+        if (frame >= 0) {
+            const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(frame, 0, frameCount)) / static_cast<float>(frameCount);
+            DrawRectangle(static_cast<int>(x - 2.0f), static_cast<int>(ruler.y + 23.0f), 5, static_cast<int>(rect.height - 42.0f), SKYBLUE);
+        }
+    }
+    const float playheadX = ruler.x + ruler.width * static_cast<float>(std::clamp(liveFrame, 0, frameCount)) / static_cast<float>(frameCount);
+    DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(rect.height - 32.0f), BLUE);
+    if (CheckCollisionPointRec(GetMousePosition(), {ruler.x, ruler.y, ruler.width, rect.height - 38.0f}) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        const float t = std::clamp((GetMousePosition().x - ruler.x) / ruler.width, 0.0f, 1.0f);
+        const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(frameCount)));
+        const float clickedY = GetMousePosition().y;
+        const int clickedLane = static_cast<int>((clickedY - (rect.y + 70.0f)) / 24.0f);
+        if (clickedLane == 4) {
+            int bestInterrupt = -1;
+            int bestDistance = 1000000;
+            for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {
+                const pf::InterruptRule& rule = state.interrupts[static_cast<size_t>(interruptIndex)];
+                const int startFrame = std::clamp(rule.enableFrame, 0, frameCount);
+                const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
+                if (clickedFrame >= startFrame && clickedFrame <= endFrame) {
+                    const int distance = std::min(std::abs(clickedFrame - startFrame), std::abs(clickedFrame - endFrame));
+                    if (distance < bestDistance) {
+                        bestInterrupt = interruptIndex;
+                        bestDistance = distance;
+                    }
+                }
+            }
+            if (bestInterrupt >= 0) {
+                editor.selectedInterrupt = bestInterrupt;
+                session.selectedInterrupt = bestInterrupt;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+                session.selectedState = editor.selectedState;
+                session.clamp();
+                scrubEditorSelectedState(world, editor, clickedFrame);
+                return;
+            }
+        }
+        int best = -1;
+        int bestDistance = 1000000;
+        for (int i = 0; i < static_cast<int>(subactionFrames.size()); ++i) {
+            if (subactionFrames[static_cast<size_t>(i)] < 0) continue;
+            const int distance = std::abs(subactionFrames[static_cast<size_t>(i)] - clickedFrame);
+            if (distance < bestDistance) {
+                best = i;
+                bestDistance = distance;
+            }
+        }
+        if (best >= 0) {
+            editor.selectedSubaction = best;
+            session.selectedSubaction = best;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+        } else {
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        }
+        session.selectedState = editor.selectedState;
+        session.clamp();
+        scrubEditorSelectedState(world, editor, clickedFrame);
+    }
+}
+
+static void drawEditorPackageVariableStrip(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    pf::FighterDefinition& def,
+    Rectangle rect)
+{
+    DrawText("Variables", static_cast<int>(rect.x), static_cast<int>(rect.y), 10, Fade(RAYWHITE, 0.62f));
+    if (def.packageVariables.empty()) {
+        DrawText("No package variables", static_cast<int>(rect.x), static_cast<int>(rect.y + 22.0f), 11, Fade(RAYWHITE, 0.55f));
+        if (uiButton({rect.x + rect.width - 62.0f, rect.y + 16.0f, 58.0f, 22.0f}, "+Var")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionPackageVariable(session, {}, 0, &added, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added package variable");
+                editor.selectedPackageVariable = added;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+            } else {
+                editor.status = "Editor: add variable failed: " + error;
+            }
+        }
+        return;
+    }
+
+    editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
+    pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+    if (uiButton({rect.x, rect.y + 16.0f, 26.0f, 22.0f}, "<")) {
+        editor.selectedPackageVariable = wrappedIndex(editor.selectedPackageVariable - 1, static_cast<int>(def.packageVariables.size()));
+        editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+    }
+    if (uiButton({rect.x + 32.0f, rect.y + 16.0f, 26.0f, 22.0f}, ">")) {
+        editor.selectedPackageVariable = wrappedIndex(editor.selectedPackageVariable + 1, static_cast<int>(def.packageVariables.size()));
+        editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+    }
+    const float nameX = rect.x + 64.0f;
+    const float nameW = std::max(94.0f, rect.width - 324.0f);
+    std::string renamedVariable;
+    if (uiTextField({nameX, rect.y + 15.0f, nameW, 24.0f},
+            "workstation-package-variable-name",
+            editor,
+            variable.name,
+            renamedVariable,
+            48))
+    {
+        std::string error;
+        const std::string oldName = variable.name;
+        if (pf::renameEditorSessionPackageVariable(session, editor.selectedPackageVariable, renamedVariable, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed package variable " + oldName + " to " + renamedVariable);
+            editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+            return;
+        }
+        editor.status = "Editor: rename variable failed: " + error;
+    }
+    DrawText(("init=" + std::to_string(variable.initialValue)).c_str(),
+        static_cast<int>(nameX + nameW + 8.0f),
+        static_cast<int>(rect.y + 21.0f),
+        10,
+        Fade(RAYWHITE, 0.68f));
+    if (uiButton({rect.x + rect.width - 214.0f, rect.y + 16.0f, 42.0f, 22.0f}, "I-")) {
+        std::string error;
+        if (pf::setEditorSessionPackageVariableInitialValue(session, editor.selectedPackageVariable, variable.initialValue - 1, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lowered package variable initial value");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+            return;
+        }
+        editor.status = "Editor: variable initial edit failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 166.0f, rect.y + 16.0f, 42.0f, 22.0f}, "I+")) {
+        std::string error;
+        if (pf::setEditorSessionPackageVariableInitialValue(session, editor.selectedPackageVariable, variable.initialValue + 1, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: raised package variable initial value");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+            return;
+        }
+        editor.status = "Editor: variable initial edit failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 118.0f, rect.y + 16.0f, 54.0f, 22.0f}, "+Var")) {
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionPackageVariable(session, {}, 0, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added package variable");
+            editor.selectedPackageVariable = added;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+            return;
+        }
+        editor.status = "Editor: add variable failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 58.0f, rect.y + 16.0f, 54.0f, 22.0f}, "-Var")) {
+        std::string error;
+        const bool removingOnlyVariable = def.packageVariables.size() <= 1;
+        if (pf::removeEditorSessionPackageVariable(session, editor.selectedPackageVariable, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed package variable");
+            editor.selectionKind = removingOnlyVariable ? pf::FighterEditorSelectionKind::Script : pf::FighterEditorSelectionKind::Variable;
+            return;
+        }
+        editor.status = "Editor: remove variable failed: " + error;
+    }
+}
+
+static int countPackageVariableOperandUses(const pf::FighterDefinition& def, int variableIndex) {
+    int uses = 0;
+    for (const pf::PackageScript& script : def.packageScripts) {
+        for (const pf::PackageScriptInstruction& instruction : script.instructions) {
+            if (instruction.dst == variableIndex) {
+                ++uses;
+            }
+            if (instruction.srcA == variableIndex) {
+                ++uses;
+            }
+            if (instruction.srcB == variableIndex) {
+                ++uses;
+            }
+        }
+    }
+    for (const pf::FighterState& state : def.states) {
+        for (const pf::InterruptRule& rule : state.interrupts) {
+            if (rule.packageVariable == variableIndex) {
+                ++uses;
+            }
+        }
+    }
+    return uses;
+}
+
+static const char* gameObjectKindName(pf::GameObjectKind kind) {
+    switch (kind) {
+    case pf::GameObjectKind::Item: return "Item";
+    case pf::GameObjectKind::Projectile: return "Projectile";
+    }
+    return "Object";
+}
+
+static pf::GameObjectKind nextGameObjectKind(pf::GameObjectKind kind) {
+    return kind == pf::GameObjectKind::Projectile
+        ? pf::GameObjectKind::Item
+        : pf::GameObjectKind::Projectile;
+}
+
+static void drawEditorObjectWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "Objects / Articles");
+    auto addObject = [&](pf::GameObjectKind kind) -> bool {
+        std::string error;
+        int added = -1;
+        const std::string prefix = kind == pf::GameObjectKind::Projectile ? "Projectile" : "Item";
+        if (pf::addEditorSessionObject(session, pf::uniqueEditorObjectName(session.package, prefix), kind, &added, &error)) {
+            editor.selectedObjectDef = added;
+            editor.selectedObjectState = 0;
+            editor.selectedPackageScript = 0;
+            editor.selectedPackageInstruction = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: added ") + gameObjectKindName(kind));
+            return true;
+        }
+        editor.status = "Editor: add object failed: " + error;
+        return false;
+    };
+
+    if (session.package.objects.empty()) {
+        DrawText("No package-owned objects/articles", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 36.0f), 13, Fade(RAYWHITE, 0.68f));
+        if (uiButton({rect.x + 10.0f, rect.y + 62.0f, 94.0f, 24.0f}, "+Projectile")) {
+            addObject(pf::GameObjectKind::Projectile);
+            return;
+        }
+        if (uiButton({rect.x + 112.0f, rect.y + 62.0f, 74.0f, 24.0f}, "+Item")) {
+            addObject(pf::GameObjectKind::Item);
+            return;
+        }
+        DrawText("Spawn instructions and object callbacks will target definitions created here.",
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 102.0f),
+            11,
+            Fade(RAYWHITE, 0.56f));
+        return;
+    }
+
+    editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(session.package.objects.size()) - 1);
+    pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+    DrawText((std::string("Selected: ") + object.name + "  " + gameObjectKindName(object.kind)).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + 34.0f),
+        13,
+        RAYWHITE);
+    if (uiButton({rect.x + rect.width - 236.0f, rect.y + 29.0f, 84.0f, 22.0f}, "+Projectile")) {
+        addObject(pf::GameObjectKind::Projectile);
+        return;
+    }
+    if (uiButton({rect.x + rect.width - 146.0f, rect.y + 29.0f, 58.0f, 22.0f}, "+Item")) {
+        addObject(pf::GameObjectKind::Item);
+        return;
+    }
+    if (uiButton({rect.x + rect.width - 82.0f, rect.y + 29.0f, 66.0f, 22.0f}, "-Object")) {
+        std::string error;
+        if (pf::removeEditorSessionObject(session, editor.selectedObjectDef, {}, &error)) {
+            editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, std::max(0, static_cast<int>(session.package.objects.size()) - 1));
+            editor.selectedObjectState = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object/article");
+            return;
+        }
+        editor.status = "Editor: remove object failed: " + error;
+    }
+
+    const float listY = rect.y + 62.0f;
+    const float objectListW = std::clamp(rect.width * 0.34f, 116.0f, 172.0f);
+    DrawText("Definitions", static_cast<int>(rect.x + 10.0f), static_cast<int>(listY), 10, Fade(RAYWHITE, 0.62f));
+    const int visibleObjects = std::min(5, static_cast<int>(session.package.objects.size()));
+    const int objectStart = visibleListStart(editor.selectedObjectDef, static_cast<int>(session.package.objects.size()), visibleObjects);
+    for (int row = 0; row < visibleObjects; ++row) {
+        const int objectIndex = objectStart + row;
+        const pf::GameObjectDefinition& rowObject = session.package.objects[static_cast<size_t>(objectIndex)];
+        const std::string label = clippedText(rowObject.name + "  " + gameObjectKindName(rowObject.kind), 10, objectListW - 8.0f);
+        if (uiListRow({rect.x + 10.0f, listY + 16.0f + 22.0f * row, objectListW, 20.0f}, label, objectIndex == editor.selectedObjectDef)) {
+            editor.selectedObjectDef = objectIndex;
+            editor.selectedObjectState = 0;
+            editor.selectedPackageScript = 0;
+            editor.selectedPackageInstruction = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            return;
+        }
+    }
+
+    const float detailX = rect.x + 20.0f + objectListW;
+    const float detailW = std::max(180.0f, rect.width - objectListW - 30.0f);
+    DrawText(("States " + std::to_string(object.states.size()) +
+              "  Vars " + std::to_string(object.packageVariables.size()) +
+              "  Scripts " + std::to_string(object.packageScripts.size())).c_str(),
+        static_cast<int>(detailX),
+        static_cast<int>(listY),
+        11,
+        Fade(RAYWHITE, 0.72f));
+
+    if (!object.states.empty()) {
+        editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+        const int visibleStates = std::min(3, static_cast<int>(object.states.size()));
+        const int stateStart = visibleListStart(editor.selectedObjectState, static_cast<int>(object.states.size()), visibleStates);
+        for (int row = 0; row < visibleStates; ++row) {
+            const int stateIndex = stateStart + row;
+            const pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(stateIndex)];
+            std::string label = objectState.name + " len=" + std::to_string(objectState.animationLengthFrames);
+            if (stateIndex == object.initialState) {
+                label += " initial";
+            }
+            if (uiListRow({detailX, listY + 16.0f + 22.0f * row, detailW, 20.0f}, clippedText(label, 10, detailW - 8.0f), stateIndex == editor.selectedObjectState)) {
+                editor.selectedObjectState = stateIndex;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                return;
+            }
+        }
+    } else {
+        DrawText("No object states", static_cast<int>(detailX), static_cast<int>(listY + 22.0f), 11, Fade(RAYWHITE, 0.56f));
+    }
+
+    const float stateButtonY = listY + 90.0f;
+    if (uiButton({detailX, stateButtonY, 62.0f, 22.0f}, "+State")) {
+        std::string error;
+        int created = -1;
+        if (pf::createEditorSessionObjectState(session, editor.selectedObjectDef, {}, -1, &created, &error)) {
+            editor.selectedObjectState = created;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object state");
+            return;
+        }
+        editor.status = "Editor: add object state failed: " + error;
+    }
+    if (uiButton({detailX + 68.0f, stateButtonY, 58.0f, 22.0f}, "Clone")) {
+        std::string error;
+        int created = -1;
+        if (pf::duplicateEditorSessionObjectState(session, editor.selectedObjectDef, editor.selectedObjectState, &created, &error)) {
+            editor.selectedObjectState = created;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned object state");
+            return;
+        }
+        editor.status = "Editor: clone object state failed: " + error;
+    }
+    if (uiButton({detailX + 132.0f, stateButtonY, 58.0f, 22.0f}, "-State")) {
+        std::string error;
+        if (pf::removeEditorSessionObjectState(session, editor.selectedObjectDef, editor.selectedObjectState, {}, &error)) {
+            editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, std::max(0, static_cast<int>(session.package.objects[static_cast<size_t>(editor.selectedObjectDef)].states.size()) - 1));
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object state");
+            return;
+        }
+        editor.status = "Editor: remove object state failed: " + error;
+    }
+    if (uiButton({detailX + 196.0f, stateButtonY, 58.0f, 22.0f}, "Initial")) {
+        if (!object.states.empty()) {
+            const pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
+            std::string error;
+            if (pf::setEditorSessionObjectStateTiming(session, editor.selectedObjectDef, editor.selectedObjectState, objectState.animationLengthFrames, objectState.loopAnimation, true, &error)) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: set object initial state");
+                return;
+            }
+            editor.status = "Editor: set object initial failed: " + error;
+        }
+    }
+
+    const float scriptY = stateButtonY + 36.0f;
+    DrawText("Object Script", static_cast<int>(detailX), static_cast<int>(scriptY), 10, Fade(RAYWHITE, 0.62f));
+    if (object.packageScripts.empty()) {
+        DrawText("No object scripts", static_cast<int>(detailX), static_cast<int>(scriptY + 20.0f), 11, Fade(RAYWHITE, 0.56f));
+        if (uiButton({detailX, scriptY + 44.0f, 72.0f, 22.0f}, "+Script")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionObjectPackageScript(session, editor.selectedObjectDef, {}, 64, &added, &error)) {
+                editor.selectedPackageScript = added;
+                editor.selectedPackageInstruction = 0;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object script");
+                return;
+            }
+            editor.status = "Editor: add object script failed: " + error;
+        }
+    } else {
+        editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+        pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        DrawText(clippedText(script.name + "  instr=" + std::to_string(script.instructions.size()), 11, detailW - 8.0f).c_str(),
+            static_cast<int>(detailX),
+            static_cast<int>(scriptY + 20.0f),
+            11,
+            RAYWHITE);
+        if (uiButton({detailX, scriptY + 42.0f, 34.0f, 22.0f}, "<")) {
+            editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript - 1, static_cast<int>(object.packageScripts.size()));
+            editor.selectedPackageInstruction = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            return;
+        }
+        if (uiButton({detailX + 40.0f, scriptY + 42.0f, 34.0f, 22.0f}, ">")) {
+            editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript + 1, static_cast<int>(object.packageScripts.size()));
+            editor.selectedPackageInstruction = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+            return;
+        }
+        if (uiButton({detailX + 80.0f, scriptY + 42.0f, 58.0f, 22.0f}, "+Script")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionObjectPackageScript(session, editor.selectedObjectDef, {}, 64, &added, &error)) {
+                editor.selectedPackageScript = added;
+                editor.selectedPackageInstruction = 0;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object script");
+                return;
+            }
+            editor.status = "Editor: add object script failed: " + error;
+        }
+        if (uiButton({detailX + 144.0f, scriptY + 42.0f, 58.0f, 22.0f}, "Clone")) {
+            std::string error;
+            int added = -1;
+            if (pf::duplicateEditorSessionObjectPackageScript(session, editor.selectedObjectDef, editor.selectedPackageScript, &added, &error)) {
+                editor.selectedPackageScript = added;
+                editor.selectedPackageInstruction = 0;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned object script");
+                return;
+            }
+            editor.status = "Editor: clone object script failed: " + error;
+        }
+        if (uiButton({detailX + 208.0f, scriptY + 42.0f, 58.0f, 22.0f}, "-Script")) {
+            std::string error;
+            if (pf::removeEditorSessionObjectPackageScript(session, editor.selectedObjectDef, editor.selectedPackageScript, &error)) {
+                editor.selectedPackageScript = 0;
+                editor.selectedPackageInstruction = 0;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object script");
+                return;
+            }
+            editor.status = "Editor: remove object script failed: " + error;
+        }
+
+        const float instrY = scriptY + 72.0f;
+        if (uiButton({detailX, instrY, 54.0f, 22.0f}, "+Nop")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionObjectPackageInstruction(session, editor.selectedObjectDef, editor.selectedPackageScript, {pf::PackageScriptOp::Nop, -1, -1, -1, 0, 0, {}}, -1, &added, &error)) {
+                editor.selectedPackageInstruction = added;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object Nop instruction");
+                return;
+            }
+            editor.status = "Editor: add object instruction failed: " + error;
+        }
+        if (uiButton({detailX + 60.0f, instrY, 58.0f, 22.0f}, "+State")) {
+            pf::PackageScriptInstruction instruction{pf::PackageScriptOp::ChangeState, -1, -1, -1, 0, 0, {}};
+            normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionObjectPackageInstruction(session, editor.selectedObjectDef, editor.selectedPackageScript, instruction, -1, &added, &error)) {
+                editor.selectedPackageInstruction = added;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object state-change instruction");
+                return;
+            }
+            editor.status = "Editor: add object instruction failed: " + error;
+        }
+        if (uiButton({detailX + 124.0f, instrY, 56.0f, 22.0f}, "-Instr")) {
+            std::string error;
+            if (pf::removeEditorSessionObjectPackageInstruction(session, editor.selectedObjectDef, editor.selectedPackageScript, editor.selectedPackageInstruction, &error)) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed object instruction");
+                return;
+            }
+            editor.status = "Editor: remove object instruction failed: " + error;
+        }
+        if (uiButton({detailX + 186.0f, instrY, 54.0f, 22.0f}, "Linear")) {
+            std::string error;
+            if (pf::setEditorSessionObjectPackageScriptGraph(session, editor.selectedObjectDef, editor.selectedPackageScript, pf::makePackageScriptLinearGraph(script), &error)) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: rebuilt object script graph");
+                return;
+            }
+            editor.status = "Editor: object graph rebuild failed: " + error;
+        }
+        if (uiButton({detailX + 246.0f, instrY, 54.0f, 22.0f}, "Compile")) {
+            std::string error;
+            if (pf::compileEditorSessionObjectPackageScriptGraph(session, editor.selectedObjectDef, editor.selectedPackageScript, &error)) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: compiled object script graph");
+                return;
+            }
+            editor.status = "Editor: object graph compile failed: " + error;
+        }
+
+        const Rectangle canvas{detailX, instrY + 30.0f, detailW, std::max(44.0f, rect.y + rect.height - instrY - 40.0f)};
+        drawPackageScriptBlockGraph(script, editor, canvas);
+    }
+}
+
+static void drawEditorAnimationWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    pf::FighterDefinition& def,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "Animation");
+    editor.selectionKind = pf::FighterEditorSelectionKind::Animation;
+    if (def.authoredClips.empty()) {
+        DrawText("No authored clips in this package", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 36.0f), 13, Fade(RAYWHITE, 0.68f));
+        if (uiButton({rect.x + 10.0f, rect.y + 62.0f, 78.0f, 24.0f}, "+ Clip")) {
+            std::string error;
+            int created = -1;
+            if (pf::createEditorSessionAuthoredClip(session, {}, -1, &created, &error)) {
+                editor.selectedAnimationClip = created;
+                editor.selectedAnimationTrack = 0;
+                editor.selectedAnimationKey = 0;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: created authored animation clip");
+                return;
+            }
+            editor.status = "Editor: create clip failed: " + error;
+        }
+        return;
+    }
+
+    editor.selectedAnimationClip = std::clamp(editor.selectedAnimationClip, 0, static_cast<int>(def.authoredClips.size()) - 1);
+    pf::AnimationClip& clip = def.authoredClips[static_cast<size_t>(editor.selectedAnimationClip)];
+    const int clipFrameCount = std::max(1, static_cast<int>(pf::fxToFloat(clip.frameCount)));
+    editor.animationScrubFrame = std::clamp(editor.animationScrubFrame, 0, std::max(0, clipFrameCount - 1));
+
+    DrawText(("Clip: " + clip.name + "  action=" + std::to_string(clip.actionIndex) +
+              " frames=" + std::to_string(clipFrameCount)).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + 34.0f),
+        13,
+        RAYWHITE);
+
+    const float clipListW = std::clamp(rect.width * 0.30f, 112.0f, 164.0f);
+    const float listY = rect.y + 62.0f;
+    DrawText("Clips", static_cast<int>(rect.x + 10.0f), static_cast<int>(listY), 10, Fade(RAYWHITE, 0.62f));
+    const int visibleClips = std::min(5, static_cast<int>(def.authoredClips.size()));
+    const int clipStart = visibleListStart(editor.selectedAnimationClip, static_cast<int>(def.authoredClips.size()), visibleClips);
+    for (int row = 0; row < visibleClips; ++row) {
+        const int clipIndex = clipStart + row;
+        const pf::AnimationClip& rowClip = def.authoredClips[static_cast<size_t>(clipIndex)];
+        const std::string label = clippedText(rowClip.name + " a" + std::to_string(rowClip.actionIndex), 10, clipListW - 8.0f);
+        if (uiListRow({rect.x + 10.0f, listY + 16.0f + 22.0f * row, clipListW, 20.0f}, label, clipIndex == editor.selectedAnimationClip)) {
+            editor.selectedAnimationClip = clipIndex;
+            editor.selectedAnimationTrack = 0;
+            editor.selectedAnimationKey = 0;
+            editor.animationScrubFrame = 0;
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+            return;
+        }
+    }
+
+    if (uiButton({rect.x + 10.0f, listY + 134.0f, 58.0f, 22.0f}, "+Clip")) {
+        std::string error;
+        int created = -1;
+        if (pf::createEditorSessionAuthoredClip(session, {}, -1, &created, &error)) {
+            editor.selectedAnimationClip = created;
+            editor.selectedAnimationTrack = 0;
+            editor.selectedAnimationKey = 0;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: created authored clip");
+            return;
+        }
+        editor.status = "Editor: create clip failed: " + error;
+    }
+    if (uiButton({rect.x + 74.0f, listY + 134.0f, 58.0f, 22.0f}, "Clone")) {
+        std::string error;
+        int created = -1;
+        if (pf::duplicateEditorSessionAuthoredClip(session, editor.selectedAnimationClip, &created, &error)) {
+            editor.selectedAnimationClip = created;
+            editor.selectedAnimationTrack = 0;
+            editor.selectedAnimationKey = 0;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned authored clip");
+            return;
+        }
+        editor.status = "Editor: clone clip failed: " + error;
+    }
+    if (uiButton({rect.x + 138.0f, listY + 134.0f, 58.0f, 22.0f}, "-Clip")) {
+        std::string error;
+        if (pf::removeEditorSessionAuthoredClip(session, editor.selectedAnimationClip, {}, &error)) {
+            editor.selectedAnimationClip = std::clamp(editor.selectedAnimationClip, 0, std::max(0, static_cast<int>(session.package.fighters.front().authoredClips.size()) - 1));
+            editor.selectedAnimationTrack = 0;
+            editor.selectedAnimationKey = 0;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed authored clip");
+            return;
+        }
+        editor.status = "Editor: remove clip failed: " + error;
+    }
+
+    const float detailX = rect.x + clipListW + 22.0f;
+    const float detailW = std::max(190.0f, rect.width - clipListW - 32.0f);
+    const Rectangle scrub{detailX, rect.y + 62.0f, detailW, 34.0f};
+    DrawRectangleRec(scrub, Fade(BLACK, 0.22f));
+    DrawRectangleLinesEx(scrub, 1.0f, Fade(RAYWHITE, 0.35f));
+    const float scrubT = static_cast<float>(editor.animationScrubFrame) / static_cast<float>(std::max(1, clipFrameCount - 1));
+    const float playheadX = scrub.x + 6.0f + (scrub.width - 12.0f) * scrubT;
+    DrawRectangle(static_cast<int>(playheadX), static_cast<int>(scrub.y - 3.0f), 2, static_cast<int>(scrub.height + 6.0f), ORANGE);
+    DrawText(("Frame " + std::to_string(editor.animationScrubFrame) + "/" + std::to_string(std::max(0, clipFrameCount - 1))).c_str(),
+        static_cast<int>(scrub.x + 8.0f),
+        static_cast<int>(scrub.y + 10.0f),
+        11,
+        RAYWHITE);
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), scrub)) {
+        const float t = std::clamp((GetMousePosition().x - scrub.x - 6.0f) / (scrub.width - 12.0f), 0.0f, 1.0f);
+        editor.animationScrubFrame = static_cast<int>(std::round(t * static_cast<float>(std::max(0, clipFrameCount - 1))));
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+    }
+    if (uiButton({detailX, rect.y + 104.0f, 52.0f, 22.0f}, "Prev")) {
+        editor.animationScrubFrame = std::max(0, editor.animationScrubFrame - 1);
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+    }
+    if (uiButton({detailX + 58.0f, rect.y + 104.0f, 52.0f, 22.0f}, "Next")) {
+        editor.animationScrubFrame = std::min(std::max(0, clipFrameCount - 1), editor.animationScrubFrame + 1);
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+    }
+    if (uiButton({detailX + 116.0f, rect.y + 104.0f, 64.0f, 22.0f}, "Preview", editor.animationPreviewActive)) {
+        editor.animationPreviewActive = !editor.animationPreviewActive;
+        editor.paused = true;
+    }
+
+    const float trackY = rect.y + 140.0f;
+    DrawText(("Tracks " + std::to_string(clip.tracks.size()) +
+              "  Skeleton joints " + std::to_string(def.authoredSkeleton.size())).c_str(),
+        static_cast<int>(detailX),
+        static_cast<int>(trackY),
+        11,
+        Fade(RAYWHITE, 0.7f));
+    if (uiButton({detailX, trackY + 18.0f, 64.0f, 22.0f}, "+Track")) {
+        pf::AnimationTrack track;
+        track.joint = std::clamp(editor.selectedAnimationJoint, 0, std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+        track.channel = pf::AnimationChannel::TranslateX;
+        track.keys = {
+            {0, 0, 0, pf::AnimationInterpolation::Linear},
+            {clip.frameCount, 0, 0, pf::AnimationInterpolation::Linear},
+        };
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionAuthoredTrack(session, editor.selectedAnimationClip, track, -1, &added, &error)) {
+            editor.selectedAnimationTrack = added;
+            editor.selectedAnimationKey = 0;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added authored animation track");
+            return;
+        }
+        editor.status = "Editor: add track failed: " + error;
+    }
+
+    if (!clip.tracks.empty()) {
+        editor.selectedAnimationTrack = std::clamp(editor.selectedAnimationTrack, 0, static_cast<int>(clip.tracks.size()) - 1);
+        pf::AnimationTrack& track = clip.tracks[static_cast<size_t>(editor.selectedAnimationTrack)];
+        DrawText(("Track #" + std::to_string(editor.selectedAnimationTrack) +
+                  " joint=" + std::to_string(track.joint) +
+                  " " + animationChannelName(track.channel)).c_str(),
+            static_cast<int>(detailX + 74.0f),
+            static_cast<int>(trackY + 23.0f),
+            11,
+            RAYWHITE);
+        if (uiButton({detailX, trackY + 48.0f, 48.0f, 22.0f}, "Tr<")) {
+            editor.selectedAnimationTrack = wrappedIndex(editor.selectedAnimationTrack - 1, static_cast<int>(clip.tracks.size()));
+            editor.selectedAnimationKey = 0;
+            return;
+        }
+        if (uiButton({detailX + 54.0f, trackY + 48.0f, 48.0f, 22.0f}, "Tr>")) {
+            editor.selectedAnimationTrack = wrappedIndex(editor.selectedAnimationTrack + 1, static_cast<int>(clip.tracks.size()));
+            editor.selectedAnimationKey = 0;
+            return;
+        }
+        if (uiButton({detailX + 108.0f, trackY + 48.0f, 54.0f, 22.0f}, "Chan")) {
+            pf::AnimationTrack edited = track;
+            edited.channel = nextAnimationChannel(edited.channel);
+            std::string error;
+            if (pf::setEditorSessionAuthoredTrack(session, editor.selectedAnimationClip, editor.selectedAnimationTrack, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: changed animation track channel");
+                return;
+            }
+            editor.status = "Editor: track edit failed: " + error;
+        }
+        if (uiButton({detailX + 168.0f, trackY + 48.0f, 62.0f, 22.0f}, "UseJnt")) {
+            pf::AnimationTrack edited = track;
+            edited.joint = std::clamp(editor.selectedAnimationJoint, 0, std::max(0, static_cast<int>(def.authoredSkeleton.size()) - 1));
+            std::string error;
+            if (pf::setEditorSessionAuthoredTrack(session, editor.selectedAnimationClip, editor.selectedAnimationTrack, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: assigned track to selected joint");
+                return;
+            }
+            editor.status = "Editor: track edit failed: " + error;
+        }
+        if (uiButton({detailX + 236.0f, trackY + 48.0f, 58.0f, 22.0f}, "-Track")) {
+            std::string error;
+            if (pf::removeEditorSessionAuthoredTrack(session, editor.selectedAnimationClip, editor.selectedAnimationTrack, &error)) {
+                editor.selectedAnimationTrack = std::clamp(editor.selectedAnimationTrack, 0, std::max(0, static_cast<int>(clip.tracks.size()) - 1));
+                editor.selectedAnimationKey = 0;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed authored animation track");
+                return;
+            }
+            editor.status = "Editor: remove track failed: " + error;
+        }
+
+        const Rectangle keyLane{detailX, trackY + 82.0f, detailW, 32.0f};
+        DrawRectangleRec(keyLane, Fade(BLACK, 0.18f));
+        DrawRectangleLinesEx(keyLane, 1.0f, Fade(RAYWHITE, 0.28f));
+        for (size_t i = 0; i < track.keys.size(); ++i) {
+            const pf::AnimationKey& key = track.keys[i];
+            const float t = std::clamp(pf::fxToFloat(key.frame) / static_cast<float>(std::max(1, clipFrameCount - 1)), 0.0f, 1.0f);
+            const float x = keyLane.x + 6.0f + (keyLane.width - 12.0f) * t;
+            DrawCircle(static_cast<int>(x), static_cast<int>(keyLane.y + keyLane.height * 0.5f), static_cast<int>(i) == editor.selectedAnimationKey ? 5.0f : 3.0f, static_cast<int>(i) == editor.selectedAnimationKey ? ORANGE : SKYBLUE);
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), keyLane) && !track.keys.empty()) {
+            const float t = std::clamp((GetMousePosition().x - keyLane.x - 6.0f) / (keyLane.width - 12.0f), 0.0f, 1.0f);
+            const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(std::max(0, clipFrameCount - 1))));
+            int bestKey = 0;
+            int bestDistance = 1000000;
+            for (size_t i = 0; i < track.keys.size(); ++i) {
+                const int keyFrame = static_cast<int>(pf::fxToFloat(track.keys[i].frame));
+                const int distance = std::abs(keyFrame - clickedFrame);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestKey = static_cast<int>(i);
+                }
+            }
+            editor.selectedAnimationKey = bestKey;
+            editor.animationScrubFrame = static_cast<int>(pf::fxToFloat(track.keys[static_cast<size_t>(bestKey)].frame));
+            editor.animationPreviewActive = true;
+            editor.paused = true;
+        }
+        const float keyY = trackY + 122.0f;
+        if (uiButton({detailX, keyY, 54.0f, 22.0f}, "+Key")) {
+            pf::AnimationKey key;
+            key.frame = pf::fx(editor.animationScrubFrame);
+            key.value = pf::sampleTrack(track, key.frame);
+            key.interpolation = pf::AnimationInterpolation::Linear;
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionAuthoredKey(session, editor.selectedAnimationClip, editor.selectedAnimationTrack, key, &added, &error)) {
+                editor.selectedAnimationKey = added;
+                editor.animationPreviewActive = true;
+                editor.paused = true;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added authored animation key");
+                return;
+            }
+            editor.status = "Editor: add key failed: " + error;
+        }
+        if (!track.keys.empty()) {
+            editor.selectedAnimationKey = std::clamp(editor.selectedAnimationKey, 0, static_cast<int>(track.keys.size()) - 1);
+            const pf::AnimationKey& key = track.keys[static_cast<size_t>(editor.selectedAnimationKey)];
+            DrawText(("Key #" + std::to_string(editor.selectedAnimationKey) +
+                      " f=" + std::to_string(static_cast<int>(pf::fxToFloat(key.frame))) +
+                      " v=" + std::to_string(pf::fxToFloat(key.value))).c_str(),
+                static_cast<int>(detailX + 64.0f),
+                static_cast<int>(keyY + 5.0f),
+                10,
+                RAYWHITE);
+            auto commitKey = [&](pf::AnimationKey edited, const std::string& message) -> bool {
+                std::string error;
+                if (pf::setEditorSessionAuthoredKey(session, editor.selectedAnimationClip, editor.selectedAnimationTrack, editor.selectedAnimationKey, edited, &error)) {
+                    editor.animationPreviewActive = true;
+                    editor.paused = true;
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+                editor.status = "Editor: key edit failed: " + error;
+                return false;
+            };
+            pf::AnimationKey editedKey = key;
+            if (uiButton({detailX, keyY + 28.0f, 44.0f, 22.0f}, "Val-")) {
+                editedKey.value -= pf::fxFromFloat(0.05f);
+                if (commitKey(editedKey, "Editor: lowered authored key value")) return;
+            }
+            if (uiButton({detailX + 50.0f, keyY + 28.0f, 44.0f, 22.0f}, "Val+")) {
+                editedKey.value += pf::fxFromFloat(0.05f);
+                if (commitKey(editedKey, "Editor: raised authored key value")) return;
+            }
+            if (uiButton({detailX + 100.0f, keyY + 28.0f, 44.0f, 22.0f}, "Fr-")) {
+                editedKey.frame = pf::fx(std::max(0, static_cast<int>(pf::fxToFloat(editedKey.frame)) - 1));
+                editor.animationScrubFrame = static_cast<int>(pf::fxToFloat(editedKey.frame));
+                if (commitKey(editedKey, "Editor: moved authored key earlier")) return;
+            }
+            if (uiButton({detailX + 150.0f, keyY + 28.0f, 44.0f, 22.0f}, "Fr+")) {
+                editedKey.frame = pf::fx(std::min(std::max(0, clipFrameCount - 1), static_cast<int>(pf::fxToFloat(editedKey.frame)) + 1));
+                editor.animationScrubFrame = static_cast<int>(pf::fxToFloat(editedKey.frame));
+                if (commitKey(editedKey, "Editor: moved authored key later")) return;
+            }
+            if (uiButton({detailX + 200.0f, keyY + 28.0f, 58.0f, 22.0f}, "-Key")) {
+                std::string error;
+                if (pf::removeEditorSessionAuthoredKey(session, editor.selectedAnimationClip, editor.selectedAnimationTrack, editor.selectedAnimationKey, &error)) {
+                    editor.selectedAnimationKey = 0;
+                    editor.animationPreviewActive = true;
+                    editor.paused = true;
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed authored key");
+                    return;
+                }
+                editor.status = "Editor: remove key failed: " + error;
+            }
+        }
+    }
+
+    if (editor.animationPreviewActive) {
+        pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), clip.actionIndex, pf::fx(editor.animationScrubFrame));
+    }
+}
+
+static void drawEditorLogicGraphWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    pf::FighterDefinition& def,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "Logic Graph");
+    if (def.packageScripts.empty()) {
+        DrawText("No package scripts", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 36.0f), 13, Fade(RAYWHITE, 0.7f));
+        if (uiButton({rect.x + 10.0f, rect.y + 58.0f, 90.0f, 24.0f}, "+ Script")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionPackageScript(session, {}, 64, &added, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added package script");
+                editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+            } else {
+                editor.status = "Editor: add script failed: " + error;
+            }
+        }
+        drawEditorPackageVariableStrip(world, editor, session, selectedFighterDef, def, {rect.x + 10.0f, rect.y + 92.0f, rect.width - 20.0f, 44.0f});
+        return;
+    }
+    editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+    session.selectedPackageScript = editor.selectedPackageScript;
+    editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, std::max(0, static_cast<int>(def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].instructions.size()) - 1));
+    session.selectedPackageInstruction = editor.selectedPackageInstruction;
+    pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+    DrawText(clippedText(script.name + "  budget " + std::to_string(script.instructionBudget), 13, rect.width - 296.0f).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + 34.0f),
+        13,
+        RAYWHITE);
+    if (uiButton({rect.x + rect.width - 288.0f, rect.y + 29.0f, 38.0f, 22.0f}, "<")) {
+        editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript - 1, static_cast<int>(def.packageScripts.size()));
+        editor.selectedPackageInstruction = 0;
+        session.selectedPackageScript = editor.selectedPackageScript;
+        session.selectedPackageInstruction = 0;
+    }
+    if (uiButton({rect.x + rect.width - 246.0f, rect.y + 29.0f, 38.0f, 22.0f}, ">")) {
+        editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript + 1, static_cast<int>(def.packageScripts.size()));
+        editor.selectedPackageInstruction = 0;
+        session.selectedPackageScript = editor.selectedPackageScript;
+        session.selectedPackageInstruction = 0;
+    }
+    if (uiButton({rect.x + rect.width - 202.0f, rect.y + 29.0f, 58.0f, 22.0f}, "+Script")) {
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionPackageScript(session, {}, 64, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added package script");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+            return;
+        }
+        editor.status = "Editor: add script failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 138.0f, rect.y + 29.0f, 58.0f, 22.0f}, "Clone")) {
+        std::string error;
+        int added = -1;
+        if (pf::duplicateEditorSessionPackageScript(session, editor.selectedPackageScript, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned package script");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+            return;
+        }
+        editor.status = "Editor: clone script failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 74.0f, rect.y + 29.0f, 58.0f, 22.0f}, "-Script")) {
+        std::string error;
+        if (pf::removeEditorSessionPackageScript(session, editor.selectedPackageScript, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed package script");
+            return;
+        }
+        editor.status = "Editor: remove script failed: " + error;
+    }
+
+    drawEditorPackageVariableStrip(world, editor, session, selectedFighterDef, def, {rect.x + 10.0f, rect.y + 56.0f, rect.width - 20.0f, 44.0f});
+
+    const float listY = rect.y + 108.0f;
+    const float scriptListW = std::clamp(rect.width * 0.32f, 108.0f, 170.0f);
+    const float instructionListX = rect.x + 18.0f + scriptListW;
+    const float instructionListW = std::max(124.0f, rect.width - scriptListW - 28.0f);
+    DrawText("Scripts", static_cast<int>(rect.x + 10.0f), static_cast<int>(listY), 10, Fade(RAYWHITE, 0.62f));
+    DrawText("Instructions", static_cast<int>(instructionListX), static_cast<int>(listY), 10, Fade(RAYWHITE, 0.62f));
+    const int visibleScripts = std::min(2, static_cast<int>(def.packageScripts.size()));
+    const int scriptStart = visibleListStart(editor.selectedPackageScript, static_cast<int>(def.packageScripts.size()), visibleScripts);
+    for (int row = 0; row < visibleScripts; ++row) {
+        const int scriptIndex = scriptStart + row;
+        const pf::PackageScript& rowScript = def.packageScripts[static_cast<size_t>(scriptIndex)];
+        if (uiListRow({rect.x + 10.0f, listY + 16.0f + 22.0f * row, scriptListW, 20.0f},
+                clippedText(rowScript.name + " (" + std::to_string(rowScript.instructions.size()) + ")", 10, scriptListW - 8.0f),
+                scriptIndex == editor.selectedPackageScript))
+        {
+            editor.selectedPackageScript = scriptIndex;
+            editor.selectedPackageInstruction = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+            session.selectedPackageScript = scriptIndex;
+            session.selectedPackageInstruction = 0;
+            return;
+        }
+    }
+    const int visibleInstructions = std::min(2, static_cast<int>(script.instructions.size()));
+    const int instructionStart = visibleListStart(editor.selectedPackageInstruction, static_cast<int>(script.instructions.size()), visibleInstructions);
+    for (int row = 0; row < visibleInstructions; ++row) {
+        const int instructionIndex = instructionStart + row;
+        const pf::PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(instructionIndex)];
+        if (uiListRow({instructionListX, listY + 16.0f + 22.0f * row, instructionListW, 20.0f},
+                clippedText("#" + std::to_string(instructionIndex) + " " + packageInstructionLabel(instruction), 10, instructionListW - 8.0f),
+                instructionIndex == editor.selectedPackageInstruction))
+        {
+            editor.selectedPackageInstruction = instructionIndex;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+            session.selectedPackageInstruction = instructionIndex;
+        }
+    }
+    if (script.instructions.empty()) {
+        DrawText("No instructions", static_cast<int>(instructionListX + 6.0f), static_cast<int>(listY + 22.0f), 11, Fade(RAYWHITE, 0.5f));
+    }
+
+    const float actionY = listY + 66.0f;
+    auto addInstruction = [&](pf::PackageScriptInstruction instruction, const std::string& label) -> bool {
+        normalizePackageInstruction(instruction, def, world, selectedFighterDef, editor.selectedState, editor.selectedObjectDef);
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionPackageInstruction(session, editor.selectedPackageScript, instruction, -1, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " instruction");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+            return true;
+        }
+        editor.status = "Editor: add instruction failed: " + error;
+        return false;
+    };
+    if (uiButton({rect.x + 10.0f, actionY, 54.0f, 22.0f}, "+Nop")) {
+        if (addInstruction({pf::PackageScriptOp::Nop, -1, -1, -1, 0, 0, {}}, "Nop")) return;
+    }
+    if (uiButton({rect.x + 70.0f, actionY, 54.0f, 22.0f}, "+Read")) {
+        if (addInstruction({pf::PackageScriptOp::SetVarFrame, editor.selectedPackageVariable, -1, -1, 0, 0, {}}, "fact read")) return;
+    }
+    if (uiButton({rect.x + 130.0f, actionY, 54.0f, 22.0f}, "+Vel")) {
+        if (addInstruction({pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}}, "velocity")) return;
+    }
+    if (uiButton({rect.x + 190.0f, actionY, 54.0f, 22.0f}, "+State")) {
+        if (addInstruction({pf::PackageScriptOp::ChangeState, -1, -1, -1, 0, 0, {}}, "state change")) return;
+    }
+    if (uiButton({rect.x + 250.0f, actionY, 54.0f, 22.0f}, "+Call")) {
+        if (addInstruction({pf::PackageScriptOp::CallScript, -1, -1, -1, 0, 0, {}}, "script call")) return;
+    }
+    if (uiButton({rect.x + 310.0f, actionY, 54.0f, 22.0f}, "-Instr")) {
+        std::string error;
+        if (pf::removeEditorSessionPackageInstruction(session, editor.selectedPackageScript, editor.selectedPackageInstruction, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed package instruction");
+            return;
+        }
+        editor.status = "Editor: remove instruction failed: " + error;
+    }
+    if (uiButton({rect.x + 370.0f, actionY, 42.0f, 22.0f}, "Up")) {
+        std::string error;
+        int moved = -1;
+        if (pf::moveEditorSessionPackageInstruction(session, editor.selectedPackageScript, editor.selectedPackageInstruction, -1, &moved, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved package instruction up");
+            return;
+        }
+        editor.status = "Editor: move instruction failed: " + error;
+    }
+    if (uiButton({rect.x + 418.0f, actionY, 42.0f, 22.0f}, "Down")) {
+        std::string error;
+        int moved = -1;
+        if (pf::moveEditorSessionPackageInstruction(session, editor.selectedPackageScript, editor.selectedPackageInstruction, 1, &moved, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved package instruction down");
+            return;
+        }
+        editor.status = "Editor: move instruction failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 186.0f, actionY, 56.0f, 22.0f}, "Linear")) {
+        std::string error;
+        if (pf::setEditorSessionPackageScriptGraph(session, editor.selectedPackageScript, pf::makePackageScriptLinearGraph(script), &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: rebuilt linear graph metadata");
+            return;
+        }
+        editor.status = "Editor: graph rebuild failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 124.0f, actionY, 52.0f, 22.0f}, "Flow")) {
+        std::string error;
+        if (pf::setEditorSessionPackageScriptGraph(session, editor.selectedPackageScript, pf::makePackageScriptControlFlowGraph(script), &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: rebuilt control-flow graph metadata");
+            return;
+        }
+        editor.status = "Editor: graph rebuild failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 66.0f, actionY, 50.0f, 22.0f}, "Compile")) {
+        std::string error;
+        if (pf::compileEditorSessionPackageScriptGraph(session, editor.selectedPackageScript, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: compiled graph into package script");
+            return;
+        }
+        editor.status = "Editor: graph compile failed: " + error;
+    }
+
+    const Rectangle canvas{rect.x + 10.0f, actionY + 30.0f, rect.width - 20.0f, std::max(52.0f, rect.y + rect.height - actionY - 40.0f)};
+    DrawRectangleRec(canvas, {12, 16, 20, 255});
+    DrawRectangleLinesEx(canvas, 1.0f, {54, 64, 76, 255});
+    for (int gx = 0; gx < static_cast<int>(canvas.width); gx += 32) {
+        DrawLine(static_cast<int>(canvas.x + gx), static_cast<int>(canvas.y), static_cast<int>(canvas.x + gx), static_cast<int>(canvas.y + canvas.height), Fade(RAYWHITE, 0.06f));
+    }
+    for (int gy = 0; gy < static_cast<int>(canvas.height); gy += 32) {
+        DrawLine(static_cast<int>(canvas.x), static_cast<int>(canvas.y + gy), static_cast<int>(canvas.x + canvas.width), static_cast<int>(canvas.y + gy), Fade(RAYWHITE, 0.06f));
+    }
+    if (script.graph.nodes.empty()) {
+        drawPackageScriptBlockGraph(script, editor, canvas, &session);
+        return;
+    }
+    const float scale = 0.72f;
+    for (const pf::PackageScriptGraphLink& link : script.graph.links) {
+        const auto from = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) { return node.id == link.fromNode; });
+        const auto to = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) { return node.id == link.toNode; });
+        if (from == script.graph.nodes.end() || to == script.graph.nodes.end()) {
+            continue;
+        }
+        const Vector2 a{canvas.x + 40.0f + pf::fxToFloat(from->position.x) * scale + 104.0f, canvas.y + 28.0f + pf::fxToFloat(from->position.y) * scale + 22.0f};
+        const Vector2 b{canvas.x + 40.0f + pf::fxToFloat(to->position.x) * scale, canvas.y + 28.0f + pf::fxToFloat(to->position.y) * scale + 22.0f};
+        DrawLineBezier(a, b, 2.0f, Fade(SKYBLUE, 0.6f));
+    }
+    for (const pf::PackageScriptGraphNode& node : script.graph.nodes) {
+        const Rectangle nodeRect{
+            canvas.x + 40.0f + pf::fxToFloat(node.position.x) * scale,
+            canvas.y + 28.0f + pf::fxToFloat(node.position.y) * scale,
+            node.kind == pf::PackageScriptGraphNodeKind::Entry ? 86.0f : 112.0f,
+            44.0f,
+        };
+        const bool selected = node.instructionIndex == editor.selectedPackageInstruction && node.kind == pf::PackageScriptGraphNodeKind::Instruction;
+        const Color fill = node.kind == pf::PackageScriptGraphNodeKind::Entry ? Fade(PURPLE, 0.74f) : (selected ? Fade(ORANGE, 0.78f) : Fade(BLUE, 0.56f));
+        DrawRectangleRounded(nodeRect, 0.08f, 6, fill);
+        DrawRectangleRoundedLines(nodeRect, 0.08f, 6, selected ? ORANGE : Fade(RAYWHITE, 0.5f));
+        const std::string label = node.kind == pf::PackageScriptGraphNodeKind::Entry
+            ? "Entry"
+            : (node.instructionIndex >= 0 && node.instructionIndex < static_cast<int>(script.instructions.size())
+                ? packageScriptOpName(script.instructions[static_cast<size_t>(node.instructionIndex)].op)
+                : "Node");
+        DrawText(clippedText(label, 11, nodeRect.width - 12.0f).c_str(), static_cast<int>(nodeRect.x + 7.0f), static_cast<int>(nodeRect.y + 9.0f), 11, RAYWHITE);
+        DrawText(("#" + std::to_string(node.id)).c_str(), static_cast<int>(nodeRect.x + 7.0f), static_cast<int>(nodeRect.y + 25.0f), 10, Fade(RAYWHITE, 0.68f));
+        if (CheckCollisionPointRec(GetMousePosition(), nodeRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && node.instructionIndex >= 0) {
+            editor.selectedPackageInstruction = node.instructionIndex;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+            session.selectedPackageInstruction = node.instructionIndex;
+        }
+    }
+}
+
+static void drawEditorInspectorWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    pf::FighterDefinition& def,
+    pf::FighterState& state,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "Inspector");
+    DrawText(("Context: " + std::string(editorSelectionKindName(editor.selectionKind))).c_str(),
+        static_cast<int>(std::max(rect.x + 118.0f, rect.x + rect.width - 178.0f)),
+        static_cast<int>(rect.y + 6.0f),
+        11,
+        Fade(RAYWHITE, 0.68f));
+    if (editor.workspace == pf::EditorWorkspace::Assets || editor.selectionKind == pf::FighterEditorSelectionKind::Object) {
+        DrawText("Object / Article", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        if (session.package.objects.empty()) {
+            DrawText("No object definitions in this package", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, Fade(RAYWHITE, 0.62f));
+            if (uiButton({rect.x + 10.0f, rect.y + 86.0f, 94.0f, 24.0f}, "+Projectile")) {
+                std::string error;
+                int added = -1;
+                if (pf::addEditorSessionObject(session, pf::uniqueEditorObjectName(session.package, "Projectile"), pf::GameObjectKind::Projectile, &added, &error)) {
+                    editor.selectedObjectDef = added;
+                    editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added projectile object");
+                    return;
+                }
+                editor.status = "Editor: add object failed: " + error;
+            }
+            return;
+        }
+
+        editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(session.package.objects.size()) - 1);
+        pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        std::string renamedObject;
+        if (uiTextField({rect.x + 10.0f, rect.y + 58.0f, rect.width - 20.0f, 24.0f},
+                "workstation-object-name",
+                editor,
+                object.name,
+                renamedObject,
+                48))
+        {
+            std::string error;
+            if (pf::renameEditorSessionObject(session, editor.selectedObjectDef, renamedObject, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed object/article");
+                return;
+            }
+            editor.status = "Editor: rename object failed: " + error;
+        }
+
+        DrawText(("Kind " + std::string(gameObjectKindName(object.kind)) +
+                  "  life=" + std::to_string(object.lifetimeFrames) +
+                  "  g=" + std::to_string(pf::fxToFloat(object.gravity)) +
+                  "  maxDmg=" + std::to_string(pf::fxToFloat(object.maxDamage))).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 90.0f),
+            11,
+            RAYWHITE);
+        auto commitObjectProperties = [&](const pf::GameObjectDefinition& edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionObjectProperties(
+                    session,
+                    editor.selectedObjectDef,
+                    std::max(1, edited.lifetimeFrames),
+                    edited.gravity,
+                    edited.terminalVelocity,
+                    edited.maxDamage,
+                    edited.destroyOnHit,
+                    edited.destroyOnShield,
+                    edited.hitOwner,
+                    &error))
+            {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: object property edit failed: " + error;
+            return false;
+        };
+        pf::GameObjectDefinition editedObject = object;
+        const float propY = rect.y + 112.0f;
+        if (uiButton({rect.x + 10.0f, propY, 58.0f, 22.0f}, "Kind")) {
+            std::string error;
+            if (pf::setEditorSessionObjectKind(session, editor.selectedObjectDef, nextGameObjectKind(object.kind), &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: changed object kind");
+                return;
+            }
+            editor.status = "Editor: object kind edit failed: " + error;
+        }
+        if (uiButton({rect.x + 74.0f, propY, 50.0f, 22.0f}, "Life-")) {
+            editedObject.lifetimeFrames = std::max(1, editedObject.lifetimeFrames - 15);
+            if (commitObjectProperties(editedObject, "Editor: shortened object lifetime")) return;
+        }
+        if (uiButton({rect.x + 130.0f, propY, 50.0f, 22.0f}, "Life+")) {
+            editedObject.lifetimeFrames += 15;
+            if (commitObjectProperties(editedObject, "Editor: lengthened object lifetime")) return;
+        }
+        if (uiButton({rect.x + 186.0f, propY, 42.0f, 22.0f}, "G-")) {
+            editedObject.gravity -= pf::fxFromFloat(0.01f);
+            if (commitObjectProperties(editedObject, "Editor: lowered object gravity")) return;
+        }
+        if (uiButton({rect.x + 234.0f, propY, 42.0f, 22.0f}, "G+")) {
+            editedObject.gravity += pf::fxFromFloat(0.01f);
+            if (commitObjectProperties(editedObject, "Editor: raised object gravity")) return;
+        }
+        if (uiButton({rect.x + 282.0f, propY, 58.0f, 22.0f}, "Owner", object.hitOwner)) {
+            editedObject.hitOwner = !editedObject.hitOwner;
+            if (commitObjectProperties(editedObject, "Editor: toggled object owner hit flag")) return;
+        }
+        const float flagY = propY + 28.0f;
+        if (uiButton({rect.x + 10.0f, flagY, 76.0f, 22.0f}, "HitKill", object.destroyOnHit)) {
+            editedObject.destroyOnHit = !editedObject.destroyOnHit;
+            if (commitObjectProperties(editedObject, "Editor: toggled destroy on hit")) return;
+        }
+        if (uiButton({rect.x + 92.0f, flagY, 82.0f, 22.0f}, "ShieldKill", object.destroyOnShield)) {
+            editedObject.destroyOnShield = !editedObject.destroyOnShield;
+            if (commitObjectProperties(editedObject, "Editor: toggled destroy on shield")) return;
+        }
+        if (uiButton({rect.x + 180.0f, flagY, 62.0f, 22.0f}, "Dmg-")) {
+            editedObject.maxDamage = std::max(pf::Fix{0}, editedObject.maxDamage - pf::fx(1));
+            if (commitObjectProperties(editedObject, "Editor: lowered object max damage")) return;
+        }
+        if (uiButton({rect.x + 248.0f, flagY, 62.0f, 22.0f}, "Dmg+")) {
+            editedObject.maxDamage += pf::fx(1);
+            if (commitObjectProperties(editedObject, "Editor: raised object max damage")) return;
+        }
+
+        const float stateY = flagY + 36.0f;
+        if (!object.states.empty()) {
+            editor.selectedObjectState = std::clamp(editor.selectedObjectState, 0, static_cast<int>(object.states.size()) - 1);
+            const pf::GameObjectStateDefinition& objectState = object.states[static_cast<size_t>(editor.selectedObjectState)];
+            DrawText(("State #" + std::to_string(editor.selectedObjectState) + " " + objectState.name +
+                      " len=" + std::to_string(objectState.animationLengthFrames) +
+                      (editor.selectedObjectState == object.initialState ? " initial" : "")).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(stateY),
+                11,
+                RAYWHITE);
+            std::string renamedObjectState;
+            if (uiTextField({rect.x + 10.0f, stateY + 18.0f, rect.width - 20.0f, 22.0f},
+                    "workstation-object-state-name",
+                    editor,
+                    objectState.name,
+                    renamedObjectState,
+                    48))
+            {
+                std::string error;
+                if (pf::renameEditorSessionObjectState(session, editor.selectedObjectDef, editor.selectedObjectState, renamedObjectState, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed object state");
+                    return;
+                }
+                editor.status = "Editor: rename object state failed: " + error;
+            }
+            const float objectStateButtonY = stateY + 48.0f;
+            if (uiButton({rect.x + 10.0f, objectStateButtonY, 50.0f, 22.0f}, "Prev")) {
+                editor.selectedObjectState = wrappedIndex(editor.selectedObjectState - 1, static_cast<int>(object.states.size()));
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                return;
+            }
+            if (uiButton({rect.x + 66.0f, objectStateButtonY, 50.0f, 22.0f}, "Next")) {
+                editor.selectedObjectState = wrappedIndex(editor.selectedObjectState + 1, static_cast<int>(object.states.size()));
+                editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                return;
+            }
+            if (uiButton({rect.x + 122.0f, objectStateButtonY, 48.0f, 22.0f}, "Len-")) {
+                std::string error;
+                if (pf::setEditorSessionObjectStateTiming(session, editor.selectedObjectDef, editor.selectedObjectState, std::max(1, objectState.animationLengthFrames - 1), objectState.loopAnimation, false, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: shortened object state");
+                    return;
+                }
+                editor.status = "Editor: object state timing failed: " + error;
+            }
+            if (uiButton({rect.x + 176.0f, objectStateButtonY, 48.0f, 22.0f}, "Len+")) {
+                std::string error;
+                if (pf::setEditorSessionObjectStateTiming(session, editor.selectedObjectDef, editor.selectedObjectState, objectState.animationLengthFrames + 1, objectState.loopAnimation, false, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lengthened object state");
+                    return;
+                }
+                editor.status = "Editor: object state timing failed: " + error;
+            }
+            if (uiButton({rect.x + 230.0f, objectStateButtonY, 54.0f, 22.0f}, "Loop", objectState.loopAnimation)) {
+                std::string error;
+                if (pf::setEditorSessionObjectStateTiming(session, editor.selectedObjectDef, editor.selectedObjectState, objectState.animationLengthFrames, !objectState.loopAnimation, false, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled object state loop");
+                    return;
+                }
+                editor.status = "Editor: object state timing failed: " + error;
+            }
+            if (uiButton({rect.x + 290.0f, objectStateButtonY, 58.0f, 22.0f}, "Initial")) {
+                std::string error;
+                if (pf::setEditorSessionObjectStateTiming(session, editor.selectedObjectDef, editor.selectedObjectState, objectState.animationLengthFrames, objectState.loopAnimation, true, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: set object initial state");
+                    return;
+                }
+                editor.status = "Editor: object initial state failed: " + error;
+            }
+        }
+
+        const float objectVarY = stateY + 82.0f;
+        DrawText(("Object vars " + std::to_string(object.packageVariables.size()) +
+                  "  scripts " + std::to_string(object.packageScripts.size()) +
+                  "  boxes H" + std::to_string(object.hitboxes.size()) +
+                  " Hu" + std::to_string(object.hurtboxes.size()) +
+                  " T" + std::to_string(object.touchboxes.size())).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(objectVarY),
+            10,
+            Fade(RAYWHITE, 0.68f));
+        if (uiButton({rect.x + 10.0f, objectVarY + 18.0f, 54.0f, 22.0f}, "+Var")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionObjectPackageVariable(session, editor.selectedObjectDef, {}, 0, &added, &error)) {
+                editor.selectedPackageVariable = added;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added object variable");
+                return;
+            }
+            editor.status = "Editor: add object variable failed: " + error;
+        }
+        if (!object.packageVariables.empty()) {
+            editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(object.packageVariables.size()) - 1);
+            const pf::PackageVariableDefinition& objectVariable = object.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+            DrawText(clippedText("v" + std::to_string(editor.selectedPackageVariable) + " " + objectVariable.name + " init=" + std::to_string(objectVariable.initialValue), 10, rect.width - 146.0f).c_str(),
+                static_cast<int>(rect.x + 72.0f),
+                static_cast<int>(objectVarY + 23.0f),
+                10,
+                RAYWHITE);
+            if (uiButton({rect.x + rect.width - 68.0f, objectVarY + 18.0f, 26.0f, 22.0f}, "-")) {
+                std::string error;
+                if (pf::setEditorSessionObjectPackageVariableInitialValue(session, editor.selectedObjectDef, editor.selectedPackageVariable, objectVariable.initialValue - 1, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lowered object variable initial value");
+                    return;
+                }
+                editor.status = "Editor: object variable edit failed: " + error;
+            }
+            if (uiButton({rect.x + rect.width - 36.0f, objectVarY + 18.0f, 26.0f, 22.0f}, "+")) {
+                std::string error;
+                if (pf::setEditorSessionObjectPackageVariableInitialValue(session, editor.selectedObjectDef, editor.selectedPackageVariable, objectVariable.initialValue + 1, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: raised object variable initial value");
+                    return;
+                }
+                editor.status = "Editor: object variable edit failed: " + error;
+            }
+        }
+        return;
+    }
+    if (editor.workspace == pf::EditorWorkspace::Animation || editor.selectionKind == pf::FighterEditorSelectionKind::Animation) {
+        DrawText("Animation", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        if (def.authoredClips.empty()) {
+            DrawText("No authored clips", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, Fade(RAYWHITE, 0.62f));
+            return;
+        }
+        editor.selectedAnimationClip = std::clamp(editor.selectedAnimationClip, 0, static_cast<int>(def.authoredClips.size()) - 1);
+        const pf::AnimationClip& clip = def.authoredClips[static_cast<size_t>(editor.selectedAnimationClip)];
+        std::string renamedClip;
+        if (uiTextField({rect.x + 10.0f, rect.y + 58.0f, rect.width - 20.0f, 24.0f},
+                "workstation-animation-clip-name",
+                editor,
+                clip.name,
+                renamedClip,
+                48))
+        {
+            std::string error;
+            if (pf::renameEditorSessionAuthoredClip(session, editor.selectedAnimationClip, renamedClip, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed authored clip");
+                return;
+            }
+            editor.status = "Editor: rename clip failed: " + error;
+        }
+        const int clipFrames = std::max(1, static_cast<int>(pf::fxToFloat(clip.frameCount)));
+        DrawText(("action=" + std::to_string(clip.actionIndex) +
+                  " frames=" + std::to_string(clipFrames) +
+                  " blend=" + std::to_string(clip.defaultBlendFrames) +
+                  " flags=" + std::to_string(clip.actionFlags)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 90.0f),
+            11,
+            RAYWHITE);
+        auto commitClip = [&](int actionIndex, int frameCount, int blendFrames, uint32_t actionFlags, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionAuthoredClipProperties(
+                    session,
+                    editor.selectedAnimationClip,
+                    actionIndex,
+                    pf::fx(std::max(1, frameCount)),
+                    std::max(0, blendFrames),
+                    actionFlags,
+                    &error))
+            {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: clip property edit failed: " + error;
+            return false;
+        };
+        const float clipY = rect.y + 112.0f;
+        if (uiButton({rect.x + 10.0f, clipY, 54.0f, 22.0f}, "Len-")) {
+            if (commitClip(clip.actionIndex, clipFrames - 1, clip.defaultBlendFrames, clip.actionFlags, "Editor: shortened authored clip")) return;
+        }
+        if (uiButton({rect.x + 70.0f, clipY, 54.0f, 22.0f}, "Len+")) {
+            if (commitClip(clip.actionIndex, clipFrames + 1, clip.defaultBlendFrames, clip.actionFlags, "Editor: lengthened authored clip")) return;
+        }
+        if (uiButton({rect.x + 130.0f, clipY, 54.0f, 22.0f}, "Act-")) {
+            if (commitClip(std::max(0, clip.actionIndex - 1), clipFrames, clip.defaultBlendFrames, clip.actionFlags, "Editor: lowered authored clip action index")) return;
+        }
+        if (uiButton({rect.x + 190.0f, clipY, 54.0f, 22.0f}, "Act+")) {
+            if (commitClip(clip.actionIndex + 1, clipFrames, clip.defaultBlendFrames, clip.actionFlags, "Editor: raised authored clip action index")) return;
+        }
+        if (uiButton({rect.x + 250.0f, clipY, 62.0f, 22.0f}, "Blend-")) {
+            if (commitClip(clip.actionIndex, clipFrames, clip.defaultBlendFrames - 1, clip.actionFlags, "Editor: lowered authored clip blend")) return;
+        }
+        if (uiButton({rect.x + 318.0f, clipY, 62.0f, 22.0f}, "Blend+")) {
+            if (commitClip(clip.actionIndex, clipFrames, clip.defaultBlendFrames + 1, clip.actionFlags, "Editor: raised authored clip blend")) return;
+        }
+        if (uiButton({rect.x + 10.0f, clipY + 30.0f, 86.0f, 22.0f}, "UseOnState")) {
+            std::string error;
+            if (pf::setEditorSessionStateAnimation(session, session.selectedState, clip.name, clip.actionIndex, clipFrames, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: assigned authored clip to selected state");
+                return;
+            }
+            editor.status = "Editor: assign clip failed: " + error;
+        }
+
+        const float jointY = clipY + 66.0f;
+        DrawText(("Joints " + std::to_string(def.authoredSkeleton.size()) +
+                  "  selected " + std::to_string(editor.selectedAnimationJoint)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(jointY),
+            11,
+            Fade(RAYWHITE, 0.7f));
+        if (uiButton({rect.x + 10.0f, jointY + 20.0f, 64.0f, 22.0f}, "+Joint")) {
+            pf::AnimationJoint joint;
+            joint.parent = def.authoredSkeleton.empty() ? -1 : std::clamp(editor.selectedAnimationJoint, 0, static_cast<int>(def.authoredSkeleton.size()) - 1);
+            joint.name = pf::uniqueEditorAuthoredJointName(def);
+            joint.scale = {pf::fx(1), pf::fx(1), pf::fx(1)};
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionAuthoredJoint(session, joint, -1, &added, &error)) {
+                editor.selectedAnimationJoint = added;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added authored joint");
+                return;
+            }
+            editor.status = "Editor: add joint failed: " + error;
+        }
+        if (!def.authoredSkeleton.empty()) {
+            editor.selectedAnimationJoint = std::clamp(editor.selectedAnimationJoint, 0, static_cast<int>(def.authoredSkeleton.size()) - 1);
+            const pf::AnimationJoint& joint = def.authoredSkeleton[static_cast<size_t>(editor.selectedAnimationJoint)];
+            std::string renamedJoint;
+            if (uiTextField({rect.x + 82.0f, jointY + 20.0f, rect.width - 92.0f, 22.0f},
+                    "workstation-animation-joint-name",
+                    editor,
+                    joint.name,
+                    renamedJoint,
+                    48))
+            {
+                pf::AnimationJoint edited = joint;
+                edited.name = renamedJoint;
+                std::string error;
+                if (pf::setEditorSessionAuthoredJoint(session, editor.selectedAnimationJoint, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed authored joint");
+                    return;
+                }
+                editor.status = "Editor: joint rename failed: " + error;
+            }
+            const float jointButtonY = jointY + 50.0f;
+            if (uiButton({rect.x + 10.0f, jointButtonY, 46.0f, 22.0f}, "Jnt<")) {
+                editor.selectedAnimationJoint = wrappedIndex(editor.selectedAnimationJoint - 1, static_cast<int>(def.authoredSkeleton.size()));
+                return;
+            }
+            if (uiButton({rect.x + 62.0f, jointButtonY, 46.0f, 22.0f}, "Jnt>")) {
+                editor.selectedAnimationJoint = wrappedIndex(editor.selectedAnimationJoint + 1, static_cast<int>(def.authoredSkeleton.size()));
+                return;
+            }
+            auto commitJoint = [&](pf::AnimationJoint edited, const std::string& message) -> bool {
+                std::string error;
+                if (pf::setEditorSessionAuthoredJoint(session, editor.selectedAnimationJoint, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+                editor.status = "Editor: joint edit failed: " + error;
+                return false;
+            };
+            pf::AnimationJoint editedJoint = joint;
+            if (uiButton({rect.x + 114.0f, jointButtonY, 36.0f, 22.0f}, "X-")) {
+                editedJoint.translation.x -= pf::fxFromFloat(0.05f);
+                if (commitJoint(editedJoint, "Editor: moved joint left")) return;
+            }
+            if (uiButton({rect.x + 156.0f, jointButtonY, 36.0f, 22.0f}, "X+")) {
+                editedJoint.translation.x += pf::fxFromFloat(0.05f);
+                if (commitJoint(editedJoint, "Editor: moved joint right")) return;
+            }
+            if (uiButton({rect.x + 198.0f, jointButtonY, 36.0f, 22.0f}, "Y-")) {
+                editedJoint.translation.y -= pf::fxFromFloat(0.05f);
+                if (commitJoint(editedJoint, "Editor: lowered joint")) return;
+            }
+            if (uiButton({rect.x + 240.0f, jointButtonY, 36.0f, 22.0f}, "Y+")) {
+                editedJoint.translation.y += pf::fxFromFloat(0.05f);
+                if (commitJoint(editedJoint, "Editor: raised joint")) return;
+            }
+            if (uiButton({rect.x + 282.0f, jointButtonY, 58.0f, 22.0f}, "-Joint")) {
+                std::string error;
+                if (pf::removeEditorSessionAuthoredJoint(session, editor.selectedAnimationJoint, &error)) {
+                    editor.selectedAnimationJoint = 0;
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed authored joint");
+                    return;
+                }
+                editor.status = "Editor: remove joint failed: " + error;
+            }
+            DrawText(("pos=(" + std::to_string(pf::fxToFloat(joint.translation.x)) + ", " +
+                      std::to_string(pf::fxToFloat(joint.translation.y)) + ") parent=" +
+                      std::to_string(joint.parent)).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(jointButtonY + 30.0f),
+                10,
+                Fade(RAYWHITE, 0.66f));
+        }
+        return;
+    }
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Viewport) {
+        DrawText("Viewport Volumes", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        DrawText((std::string("Overlays ") +
+                  (editor.showModel ? "model " : "") +
+                  (editor.showHitboxes ? "hit " : "") +
+                  (editor.showHurtboxes ? "hurt " : "") +
+                  (editor.showEcb ? "ecb " : "") +
+                  (editor.showSkeleton ? "bones" : "")).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 62.0f),
+            11,
+            Fade(RAYWHITE, 0.7f));
+        const float ecbY = rect.y + 86.0f;
+        DrawText(("Authored ECB: " + std::string(def.authoredEcb.enabled ? "enabled" : "disabled")).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(ecbY),
+            11,
+            RAYWHITE);
+        auto commitEcb = [&](pf::FighterEcbDefinition edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionAuthoredEcb(session, edited, true, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: authored ECB edit failed: " + error;
+            return false;
+        };
+        pf::FighterEcbDefinition editedEcb = def.authoredEcb;
+        if (uiButton({rect.x + 10.0f, ecbY + 20.0f, 52.0f, 22.0f}, "ECB", def.authoredEcb.enabled)) {
+            editedEcb.enabled = !editedEcb.enabled;
+            if (commitEcb(editedEcb, editedEcb.enabled ? "Editor: enabled authored ECB" : "Editor: disabled authored ECB")) return;
+        }
+        if (def.authoredEcb.enabled) {
+            DrawText(("w=" + std::to_string(pf::fxToFloat(def.authoredEcb.points[2].x) * 2.0f) +
+                      " top=" + std::to_string(pf::fxToFloat(def.authoredEcb.points[1].y)) +
+                      " side=" + std::to_string(pf::fxToFloat(def.authoredEcb.points[0].y)) +
+                      " bot=" + std::to_string(pf::fxToFloat(def.authoredEcb.points[3].y))).c_str(),
+                static_cast<int>(rect.x + 70.0f),
+                static_cast<int>(ecbY + 25.0f),
+                10,
+                Fade(RAYWHITE, 0.68f));
+            const float ecbButtonY = ecbY + 50.0f;
+            if (uiButton({rect.x + 10.0f, ecbButtonY, 46.0f, 22.0f}, "W+")) {
+                editedEcb.points[0].x -= pf::fxFromFloat(0.05f);
+                editedEcb.points[2].x += pf::fxFromFloat(0.05f);
+                if (commitEcb(editedEcb, "Editor: widened authored ECB")) return;
+            }
+            if (uiButton({rect.x + 62.0f, ecbButtonY, 46.0f, 22.0f}, "W-")) {
+                editedEcb.points[0].x = std::min(editedEcb.points[0].x + pf::fxFromFloat(0.05f), -pf::fxFromFloat(0.1f));
+                editedEcb.points[2].x = std::max(editedEcb.points[2].x - pf::fxFromFloat(0.05f), pf::fxFromFloat(0.1f));
+                if (commitEcb(editedEcb, "Editor: narrowed authored ECB")) return;
+            }
+            if (uiButton({rect.x + 114.0f, ecbButtonY, 54.0f, 22.0f}, "Top+")) {
+                editedEcb.points[1].y += pf::fxFromFloat(0.1f);
+                if (commitEcb(editedEcb, "Editor: raised authored ECB top")) return;
+            }
+            if (uiButton({rect.x + 174.0f, ecbButtonY, 54.0f, 22.0f}, "Top-")) {
+                editedEcb.points[1].y = std::max(editedEcb.points[3].y + pf::fxFromFloat(0.5f), editedEcb.points[1].y - pf::fxFromFloat(0.1f));
+                if (commitEcb(editedEcb, "Editor: lowered authored ECB top")) return;
+            }
+            if (uiButton({rect.x + 234.0f, ecbButtonY, 54.0f, 22.0f}, "Bot+")) {
+                editedEcb.points[3].y += pf::fxFromFloat(0.05f);
+                if (commitEcb(editedEcb, "Editor: raised authored ECB bottom")) return;
+            }
+            if (uiButton({rect.x + 294.0f, ecbButtonY, 54.0f, 22.0f}, "Bot-")) {
+                editedEcb.points[3].y -= pf::fxFromFloat(0.05f);
+                if (commitEcb(editedEcb, "Editor: lowered authored ECB bottom")) return;
+            }
+            if (uiButton({rect.x + 10.0f, ecbButtonY + 28.0f, 58.0f, 22.0f}, "Side+")) {
+                editedEcb.points[0].y += pf::fxFromFloat(0.05f);
+                editedEcb.points[2].y += pf::fxFromFloat(0.05f);
+                if (commitEcb(editedEcb, "Editor: raised authored ECB side points")) return;
+            }
+            if (uiButton({rect.x + 74.0f, ecbButtonY + 28.0f, 58.0f, 22.0f}, "Side-")) {
+                editedEcb.points[0].y -= pf::fxFromFloat(0.05f);
+                editedEcb.points[2].y -= pf::fxFromFloat(0.05f);
+                if (commitEcb(editedEcb, "Editor: lowered authored ECB side points")) return;
+            }
+        }
+
+        const float hurtY = ecbY + 116.0f;
+        DrawText(("Fighter hurtboxes: " + std::to_string(def.hurtboxes.size())).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(hurtY),
+            11,
+            RAYWHITE);
+        if (uiButton({rect.x + 140.0f, hurtY - 4.0f, 62.0f, 22.0f}, "+Hurt")) {
+            pf::HurtboxDefinition hurtbox;
+            hurtbox.bone = pf::BoneId::Hip;
+            hurtbox.startOffset = {0, pf::fxFromFloat(-0.35f), 0};
+            hurtbox.endOffset = {0, pf::fxFromFloat(0.45f), 0};
+            hurtbox.radius = pf::fxFromFloat(0.35f);
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionHurtbox(session, hurtbox, -1, &added, &error)) {
+                editor.selectedHurtbox = added;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added fighter hurtbox");
+                return;
+            }
+            editor.status = "Editor: add hurtbox failed: " + error;
+        }
+        if (uiButton({rect.x + 208.0f, hurtY - 4.0f, 62.0f, 22.0f}, "-Hurt")) {
+            std::string error;
+            if (pf::removeEditorSessionHurtbox(session, editor.selectedHurtbox, &error)) {
+                editor.selectedHurtbox = 0;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed fighter hurtbox");
+                return;
+            }
+            editor.status = "Editor: remove hurtbox failed: " + error;
+        }
+        if (!def.hurtboxes.empty()) {
+            editor.selectedHurtbox = std::clamp(editor.selectedHurtbox, 0, static_cast<int>(def.hurtboxes.size()) - 1);
+            const pf::HurtboxDefinition& hurtbox = def.hurtboxes[static_cast<size_t>(editor.selectedHurtbox)];
+            DrawText(("#" + std::to_string(editor.selectedHurtbox) + " " + pf::boneName(hurtbox.bone) +
+                      " " + hurtboxStateName(hurtbox.state) +
+                      " r=" + std::to_string(pf::fxToFloat(hurtbox.radius)) +
+                      (hurtbox.grabbable ? " grab" : " no-grab")).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(hurtY + 24.0f),
+                11,
+                Fade(RAYWHITE, 0.72f));
+            auto commitHurtbox = [&](pf::HurtboxDefinition edited, const std::string& message) -> bool {
+                std::string error;
+                if (pf::setEditorSessionHurtbox(session, editor.selectedHurtbox, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+                editor.status = "Editor: hurtbox edit failed: " + error;
+                return false;
+            };
+            pf::HurtboxDefinition editedHurtbox = hurtbox;
+            const float hurtButtonY = hurtY + 48.0f;
+            if (uiButton({rect.x + 10.0f, hurtButtonY, 46.0f, 22.0f}, "Prev")) {
+                editor.selectedHurtbox = wrappedIndex(editor.selectedHurtbox - 1, static_cast<int>(def.hurtboxes.size()));
+                return;
+            }
+            if (uiButton({rect.x + 62.0f, hurtButtonY, 46.0f, 22.0f}, "Next")) {
+                editor.selectedHurtbox = wrappedIndex(editor.selectedHurtbox + 1, static_cast<int>(def.hurtboxes.size()));
+                return;
+            }
+            if (uiButton({rect.x + 114.0f, hurtButtonY, 42.0f, 22.0f}, "R-")) {
+                editedHurtbox.radius = std::max(pf::fxFromFloat(0.05f), editedHurtbox.radius - pf::fxFromFloat(0.05f));
+                if (commitHurtbox(editedHurtbox, "Editor: shrank fighter hurtbox")) return;
+            }
+            if (uiButton({rect.x + 162.0f, hurtButtonY, 42.0f, 22.0f}, "R+")) {
+                editedHurtbox.radius += pf::fxFromFloat(0.05f);
+                if (commitHurtbox(editedHurtbox, "Editor: enlarged fighter hurtbox")) return;
+            }
+            if (uiButton({rect.x + 210.0f, hurtButtonY, 52.0f, 22.0f}, "Bone")) {
+                editedHurtbox.bone = nextEditorBone(editedHurtbox.bone);
+                if (commitHurtbox(editedHurtbox, "Editor: changed fighter hurtbox bone")) return;
+            }
+            if (uiButton({rect.x + 268.0f, hurtButtonY, 54.0f, 22.0f}, "State")) {
+                editedHurtbox.state = nextHurtboxState(editedHurtbox.state);
+                if (commitHurtbox(editedHurtbox, "Editor: changed fighter hurtbox state")) return;
+            }
+            if (uiButton({rect.x + 328.0f, hurtButtonY, 54.0f, 22.0f}, "Grab", hurtbox.grabbable)) {
+                editedHurtbox.grabbable = !editedHurtbox.grabbable;
+                if (commitHurtbox(editedHurtbox, "Editor: toggled fighter hurtbox grabbable")) return;
+            }
+            const float moveY = hurtButtonY + 28.0f;
+            if (uiButton({rect.x + 10.0f, moveY, 42.0f, 22.0f}, "X-")) {
+                editedHurtbox.startOffset.x -= pf::fxFromFloat(0.1f);
+                editedHurtbox.endOffset.x -= pf::fxFromFloat(0.1f);
+                if (commitHurtbox(editedHurtbox, "Editor: moved fighter hurtbox backward")) return;
+            }
+            if (uiButton({rect.x + 58.0f, moveY, 42.0f, 22.0f}, "X+")) {
+                editedHurtbox.startOffset.x += pf::fxFromFloat(0.1f);
+                editedHurtbox.endOffset.x += pf::fxFromFloat(0.1f);
+                if (commitHurtbox(editedHurtbox, "Editor: moved fighter hurtbox forward")) return;
+            }
+            if (uiButton({rect.x + 106.0f, moveY, 42.0f, 22.0f}, "Y-")) {
+                editedHurtbox.startOffset.y -= pf::fxFromFloat(0.1f);
+                editedHurtbox.endOffset.y -= pf::fxFromFloat(0.1f);
+                if (commitHurtbox(editedHurtbox, "Editor: lowered fighter hurtbox")) return;
+            }
+            if (uiButton({rect.x + 154.0f, moveY, 42.0f, 22.0f}, "Y+")) {
+                editedHurtbox.startOffset.y += pf::fxFromFloat(0.1f);
+                editedHurtbox.endOffset.y += pf::fxFromFloat(0.1f);
+                if (commitHurtbox(editedHurtbox, "Editor: raised fighter hurtbox")) return;
+            }
+            if (uiButton({rect.x + 202.0f, moveY, 54.0f, 22.0f}, "Tall+")) {
+                editedHurtbox.endOffset.y += pf::fxFromFloat(0.1f);
+                if (commitHurtbox(editedHurtbox, "Editor: stretched fighter hurtbox")) return;
+            }
+            if (uiButton({rect.x + 262.0f, moveY, 54.0f, 22.0f}, "Tall-")) {
+                editedHurtbox.endOffset.y = std::max(editedHurtbox.startOffset.y + pf::fxFromFloat(0.1f), editedHurtbox.endOffset.y - pf::fxFromFloat(0.1f));
+                if (commitHurtbox(editedHurtbox, "Editor: shortened fighter hurtbox")) return;
+            }
+        }
+        return;
+    }
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Variable) {
+        DrawText("Package Variable", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        if (def.packageVariables.empty()) {
+            DrawText("No package variables", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, Fade(RAYWHITE, 0.62f));
+            if (uiButton({rect.x + 10.0f, rect.y + 86.0f, 72.0f, 24.0f}, "+Var")) {
+                std::string error;
+                int added = -1;
+                if (pf::addEditorSessionPackageVariable(session, {}, 0, &added, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added package variable");
+                    editor.selectedPackageVariable = added;
+                } else {
+                    editor.status = "Editor: add variable failed: " + error;
+                }
+            }
+            return;
+        }
+
+        editor.selectedPackageVariable = std::clamp(editor.selectedPackageVariable, 0, static_cast<int>(def.packageVariables.size()) - 1);
+        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+        DrawText(("#" + std::to_string(editor.selectedPackageVariable) +
+                  "  initial=" + std::to_string(variable.initialValue) +
+                  "  operand uses=" + std::to_string(countPackageVariableOperandUses(def, editor.selectedPackageVariable))).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 62.0f),
+            12,
+            RAYWHITE);
+        std::string renamedVariable;
+        if (uiTextField({rect.x + 10.0f, rect.y + 84.0f, rect.width - 20.0f, 24.0f},
+                "workstation-inspector-variable-name",
+                editor,
+                variable.name,
+                renamedVariable,
+                48))
+        {
+            std::string error;
+            if (pf::renameEditorSessionPackageVariable(session, editor.selectedPackageVariable, renamedVariable, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed package variable");
+                return;
+            }
+            editor.status = "Editor: rename variable failed: " + error;
+        }
+        if (uiButton({rect.x + 10.0f, rect.y + 118.0f, 62.0f, 22.0f}, "Prev")) {
+            editor.selectedPackageVariable = wrappedIndex(editor.selectedPackageVariable - 1, static_cast<int>(def.packageVariables.size()));
+        }
+        if (uiButton({rect.x + 78.0f, rect.y + 118.0f, 62.0f, 22.0f}, "Next")) {
+            editor.selectedPackageVariable = wrappedIndex(editor.selectedPackageVariable + 1, static_cast<int>(def.packageVariables.size()));
+        }
+        if (uiButton({rect.x + 146.0f, rect.y + 118.0f, 54.0f, 22.0f}, "Init-")) {
+            std::string error;
+            if (pf::setEditorSessionPackageVariableInitialValue(session, editor.selectedPackageVariable, variable.initialValue - 1, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lowered package variable initial value");
+                return;
+            }
+            editor.status = "Editor: variable initial edit failed: " + error;
+        }
+        if (uiButton({rect.x + 206.0f, rect.y + 118.0f, 54.0f, 22.0f}, "Init+")) {
+            std::string error;
+            if (pf::setEditorSessionPackageVariableInitialValue(session, editor.selectedPackageVariable, variable.initialValue + 1, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: raised package variable initial value");
+                return;
+            }
+            editor.status = "Editor: variable initial edit failed: " + error;
+        }
+        if (uiButton({rect.x + 10.0f, rect.y + 150.0f, 62.0f, 22.0f}, "+Var")) {
+            std::string error;
+            int added = -1;
+            if (pf::addEditorSessionPackageVariable(session, {}, 0, &added, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added package variable");
+                editor.selectedPackageVariable = added;
+                return;
+            }
+            editor.status = "Editor: add variable failed: " + error;
+        }
+        if (uiButton({rect.x + 78.0f, rect.y + 150.0f, 62.0f, 22.0f}, "-Var")) {
+            std::string error;
+            if (pf::removeEditorSessionPackageVariable(session, editor.selectedPackageVariable, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed package variable");
+                return;
+            }
+            editor.status = "Editor: remove variable failed: " + error;
+        }
+        DrawText("Instructions can use this as dst/src operands; interrupt rules can use it for variable conditions.",
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 186.0f),
+            10,
+            Fade(RAYWHITE, 0.62f));
+        return;
+    }
+    if (editor.workspace == pf::EditorWorkspace::Logic && !def.packageScripts.empty()) {
+        editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+        session.selectedPackageScript = editor.selectedPackageScript;
+        pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        std::string renamedScript;
+        DrawText("Script", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        if (uiTextField({rect.x + 58.0f, rect.y + 29.0f, rect.width - 68.0f, 24.0f},
+                "workstation-script-name",
+                editor,
+                script.name,
+                renamedScript,
+                64))
+        {
+            std::string error;
+            const std::string oldName = script.name;
+            if (pf::renameEditorSessionPackageScript(session, editor.selectedPackageScript, renamedScript, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed script " + oldName + " to " + renamedScript);
+                return;
+            }
+            editor.status = "Editor: rename script failed: " + error;
+        }
+        DrawText(("Instructions " + std::to_string(script.instructions.size()) +
+                  "  Graph nodes " + std::to_string(script.graph.nodes.size()) +
+                  "  Links " + std::to_string(script.graph.links.size())).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 62.0f),
+            11,
+            Fade(RAYWHITE, 0.72f));
+        if (uiButton({rect.x + 10.0f, rect.y + 84.0f, 72.0f, 22.0f}, "Budget-")) {
+            std::string error;
+            if (pf::setEditorSessionPackageScriptBudget(session, editor.selectedPackageScript, std::max(1, script.instructionBudget - 8), &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lowered script instruction budget");
+                return;
+            }
+            editor.status = "Editor: script budget failed: " + error;
+        }
+        if (uiButton({rect.x + 88.0f, rect.y + 84.0f, 72.0f, 22.0f}, "Budget+")) {
+            std::string error;
+            if (pf::setEditorSessionPackageScriptBudget(session, editor.selectedPackageScript, script.instructionBudget + 8, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: raised script instruction budget");
+                return;
+            }
+            editor.status = "Editor: script budget failed: " + error;
+        }
+        auto bindSlot = [&](pf::FighterEditorStateCallbackSlot slot, const char* label) -> bool {
+            std::string error;
+            if (pf::bindEditorSessionPackageScriptCallback(session, session.selectedState, slot, script.name, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: bound script to ") + label + " callback");
+                return true;
+            }
+            editor.status = "Editor: callback bind failed: " + error;
+            return false;
+        };
+        const float bindY = rect.y + 114.0f;
+        DrawText("Bind selected script to state callback", static_cast<int>(rect.x + 10.0f), static_cast<int>(bindY), 11, Fade(RAYWHITE, 0.66f));
+        if (uiButton({rect.x + 10.0f, bindY + 20.0f, 58.0f, 22.0f}, "Enter")) {
+            if (bindSlot(pf::FighterEditorStateCallbackSlot::Enter, "enter")) return;
+        }
+        if (uiButton({rect.x + 74.0f, bindY + 20.0f, 58.0f, 22.0f}, "Frame")) {
+            if (bindSlot(pf::FighterEditorStateCallbackSlot::Frame, "frame")) return;
+        }
+        if (uiButton({rect.x + 138.0f, bindY + 20.0f, 58.0f, 22.0f}, "Land")) {
+            if (bindSlot(pf::FighterEditorStateCallbackSlot::Landing, "landing")) return;
+        }
+        if (uiButton({rect.x + 202.0f, bindY + 20.0f, 58.0f, 22.0f}, "Air")) {
+            if (bindSlot(pf::FighterEditorStateCallbackSlot::Airborne, "airborne")) return;
+        }
+        if (!script.instructions.empty()) {
+            editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, static_cast<int>(script.instructions.size()) - 1);
+            session.selectedPackageInstruction = editor.selectedPackageInstruction;
+            const pf::PackageScriptInstruction& selectedInstruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
+            const float instrY = bindY + 54.0f;
+            DrawText(clippedText("Instruction #" + std::to_string(editor.selectedPackageInstruction) + "  " + packageInstructionLabel(selectedInstruction), 11, rect.width - 20.0f).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(instrY),
+                11,
+                RAYWHITE);
+            auto commitInstruction = [&](pf::PackageScriptInstruction instruction, const std::string& message) -> bool {
+                normalizePackageInstruction(instruction, def, world, selectedFighterDef, editor.selectedState, editor.selectedObjectDef);
+                std::string error;
+                if (pf::setEditorSessionPackageInstruction(session, editor.selectedPackageScript, editor.selectedPackageInstruction, instruction, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+                editor.status = "Editor: instruction edit failed: " + error;
+                return false;
+            };
+            pf::PackageScriptInstruction edited = selectedInstruction;
+            if (uiButton({rect.x + 10.0f, instrY + 22.0f, 52.0f, 22.0f}, "Op>")) {
+                edited.op = nextPackageScriptOp(edited.op);
+                if (commitInstruction(edited, "Editor: cycled script op")) return;
+            }
+            if (uiButton({rect.x + 68.0f, instrY + 22.0f, 44.0f, 22.0f}, "Dst-")) {
+                --edited.dst;
+                if (commitInstruction(edited, "Editor: changed instruction dst")) return;
+            }
+            if (uiButton({rect.x + 118.0f, instrY + 22.0f, 44.0f, 22.0f}, "Dst+")) {
+                ++edited.dst;
+                if (commitInstruction(edited, "Editor: changed instruction dst")) return;
+            }
+            if (uiButton({rect.x + 168.0f, instrY + 22.0f, 42.0f, 22.0f}, "A-")) {
+                --edited.srcA;
+                if (commitInstruction(edited, "Editor: changed instruction srcA")) return;
+            }
+            if (uiButton({rect.x + 216.0f, instrY + 22.0f, 42.0f, 22.0f}, "A+")) {
+                ++edited.srcA;
+                if (commitInstruction(edited, "Editor: changed instruction srcA")) return;
+            }
+            if (uiButton({rect.x + 264.0f, instrY + 22.0f, 42.0f, 22.0f}, "I-")) {
+                --edited.intValue;
+                if (commitInstruction(edited, "Editor: changed instruction integer")) return;
+            }
+            if (uiButton({rect.x + 312.0f, instrY + 22.0f, 42.0f, 22.0f}, "I+")) {
+                ++edited.intValue;
+                if (commitInstruction(edited, "Editor: changed instruction integer")) return;
+            }
+            DrawText(("dst=" + std::to_string(selectedInstruction.dst) +
+                      " a=" + std::to_string(selectedInstruction.srcA) +
+                      " b=" + std::to_string(selectedInstruction.srcB) +
+                      " i=" + std::to_string(selectedInstruction.intValue) +
+                      " f=" + std::to_string(pf::fxToFloat(selectedInstruction.fixValue))).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(instrY + 50.0f),
+                10,
+                Fade(RAYWHITE, 0.64f));
+            std::string committedText;
+            if (uiTextField({rect.x + 10.0f, instrY + 70.0f, rect.width - 20.0f, 22.0f},
+                    "workstation-logic-instruction-text",
+                    editor,
+                    selectedInstruction.text,
+                    committedText,
+                    64))
+            {
+                edited.text = committedText;
+                if (commitInstruction(edited, "Editor: changed instruction target text")) return;
+            }
+        } else {
+            DrawText("Selected script has no instructions", static_cast<int>(rect.x + 10.0f), static_cast<int>(bindY + 56.0f), 11, Fade(RAYWHITE, 0.6f));
+        }
+        return;
+    }
+    std::string renamedState;
+    DrawText("State", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+    if (uiTextField({rect.x + 58.0f, rect.y + 29.0f, rect.width - 68.0f, 24.0f}, "workstation-state-name", editor, state.name, renamedState)) {
+        std::string error;
+        const std::string oldName = state.name;
+        if (pf::renameEditorSessionState(session, session.selectedState, renamedState, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed session state " + oldName + " to " + renamedState);
+        } else {
+            editor.status = "Editor: rename state failed: " + error;
+        }
+    }
+    DrawText(("Anim: " + clippedText(state.animation, 12, rect.width - 70.0f)).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, RAYWHITE);
+    DrawText(("Frames: " + std::to_string(state.animationLengthFrames) +
+              "  IASA: " + std::to_string(state.initialInterruptibleFrame)).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + 82.0f),
+        12,
+        RAYWHITE);
+    if (uiButton({rect.x + 10.0f, rect.y + 104.0f, 54.0f, 22.0f}, "Len-")) {
+        std::string error;
+        if (pf::setEditorSessionStateTiming(session, session.selectedState, std::max(1, state.animationLengthFrames - 1), state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: shortened selected state");
+        } else {
+            editor.status = "Editor: state timing failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + 70.0f, rect.y + 104.0f, 54.0f, 22.0f}, "Len+")) {
+        std::string error;
+        if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames + 1, state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lengthened selected state");
+        } else {
+            editor.status = "Editor: state timing failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + 130.0f, rect.y + 104.0f, 54.0f, 22.0f}, "IASA-")) {
+        std::string error;
+        if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, std::max(0, state.initialInterruptibleFrame - 1), state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA earlier");
+        } else {
+            editor.status = "Editor: state timing failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + 190.0f, rect.y + 104.0f, 54.0f, 22.0f}, "IASA+")) {
+        std::string error;
+        if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, state.initialInterruptibleFrame + 1, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA later");
+        } else {
+            editor.status = "Editor: state timing failed: " + error;
+        }
+    }
+    const float y = rect.y + 138.0f;
+    if (uiButton({rect.x + 10.0f, y, 76.0f, 24.0f}, "Loop", state.loopAnimation)) {
+        state.loopAnimation = !state.loopAnimation;
+        session.dirty = true;
+        syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled state loop flag");
+    }
+    if (uiButton({rect.x + 92.0f, y, 76.0f, 24.0f}, "AnimPhys", state.useAnimPhysics)) {
+        std::string error;
+        if (pf::setEditorSessionStateCollisionFlags(session, session.selectedState, !state.useAnimPhysics, state.allowSlideoff, state.allowLedgeGrab, state.allowBackwardsLedgeGrab, state.allowWallCollision, state.allowCeilingCollision, state.convertFloorCollisionToGround, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled animation physics");
+        } else {
+            editor.status = "Editor: collision flags failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + 174.0f, y, 76.0f, 24.0f}, "Ledge", state.allowLedgeGrab)) {
+        std::string error;
+        if (pf::setEditorSessionStateCollisionFlags(session, session.selectedState, state.useAnimPhysics, state.allowSlideoff, !state.allowLedgeGrab, state.allowBackwardsLedgeGrab, state.allowWallCollision, state.allowCeilingCollision, state.convertFloorCollisionToGround, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled ledge grab flag");
+        } else {
+            editor.status = "Editor: collision flags failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + 256.0f, y, 76.0f, 24.0f}, "Wall", state.allowWallCollision)) {
+        std::string error;
+        if (pf::setEditorSessionStateCollisionFlags(session, session.selectedState, state.useAnimPhysics, state.allowSlideoff, state.allowLedgeGrab, state.allowBackwardsLedgeGrab, !state.allowWallCollision, state.allowCeilingCollision, state.convertFloorCollisionToGround, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: toggled wall collision flag");
+        } else {
+            editor.status = "Editor: collision flags failed: " + error;
+        }
+    }
+    DrawText(("Callbacks  enter=" + std::to_string(state.onEnter.size()) +
+              " frame=" + std::to_string(state.onFrame.size()) +
+              " land=" + std::to_string(state.onLanding.size()) +
+              " air=" + std::to_string(state.onAirborne.size())).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(y + 38.0f),
+        11,
+        Fade(RAYWHITE, 0.72f));
+    DrawText(("Subactions " + std::to_string(state.action.size()) +
+              "  Interrupts " + std::to_string(state.interrupts.size()) +
+              "  Hurtboxes " + std::to_string(def.hasHsdAsset && def.hsdAsset ? def.hsdAsset->hurtboxes.size() : def.hurtboxes.size())).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(y + 58.0f),
+        11,
+        Fade(RAYWHITE, 0.72f));
+    if (!state.action.empty()) {
+        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
+        const pf::Subaction& subaction = state.action[static_cast<size_t>(editor.selectedSubaction)];
+        DrawText(("Selected subaction #" + std::to_string(editor.selectedSubaction) + "  " + subactionTypeName(subaction.type)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(y + 84.0f),
+            12,
+            RAYWHITE);
+        auto commitSubaction = [&](pf::Subaction edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionSubaction(session, session.selectedState, editor.selectedSubaction, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: subaction edit failed: " + error;
+            return false;
+        };
+        pf::Subaction editedSubaction = subaction;
+        const float subY = y + 106.0f;
+        DrawText(("frames=" + std::to_string(subaction.frames)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(subY + 5.0f),
+            10,
+            Fade(RAYWHITE, 0.68f));
+        if (uiButton({rect.x + 82.0f, subY, 48.0f, 22.0f}, "Fr-")) {
+            editedSubaction.frames = std::max(0, editedSubaction.frames - 1);
+            if (commitSubaction(editedSubaction, "Editor: shortened selected subaction")) return;
+        }
+        if (uiButton({rect.x + 136.0f, subY, 48.0f, 22.0f}, "Fr+")) {
+            ++editedSubaction.frames;
+            if (commitSubaction(editedSubaction, "Editor: lengthened selected subaction")) return;
+        }
+        if (subaction.type == pf::SubactionType::CallScript && !def.packageScripts.empty()) {
+            if (uiButton({rect.x + 190.0f, subY, 74.0f, 22.0f}, "UseScript")) {
+                editedSubaction.objectName = packageScriptTargetName(def.packageScripts, editor.selectedPackageScript);
+                if (commitSubaction(editedSubaction, "Editor: retargeted script subaction")) return;
+            }
+            DrawText(clippedText("call " + subaction.objectName, 10, rect.width - 282.0f).c_str(),
+                static_cast<int>(rect.x + 272.0f),
+                static_cast<int>(subY + 5.0f),
+                10,
+                Fade(RAYWHITE, 0.68f));
+        }
+        if (subaction.type == pf::SubactionType::CreateHitbox || subaction.type == pf::SubactionType::CreateThrowHitbox) {
+            DrawText(("Hitbox dmg=" + std::to_string(pf::fxToFloat(subaction.hitbox.damage)) +
+                      " r=" + std::to_string(pf::fxToFloat(subaction.hitbox.radius)) +
+                      " angle=" + std::to_string(pf::fxToFloat(subaction.hitbox.knockbackAngleDegrees))).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(y + 132.0f),
+                11,
+                Fade(RAYWHITE, 0.72f));
+            const float hitY = y + 154.0f;
+            if (uiButton({rect.x + 10.0f, hitY, 46.0f, 22.0f}, "Dmg-")) {
+                editedSubaction.hitbox.damage = std::max(pf::Fix{0}, editedSubaction.hitbox.damage - pf::fx(1));
+                if (commitSubaction(editedSubaction, "Editor: lowered selected hitbox damage")) return;
+            }
+            if (uiButton({rect.x + 62.0f, hitY, 46.0f, 22.0f}, "Dmg+")) {
+                editedSubaction.hitbox.damage += pf::fx(1);
+                if (commitSubaction(editedSubaction, "Editor: raised selected hitbox damage")) return;
+            }
+            if (uiButton({rect.x + 114.0f, hitY, 42.0f, 22.0f}, "R-")) {
+                editedSubaction.hitbox.radius = std::max(pf::fxFromFloat(0.05f), editedSubaction.hitbox.radius - pf::fxFromFloat(0.05f));
+                if (commitSubaction(editedSubaction, "Editor: shrank selected hitbox")) return;
+            }
+            if (uiButton({rect.x + 162.0f, hitY, 42.0f, 22.0f}, "R+")) {
+                editedSubaction.hitbox.radius += pf::fxFromFloat(0.05f);
+                if (commitSubaction(editedSubaction, "Editor: enlarged selected hitbox")) return;
+            }
+            if (uiButton({rect.x + 210.0f, hitY, 44.0f, 22.0f}, "Ang-")) {
+                editedSubaction.hitbox.knockbackAngleDegrees -= pf::fx(5);
+                if (commitSubaction(editedSubaction, "Editor: lowered selected hitbox angle")) return;
+            }
+            if (uiButton({rect.x + 260.0f, hitY, 44.0f, 22.0f}, "Ang+")) {
+                editedSubaction.hitbox.knockbackAngleDegrees += pf::fx(5);
+                if (commitSubaction(editedSubaction, "Editor: raised selected hitbox angle")) return;
+            }
+            const float offY = hitY + 26.0f;
+            if (uiButton({rect.x + 10.0f, offY, 42.0f, 22.0f}, "X-")) {
+                editedSubaction.hitbox.offset.x -= pf::fxFromFloat(0.1f);
+                if (commitSubaction(editedSubaction, "Editor: moved selected hitbox backward")) return;
+            }
+            if (uiButton({rect.x + 58.0f, offY, 42.0f, 22.0f}, "X+")) {
+                editedSubaction.hitbox.offset.x += pf::fxFromFloat(0.1f);
+                if (commitSubaction(editedSubaction, "Editor: moved selected hitbox forward")) return;
+            }
+            if (uiButton({rect.x + 106.0f, offY, 42.0f, 22.0f}, "Y-")) {
+                editedSubaction.hitbox.offset.y -= pf::fxFromFloat(0.1f);
+                if (commitSubaction(editedSubaction, "Editor: lowered selected hitbox")) return;
+            }
+            if (uiButton({rect.x + 154.0f, offY, 42.0f, 22.0f}, "Y+")) {
+                editedSubaction.hitbox.offset.y += pf::fxFromFloat(0.1f);
+                if (commitSubaction(editedSubaction, "Editor: raised selected hitbox")) return;
+            }
+        }
+    }
+    if (!state.interrupts.empty()) {
+        editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
+        const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
+        const float intY = y + 206.0f;
+        DrawText(("Interrupt #" + std::to_string(editor.selectedInterrupt) +
+                  " -> " + interrupt.targetState +
+                  "  " + interruptConditionName(interrupt.condition) +
+                  "  " + groundRequirementName(interrupt.ground)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(intY),
+            11,
+            RAYWHITE);
+        auto commitInterrupt = [&](pf::InterruptRule edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionInterrupt(session, session.selectedState, editor.selectedInterrupt, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: interrupt edit failed: " + error;
+            return false;
+        };
+        pf::InterruptRule editedInterrupt = interrupt;
+        const float intButtonsY = intY + 22.0f;
+        if (uiButton({rect.x + 10.0f, intButtonsY, 50.0f, 22.0f}, "Cond")) {
+            editedInterrupt.condition = nextCommonInterruptCondition(editedInterrupt.condition);
+            if (commitInterrupt(editedInterrupt, "Editor: changed interrupt condition")) return;
+        }
+        if (uiButton({rect.x + 66.0f, intButtonsY, 50.0f, 22.0f}, "Ground")) {
+            editedInterrupt.ground = nextGroundRequirement(editedInterrupt.ground);
+            if (commitInterrupt(editedInterrupt, "Editor: changed interrupt ground requirement")) return;
+        }
+        if (uiButton({rect.x + 122.0f, intButtonsY, 42.0f, 22.0f}, "En-")) {
+            editedInterrupt.enableFrame = std::max(0, editedInterrupt.enableFrame - 1);
+            if (commitInterrupt(editedInterrupt, "Editor: moved interrupt start earlier")) return;
+        }
+        if (uiButton({rect.x + 170.0f, intButtonsY, 42.0f, 22.0f}, "En+")) {
+            ++editedInterrupt.enableFrame;
+            if (commitInterrupt(editedInterrupt, "Editor: moved interrupt start later")) return;
+        }
+        if (uiButton({rect.x + 218.0f, intButtonsY, 44.0f, 22.0f}, "Dis-")) {
+            editedInterrupt.disableFrame = std::max(0, editedInterrupt.disableFrame - 1);
+            if (commitInterrupt(editedInterrupt, "Editor: moved interrupt end earlier")) return;
+        }
+        if (uiButton({rect.x + 268.0f, intButtonsY, 44.0f, 22.0f}, "Dis+")) {
+            ++editedInterrupt.disableFrame;
+            if (commitInterrupt(editedInterrupt, "Editor: moved interrupt end later")) return;
+        }
+        DrawText(("enable=" + std::to_string(interrupt.enableFrame) +
+                  " disable=" + std::to_string(interrupt.disableFrame) +
+                  " lag=" + std::to_string(interrupt.lagFrames)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(intButtonsY + 28.0f),
+            10,
+            Fade(RAYWHITE, 0.64f));
+        std::string committedTarget;
+        if (uiTextField({rect.x + 10.0f, intButtonsY + 48.0f, rect.width - 20.0f, 22.0f},
+                "workstation-interrupt-target",
+                editor,
+                interrupt.targetState,
+                committedTarget,
+                64))
+        {
+            editedInterrupt.targetState = committedTarget;
+            if (commitInterrupt(editedInterrupt, "Editor: changed interrupt target state")) return;
+        }
+    }
+    const float scriptY = y + 304.0f;
+    if (!def.packageScripts.empty() && scriptY + 112.0f < rect.y + rect.height) {
+        editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+        session.selectedPackageScript = editor.selectedPackageScript;
+        pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        DrawText(clippedText("Script node: " + script.name, 12, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(scriptY),
+            12,
+            RAYWHITE);
+        if (!script.instructions.empty()) {
+            editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, static_cast<int>(script.instructions.size()) - 1);
+            session.selectedPackageInstruction = editor.selectedPackageInstruction;
+            const pf::PackageScriptInstruction& selectedInstruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
+            DrawText(clippedText("#" + std::to_string(editor.selectedPackageInstruction) + "  " + packageInstructionLabel(selectedInstruction), 11, rect.width - 20.0f).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(scriptY + 20.0f),
+                11,
+                Fade(RAYWHITE, 0.74f));
+
+            auto commitInstruction = [&](pf::PackageScriptInstruction instruction, const std::string& message) -> bool {
+                normalizePackageInstruction(instruction, def, world, selectedFighterDef, editor.selectedState, editor.selectedObjectDef);
+                std::string error;
+                if (pf::setEditorSessionPackageInstruction(session, editor.selectedPackageScript, editor.selectedPackageInstruction, instruction, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                    return true;
+                }
+                editor.status = "Editor: instruction edit failed: " + error;
+                return false;
+            };
+
+            pf::PackageScriptInstruction edited = selectedInstruction;
+            const float rowA = scriptY + 42.0f;
+            if (uiButton({rect.x + 10.0f, rowA, 52.0f, 22.0f}, "Op>")) {
+                edited.op = nextPackageScriptOp(edited.op);
+                if (commitInstruction(edited, "Editor: cycled script op")) return;
+            }
+            if (uiButton({rect.x + 68.0f, rowA, 44.0f, 22.0f}, "Dst-")) {
+                --edited.dst;
+                if (commitInstruction(edited, "Editor: changed instruction dst")) return;
+            }
+            if (uiButton({rect.x + 118.0f, rowA, 44.0f, 22.0f}, "Dst+")) {
+                ++edited.dst;
+                if (commitInstruction(edited, "Editor: changed instruction dst")) return;
+            }
+            if (uiButton({rect.x + 168.0f, rowA, 42.0f, 22.0f}, "A-")) {
+                --edited.srcA;
+                if (commitInstruction(edited, "Editor: changed instruction srcA")) return;
+            }
+            if (uiButton({rect.x + 216.0f, rowA, 42.0f, 22.0f}, "A+")) {
+                ++edited.srcA;
+                if (commitInstruction(edited, "Editor: changed instruction srcA")) return;
+            }
+            if (uiButton({rect.x + 264.0f, rowA, 42.0f, 22.0f}, "B-")) {
+                --edited.srcB;
+                if (commitInstruction(edited, "Editor: changed instruction srcB")) return;
+            }
+            if (uiButton({rect.x + 312.0f, rowA, 42.0f, 22.0f}, "B+")) {
+                ++edited.srcB;
+                if (commitInstruction(edited, "Editor: changed instruction srcB")) return;
+            }
+
+            const float rowB = scriptY + 70.0f;
+            DrawText(("dst=" + std::to_string(selectedInstruction.dst) +
+                      " a=" + std::to_string(selectedInstruction.srcA) +
+                      " b=" + std::to_string(selectedInstruction.srcB) +
+                      " i=" + std::to_string(selectedInstruction.intValue) +
+                      " f=" + std::to_string(pf::fxToFloat(selectedInstruction.fixValue))).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(rowB + 4.0f),
+                10,
+                Fade(RAYWHITE, 0.64f));
+            if (uiButton({rect.x + rect.width - 178.0f, rowB, 42.0f, 22.0f}, "I-")) {
+                --edited.intValue;
+                if (commitInstruction(edited, "Editor: changed instruction integer")) return;
+            }
+            if (uiButton({rect.x + rect.width - 130.0f, rowB, 42.0f, 22.0f}, "I+")) {
+                ++edited.intValue;
+                if (commitInstruction(edited, "Editor: changed instruction integer")) return;
+            }
+            if (uiButton({rect.x + rect.width - 82.0f, rowB, 32.0f, 22.0f}, "F-")) {
+                edited.fixValue -= pf::fxFromFloat(0.1f);
+                if (commitInstruction(edited, "Editor: changed instruction fixed value")) return;
+            }
+            if (uiButton({rect.x + rect.width - 44.0f, rowB, 32.0f, 22.0f}, "F+")) {
+                edited.fixValue += pf::fxFromFloat(0.1f);
+                if (commitInstruction(edited, "Editor: changed instruction fixed value")) return;
+            }
+            std::string committedText;
+            if (uiTextField({rect.x + 10.0f, scriptY + 96.0f, rect.width - 20.0f, 22.0f},
+                    "workstation-instruction-text",
+                    editor,
+                    selectedInstruction.text,
+                    committedText,
+                    64))
+            {
+                edited.text = committedText;
+                if (commitInstruction(edited, "Editor: changed instruction target text")) return;
+            }
+        } else {
+            DrawText("Selected script has no instructions", static_cast<int>(rect.x + 10.0f), static_cast<int>(scriptY + 20.0f), 11, Fade(RAYWHITE, 0.6f));
+        }
+    }
+    if (!world.objectDefs.empty()) {
+        DrawText(("Objects/articles: " + std::to_string(world.objectDefs.size())).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + rect.height - 28.0f),
+            11,
+            Fade(RAYWHITE, 0.62f));
+    }
+}
+
+static std::string editorContextDetail(
+    const pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    const pf::FighterDefinition& def,
+    const pf::FighterState& state)
+{
+    switch (editor.selectionKind) {
+    case pf::FighterEditorSelectionKind::State:
+        return "state " + state.name + " index=" + std::to_string(session.selectedState);
+    case pf::FighterEditorSelectionKind::Subaction:
+        if (editor.selectedSubaction >= 0 && editor.selectedSubaction < static_cast<int>(state.action.size())) {
+            const pf::Subaction& subaction = state.action[static_cast<size_t>(editor.selectedSubaction)];
+            return "subaction #" + std::to_string(editor.selectedSubaction) + " " + subactionTypeName(subaction.type) +
+                " frames=" + std::to_string(subaction.frames);
+        }
+        return "subaction none";
+    case pf::FighterEditorSelectionKind::Interrupt:
+        if (editor.selectedInterrupt >= 0 && editor.selectedInterrupt < static_cast<int>(state.interrupts.size())) {
+            const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
+            return "interrupt #" + std::to_string(editor.selectedInterrupt) + " -> " + interrupt.targetState +
+                " enable=" + std::to_string(interrupt.enableFrame) +
+                " disable=" + std::to_string(interrupt.disableFrame);
+        }
+        return "interrupt none";
+    case pf::FighterEditorSelectionKind::Script:
+        if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(def.packageScripts.size())) {
+            const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+            return "script #" + std::to_string(editor.selectedPackageScript) + " " + script.name +
+                " instructions=" + std::to_string(script.instructions.size()) +
+                " graphNodes=" + std::to_string(script.graph.nodes.size());
+        }
+        return "script none";
+    case pf::FighterEditorSelectionKind::Instruction:
+        if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(def.packageScripts.size())) {
+            const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+            if (editor.selectedPackageInstruction >= 0 && editor.selectedPackageInstruction < static_cast<int>(script.instructions.size())) {
+                return "instruction #" + std::to_string(editor.selectedPackageInstruction) + " " +
+                    packageInstructionLabel(script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)]);
+            }
+        }
+        return "instruction none";
+    case pf::FighterEditorSelectionKind::Variable:
+        if (editor.selectedPackageVariable >= 0 && editor.selectedPackageVariable < static_cast<int>(def.packageVariables.size())) {
+            const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(editor.selectedPackageVariable)];
+            return "variable #" + std::to_string(editor.selectedPackageVariable) + " " + variable.name +
+                " initial=" + std::to_string(variable.initialValue) +
+                " uses=" + std::to_string(countPackageVariableOperandUses(def, editor.selectedPackageVariable));
+        }
+        return "variable none";
+    case pf::FighterEditorSelectionKind::Object:
+        if (editor.selectedObjectDef >= 0 && editor.selectedObjectDef < static_cast<int>(session.package.objects.size())) {
+            const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+            return "object #" + std::to_string(editor.selectedObjectDef) + " " + object.name +
+                " kind=" + gameObjectKindName(object.kind) +
+                " states=" + std::to_string(object.states.size()) +
+                " scripts=" + std::to_string(object.packageScripts.size()) +
+                " boxes=" + std::to_string(object.hitboxes.size() + object.hurtboxes.size() + object.touchboxes.size());
+        }
+        return "object/article none";
+    case pf::FighterEditorSelectionKind::Animation:
+        return "animation clip=" + std::to_string(editor.selectedAnimationClip) +
+            " joint=" + std::to_string(editor.selectedAnimationJoint) +
+            " frame=" + std::to_string(editor.animationScrubFrame);
+    case pf::FighterEditorSelectionKind::Viewport:
+        return std::string("viewport overlays model=") + (editor.showModel ? "on" : "off") +
+            " hit=" + (editor.showHitboxes ? "on" : "off") +
+            " hurt=" + (editor.showHurtboxes ? "on" : "off");
+    }
+    return "state " + state.name;
+}
+
+static std::string editorSelectedGraphDiagnostic(const pf::FighterEditor& editor, const pf::FighterDefinition& def, Color& color) {
+    color = Fade(RAYWHITE, 0.62f);
+    if (def.packageScripts.empty()) {
+        return "Graph: no package scripts";
+    }
+    const int scriptIndex = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+    pf::PackageScript script = def.packageScripts[static_cast<size_t>(scriptIndex)];
+    if (script.graph.nodes.empty()) {
+        return "Graph: no metadata; Linear/Flow can rebuild it";
+    }
+    std::string error;
+    if (pf::compilePackageScriptGraph(script, &error)) {
+        color = GREEN;
+        return "Graph: selected script compiles";
+    }
+    color = RED;
+    return "Graph: " + error;
+}
+
+static void drawEditorDiagnosticsWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    const pf::FighterRuntime& fighter,
+    const pf::FighterDefinition& def,
+    const pf::FighterState& state,
+    Rectangle rect)
+{
+    drawPanelChrome(rect, "Diagnostics");
+    const float y = rect.y + 34.0f;
+    DrawText(clippedText(editor.status, 12, rect.width * 0.58f).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(y), 12, RAYWHITE);
+    DrawText((std::string("Mode: ") + (editor.testMode ? "Test" : "Edit") +
+              "  Session: " + (session.dirty ? "dirty" : "clean") +
+              "  Context: " + editorSelectionKindName(editor.selectionKind) +
+              "  FighterDef " + std::to_string(fighter.fighterDef)).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(y + 22.0f),
+        11,
+        Fade(RAYWHITE, 0.66f));
+    DrawText(clippedText("Selected: " + editorContextDetail(editor, session, def, state), 11, rect.width * 0.58f).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(y + 44.0f),
+        11,
+        Fade(RAYWHITE, 0.72f));
+    Color graphDiagnosticColor = Fade(RAYWHITE, 0.62f);
+    const std::string graphDiagnostic = editorSelectedGraphDiagnostic(editor, def, graphDiagnosticColor);
+    DrawText(clippedText(graphDiagnostic, 11, rect.width * 0.42f).c_str(),
+        static_cast<int>(rect.x + rect.width * 0.58f),
+        static_cast<int>(y + 44.0f),
+        11,
+        graphDiagnosticColor);
+    if (editor.lastPackageBytes > 0) {
+        DrawText(("Last package " + editor.lastPackageName +
+                  " bytes=" + std::to_string(editor.lastPackageBytes) +
+                  " checksum=" + std::to_string(editor.lastPackageChecksum) +
+                  " fighters=" + std::to_string(editor.lastPackageFighters) +
+                  " objects=" + std::to_string(editor.lastPackageObjects)).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(y + 66.0f),
+            11,
+            editor.lastPackageValid ? GREEN : RED);
+    } else {
+        DrawText("No package validation has run this session", static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 66.0f), 11, Fade(RAYWHITE, 0.58f));
+    }
+    if (!editor.lastPackageMessage.empty()) {
+        DrawText(clippedText("Validation: " + editor.lastPackageMessage, 11, rect.width * 0.46f).c_str(),
+            static_cast<int>(rect.x + rect.width * 0.52f),
+            static_cast<int>(y + 66.0f),
+            11,
+            editor.lastPackageValid ? GREEN : RED);
+    }
+    const Rectangle validateButton{rect.x + rect.width - 294.0f, y - 4.0f, 86.0f, 24.0f};
+    if (uiButton(validateButton, "Validate")) {
+        std::string error;
+        const bool wasDirty = session.dirty;
+        pf::FighterEditorPackageSnapshot snapshot;
+        if (pf::exportFighterEditorSessionPackage(session, snapshot, &error)) {
+            session.dirty = wasDirty;
+            updateEditorPackageSummary(editor, snapshot.descriptor);
+            editor.status = "Editor: session package validates bytes=" + std::to_string(snapshot.bytes.size());
+        } else {
+            session.dirty = wasDirty;
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor session validation failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + rect.width - 198.0f, y - 4.0f, 86.0f, 24.0f}, "Top Test")) {
+        editor.status = "Editor: use the top Test action to launch the unsaved session";
+    }
+    if (uiButton({rect.x + rect.width - 102.0f, y - 4.0f, 86.0f, 24.0f}, "Reset Msg")) {
+        editor.status = "Editor: ready";
+    }
+}
+
+static void drawEditorWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    bool& sessionActive,
+    int& selectedFighterDef)
+{
+    editor.clampToWorld(world);
+    if (world.fighters.empty()) {
+        return;
+    }
+    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        return;
+    }
+    std::string sessionError;
+    if (!ensureEditorSessionFromWorld(world, editor, session, sessionActive, fighter.fighterDef, &sessionError)) {
+        editor.status = "Editor session failed: " + sessionError;
+        return;
+    }
+    pf::FighterDefinition* sessionDef = session.rootFighter();
+    if (!sessionDef) {
+        editor.status = "Editor session has no root fighter";
+        return;
+    }
+    pf::FighterDefinition& def = *sessionDef;
+    if (def.states.empty()) {
+        return;
+    }
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+    pf::FighterState& state = def.states[static_cast<size_t>(session.selectedState)];
+    const EditorWorkstationLayout layout = editorWorkstationLayout();
+
+    DrawRectangleRec(layout.viewport, Fade(BLACK, 0.08f));
+    DrawRectangleLinesEx(layout.viewport, 1.0f, Fade(SKYBLUE, 0.45f));
+    DrawText(("Viewport: " + def.name + " / " + state.name).c_str(),
+        static_cast<int>(layout.viewport.x + 12.0f),
+        static_cast<int>(layout.viewport.y + 10.0f),
+        13,
+        RAYWHITE);
+    DrawText((std::string("Overlays: ") + (editor.showBoxes ? "debug capsules, ECB, bones" : "model only") +
+              "  Camera: " + (editor.sideView ? "side" : "perspective")).c_str(),
+        static_cast<int>(layout.viewport.x + 12.0f),
+        static_cast<int>(layout.viewport.y + 30.0f),
+        11,
+        Fade(RAYWHITE, 0.7f));
+    drawEditorViewportOverlayControls(editor, layout.viewport);
+
+    drawEditorToolStrip(world, editor, session, selectedFighterDef, layout.toolStrip);
+    drawEditorStateBrowserWorkstation(world, editor, session, def, layout.leftBrowser);
+    drawEditorTimelineWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.timeline);
+    if (editor.workspace == pf::EditorWorkspace::Assets) {
+        drawEditorObjectWorkstation(world, editor, session, selectedFighterDef, layout.rightGraph);
+    } else if (editor.workspace == pf::EditorWorkspace::Animation) {
+        drawEditorAnimationWorkstation(world, editor, session, selectedFighterDef, def, layout.rightGraph);
+    } else {
+        drawEditorLogicGraphWorkstation(world, editor, session, selectedFighterDef, def, layout.rightGraph);
+    }
+    drawEditorInspectorWorkstation(world, editor, session, selectedFighterDef, def, state, layout.rightInspector);
+    drawEditorDiagnosticsWorkstation(world, editor, session, fighter, def, state, layout.diagnostics);
+}
+
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
@@ -7916,11 +11185,12 @@ static void launchEditorTestWorld(
 }
 
 int main() {
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(1280, 720, "PFighter C++ raylib prototype");
     if (!IsWindowReady()) {
         return 1;
     }
+    SetWindowMinSize(960, 640);
     SetTargetFPS(60);
 
     Camera3D camera{};
@@ -7929,11 +11199,18 @@ int main() {
     camera.up = {0.0f, 1.0f, 0.0f};
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
+    float editorCameraYaw = 0.0f;
+    float editorCameraPitch = 0.30f;
+    float editorCameraDistance = 152.0f;
+    float editorCameraOrthoSize = 120.0f;
+    bool editorCameraOrbitDragging = false;
 
     AppMode appMode = AppMode::MainMenu;
     int testFighterDef = 0;
     pf::World world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
     pf::FighterEditor editor;
+    pf::FighterEditorSession editorSession;
+    bool editorSessionActive = false;
     ReplayHarness replay;
     TickrateControl tickrate;
     const std::array<int, 7> fighterKeys{
@@ -7949,6 +11226,7 @@ int main() {
         replay.playbackLoaded = false;
         replay.realtimePlayback = false;
         replay.recordingActive = false;
+        editorSessionActive = false;
         editor.testMode = false;
         editor.animationPreviewActive = false;
         editor.status = "Editor: selected " + world.fighterDefs[static_cast<size_t>(testFighterDef)].name;
@@ -8007,13 +11285,133 @@ int main() {
             object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name,
             editor);
     };
+    auto ensureMainEditorSession = [&]() -> bool {
+        std::string error;
+        int rootFighterDef = testFighterDef;
+        if (!world.fighters.empty()) {
+            editor.clampToWorld(world);
+            const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+            rootFighterDef = fighter.fighterDef;
+        }
+        if (!ensureEditorSessionFromWorld(world, editor, editorSession, editorSessionActive, rootFighterDef, &error)) {
+            editor.status = "Editor session failed: " + error;
+            return false;
+        }
+        return true;
+    };
+    auto syncMainEditorSession = [&](const std::string& successMessage) -> bool {
+        return syncEditorSessionMutation(world, editor, editorSession, testFighterDef, successMessage);
+    };
+    auto createEditorSessionStateFromUi = [&]() {
+        if (!ensureMainEditorSession()) {
+            return;
+        }
+        std::string error;
+        int created = -1;
+        if (pf::createEditorSessionState(editorSession, {}, editorSession.selectedState, &created, &error)) {
+            syncMainEditorSession("Editor: created session state " + editorSession.rootFighter()->states[static_cast<size_t>(created)].name);
+        } else {
+            editor.status = "Editor: create state failed: " + error;
+        }
+    };
+    auto removeEditorSessionStateFromUi = [&]() {
+        if (!ensureMainEditorSession()) {
+            return;
+        }
+        std::string error;
+        const std::string removed = editorSession.rootFighter() && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(editorSession.rootFighter()->states.size())
+            ? editorSession.rootFighter()->states[static_cast<size_t>(editorSession.selectedState)].name
+            : std::string{"state"};
+        if (pf::removeEditorSessionState(editorSession, editorSession.selectedState, {}, &error)) {
+            syncMainEditorSession("Editor: removed session state " + removed);
+        } else {
+            editor.status = "Editor: remove state failed: " + error;
+        }
+    };
+    auto launchEditorSessionTestWorld = [&]() {
+        if (!ensureMainEditorSession()) {
+            return;
+        }
+        std::string error;
+        int testRoot = -1;
+        pf::FighterPackageDescriptor descriptor;
+        if (!pf::makeFighterEditorSessionTestWorld(editorSession, world, &testRoot, &descriptor, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor test failed: " + error;
+            return;
+        }
+        updateEditorPackageSummary(editor, descriptor);
+        testFighterDef = testRoot;
+        editor.selectedFighter = 0;
+        editor.selectedState = editorSession.selectedState;
+        editor.selectedSubaction = editorSession.selectedSubaction;
+        editor.selectedInterrupt = editorSession.selectedInterrupt;
+        editor.testMode = true;
+        editor.animationPreviewActive = false;
+        editor.paused = false;
+        replay.playbackLoaded = false;
+        replay.realtimePlayback = false;
+        replay.recordingActive = false;
+        editor.status = "Editor test: session package loaded on Battlefield with Sandbag checksum=" + std::to_string(editor.lastPackageChecksum);
+    };
+    auto returnEditorSessionFromTestWorld = [&]() {
+        if (!editor.testMode) {
+            return;
+        }
+        if (!ensureMainEditorSession()) {
+            return;
+        }
+        if (!syncMainEditorSession("Editor: returned from test with unsaved session intact")) {
+            return;
+        }
+        editor.selectedFighter = 0;
+        editor.selectedState = editorSession.selectedState;
+        editor.selectedSubaction = editorSession.selectedSubaction;
+        editor.selectedInterrupt = editorSession.selectedInterrupt;
+        editor.testMode = false;
+        editor.animationPreviewActive = true;
+        editor.paused = true;
+        replay.playbackLoaded = false;
+        replay.realtimePlayback = false;
+        replay.recordingActive = false;
+        editor.status = "Editor: returned from test without discarding unsaved edits";
+    };
 
     while (!WindowShouldClose()) {
-        if (appMode != AppMode::MainMenu) {
+        const bool editorMode = appMode == AppMode::Editor;
+        const bool editorEditMode = editorMode && !editor.testMode;
+        if (appMode == AppMode::Gameplay) {
             updateTickrateControl(tickrate);
         }
-        const bool editorTextEditing = appMode == AppMode::Editor && !editor.activeTextField.empty();
+        const bool editorTextEditing = editorMode && !editor.activeTextField.empty();
         const bool globalShortcutsEnabled = !editorTextEditing;
+        if (editorEditMode && !editorTextEditing) {
+            const Rectangle viewport = editorWorkstationLayout().viewport;
+            const Vector2 mouse = GetMousePosition();
+            const bool mouseInViewport = CheckCollisionPointRec(mouse, viewport);
+            const float wheel = GetMouseWheelMove();
+            if (mouseInViewport && wheel != 0.0f) {
+                if (editor.sideView) {
+                    editorCameraOrthoSize = std::clamp(editorCameraOrthoSize - wheel * 8.0f, 28.0f, 220.0f);
+                } else {
+                    editorCameraDistance = std::clamp(editorCameraDistance - wheel * 9.0f, 28.0f, 260.0f);
+                }
+            }
+            if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE) && mouseInViewport) {
+                editorCameraOrbitDragging = true;
+                editor.sideView = false;
+            }
+            if (IsMouseButtonReleased(MOUSE_BUTTON_MIDDLE)) {
+                editorCameraOrbitDragging = false;
+            }
+            if (editorCameraOrbitDragging) {
+                const Vector2 delta = GetMouseDelta();
+                editorCameraYaw -= delta.x * 0.008f;
+                editorCameraPitch = std::clamp(editorCameraPitch - delta.y * 0.008f, -1.10f, 1.10f);
+            }
+        } else {
+            editorCameraOrbitDragging = false;
+        }
         if (IsKeyPressed(KEY_ESCAPE)) {
             if (editorTextEditing) {
                 editor.activeTextField.clear();
@@ -8031,13 +11429,17 @@ int main() {
         const bool deleteStateClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorDeleteStateButtonRect());
         if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_N) || newStateClicked)) {
-            createEditorState(world, editor);
+            createEditorSessionStateFromUi();
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
-            removeEditorState(world, editor);
+            removeEditorSessionStateFromUi();
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_T) || testClicked)) {
-            launchEditorTestWorld(world, editor, replay, testFighterDef);
+            if (editor.testMode) {
+                returnEditorSessionFromTestWorld();
+            } else {
+                launchEditorSessionTestWorld();
+            }
         }
         if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F1)) editor.showBoxes = !editor.showBoxes;
         if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F2)) editor.sideView = !editor.sideView;
@@ -8053,39 +11455,122 @@ int main() {
             replay.playbackLoaded = false;
             replay.realtimePlayback = false;
             replay.recordingActive = false;
+            editorSessionActive = false;
             editor.testMode = false;
             editor.animationPreviewActive = false;
             editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) --editor.selectedState;
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) ++editor.selectedState;
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) {
+            if (ensureMainEditorSession()) {
+                editorSession.selectedState = std::max(0, editorSession.selectedState - 1);
+                editorSession.selectedSubaction = 0;
+                editorSession.selectedInterrupt = 0;
+                editorSession.clamp();
+                syncEditorSelectionFromSession(editor, editorSession);
+                editor.selectionKind = pf::FighterEditorSelectionKind::State;
+                if (pf::FighterDefinition* def = editorSession.rootFighter()) {
+                    previewEditorSelectedState(world, editor, *def);
+                }
+            }
+        }
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) {
+            if (ensureMainEditorSession()) {
+                ++editorSession.selectedState;
+                editorSession.selectedSubaction = 0;
+                editorSession.selectedInterrupt = 0;
+                editorSession.clamp();
+                syncEditorSelectionFromSession(editor, editorSession);
+                editor.selectionKind = pf::FighterEditorSelectionKind::State;
+                if (pf::FighterDefinition* def = editorSession.rootFighter()) {
+                    previewEditorSelectedState(world, editor, *def);
+                }
+            }
+        }
         const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
         if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
-                if (pf::FighterState* state = selectedEditorState()) {
-                    moveEditorSubaction(*state, editor, -1);
+                if (ensureMainEditorSession()) {
+                    std::string error;
+                    int moved = -1;
+                    if (pf::moveEditorSessionSubaction(editorSession, editorSession.selectedState, editor.selectedSubaction, -1, &moved, &error)) {
+                        syncMainEditorSession("Editor: moved selected subaction earlier");
+                        editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                    } else {
+                        editor.status = "Editor: move subaction failed: " + error;
+                    }
                 }
             } else {
                 --editor.selectedSubaction;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
             }
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
-                if (pf::FighterState* state = selectedEditorState()) {
-                    moveEditorSubaction(*state, editor, 1);
+                if (ensureMainEditorSession()) {
+                    std::string error;
+                    int moved = -1;
+                    if (pf::moveEditorSessionSubaction(editorSession, editorSession.selectedState, editor.selectedSubaction, 1, &moved, &error)) {
+                        syncMainEditorSession("Editor: moved selected subaction later");
+                        editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                    } else {
+                        editor.status = "Editor: move subaction failed: " + error;
+                    }
                 }
             } else {
                 ++editor.selectedSubaction;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
             }
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
-            removeSelectedSubaction();
+            if (ensureMainEditorSession()) {
+                std::string error;
+                if (pf::removeEditorSessionSubaction(editorSession, editorSession.selectedState, editor.selectedSubaction, &error)) {
+                    syncMainEditorSession("Editor: removed selected subaction");
+                    editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                } else {
+                    editor.status = "Editor: remove subaction failed: " + error;
+                }
+            }
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
-            adjustSelectedSubactionFrames(-1);
+            if (ensureMainEditorSession()) {
+                pf::FighterDefinition* def = editorSession.rootFighter();
+                if (def && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(def->states.size())) {
+                    pf::FighterState& state = def->states[static_cast<size_t>(editorSession.selectedState)];
+                    if (!state.action.empty()) {
+                        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
+                        pf::Subaction edited = state.action[static_cast<size_t>(editor.selectedSubaction)];
+                        edited.frames = std::max(0, edited.frames - 1);
+                        std::string error;
+                        if (pf::setEditorSessionSubaction(editorSession, editorSession.selectedState, editor.selectedSubaction, edited, &error)) {
+                            syncMainEditorSession("Editor: shortened selected subaction");
+                            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                        } else {
+                            editor.status = "Editor: subaction edit failed: " + error;
+                        }
+                    }
+                }
+            }
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
-            adjustSelectedSubactionFrames(1);
+            if (ensureMainEditorSession()) {
+                pf::FighterDefinition* def = editorSession.rootFighter();
+                if (def && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(def->states.size())) {
+                    pf::FighterState& state = def->states[static_cast<size_t>(editorSession.selectedState)];
+                    if (!state.action.empty()) {
+                        editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
+                        pf::Subaction edited = state.action[static_cast<size_t>(editor.selectedSubaction)];
+                        ++edited.frames;
+                        std::string error;
+                        if (pf::setEditorSessionSubaction(editorSession, editorSession.selectedState, editor.selectedSubaction, edited, &error)) {
+                            syncMainEditorSession("Editor: lengthened selected subaction");
+                            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                        } else {
+                            editor.status = "Editor: subaction edit failed: " + error;
+                        }
+                    }
+                }
+            }
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Assets && IsKeyPressed(KEY_U)) {
             bindSelectedObjectStateCallback();
@@ -8098,28 +11583,30 @@ int main() {
             }
         }
 
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F5)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Gameplay && IsKeyPressed(KEY_F5)) {
             beginReplayRecording(replay, world, testFighterDef, testFighterDef);
             editor.paused = false;
         }
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F6)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Gameplay && IsKeyPressed(KEY_F6)) {
             saveReplayRecording(replay);
         }
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F7)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Gameplay && IsKeyPressed(KEY_F7)) {
             loadReplayPlayback(replay, world, testFighterDef);
             editor.paused = true;
         }
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F8)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Gameplay && IsKeyPressed(KEY_F8)) {
             stepReplayPlayback(replay, world);
         }
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
+        if (globalShortcutsEnabled && appMode == AppMode::Gameplay && IsKeyPressed(KEY_F9) && replay.playbackLoaded) {
             replay.realtimePlayback = !replay.realtimePlayback;
             editor.paused = !replay.realtimePlayback;
         }
 
-        const pf::InputFrame p1Input = editorTextEditing ? pf::InputFrame{} : readPlayerInput(0, false);
-        const pf::InputFrame p2Input = editorTextEditing || editor.testMode ? pf::InputFrame{} : readPlayerInput(1, true);
-        const bool simRunning = appMode != AppMode::MainMenu && ((replay.playbackLoaded && replay.realtimePlayback) || !editor.paused);
+        const pf::InputFrame p1Input = editorTextEditing || editorEditMode ? pf::InputFrame{} : readPlayerInput(0, false);
+        const pf::InputFrame p2Input = editorTextEditing || editorMode ? pf::InputFrame{} : readPlayerInput(1, true);
+        const bool simRunning = appMode == AppMode::Gameplay
+            ? ((replay.playbackLoaded && replay.realtimePlayback) || !editor.paused)
+            : (editorMode && editor.testMode && !editor.paused);
         if (simRunning) {
             tickrate.accumulator += GetFrameTime();
             const float tickStep = 1.0f / static_cast<float>(tickrate.ticksPerSecond);
@@ -8138,15 +11625,24 @@ int main() {
         } else {
             tickrate.accumulator = 0.0f;
         }
+        if (editorEditMode) {
+            prepareEditorEditPreview(world, editor, !editor.paused);
+        }
 
         if (editor.sideView) {
             camera.position = {0.0f, 12.0f, 145.0f};
             camera.target = {0.0f, 12.0f, 0.0f};
-            camera.fovy = 120.0f;
+            camera.fovy = editorCameraOrthoSize;
             camera.projection = CAMERA_ORTHOGRAPHIC;
         } else {
-            camera.position = {0.0f, 55.0f, 145.0f};
-            camera.target = {0.0f, 10.0f, 0.0f};
+            const Vector3 target{0.0f, 10.0f, 0.0f};
+            const float cosPitch = std::cos(editorCameraPitch);
+            camera.target = target;
+            camera.position = {
+                target.x + std::sin(editorCameraYaw) * cosPitch * editorCameraDistance,
+                target.y + std::sin(editorCameraPitch) * editorCameraDistance,
+                target.z + std::cos(editorCameraYaw) * cosPitch * editorCameraDistance,
+            };
             camera.fovy = 45.0f;
             camera.projection = CAMERA_PERSPECTIVE;
         }
@@ -8156,33 +11652,40 @@ int main() {
         if (appMode == AppMode::MainMenu) {
             drawMainMenu(appMode);
         } else {
-            BeginMode3D(camera);
-            DrawGrid(40, 10.0f);
-            for (const pf::StageSegment& segment : world.stage.segments) {
-                DrawLine3D(toRayGround(segment.start), toRayGround(segment.end), segment.type == pf::SegmentType::Solid ? BLACK : DARKGREEN);
-            }
-            if (editor.showBoxes) {
-                for (const pf::StageLedge& ledge : world.stage.ledges) {
-                    const Vector3 ledgePos = toRayGround(ledge.position);
-                    DrawSphere(ledgePos, 0.12f, PURPLE);
-                    DrawLine3D(ledgePos, {ledgePos.x + 0.45f * static_cast<float>(ledge.direction), ledgePos.y, ledgePos.z}, PURPLE);
-                    drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[0].fighterDef)], world.fighters[0], ledge, Fade(ORANGE, 0.45f));
-                    drawLedgeSnapSweep(world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)], world.fighters[1], ledge, Fade(SKYBLUE, 0.45f));
+            if (editorEditMode) {
+                const EditorWorkstationLayout layout = editorWorkstationLayout();
+                const Rectangle viewport = layout.viewport;
+                BeginScissorMode(
+                    static_cast<int>(viewport.x),
+                    static_cast<int>(viewport.y),
+                    static_cast<int>(viewport.width),
+                    static_cast<int>(viewport.height));
+                rlViewport(
+                    static_cast<int>(viewport.x),
+                    GetScreenHeight() - static_cast<int>(viewport.y + viewport.height),
+                    static_cast<int>(viewport.width),
+                    static_cast<int>(viewport.height));
+                BeginMode3D(camera);
+                drawWorldScene3D(world, editor, true);
+                EndMode3D();
+                rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+                EndScissorMode();
+            } else {
+                BeginMode3D(camera);
+                drawWorldScene3D(world, editor, false);
+                if (editorMode) {
+                    drawEditorSelectedAuthoredMeshVertex(world, editor);
+                    drawEditorSelectedAuthoredJoint(world, editor);
                 }
+                EndMode3D();
             }
-            drawFighter(world, world.fighters[0], ORANGE, editor.showBoxes);
-            drawFighter(world, world.fighters[1], SKYBLUE, editor.showBoxes);
-            drawGameObjects(world, editor.showBoxes);
-            if (appMode == AppMode::Editor) {
-                drawEditorSelectedAuthoredMeshVertex(world, editor);
-                drawEditorSelectedAuthoredJoint(world, editor);
+            if (editorMode) {
+                drawEditorWorkstation(world, editor, editorSession, editorSessionActive, testFighterDef);
             }
-            EndMode3D();
-            if (appMode == AppMode::Editor) {
-                drawEditor(world, editor, testFighterDef);
+            if (appMode == AppMode::Gameplay) {
+                drawReplayStatus(replay);
+                drawTickrateControl(tickrate);
             }
-            drawReplayStatus(replay);
-            drawTickrateControl(tickrate);
         }
         drawTopNav(appMode);
         EndDrawing();

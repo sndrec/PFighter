@@ -2620,6 +2620,30 @@ bool setEditorSessionStateTiming(
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
+bool setEditorSessionStateAnimation(
+    FighterEditorSession& session,
+    int stateIndex,
+    const std::string& animation,
+    int animationActionIndex,
+    int animationLengthFrames,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    if (animation.empty()) {
+        setEditorError(error, "editor state animation name is empty");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->animation = animation;
+    state->animationActionIndex = animationActionIndex;
+    state->animationLengthFrames = std::max(1, animationLengthFrames);
+    session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
 bool setEditorSessionStateCollisionFlags(
     FighterEditorSession& session,
     int stateIndex,
@@ -2696,6 +2720,28 @@ bool addEditorSessionSubaction(
         *addedSubactionIndex = index;
     }
     return true;
+}
+
+bool setEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    int subactionIndex,
+    const Subaction& subaction,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    if (subactionIndex < 0 || subactionIndex >= static_cast<int>(state->action.size())) {
+        setEditorError(error, "editor subaction index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->action[static_cast<size_t>(subactionIndex)] = subaction;
+    session.selectedState = stateIndex;
+    session.selectedSubaction = subactionIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
 bool removeEditorSessionSubaction(
@@ -2783,6 +2829,28 @@ bool addEditorSessionInterrupt(
         *addedInterruptIndex = index;
     }
     return true;
+}
+
+bool setEditorSessionInterrupt(
+    FighterEditorSession& session,
+    int stateIndex,
+    int interruptIndex,
+    const InterruptRule& interrupt,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    if (interruptIndex < 0 || interruptIndex >= static_cast<int>(state->interrupts.size())) {
+        setEditorError(error, "editor interrupt index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->interrupts[static_cast<size_t>(interruptIndex)] = interrupt;
+    session.selectedState = stateIndex;
+    session.selectedInterrupt = interruptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
 bool removeEditorSessionInterrupt(
@@ -2898,6 +2966,26 @@ bool renameEditorSessionPackageVariable(
     }
     FighterPackage previous = session.package;
     def.packageVariables[static_cast<size_t>(variableIndex)].name = newName;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionPackageVariableInitialValue(
+    FighterEditorSession& session,
+    int variableIndex,
+    int32_t initialValue,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (variableIndex < 0 || variableIndex >= static_cast<int>(def.packageVariables.size())) {
+        setEditorError(error, "editor package variable index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    def.packageVariables[static_cast<size_t>(variableIndex)].initialValue = initialValue;
+    session.selectedFighter = 0;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
@@ -4738,6 +4826,26 @@ bool renameEditorSessionObjectPackageVariable(
     }
     FighterPackage previous = session.package;
     object->packageVariables[static_cast<size_t>(variableIndex)].name = newName;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionObjectPackageVariableInitialValue(
+    FighterEditorSession& session,
+    int objectIndex,
+    int variableIndex,
+    int32_t initialValue,
+    std::string* error)
+{
+    GameObjectDefinition* object = nullptr;
+    if (!validSessionObject(session, objectIndex, &object, error)) {
+        return false;
+    }
+    if (variableIndex < 0 || variableIndex >= static_cast<int>(object->packageVariables.size())) {
+        setEditorError(error, "editor object package variable index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    object->packageVariables[static_cast<size_t>(variableIndex)].initialValue = initialValue;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
