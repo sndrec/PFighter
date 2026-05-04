@@ -2666,6 +2666,15 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetFighterCommandVarFromVar:
             setFighterCommandVar(fighter, instruction.dst, static_cast<uint32_t>(packageVar(fighter, instruction.srcA)));
             break;
+        case PackageScriptOp::SetVarFighterThrowFlag:
+            setPackageVar(fighter, instruction.dst, fighterThrowFlag(fighter, instruction.intValue) ? 1 : 0);
+            break;
+        case PackageScriptOp::SetFighterThrowFlagImmediate:
+            setFighterThrowFlag(fighter, instruction.dst, instruction.intValue != 0);
+            break;
+        case PackageScriptOp::SetFighterThrowFlagFromVar:
+            setFighterThrowFlag(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != 0);
+            break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
             break;
