@@ -1173,6 +1173,9 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
     case pf::PackageScriptOp::SpawnFighter: return "SpawnF";
     case pf::PackageScriptOp::SpawnFighterSetVar: return "SpawnFV";
+    case pf::PackageScriptOp::SetVarIndexedFighterVar: return "IdxFRead";
+    case pf::PackageScriptOp::SetIndexedFighterVarImmediate: return "IdxFSet";
+    case pf::PackageScriptOp::SetIndexedFighterVarFromVar: return "IdxFVar";
     }
     return "Op";
 }
@@ -1362,6 +1365,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarOwnerFighterVar:
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
+    case pf::PackageScriptOp::SetVarIndexedFighterVar:
+    case pf::PackageScriptOp::SetIndexedFighterVarImmediate:
+    case pf::PackageScriptOp::SetIndexedFighterVarFromVar:
     case pf::PackageScriptOp::SetVarButtonDown:
     case pf::PackageScriptOp::SetVarButtonPressed:
     case pf::PackageScriptOp::SetVarStickX:
@@ -1738,6 +1744,15 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SpawnFighterSetVar:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
+    case pf::PackageScriptOp::SetVarIndexedFighterVar:
+        label += " v" + std::to_string(instruction.dst) + " = fighter[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetIndexedFighterVarImmediate:
+        label += " fighter[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetIndexedFighterVarFromVar:
+        label += " fighter[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcB);
+        break;
     case pf::PackageScriptOp::Nop:
         break;
     }
@@ -1908,7 +1923,10 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::CallScript: return pf::PackageScriptOp::SwitchFighterDefinition;
     case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::SpawnFighter;
     case pf::PackageScriptOp::SpawnFighter: return pf::PackageScriptOp::SpawnFighterSetVar;
-    case pf::PackageScriptOp::SpawnFighterSetVar: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::SpawnFighterSetVar: return pf::PackageScriptOp::SetVarIndexedFighterVar;
+    case pf::PackageScriptOp::SetVarIndexedFighterVar: return pf::PackageScriptOp::SetIndexedFighterVarImmediate;
+    case pf::PackageScriptOp::SetIndexedFighterVarImmediate: return pf::PackageScriptOp::SetIndexedFighterVarFromVar;
+    case pf::PackageScriptOp::SetIndexedFighterVarFromVar: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
 }
@@ -1917,6 +1935,9 @@ static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
     return op != pf::PackageScriptOp::SwitchFighterDefinition &&
         op != pf::PackageScriptOp::SpawnFighter &&
         op != pf::PackageScriptOp::SpawnFighterSetVar &&
+        op != pf::PackageScriptOp::SetVarIndexedFighterVar &&
+        op != pf::PackageScriptOp::SetIndexedFighterVarImmediate &&
+        op != pf::PackageScriptOp::SetIndexedFighterVarFromVar &&
         op != pf::PackageScriptOp::SetVarButtonDown &&
         op != pf::PackageScriptOp::SetVarButtonPressed &&
         op != pf::PackageScriptOp::SetVarStickX &&

@@ -7315,6 +7315,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SwitchFighterDefinition:
             case PackageScriptOp::SpawnFighter:
             case PackageScriptOp::SpawnFighterSetVar:
+            case PackageScriptOp::SetVarIndexedFighterVar:
+            case PackageScriptOp::SetIndexedFighterVarImmediate:
+            case PackageScriptOp::SetIndexedFighterVarFromVar:
                 return;
             }
             ++frame.instructionIndex;

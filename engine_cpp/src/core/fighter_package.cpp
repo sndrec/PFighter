@@ -316,6 +316,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetAnimationFrame:
     case PackageScriptOp::SetAnimationFrameFromVar:
     case PackageScriptOp::SpawnFighterSetVar:
+    case PackageScriptOp::SetVarIndexedFighterVar:
+    case PackageScriptOp::SetIndexedFighterVarImmediate:
+    case PackageScriptOp::SetIndexedFighterVarFromVar:
         return true;
     }
     return false;
@@ -1861,6 +1864,26 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script owner fighter variable write is invalid");
         }
         requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarIndexedFighterVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "fighter index source");
+        if (!allowFighterContextReads || allowObjectContextReads || instruction.intValue < 0) {
+            throw std::runtime_error("fighter package script indexed fighter variable read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedFighterVarImmediate:
+        requireVariableIndex(instruction.srcA, variableCount, "fighter index source");
+        if (!allowFighterContextReads || allowObjectContextReads || instruction.dst < 0) {
+            throw std::runtime_error("fighter package script indexed fighter variable write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedFighterVarFromVar:
+        requireVariableIndex(instruction.srcA, variableCount, "fighter index source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
+        if (!allowFighterContextReads || allowObjectContextReads || instruction.dst < 0) {
+            throw std::runtime_error("fighter package script indexed fighter variable write is invalid");
+        }
         break;
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:

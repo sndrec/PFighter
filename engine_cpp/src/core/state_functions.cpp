@@ -2581,6 +2581,35 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
     }
     ensurePackageVars(def, fighter);
     int budget = std::clamp(found->instructionBudget, 0, 1024);
+    auto indexedFighterPackageVar = [&](int fighterIndex, int variableIndex) -> int32_t {
+        if (fighterIndex < 0 || fighterIndex >= static_cast<int>(world.fighters.size()) || variableIndex < 0) {
+            return 0;
+        }
+        FighterRuntime& target = world.fighters[static_cast<size_t>(fighterIndex)];
+        if (target.fighterDef < 0 || target.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+            return 0;
+        }
+        const FighterDefinition& targetDef = world.fighterDefs[static_cast<size_t>(target.fighterDef)];
+        ensurePackageVars(targetDef, target);
+        if (variableIndex >= static_cast<int>(target.packageVars.size())) {
+            return 0;
+        }
+        return target.packageVars[static_cast<size_t>(variableIndex)];
+    };
+    auto setIndexedFighterPackageVar = [&](int fighterIndex, int variableIndex, int32_t value) {
+        if (fighterIndex < 0 || fighterIndex >= static_cast<int>(world.fighters.size()) || variableIndex < 0) {
+            return;
+        }
+        FighterRuntime& target = world.fighters[static_cast<size_t>(fighterIndex)];
+        if (target.fighterDef < 0 || target.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+            return;
+        }
+        const FighterDefinition& targetDef = world.fighterDefs[static_cast<size_t>(target.fighterDef)];
+        ensurePackageVars(targetDef, target);
+        if (variableIndex < static_cast<int>(target.packageVars.size())) {
+            target.packageVars[static_cast<size_t>(variableIndex)] = value;
+        }
+    };
     struct ScriptFrame {
         const PackageScript* script = nullptr;
         size_t instructionIndex = 0;
@@ -2674,6 +2703,23 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             break;
         case PackageScriptOp::SetFighterThrowFlagFromVar:
             setFighterThrowFlag(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != 0);
+            break;
+        case PackageScriptOp::SetVarIndexedFighterVar:
+            setPackageVar(fighter, instruction.dst, indexedFighterPackageVar(
+                packageVar(fighter, instruction.srcA),
+                instruction.intValue));
+            break;
+        case PackageScriptOp::SetIndexedFighterVarImmediate:
+            setIndexedFighterPackageVar(
+                packageVar(fighter, instruction.srcA),
+                instruction.dst,
+                instruction.intValue);
+            break;
+        case PackageScriptOp::SetIndexedFighterVarFromVar:
+            setIndexedFighterPackageVar(
+                packageVar(fighter, instruction.srcA),
+                instruction.dst,
+                packageVar(fighter, instruction.srcB));
             break;
         case PackageScriptOp::SetVarFighterHeldObject:
             setPackageVar(fighter, instruction.dst, fighter.heldObject);
