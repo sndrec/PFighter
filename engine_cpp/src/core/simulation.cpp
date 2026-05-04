@@ -6999,15 +6999,19 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::ChangeState:
                 changeGameObjectState(world, object, instruction.text);
                 return;
-            case PackageScriptOp::SpawnObject:
-                spawnGameObject(world, instruction.text, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
+            case PackageScriptOp::SpawnObject: {
+                const Vec2 position{object.position.x, object.position.y + instruction.intValue};
+                spawnGameObject(world, instruction.text, object.ownerFighter, position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
-            case PackageScriptOp::SpawnProjectile:
-                spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, object.ownerFighter, object.position, object.facing, {object.facing * instruction.fixValue, 0});
+            }
+            case PackageScriptOp::SpawnProjectile: {
+                const Vec2 position{object.position.x, object.position.y + instruction.intValue};
+                spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, object.ownerFighter, position, object.facing, {object.facing * instruction.fixValue, 0});
                 break;
+            }
             case PackageScriptOp::SpawnObjectFromVars:
             case PackageScriptOp::SpawnProjectileFromVars: {
-                const Vec2 position{object.position.x + object.facing * instruction.fixValue, object.position.y};
+                const Vec2 position{object.position.x + object.facing * instruction.fixValue, object.position.y + instruction.intValue};
                 const Vec2 velocity{object.facing * var(instruction.srcA), var(instruction.srcB)};
                 if (instruction.op == PackageScriptOp::SpawnProjectileFromVars) {
                     spawnGameObjectOfKind(world, instruction.text, GameObjectKind::Projectile, object.ownerFighter, position, object.facing, velocity);

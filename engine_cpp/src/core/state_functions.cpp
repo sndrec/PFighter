@@ -2703,7 +2703,7 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SpawnProjectile: {
             const Vec2 position{
                 fighter.position.x + fighter.facing * fxFromFloat(0.75f),
-                fighter.position.y + fxFromFloat(0.7f),
+                fighter.position.y + fxFromFloat(0.7f) + instruction.intValue,
             };
             const Vec2 velocity{fighter.facing * instruction.fixValue, 0};
             if (instruction.op == PackageScriptOp::SpawnProjectile) {
@@ -2717,7 +2717,7 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SpawnProjectileFromVars: {
             const Vec2 position{
                 fighter.position.x + fighter.facing * instruction.fixValue,
-                fighter.position.y + fxFromFloat(0.7f),
+                fighter.position.y + fxFromFloat(0.7f) + instruction.intValue,
             };
             const Vec2 velocity{
                 fighter.facing * packageVar(fighter, instruction.srcA),

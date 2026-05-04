@@ -4705,7 +4705,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarImmediate, 7, -1, -1, pf::fxFromFloat(0.6f), 0, {}},
             {pf::PackageScriptOp::SetVarImmediate, 8, -1, -1, pf::fxFromFloat(0.2f), 0, {}},
             {pf::PackageScriptOp::SpawnProjectile, -1, -1, -1, 0, pf::fxFromFloat(1.0f), "PackageProjectileObject"},
-            {pf::PackageScriptOp::SpawnProjectileFromVars, -1, 7, 8, 0, pf::fxFromFloat(1.0f), "PackageProjectileObject"},
+            {pf::PackageScriptOp::SpawnProjectileFromVars, -1, 7, 8, pf::fxFromFloat(0.4f), pf::fxFromFloat(1.0f), "PackageProjectileObject"},
         },
     }, {
         "CallTargetScript",
@@ -4777,6 +4777,14 @@ int main(int argc, char** argv) {
         {
             {pf::PackageScriptOp::CallScript, -1, -1, -1, 0, 0, "ObjectCallTargetScript"},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 13, 0, {}},
+        },
+    }, {
+        "ObjectSpawnScript",
+        8,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 12, -1, -1, pf::fxFromFloat(0.6f), 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 13, -1, -1, pf::fxFromFloat(-0.2f), 0, {}},
+            {pf::PackageScriptOp::SpawnProjectileFromVars, -1, 12, 13, pf::fxFromFloat(0.35f), pf::fxFromFloat(1.25f), "PackageProjectileObject"},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -5182,7 +5190,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 14 &&
-        loadedPackage.objects[1].packageScripts.size() == 3;
+        loadedPackage.objects[1].packageScripts.size() == 4;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -5400,9 +5408,11 @@ int main(int argc, char** argv) {
         }
         packageProjectileScriptWorld.fighters[0].packageVars.clear();
     }
+    const pf::Vec2 packageProjectileSpawnBase = packageProjectileScriptWorld.fighters[0].position;
     pf::tickWorld(packageProjectileScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
     int packageProjectileSpawnCount = 0;
     bool packageProjectileVarSpawnOk = false;
+    bool packageProjectileYOffsetOk = false;
     const bool packageProjectileScriptRan =
         packageProjectileScriptWorld.fighters[0].packageVars.size() > 8 &&
         packageProjectileScriptWorld.fighters[0].packageVars[7] == pf::fxFromFloat(0.6f) &&
@@ -5420,6 +5430,8 @@ int main(int argc, char** argv) {
             ++packageProjectileSpawnCount;
             if (object.velocity.x == pf::fxFromFloat(0.6f) && object.velocity.y == pf::fxFromFloat(0.2f)) {
                 packageProjectileVarSpawnOk = true;
+                packageProjectileYOffsetOk = object.previousPosition.y ==
+                    packageProjectileSpawnBase.y + pf::fxFromFloat(0.7f) + pf::fxFromFloat(0.4f);
             }
         }
     }
@@ -5427,7 +5439,8 @@ int main(int argc, char** argv) {
         packageProjectileScriptRan &&
         packageProjectileDefKindOk &&
         packageProjectileSpawnCount >= 2 &&
-        packageProjectileVarSpawnOk;
+        packageProjectileVarSpawnOk &&
+        packageProjectileYOffsetOk;
     pf::World packageProjectileSubactionWorld = pf::makeTrainingWorld();
     if (packageSubactionProjectileLoaded) {
         packageProjectileSubactionWorld.fighterDefs[0] = loadedSubactionProjectilePackage.fighters[0];
@@ -5643,6 +5656,37 @@ int main(int argc, char** argv) {
         packageObjectOwnerContext->packageVars[4] == pf::fxFromFloat(0.75f) &&
         packageObjectOwnerContext->packageVars[5] == pf::fxFromFloat(-0.5f) &&
         packageObjectOwnerContext->packageVars[6] == pf::fxFromFloat(0.25f);
+    pf::World packageObjectSpawnOffsetWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectSpawnOffsetWorld.objectDefs = loadedPackage.objects;
+        for (pf::GameObjectDefinition& objectDef : packageObjectSpawnOffsetWorld.objectDefs) {
+            if (objectDef.name == "PackageVelocityObject") {
+                objectDef.onSpawned = {{std::string{"script:ObjectSpawnScript"}}};
+                break;
+            }
+        }
+    }
+    const pf::Vec2 packageObjectSpawnOffsetBase{pf::fxFromFloat(2.0f), pf::fxFromFloat(3.0f)};
+    pf::spawnGameObject(
+        packageObjectSpawnOffsetWorld,
+        "PackageVelocityObject",
+        0,
+        packageObjectSpawnOffsetBase,
+        -1,
+        {});
+    bool packageObjectSpawnYOffsetOk = false;
+    for (const pf::GameObjectRuntime& object : packageObjectSpawnOffsetWorld.objects) {
+        if (object.objectDef >= 0 &&
+            object.objectDef < static_cast<int>(packageObjectSpawnOffsetWorld.objectDefs.size()) &&
+            packageObjectSpawnOffsetWorld.objectDefs[static_cast<size_t>(object.objectDef)].name == "PackageProjectileObject" &&
+            object.velocity.x == -pf::fxFromFloat(0.6f) &&
+            object.velocity.y == pf::fxFromFloat(-0.2f) &&
+            object.previousPosition.x == packageObjectSpawnOffsetBase.x - pf::fxFromFloat(1.25f) &&
+            object.previousPosition.y == packageObjectSpawnOffsetBase.y + pf::fxFromFloat(0.35f))
+        {
+            packageObjectSpawnYOffsetOk = true;
+        }
+    }
     std::cout << "fighter_package_bytes=" << packageBytes.size()
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
@@ -5660,6 +5704,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_projectile_ok=" << packageProjectileScriptOk
               << " fighter_package_script_projectile_count=" << packageProjectileSpawnCount
               << " fighter_package_script_projectile_var_spawn=" << packageProjectileVarSpawnOk
+              << " fighter_package_script_projectile_y_offset=" << packageProjectileYOffsetOk
               << " fighter_package_script_projectile_ran=" << packageProjectileScriptRan
               << " fighter_package_script_projectile_def_kind=" << packageProjectileDefKindOk
               << " fighter_package_subaction_projectile_ok=" << packageProjectileSubactionOk
@@ -5681,6 +5726,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
+              << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected
