@@ -205,28 +205,28 @@ static void drawGroundRect(pf::Fix left, pf::Fix bottom, pf::Fix right, pf::Fix 
     DrawLine3D(toRayGround(tl), toRayGround(bl), color);
 }
 
-static pf::Vec2 hsdEcbProjection(const pf::FighterRuntime& fighter, pf::Vec3 joint) {
+static pf::Vec2 ecbJointProjection(const pf::FighterRuntime& fighter, pf::Vec3 joint) {
     return {fighter.position.x + fighter.facing * joint.z, joint.y};
 }
 
 static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    if (fighter.hsdJointWorldPositions.empty()) {
+    if (fighter.jointWorldPositions.empty()) {
         return;
     }
 
     bool haveExtents = false;
     pf::Fix minHorizontal = 0;
     pf::Fix maxHorizontal = 0;
-    if (fighter.hsdJointWorldPositions.size() > 1) {
-        const pf::Vec2 topN = hsdEcbProjection(fighter, fighter.hsdJointWorldPositions[1]);
+    if (fighter.jointWorldPositions.size() > 1) {
+        const pf::Vec2 topN = ecbJointProjection(fighter, fighter.jointWorldPositions[1]);
         DrawSphere(toRayGround(topN), 0.08f, MAGENTA);
     }
 
     for (int bone : def.environmentCollisionBones) {
-        if (bone < 0 || static_cast<size_t>(bone) >= fighter.hsdJointWorldPositions.size()) {
+        if (bone < 0 || static_cast<size_t>(bone) >= fighter.jointWorldPositions.size()) {
             continue;
         }
-        const pf::Vec3 source = fighter.hsdJointWorldPositions[static_cast<size_t>(bone)];
+        const pf::Vec3 source = fighter.jointWorldPositions[static_cast<size_t>(bone)];
         if (!haveExtents) {
             minHorizontal = source.z;
             maxHorizontal = source.z;
@@ -236,11 +236,11 @@ static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::F
             maxHorizontal = std::max(maxHorizontal, source.z);
         }
         DrawSphere(toRay(source), 0.055f, Fade(ORANGE, 0.75f));
-        DrawSphere(toRayGround(hsdEcbProjection(fighter, source)), 0.065f, GOLD);
+        DrawSphere(toRayGround(ecbJointProjection(fighter, source)), 0.065f, GOLD);
     }
 
-    if (haveExtents && fighter.hsdJointWorldPositions.size() > 1) {
-        const pf::Vec2 topN = hsdEcbProjection(fighter, fighter.hsdJointWorldPositions[1]);
+    if (haveExtents && fighter.jointWorldPositions.size() > 1) {
+        const pf::Vec2 topN = ecbJointProjection(fighter, fighter.jointWorldPositions[1]);
         const pf::Fix halfWidth = pf::fxMul(pf::fxAbs(maxHorizontal - minHorizontal), pf::fxFromFloat(0.5f));
         const pf::Fix boxReach = halfWidth + def.properties.ledgeSnapX;
         const pf::Fix boxBottom = topN.y + def.properties.ledgeSnapY - pf::fxMul(def.properties.ledgeSnapHeight, pf::fxFromFloat(0.5f));
@@ -283,27 +283,27 @@ static const std::vector<pf::AnimationJoint>* animationSkeletonForDrawing(const 
 
 static void drawAnimationSkeleton(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter, Color color) {
     const std::vector<pf::AnimationJoint>* skeleton = animationSkeletonForDrawing(def);
-    if (!skeleton || fighter.hsdJointWorldPositions.empty()) {
+    if (!skeleton || fighter.jointWorldPositions.empty()) {
         return;
     }
 
-    const size_t jointCount = std::min(skeleton->size(), fighter.hsdJointWorldPositions.size());
+    const size_t jointCount = std::min(skeleton->size(), fighter.jointWorldPositions.size());
     for (size_t i = 0; i < jointCount; ++i) {
-        pf::Vec3 joint = fighter.hsdJointWorldPositions[i];
+        pf::Vec3 joint = fighter.jointWorldPositions[i];
         const int parent = (*skeleton)[i].parent;
-        if (parent >= 0 && static_cast<size_t>(parent) < fighter.hsdJointWorldPositions.size()) {
-            pf::Vec3 parentJoint = fighter.hsdJointWorldPositions[static_cast<size_t>(parent)];
+        if (parent >= 0 && static_cast<size_t>(parent) < fighter.jointWorldPositions.size()) {
+            pf::Vec3 parentJoint = fighter.jointWorldPositions[static_cast<size_t>(parent)];
             DrawLine3D(toRay(parentJoint), toRay(joint), color);
         }
         DrawSphere(toRay(joint), 0.04f, color);
     }
 
     const int head = def.fighterBones.head;
-    if (head >= 0 && static_cast<size_t>(head) < fighter.hsdJointWorldPositions.size()) {
-        pf::Vec3 headJoint = fighter.hsdJointWorldPositions[static_cast<size_t>(head)];
+    if (head >= 0 && static_cast<size_t>(head) < fighter.jointWorldPositions.size()) {
+        pf::Vec3 headJoint = fighter.jointWorldPositions[static_cast<size_t>(head)];
         DrawSphereWires(toRay(headJoint), 0.18f, 10, 6, color);
-    } else if (fighter.hsdJointWorldPositions.size() > 1) {
-        pf::Vec3 tipJoint = fighter.hsdJointWorldPositions.back();
+    } else if (fighter.jointWorldPositions.size() > 1) {
+        pf::Vec3 tipJoint = fighter.jointWorldPositions.back();
         DrawSphereWires(toRay(tipJoint), 0.12f, 8, 4, color);
     }
 }
@@ -315,7 +315,7 @@ constexpr uint32_t kPobjCullBack = 1u << 14;
 constexpr uint32_t kPobjCullFront = 1u << 15;
 constexpr uint32_t kJObjSkeletonRoot = 1u << 1;
 
-struct HsdRenderBatch {
+struct FighterMeshRenderBatch {
     unsigned int vao = 0;
     std::array<unsigned int, 8> vbo{};
     int vertexCount = 0;
@@ -337,7 +337,7 @@ struct HsdRenderBatch {
     std::array<uint8_t, 4> materialColor{255, 255, 255, 255};
 };
 
-struct HsdRenderCache {
+struct FighterMeshRenderCache {
     Shader shader{};
     int locMvp = -1;
     int locParentMatrix = -1;
@@ -353,7 +353,7 @@ struct HsdRenderCache {
     int locMaterialColor = -1;
     unsigned int boneUniformBuffer = 0;
     std::vector<Texture2D> textures;
-    std::vector<HsdRenderBatch> batches;
+    std::vector<FighterMeshRenderBatch> batches;
 };
 
 #ifndef APIENTRY
@@ -463,7 +463,7 @@ static void uploadBoneUniformBuffer(unsigned int buffer, const std::vector<Matri
     api.bindBuffer(kGlUniformBuffer, 0);
 }
 
-const char* hsdMeshVertexShader() {
+const char* fighterMeshVertexShader() {
     return R"glsl(
 #version 330
 layout(location = 0) in vec3 vertexPosition;
@@ -555,7 +555,7 @@ void main()
 )glsl";
 }
 
-const char* hsdMeshFragmentShader() {
+const char* fighterMeshFragmentShader() {
     return R"glsl(
 #version 330
 in vec2 fragTexCoord;
@@ -646,9 +646,9 @@ static Texture2D loadTextureFromRgba(const pf::FighterMeshTexture& texture) {
     return loaded;
 }
 
-static HsdRenderCache createHsdRenderCache(const pf::FighterMesh& mesh) {
-    HsdRenderCache cache;
-    cache.shader = LoadShaderFromMemory(hsdMeshVertexShader(), hsdMeshFragmentShader());
+static FighterMeshRenderCache createFighterMeshRenderCache(const pf::FighterMesh& mesh) {
+    FighterMeshRenderCache cache;
+    cache.shader = LoadShaderFromMemory(fighterMeshVertexShader(), fighterMeshFragmentShader());
     cache.locMvp = GetShaderLocation(cache.shader, "mvp");
     cache.locParentMatrix = GetShaderLocation(cache.shader, "parentMatrix");
     cache.locTexture0 = GetShaderLocation(cache.shader, "texture0");
@@ -672,7 +672,7 @@ static HsdRenderCache createHsdRenderCache(const pf::FighterMesh& mesh) {
 
     cache.batches.reserve(mesh.batches.size());
     for (const pf::FighterMeshBatch& source : mesh.batches) {
-        HsdRenderBatch batch;
+        FighterMeshRenderBatch batch;
         batch.parentBone = source.parentBone;
         batch.singleBindBone = source.singleBindBone;
         batch.dobjIndex = source.dobjIndex;
@@ -747,16 +747,16 @@ static HsdRenderCache createHsdRenderCache(const pf::FighterMesh& mesh) {
     return cache;
 }
 
-static HsdRenderCache& hsdRenderCache(const pf::FighterMesh& mesh) {
-    static std::unordered_map<const pf::FighterMesh*, std::unique_ptr<HsdRenderCache>> caches;
+static FighterMeshRenderCache& fighterMeshRenderCache(const pf::FighterMesh& mesh) {
+    static std::unordered_map<const pf::FighterMesh*, std::unique_ptr<FighterMeshRenderCache>> caches;
     auto it = caches.find(&mesh);
     if (it == caches.end()) {
-        it = caches.emplace(&mesh, std::make_unique<HsdRenderCache>(createHsdRenderCache(mesh))).first;
+        it = caches.emplace(&mesh, std::make_unique<FighterMeshRenderCache>(createFighterMeshRenderCache(mesh))).first;
     }
     return *it->second;
 }
 
-static Matrix parentMatrixForBatch(const HsdRenderBatch& batch,
+static Matrix parentMatrixForBatch(const FighterMeshRenderBatch& batch,
                                    const std::vector<Matrix>& boneWorldMatrices) {
     int bone = batch.singleBindBone >= 0 ? batch.singleBindBone : batch.parentBone;
     if (bone >= 0 && static_cast<size_t>(bone) < boneWorldMatrices.size()) {
@@ -765,34 +765,34 @@ static Matrix parentMatrixForBatch(const HsdRenderBatch& batch,
     return MatrixIdentity();
 }
 
-static bool isBatchVisible(const HsdRenderBatch& batch, const pf::FighterRuntime& fighter) {
+static bool isBatchVisible(const FighterMeshRenderBatch& batch, const pf::FighterRuntime& fighter) {
     if (!batch.hiddenByVisibilityTable) {
         return true;
     }
     if (batch.modelPartIndex < 0 || batch.modelPartState < 0) {
         return false;
     }
-    if (static_cast<size_t>(batch.modelPartIndex) >= fighter.hsdModelVisibilityStates.size()) {
+    if (static_cast<size_t>(batch.modelPartIndex) >= fighter.modelVisibilityStates.size()) {
         return batch.modelPartState == 0;
     }
-    return fighter.hsdModelVisibilityStates[static_cast<size_t>(batch.modelPartIndex)] == batch.modelPartState;
+    return fighter.modelVisibilityStates[static_cast<size_t>(batch.modelPartIndex)] == batch.modelPartState;
 }
 
 static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
     const pf::FighterMesh& mesh = pf::authoredFighterMesh(def);
-    if (mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
+    if (mesh.batches.empty() || fighter.jointWorldTransforms.empty()) {
         return;
     }
 
-    HsdRenderCache& cache = hsdRenderCache(mesh);
+    FighterMeshRenderCache& cache = fighterMeshRenderCache(mesh);
     constexpr int kMaxBones = kHsdShaderMaxBones;
     std::vector<Matrix> boneWorldMatrices(kMaxBones, MatrixIdentity());
     std::vector<Matrix> boneMatrices(kMaxBones, MatrixIdentity());
-    const size_t boneCount = std::min({fighter.hsdJointWorldTransforms.size(),
+    const size_t boneCount = std::min({fighter.jointWorldTransforms.size(),
                                        mesh.inverseBindMatrices.size(),
                                        static_cast<size_t>(kMaxBones)});
     for (size_t i = 0; i < boneCount; ++i) {
-        std::array<float, 16> world = toFloatMatrix(fighter.hsdJointWorldTransforms[i]);
+        std::array<float, 16> world = toFloatMatrix(fighter.jointWorldTransforms[i]);
         boneWorldMatrices[i] = toRayMatrix(world);
         boneMatrices[i] = toRayMatrix(multiplyRowMajor(world, mesh.inverseBindMatrices[i]));
     }
@@ -804,7 +804,7 @@ static void drawImportedMesh(const pf::FighterDefinition& def, const pf::Fighter
     }
     uploadBoneUniformBuffer(cache.boneUniformBuffer, boneMatrices, boneWorldMatrices);
 
-    for (const HsdRenderBatch& batch : cache.batches) {
+    for (const FighterMeshRenderBatch& batch : cache.batches) {
         if (!isBatchVisible(batch, fighter)) {
             continue;
         }
@@ -4009,12 +4009,12 @@ static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const
     for (const pf::FighterMeshVertexInfluence& influence : vertex.influences) {
         if (influence.weight <= 0.0f ||
             influence.bone < 0 ||
-            static_cast<size_t>(influence.bone) >= fighter.hsdJointWorldTransforms.size())
+            static_cast<size_t>(influence.bone) >= fighter.jointWorldTransforms.size())
         {
             continue;
         }
         const pf::Vec3 weighted = pf::transformPoint(
-            fighter.hsdJointWorldTransforms[static_cast<size_t>(influence.bone)],
+            fighter.jointWorldTransforms[static_cast<size_t>(influence.bone)],
             vertex.position);
         blendedX += pf::fxToFloat(weighted.x) * influence.weight;
         blendedY += pf::fxToFloat(weighted.y) * influence.weight;
@@ -4026,8 +4026,8 @@ static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const
     }
 
     const int bone = batch.singleBindBone >= 0 ? batch.singleBindBone : batch.parentBone;
-    if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
-        return pf::transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], vertex.position);
+    if (bone >= 0 && static_cast<size_t>(bone) < fighter.jointWorldTransforms.size()) {
+        return pf::transformPoint(fighter.jointWorldTransforms[static_cast<size_t>(bone)], vertex.position);
     }
     return {fighter.position.x + vertex.position.x, fighter.position.y + vertex.position.y, vertex.position.z};
 }
@@ -4102,12 +4102,12 @@ static void drawEditorSelectedAuthoredJoint(const pf::World& world, const pf::Fi
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     if (def.authoredSkeleton.empty() ||
         editor.selectedAnimationJoint < 0 ||
-        editor.selectedAnimationJoint >= static_cast<int>(fighter.hsdJointWorldPositions.size()) ||
+        editor.selectedAnimationJoint >= static_cast<int>(fighter.jointWorldPositions.size()) ||
         editor.selectedAnimationJoint >= static_cast<int>(def.authoredSkeleton.size()))
     {
         return;
     }
-    const Vector3 jointPosition = toRay(fighter.hsdJointWorldPositions[static_cast<size_t>(editor.selectedAnimationJoint)]);
+    const Vector3 jointPosition = toRay(fighter.jointWorldPositions[static_cast<size_t>(editor.selectedAnimationJoint)]);
     DrawSphere(jointPosition, 0.09f, YELLOW);
     DrawSphereWires(jointPosition, 0.16f, 12, 8, BLACK);
 }
@@ -4115,7 +4115,7 @@ static void drawEditorSelectedAuthoredJoint(const pf::World& world, const pf::Fi
 static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, const pf::FighterEditor& editor) {
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
-    const bool hasAnimationPose = !fighter.hsdJointWorldPositions.empty() && animationSkeletonForDrawing(def) != nullptr;
+    const bool hasAnimationPose = !fighter.jointWorldPositions.empty() && animationSkeletonForDrawing(def) != nullptr;
     if (!editor.showModel) {
         // Keep debug volumes visible when the mesh/model layer is hidden.
     } else if (fighter.fighterInvisible) {
@@ -4153,8 +4153,8 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         center.x += fighter.position.x;
         center.y += fighter.position.y + pf::fxFromFloat(0.2f);
         const int shieldBone = def.fighterBones.shield;
-        if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.hsdJointWorldTransforms.size()) {
-            center = pf::transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(shieldBone)], {});
+        if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.jointWorldTransforms.size()) {
+            center = pf::transformPoint(fighter.jointWorldTransforms[static_cast<size_t>(shieldBone)], {});
         }
         DrawSphereWires(toRay(center), pf::fxToFloat(shieldRadius(def, fighter)), 18, 10, VIOLET);
     }
@@ -7778,7 +7778,7 @@ static void applyEditorPreviewFixture(pf::World& world, bool airborne) {
     fighter.groundSegment = airborne || world.stage.segments.empty() ? -1 : 0;
     fighter.groundNormal = {0, pf::fx(1)};
     fighter.facing = 1;
-    fighter.hsdPoseFacing = 1;
+    fighter.poseFacing = 1;
     fighter.fighterVelocity = {};
     fighter.knockbackVelocity = {};
     fighter.groundVelocity = {};
@@ -12271,7 +12271,7 @@ static void drawEditorInspectorWorkstation(
         }
         if (subaction.type == pf::SubactionType::SetHurtboxState) {
             const int authoredHurtboxCount = static_cast<int>(def.hurtboxes.size());
-            const bool targetsAll = subaction.hurtboxIndex < 0 && subaction.hsdBone < 0;
+            const bool targetsAll = subaction.hurtboxIndex < 0 && subaction.joint < 0;
             std::string targetLabel = targetsAll
                 ? "all hurtboxes"
                 : ("hurtbox #" + std::to_string(subaction.hurtboxIndex));
@@ -12279,8 +12279,8 @@ static void drawEditorInspectorWorkstation(
                 const pf::HurtboxDefinition& target = def.hurtboxes[static_cast<size_t>(subaction.hurtboxIndex)];
                 targetLabel += " " + std::string(pf::boneName(target.bone));
             }
-            if (subaction.hsdBone >= 0) {
-                targetLabel = "bone id " + std::to_string(subaction.hsdBone);
+            if (subaction.joint >= 0) {
+                targetLabel = "bone id " + std::to_string(subaction.joint);
             }
             DrawText(("Hurtbox timing: " + targetLabel + " -> " + hurtboxStateName(subaction.hurtboxState)).c_str(),
                 static_cast<int>(rect.x + 10.0f),
@@ -12289,7 +12289,7 @@ static void drawEditorInspectorWorkstation(
                 Fade(RAYWHITE, 0.72f));
             const float hurtTimingY = y + 154.0f;
             if (uiButton({rect.x + 10.0f, hurtTimingY, 48.0f, 22.0f}, "Prev") && authoredHurtboxCount > 0) {
-                editedSubaction.hsdBone = -1;
+                editedSubaction.joint = -1;
                 editedSubaction.hurtboxIndex = wrappedIndex(
                     editedSubaction.hurtboxIndex < 0 ? authoredHurtboxCount - 1 : editedSubaction.hurtboxIndex - 1,
                     authoredHurtboxCount);
@@ -12297,13 +12297,13 @@ static void drawEditorInspectorWorkstation(
                 if (commitSubaction(editedSubaction, "Editor: retargeted hurtbox timing")) return;
             }
             if (uiButton({rect.x + 64.0f, hurtTimingY, 48.0f, 22.0f}, "Next") && authoredHurtboxCount > 0) {
-                editedSubaction.hsdBone = -1;
+                editedSubaction.joint = -1;
                 editedSubaction.hurtboxIndex = wrappedIndex(editedSubaction.hurtboxIndex + 1, authoredHurtboxCount);
                 editor.selectedHurtbox = editedSubaction.hurtboxIndex;
                 if (commitSubaction(editedSubaction, "Editor: retargeted hurtbox timing")) return;
             }
             if (uiButton({rect.x + 118.0f, hurtTimingY, 46.0f, 22.0f}, "All")) {
-                editedSubaction.hsdBone = -1;
+                editedSubaction.joint = -1;
                 editedSubaction.hurtboxIndex = -1;
                 if (commitSubaction(editedSubaction, "Editor: set hurtbox timing target to all")) return;
             }
@@ -13273,7 +13273,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     } else {
         DrawText("Selected subaction: none", 24, 164, 14, DARKGRAY);
     }
-    DrawText(("Animation pose: " + std::to_string(fighter.hsdJointWorldPositions.size()) + " joints, " +
+    DrawText(("Animation pose: " + std::to_string(fighter.jointWorldPositions.size()) + " joints, " +
               std::to_string(fighter.poseHurtboxCapsules.size()) + " hurtboxes").c_str(), 24, 182, 14, DARKGRAY);
 
     DrawRectangle(static_cast<int>(timelineX), static_cast<int>(timelineY), static_cast<int>(timelineWidth), static_cast<int>(timelineHeight), Fade(LIGHTGRAY, 0.65f));

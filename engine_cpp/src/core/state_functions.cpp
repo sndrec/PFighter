@@ -2005,8 +2005,8 @@ static int currentActionCommonBone(const World& world, const FighterRuntime& fig
 
 static bool meleeDownBoundFaceUpPose(const World& world, const FighterRuntime& fighter) {
     const int hipN = currentActionCommonBone(world, fighter, 4);
-    if (hipN >= 0 && static_cast<size_t>(hipN) < fighter.hsdJointWorldTransforms.size()) {
-        return fighter.hsdJointWorldTransforms[static_cast<size_t>(hipN)].matrix[5] > 0;
+    if (hipN >= 0 && static_cast<size_t>(hipN) < fighter.jointWorldTransforms.size()) {
+        return fighter.jointWorldTransforms[static_cast<size_t>(hipN)].matrix[5] > 0;
     }
     return true;
 }
@@ -2851,7 +2851,7 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             FighterRuntime* target = indexedFighter(packageVar(fighter, instruction.dst));
             if (target) {
                 target->facing = packageVar(fighter, instruction.srcA) < 0 ? -1 : 1;
-                target->hsdPoseFacing = target->facing;
+                target->poseFacing = target->facing;
             }
             break;
         }

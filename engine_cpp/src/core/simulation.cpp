@@ -710,7 +710,7 @@ static std::vector<JointWorldTransform> fighterWorldTransforms(const FighterDefi
     if (!skeleton) {
         return {};
     }
-    std::vector<JointWorldTransform> localTransforms = jointWorldTransforms(*skeleton, fighter.hsdPose);
+    std::vector<JointWorldTransform> localTransforms = jointWorldTransforms(*skeleton, fighter.animationPose);
     const std::array<Fix, 16> modelMatrix = fighterModelMatrix(def, fighter);
     for (JointWorldTransform& transform : localTransforms) {
         transform.matrix = multiplyMatrix4(modelMatrix, transform.matrix);
@@ -793,18 +793,18 @@ static size_t modelVisibilityStateCount(const FighterMesh& mesh) {
 static void ensureModelVisibilityDefaults(const FighterDefinition& def, FighterRuntime& fighter) {
     const FighterMesh& mesh = authoredFighterMesh(def);
     if (mesh.batches.empty()) {
-        fighter.hsdModelVisibilityDefaultStates.clear();
-        fighter.hsdModelVisibilityStates.clear();
+        fighter.modelVisibilityDefaultStates.clear();
+        fighter.modelVisibilityStates.clear();
         return;
     }
     const size_t count = modelVisibilityStateCount(mesh);
-    if (fighter.hsdModelVisibilityDefaultStates.size() != count) {
+    if (fighter.modelVisibilityDefaultStates.size() != count) {
         // HSDLib's renderer resets high-poly visibility groups to state 0.
         // Character-specific ftParts_80074A4C default overrides are ported separately.
-        fighter.hsdModelVisibilityDefaultStates.assign(count, 0);
+        fighter.modelVisibilityDefaultStates.assign(count, 0);
     }
-    if (fighter.hsdModelVisibilityStates.size() != count) {
-        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
+    if (fighter.modelVisibilityStates.size() != count) {
+        fighter.modelVisibilityStates = fighter.modelVisibilityDefaultStates;
     }
 }
 
@@ -829,7 +829,7 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     p1.position = position;
     p1.previousPosition = p1.position;
     p1.facing = facing;
-    p1.hsdPoseFacing = facing;
+    p1.poseFacing = facing;
     p1.groundSegment = mainFloorSegmentIndex(world.stage);
     if (p1.groundSegment >= 0) {
         segmentYAtX(world.stage.segments[static_cast<size_t>(p1.groundSegment)], p1.position.x, p1.position.y);
@@ -840,7 +840,7 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     initializePackageVars(def, p1);
     if (!authoredFighterMesh(def).batches.empty()) {
         ensureModelVisibilityDefaults(def, p1);
-        p1.hsdModelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
+        p1.modelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
     }
     return p1;
 }
@@ -1081,13 +1081,13 @@ bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::s
     fighter.animationRate = fx(1);
     fighter.animationActionIndexOverride = -1;
     fighter.lastActionFrameExecuted = -1;
-    fighter.hsdPoseFacing = fighter.facing;
-    fighter.hsdTransN = {};
-    fighter.previousHsdTransN = {};
-    fighter.hsdTransNOffset = {};
-    fighter.hsdBlendFromPose.joints.clear();
-    fighter.hsdBlendFrames = 0;
-    fighter.hsdBlendElapsed = 0;
+    fighter.poseFacing = fighter.facing;
+    fighter.animationTransN = {};
+    fighter.previousAnimationTransN = {};
+    fighter.animationTransNOffset = {};
+    fighter.animationBlendFromPose.joints.clear();
+    fighter.animationBlendFrames = 0;
+    fighter.animationBlendElapsed = 0;
     fighter.throwAnimationFrozen = false;
     fighter.thrownAnimationFreezeActive = false;
     fighter.thrownAnimationFreezeFrame = 0;
@@ -1097,12 +1097,12 @@ bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::s
     initializePackageVars(*found, fighter);
     if (!authoredFighterMesh(*found).batches.empty()) {
         ensureModelVisibilityDefaults(*found, fighter);
-        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelPartAnimations.assign(authoredModelPartAnimations(*found).size(), -1);
+        fighter.modelVisibilityStates = fighter.modelVisibilityDefaultStates;
+        fighter.modelPartAnimations.assign(authoredModelPartAnimations(*found).size(), -1);
     } else {
-        fighter.hsdModelVisibilityDefaultStates.clear();
-        fighter.hsdModelVisibilityStates.clear();
-        fighter.hsdModelPartAnimations.clear();
+        fighter.modelVisibilityDefaultStates.clear();
+        fighter.modelVisibilityStates.clear();
+        fighter.modelPartAnimations.clear();
     }
     evaluatePose(*found, found->states[static_cast<size_t>(targetState)], fighter);
     calculateEcb(*found, fighter, true);
@@ -1130,7 +1130,7 @@ int spawnFighter(World& world, const std::string& fighterName, Vec2 position, in
     fighter.position = position;
     fighter.previousPosition = position;
     fighter.facing = facing == 0 ? 1 : facing;
-    fighter.hsdPoseFacing = fighter.facing;
+    fighter.poseFacing = fighter.facing;
     world.fighters.push_back(std::move(fighter));
     const int fighterIndex = static_cast<int>(world.fighters.size()) - 1;
     FighterRuntime& spawned = world.fighters.back();
@@ -1867,26 +1867,26 @@ static void refreshEcbMetadata(Ecb& ecb, const FighterRuntime& fighter) {
 }
 
 static bool calculateBoneDesiredEcb(const FighterDefinition& def, FighterRuntime& fighter, Ecb& out) {
-    if (fighter.hsdJointWorldPositions.empty()) {
+    if (fighter.jointWorldPositions.empty()) {
         return false;
     }
 
     for (int bone : def.environmentCollisionBones) {
-        if (bone < 0 || static_cast<size_t>(bone) >= fighter.hsdJointWorldPositions.size()) {
+        if (bone < 0 || static_cast<size_t>(bone) >= fighter.jointWorldPositions.size()) {
             return false;
         }
     }
 
-    const Vec3 topN = fighter.hsdJointWorldPositions.size() > 1
-        ? fighter.hsdJointWorldPositions[1]
+    const Vec3 topN = fighter.jointWorldPositions.size() > 1
+        ? fighter.jointWorldPositions[1]
         : Vec3{fighter.position.x, fighter.position.y, 0};
-    const Vec3 first = fighter.hsdJointWorldPositions[static_cast<size_t>(def.environmentCollisionBones[0])];
+    const Vec3 first = fighter.jointWorldPositions[static_cast<size_t>(def.environmentCollisionBones[0])];
     Fix minHorizontal = first.z;
     Fix maxHorizontal = first.z;
     Fix minY = first.y;
     Fix maxY = first.y;
     for (size_t i = 1; i < def.environmentCollisionBones.size(); ++i) {
-        const Vec3 joint = fighter.hsdJointWorldPositions[static_cast<size_t>(def.environmentCollisionBones[i])];
+        const Vec3 joint = fighter.jointWorldPositions[static_cast<size_t>(def.environmentCollisionBones[i])];
         minHorizontal = std::min(minHorizontal, joint.z);
         maxHorizontal = std::max(maxHorizontal, joint.z);
         minY = std::min(minY, joint.y);
@@ -2151,18 +2151,18 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     } else if (resolvedBlendFrames == kDisableAnimationBlendFrames) {
         resolvedBlendFrames = 0;
     }
-    if (resolvedBlendFrames > 0 && !fighter.hsdPose.joints.empty()) {
-        fighter.hsdBlendFromPose = fighter.hsdPose;
-        fighter.hsdBlendFrames = resolvedBlendFrames;
-        fighter.hsdBlendElapsed = 0;
+    if (resolvedBlendFrames > 0 && !fighter.animationPose.joints.empty()) {
+        fighter.animationBlendFromPose = fighter.animationPose;
+        fighter.animationBlendFrames = resolvedBlendFrames;
+        fighter.animationBlendElapsed = 0;
     } else {
-        fighter.hsdBlendFromPose.joints.clear();
-        fighter.hsdBlendFrames = 0;
-        fighter.hsdBlendElapsed = 0;
+        fighter.animationBlendFromPose.joints.clear();
+        fighter.animationBlendFrames = 0;
+        fighter.animationBlendElapsed = 0;
     }
-    fighter.hsdTransN = {};
-    fighter.previousHsdTransN = {};
-    fighter.hsdTransNOffset = {};
+    fighter.animationTransN = {};
+    fighter.previousAnimationTransN = {};
+    fighter.animationTransNOffset = {};
     fighter.throwAnimationFrozen = false;
     fighter.thrownAnimationFreezeActive = false;
     fighter.thrownAnimationFreezeFrame = 0;
@@ -2171,7 +2171,7 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.animationRate = fx(1);
     fighter.animationActionIndexOverride = -1;
     fighter.lastActionFrameExecuted = -1;
-    fighter.hsdPoseFacing = fighter.facing;
+    fighter.poseFacing = fighter.facing;
     fighter.state = target;
     fighter.lastStateChangeFrame = fighter.internalFrame;
     fighter.interruptibleFrame = lagFrames > 0 ? lagFrames : targetState.initialInterruptibleFrame;
@@ -2180,12 +2180,12 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.fightersHitThisAction.clear();
     if (!authoredFighterMesh(def).batches.empty()) {
         ensureModelVisibilityDefaults(def, fighter);
-        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
+        fighter.modelVisibilityStates = fighter.modelVisibilityDefaultStates;
+        fighter.modelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
     } else {
-        fighter.hsdModelVisibilityDefaultStates.clear();
-        fighter.hsdModelVisibilityStates.clear();
-        fighter.hsdModelPartAnimations.clear();
+        fighter.modelVisibilityDefaultStates.clear();
+        fighter.modelVisibilityStates.clear();
+        fighter.modelPartAnimations.clear();
     }
     const auto it = std::find_if(world.fighters.begin(), world.fighters.end(), [&](const FighterRuntime& item) {
         return &item == &fighter;
@@ -3030,7 +3030,7 @@ static void extractTransNForModelPose(AnimationPose& pose);
 
 static void applyShieldPose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
     if (!usesShieldPose(state) || !def.hasShieldPose ||
-        def.shieldPose.joints.size() != fighter.hsdPose.joints.size())
+        def.shieldPose.joints.size() != fighter.animationPose.joints.size())
     {
         return;
     }
@@ -3050,7 +3050,7 @@ static void applyShieldPose(const FighterDefinition& def, const FighterState& st
         const int guardOpenFrames = std::max(1, def.properties.common.guardMinHoldFramesX268);
         openingBlend = std::min(fx(1), fxDiv(fx(frameInState(fighter) + 1), fx(guardOpenFrames)));
     }
-    fighter.hsdPose = blendedPose(fighter.hsdPose, target, openingBlend);
+    fighter.animationPose = blendedPose(fighter.animationPose, target, openingBlend);
 }
 
 static void applyAnimationChannel(JointPose& pose, AnimationChannel channel, Fix value) {
@@ -3068,23 +3068,23 @@ static void applyAnimationChannel(JointPose& pose, AnimationChannel channel, Fix
 }
 
 static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (fighter.hsdModelPartAnimations.empty()) {
+    if (fighter.modelPartAnimations.empty()) {
         return;
     }
     const std::vector<ModelPartAnimationSet>& sets = authoredModelPartAnimations(def);
-    for (size_t partIndex = 0; partIndex < sets.size() && partIndex < fighter.hsdModelPartAnimations.size(); ++partIndex) {
-        const int animIndex = fighter.hsdModelPartAnimations[partIndex];
+    for (size_t partIndex = 0; partIndex < sets.size() && partIndex < fighter.modelPartAnimations.size(); ++partIndex) {
+        const int animIndex = fighter.modelPartAnimations[partIndex];
         if (animIndex < 0 || static_cast<size_t>(animIndex) >= sets[partIndex].animations.size()) {
             continue;
         }
         const AnimationClip& clip = sets[partIndex].animations[static_cast<size_t>(animIndex)];
         for (const AnimationTrack& track : clip.tracks) {
             const int joint = track.joint;
-            if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdPose.joints.size()) {
+            if (joint < 0 || static_cast<size_t>(joint) >= fighter.animationPose.joints.size()) {
                 continue;
             }
             applyAnimationChannel(
-                fighter.hsdPose.joints[static_cast<size_t>(joint)],
+                fighter.animationPose.joints[static_cast<size_t>(joint)],
                 track.channel,
                 sampleTrack(track, 0));
         }
@@ -3140,12 +3140,12 @@ static Vec3 extractMeleeAnimTranslation(const FighterDefinition& def, const Figh
 
 static void evaluateNativePoseHurtboxes(const FighterDefinition& def, FighterRuntime& fighter) {
     fighter.poseHurtboxCapsules.clear();
-    if (fighter.hsdJointWorldTransforms.empty()) {
+    if (fighter.jointWorldTransforms.empty()) {
         return;
     }
     fighter.poseHurtboxCapsules.reserve(def.hurtboxes.size());
     for (const HurtboxDefinition& hurtbox : def.hurtboxes) {
-        if (hurtbox.joint < 0 || static_cast<size_t>(hurtbox.joint) >= fighter.hsdJointWorldTransforms.size()) {
+        if (hurtbox.joint < 0 || static_cast<size_t>(hurtbox.joint) >= fighter.jointWorldTransforms.size()) {
             Capsule capsule;
             capsule.a = boneWorld(fighter, hurtbox.bone, hurtbox.startOffset);
             capsule.b = boneWorld(fighter, hurtbox.bone, hurtbox.endOffset);
@@ -3153,7 +3153,7 @@ static void evaluateNativePoseHurtboxes(const FighterDefinition& def, FighterRun
             fighter.poseHurtboxCapsules.push_back(capsule);
             continue;
         }
-        const JointWorldTransform& transform = fighter.hsdJointWorldTransforms[static_cast<size_t>(hurtbox.joint)];
+        const JointWorldTransform& transform = fighter.jointWorldTransforms[static_cast<size_t>(hurtbox.joint)];
         Capsule capsule;
         capsule.a = transformPoint(transform, hurtbox.startOffset);
         capsule.b = transformPoint(transform, hurtbox.endOffset);
@@ -3164,27 +3164,27 @@ static void evaluateNativePoseHurtboxes(const FighterDefinition& def, FighterRun
 
 static void refreshHsdWorldPose(const FighterDefinition& def, FighterRuntime& fighter) {
     if (!fighterAnimationSkeleton(def)) {
-        fighter.hsdJointWorldTransforms.clear();
-        fighter.hsdJointWorldPositions.clear();
+        fighter.jointWorldTransforms.clear();
+        fighter.jointWorldPositions.clear();
         fighter.poseHurtboxCapsules.clear();
         return;
     }
-    fighter.hsdJointWorldTransforms = fighterWorldTransforms(def, fighter);
-    fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
+    fighter.jointWorldTransforms = fighterWorldTransforms(def, fighter);
+    fighter.jointWorldPositions = translationsFromTransforms(fighter.jointWorldTransforms);
     evaluateNativePoseHurtboxes(def, fighter);
 }
 
-static bool hsdRelativeBonePosition(const FighterRuntime& fighter, int joint, Vec3& out) {
-    if (joint < 0 || static_cast<size_t>(joint) >= fighter.hsdJointWorldPositions.size()) {
+static bool relativeJointPosition(const FighterRuntime& fighter, int joint, Vec3& out) {
+    if (joint < 0 || static_cast<size_t>(joint) >= fighter.jointWorldPositions.size()) {
         return false;
     }
-    const Vec3 world = fighter.hsdJointWorldPositions[static_cast<size_t>(joint)];
+    const Vec3 world = fighter.jointWorldPositions[static_cast<size_t>(joint)];
     out = {world.x - fighter.position.x, world.y - fighter.position.y, world.z};
     return true;
 }
 
 static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (fighter.hsdJointWorldPositions.empty()) {
+    if (fighter.jointWorldPositions.empty()) {
         return;
     }
 
@@ -3192,35 +3192,35 @@ static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntim
     // from Pl*.dat. The decomp resolves common parts through ftParts_GetBoneIndex
     // before touching fp->parts[].joint; keep this as data-table plumbing, not
     // a hand-authored anatomy guess.
-    const HsdFighterBoneTable& bones = def.fighterBones;
+    const FighterBoneTable& bones = def.fighterBones;
     Vec3 position{};
-    if (hsdRelativeBonePosition(fighter, 0, position)) {
+    if (relativeJointPosition(fighter, 0, position)) {
         fighter.bones[static_cast<size_t>(BoneId::Hip)].position = position;
     }
-    if (hsdRelativeBonePosition(fighter, bones.head, position)) {
+    if (relativeJointPosition(fighter, bones.head, position)) {
         fighter.bones[static_cast<size_t>(BoneId::Head)].position = position;
-    } else if (hsdRelativeBonePosition(fighter, bones.topOfHead, position)) {
+    } else if (relativeJointPosition(fighter, bones.topOfHead, position)) {
         fighter.bones[static_cast<size_t>(BoneId::Head)].position = position;
     }
-    if (hsdRelativeBonePosition(fighter, bones.leftArm, position)) {
+    if (relativeJointPosition(fighter, bones.leftArm, position)) {
         fighter.bones[static_cast<size_t>(BoneId::HandL)].position = position;
     }
-    if (hsdRelativeBonePosition(fighter, bones.itemHold, position) ||
-        hsdRelativeBonePosition(fighter, bones.rightArm, position))
+    if (relativeJointPosition(fighter, bones.itemHold, position) ||
+        relativeJointPosition(fighter, bones.rightArm, position))
     {
         fighter.bones[static_cast<size_t>(BoneId::HandR)].position = position;
     }
-    if (hsdRelativeBonePosition(fighter, bones.leftFoot, position) ||
-        hsdRelativeBonePosition(fighter, bones.leftLeg, position))
+    if (relativeJointPosition(fighter, bones.leftFoot, position) ||
+        relativeJointPosition(fighter, bones.leftLeg, position))
     {
         fighter.bones[static_cast<size_t>(BoneId::FootL)].position = position;
     }
-    if (hsdRelativeBonePosition(fighter, bones.rightFoot, position) ||
-        hsdRelativeBonePosition(fighter, bones.rightLeg, position))
+    if (relativeJointPosition(fighter, bones.rightFoot, position) ||
+        relativeJointPosition(fighter, bones.rightLeg, position))
     {
         fighter.bones[static_cast<size_t>(BoneId::FootR)].position = position;
     }
-    if (hsdRelativeBonePosition(fighter, bones.shield, position)) {
+    if (relativeJointPosition(fighter, bones.shield, position)) {
         fighter.bones[static_cast<size_t>(BoneId::Extra)].position = position;
     }
 }
@@ -3233,7 +3233,7 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
             return;
         }
         constexpr float kHalfPi = 1.57079632679f;
-        const AnimationPose previousVisiblePose = fighter.hsdPose;
+        const AnimationPose previousVisiblePose = fighter.animationPose;
         Fix frame = fighter.animationFrame;
         if (state.loopAnimation && clip->frameCount > 0) {
             const int loopFrames = std::max(1, static_cast<int>(std::round(fxToFloat(clip->frameCount))));
@@ -3241,49 +3241,49 @@ static void evaluatePose(const FighterDefinition& def, const FighterState& state
         } else if (fighter.stateAnimationLengthOverride > 0 && clip->frameCount > 0) {
             frame = fxMul(clip->frameCount, fxDiv(fx(frameInState(fighter)), fx(fighter.stateAnimationLengthOverride)));
         }
-        fighter.hsdPose = evaluateClip(*skeleton, *clip, frame);
-        fighter.previousHsdTransN = fighter.hsdTransN;
-        fighter.hsdTransN = scaledVec3(extractMeleeAnimTranslation(def, fighter, *clip, fighter.hsdPose), def.properties.modelScale);
+        fighter.animationPose = evaluateClip(*skeleton, *clip, frame);
+        fighter.previousAnimationTransN = fighter.animationTransN;
+        fighter.animationTransN = scaledVec3(extractMeleeAnimTranslation(def, fighter, *clip, fighter.animationPose), def.properties.modelScale);
         if (frameInState(fighter) <= 1) {
-            fighter.hsdTransNOffset = {};
+            fighter.animationTransNOffset = {};
         } else {
-            fighter.hsdTransNOffset = {
-                fighter.hsdTransN.x - fighter.previousHsdTransN.x,
-                fighter.hsdTransN.y - fighter.previousHsdTransN.y,
-                fighter.hsdTransN.z - fighter.previousHsdTransN.z,
+            fighter.animationTransNOffset = {
+                fighter.animationTransN.x - fighter.previousAnimationTransN.x,
+                fighter.animationTransN.y - fighter.previousAnimationTransN.y,
+                fighter.animationTransN.z - fighter.previousAnimationTransN.z,
             };
         }
         applyShieldPose(def, state, fighter);
         applyModelPartAnimations(def, fighter);
-        if (!fighter.hsdPose.joints.empty() && !clipAnimatesTopNYRotation(*clip)) {
-            const float facing = fighter.hsdPoseFacing >= 0 ? 1.0f : -1.0f;
-            fighter.hsdPose.joints[0].rotation.y = fxFromFloat(kHalfPi * facing);
-            fighter.hsdPose.joints[0].useQuaternion = false;
+        if (!fighter.animationPose.joints.empty() && !clipAnimatesTopNYRotation(*clip)) {
+            const float facing = fighter.poseFacing >= 0 ? 1.0f : -1.0f;
+            fighter.animationPose.joints[0].rotation.y = fxFromFloat(kHalfPi * facing);
+            fighter.animationPose.joints[0].useQuaternion = false;
         }
-        if (fighter.hsdBlendFrames > 0 &&
-            previousVisiblePose.joints.size() == fighter.hsdPose.joints.size())
+        if (fighter.animationBlendFrames > 0 &&
+            previousVisiblePose.joints.size() == fighter.animationPose.joints.size())
         {
             const Fix rate = fighter.animationRate > 0 ? fighter.animationRate : 0;
-            fighter.hsdBlendElapsed += rate;
-            if (fighter.hsdBlendElapsed >= fx(fighter.hsdBlendFrames)) {
-                fighter.hsdBlendFrames = 0;
-                fighter.hsdBlendElapsed = 0;
+            fighter.animationBlendElapsed += rate;
+            if (fighter.animationBlendElapsed >= fx(fighter.animationBlendFrames)) {
+                fighter.animationBlendFrames = 0;
+                fighter.animationBlendElapsed = 0;
             } else if (rate > 0) {
-                const Fix remaining = fx(fighter.hsdBlendFrames) - fighter.hsdBlendElapsed;
+                const Fix remaining = fx(fighter.animationBlendFrames) - fighter.animationBlendElapsed;
                 const Fix t = fxDiv(rate, rate + remaining);
-                fighter.hsdPose = blendedPose(previousVisiblePose, fighter.hsdPose, t, 1);
+                fighter.animationPose = blendedPose(previousVisiblePose, fighter.animationPose, t, 1);
             } else {
-                fighter.hsdPose = previousVisiblePose;
+                fighter.animationPose = previousVisiblePose;
             }
         }
         refreshHsdWorldPose(def, fighter);
-    } else if (fighter.hsdPose.joints.empty()) {
-        fighter.hsdPose = {};
-        fighter.previousHsdTransN = fighter.hsdTransN;
-        fighter.hsdTransN = {};
-        fighter.hsdTransNOffset = {};
-        fighter.hsdJointWorldTransforms.clear();
-        fighter.hsdJointWorldPositions.clear();
+    } else if (fighter.animationPose.joints.empty()) {
+        fighter.animationPose = {};
+        fighter.previousAnimationTransN = fighter.animationTransN;
+        fighter.animationTransN = {};
+        fighter.animationTransNOffset = {};
+        fighter.jointWorldTransforms.clear();
+        fighter.jointWorldPositions.clear();
         fighter.poseHurtboxCapsules.clear();
     } else {
         refreshHsdWorldPose(def, fighter);
@@ -3334,7 +3334,7 @@ static void applyAnimationGroundVelocity(const FighterState& state, FighterRunti
     if (!state.useAnimPhysics || !fighter.grounded || frameInState(fighter) <= 1) {
         return;
     }
-    const Fix target = fighter.facing * fighter.hsdTransNOffset.z;
+    const Fix target = fighter.facing * fighter.animationTransNOffset.z;
     fighter.groundAccel = target - fighter.groundVelocity;
     fighter.groundAccelSecondary = 0;
 }
@@ -5001,8 +5001,8 @@ static Vec3 boneWorld(const FighterRuntime& fighter, BoneId bone, Vec3 offset) {
 }
 
 static Vec3 hitboxWorld(const FighterRuntime& fighter, const HitboxDefinition& hitbox) {
-    if (hitbox.hsdBone >= 0 && static_cast<size_t>(hitbox.hsdBone) < fighter.hsdJointWorldTransforms.size()) {
-        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(hitbox.hsdBone)], hitbox.offset);
+    if (hitbox.joint >= 0 && static_cast<size_t>(hitbox.joint) < fighter.jointWorldTransforms.size()) {
+        return transformPoint(fighter.jointWorldTransforms[static_cast<size_t>(hitbox.joint)], hitbox.offset);
     }
     return boneWorld(fighter, hitbox.bone, hitbox.offset);
 }
@@ -5049,8 +5049,8 @@ static Capsule objectTouchboxWorld(const GameObjectRuntime& object, const GameOb
 
 static Vec3 shieldCenterWorld(const FighterDefinition& def, const FighterRuntime& fighter) {
     const int shieldBone = def.fighterBones.shield;
-    if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.hsdJointWorldTransforms.size()) {
-        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(shieldBone)], {});
+    if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.jointWorldTransforms.size()) {
+        return transformPoint(fighter.jointWorldTransforms[static_cast<size_t>(shieldBone)], {});
     }
     return boneWorld(fighter, BoneId::Hip, {0, fxFromFloat(0.2f), 0});
 }
@@ -5071,8 +5071,8 @@ static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fi
 
 static Vec3 commonPartWorld(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart) {
     const int bone = commonPartBone(def, fighter, commonPart);
-    if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
-        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], {});
+    if (bone >= 0 && static_cast<size_t>(bone) < fighter.jointWorldTransforms.size()) {
+        return transformPoint(fighter.jointWorldTransforms[static_cast<size_t>(bone)], {});
     }
     return {fighter.position.x, fighter.position.y, 0};
 }
@@ -5267,23 +5267,23 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
     if (sub.type == SubactionType::SetModelVisibility) {
         if (sub.modelPartIndex >= 0) {
             ensureModelVisibilityDefaults(def, fighter);
-            if (sub.modelPartIndex >= static_cast<int>(fighter.hsdModelVisibilityStates.size())) {
-                fighter.hsdModelVisibilityStates.resize(static_cast<size_t>(sub.modelPartIndex + 1), 0);
+            if (sub.modelPartIndex >= static_cast<int>(fighter.modelVisibilityStates.size())) {
+                fighter.modelVisibilityStates.resize(static_cast<size_t>(sub.modelPartIndex + 1), 0);
             }
-            fighter.hsdModelVisibilityStates[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartState;
+            fighter.modelVisibilityStates[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartState;
         }
         return;
     }
     if (sub.type == SubactionType::RevertModelVisibility) {
         // ftParts_80074A8C copies every x5F4_arr.prev into x5F4_arr.idx.
         ensureModelVisibilityDefaults(def, fighter);
-        fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
+        fighter.modelVisibilityStates = fighter.modelVisibilityDefaultStates;
         return;
     }
     if (sub.type == SubactionType::RemoveModelVisibility) {
         // ftParts_80074ACC hides every visibility group by writing idx = -1.
         ensureModelVisibilityDefaults(def, fighter);
-        std::fill(fighter.hsdModelVisibilityStates.begin(), fighter.hsdModelVisibilityStates.end(), -1);
+        std::fill(fighter.modelVisibilityStates.begin(), fighter.modelVisibilityStates.end(), -1);
         return;
     }
     if (sub.type == SubactionType::SetFighterVisibility) {
@@ -5293,11 +5293,11 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
     }
     if (sub.type == SubactionType::SetModelPartAnimation) {
         if (sub.modelPartIndex >= 0) {
-            if (fighter.hsdModelPartAnimations.size() != authoredModelPartAnimations(def).size()) {
-                fighter.hsdModelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
+            if (fighter.modelPartAnimations.size() != authoredModelPartAnimations(def).size()) {
+                fighter.modelPartAnimations.assign(authoredModelPartAnimations(def).size(), -1);
             }
-            if (sub.modelPartIndex < static_cast<int>(fighter.hsdModelPartAnimations.size())) {
-                fighter.hsdModelPartAnimations[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartAnimation;
+            if (sub.modelPartIndex < static_cast<int>(fighter.modelPartAnimations.size())) {
+                fighter.modelPartAnimations[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartAnimation;
             }
         }
         return;
@@ -5328,12 +5328,12 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
         return;
     }
     if (sub.type == SubactionType::SetHurtboxState) {
-        if (sub.hsdBone >= 0) {
+        if (sub.joint >= 0) {
             if (fighter.hurtboxStates.size() != def.hurtboxes.size()) {
                 fighter.hurtboxStates.assign(def.hurtboxes.size(), HurtboxState::Normal);
             }
             for (size_t i = 0; i < def.hurtboxes.size(); ++i) {
-                if (def.hurtboxes[i].joint == sub.hsdBone) {
+                if (def.hurtboxes[i].joint == sub.joint) {
                     fighter.hurtboxStates[i] = sub.hurtboxState;
                 }
             }
@@ -6616,8 +6616,8 @@ static int transN2Bone(const FighterDefinition& def, const FighterRuntime& fight
 }
 
 static Vec3 boneWorldByIndex(const FighterRuntime& fighter, int bone) {
-    if (bone >= 0 && static_cast<size_t>(bone) < fighter.hsdJointWorldTransforms.size()) {
-        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(bone)], {});
+    if (bone >= 0 && static_cast<size_t>(bone) < fighter.jointWorldTransforms.size()) {
+        return transformPoint(fighter.jointWorldTransforms[static_cast<size_t>(bone)], {});
     }
     return {fighter.position.x, fighter.position.y, 0};
 }
@@ -6643,11 +6643,11 @@ static void translateHsdJointSubtree(const FighterDefinition& def, FighterRuntim
     if (root < 0) {
         return;
     }
-    for (size_t i = 0; i < fighter.hsdJointWorldTransforms.size(); ++i) {
+    for (size_t i = 0; i < fighter.jointWorldTransforms.size(); ++i) {
         if (!isJointInSubtree(def, static_cast<int>(i), root)) {
             continue;
         }
-        JointWorldTransform& transform = fighter.hsdJointWorldTransforms[i];
+        JointWorldTransform& transform = fighter.jointWorldTransforms[i];
         transform.translation.x += delta.x;
         transform.translation.y += delta.y;
         transform.translation.z += delta.z;
@@ -6655,7 +6655,7 @@ static void translateHsdJointSubtree(const FighterDefinition& def, FighterRuntim
         transform.matrix[7] += delta.y;
         transform.matrix[11] += delta.z;
     }
-    fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
+    fighter.jointWorldPositions = translationsFromTransforms(fighter.jointWorldTransforms);
     evaluateNativePoseHurtboxes(def, fighter);
 }
 
@@ -6690,7 +6690,7 @@ static Vec3 meleeInitialTopNFromXRotN(const FighterDefinition& def, const Fighte
 
     AnimationPose pose = bindPose(def.authoredSkeleton);
     FighterRuntime temp = fighter;
-    temp.hsdPose = pose;
+    temp.animationPose = pose;
     const std::vector<JointWorldTransform> transforms = fighterWorldTransforms(def, temp);
     const int transN = commonPartBone(def, fighter, 1);
     const int xRotN = commonPartBone(def, fighter, 2);
@@ -6722,8 +6722,8 @@ static Vec2 meleeThrowReleaseLastPosition(const FighterRuntime& anchorOwner) {
 static void storeMeleeCaptureOffsets(const FighterDefinition& victimDef, FighterRuntime& victim) {
     victim.captureConstraintOffset = meleeInitialTopNFromXRotN(victimDef, victim);
     const int xRotN = xRotNBone(victimDef, victim);
-    if (xRotN >= 0 && static_cast<size_t>(xRotN) < victim.hsdPose.joints.size()) {
-        victim.captureOriginalXRotNTranslation = victim.hsdPose.joints[static_cast<size_t>(xRotN)].translation;
+    if (xRotN >= 0 && static_cast<size_t>(xRotN) < victim.animationPose.joints.size()) {
+        victim.captureOriginalXRotNTranslation = victim.animationPose.joints[static_cast<size_t>(xRotN)].translation;
     } else {
         victim.captureOriginalXRotNTranslation = {};
     }
@@ -6739,8 +6739,8 @@ void beginMeleeThrowConstraint(World& world, size_t grabberIndex, size_t victimI
 
     // ftCo_800DB368: constrain victim XRotN to thrower TransN2 and zero XRotN rotation.
     const int xRotN = xRotNBone(victimDef, victim);
-    if (xRotN >= 0 && static_cast<size_t>(xRotN) < victim.hsdPose.joints.size()) {
-        JointPose& xRotNPose = victim.hsdPose.joints[static_cast<size_t>(xRotN)];
+    if (xRotN >= 0 && static_cast<size_t>(xRotN) < victim.animationPose.joints.size()) {
+        JointPose& xRotNPose = victim.animationPose.joints[static_cast<size_t>(xRotN)];
         xRotNPose.rotation = {};
         xRotNPose.quaternion = {};
         xRotNPose.useQuaternion = false;
@@ -6814,8 +6814,8 @@ void releaseMeleeCaptureConstraint(World& world, size_t ownerIndex, int captured
 
     if (captured.captureConstraintActive) {
         const int xRotN = xRotNBone(capturedDef, captured);
-        if (xRotN >= 0 && static_cast<size_t>(xRotN) < captured.hsdPose.joints.size()) {
-            captured.hsdPose.joints[static_cast<size_t>(xRotN)].translation = captured.captureOriginalXRotNTranslation;
+        if (xRotN >= 0 && static_cast<size_t>(xRotN) < captured.animationPose.joints.size()) {
+            captured.animationPose.joints[static_cast<size_t>(xRotN)].translation = captured.captureOriginalXRotNTranslation;
         }
     }
     if (applyOffset) {
@@ -7670,7 +7670,7 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 FighterRuntime* target = indexedFighter(var(instruction.dst));
                 if (target) {
                     target->facing = var(instruction.srcA) < 0 ? -1 : 1;
-                    target->hsdPoseFacing = target->facing;
+                    target->poseFacing = target->facing;
                 }
                 break;
             }
@@ -9074,7 +9074,7 @@ WorldSnapshot saveWorld(const World& world) {
         item.lastActionFrameExecuted = fighter.lastActionFrameExecuted;
         item.runAnimationVelocity = fighter.runAnimationVelocity;
         item.facing = fighter.facing;
-        item.hsdPoseFacing = fighter.hsdPoseFacing;
+        item.poseFacing = fighter.poseFacing;
         item.jumpsUsed = fighter.jumpsUsed;
         item.grounded = fighter.grounded;
         item.percent = fighter.percent;
@@ -9193,19 +9193,19 @@ WorldSnapshot saveWorld(const World& world) {
         item.stickYTiltTimer = fighter.stickYTiltTimer;
         item.input = fighter.input;
         item.bones = fighter.bones;
-        item.hsdPose = fighter.hsdPose;
-        item.hsdBlendFromPose = fighter.hsdBlendFromPose;
-        item.hsdBlendFrames = fighter.hsdBlendFrames;
-        item.hsdBlendElapsed = fighter.hsdBlendElapsed;
-        item.hsdTransN = fighter.hsdTransN;
-        item.previousHsdTransN = fighter.previousHsdTransN;
-        item.hsdTransNOffset = fighter.hsdTransNOffset;
-        item.hsdJointWorldTransforms = fighter.hsdJointWorldTransforms;
-        item.hsdJointWorldPositions = fighter.hsdJointWorldPositions;
+        item.animationPose = fighter.animationPose;
+        item.animationBlendFromPose = fighter.animationBlendFromPose;
+        item.animationBlendFrames = fighter.animationBlendFrames;
+        item.animationBlendElapsed = fighter.animationBlendElapsed;
+        item.animationTransN = fighter.animationTransN;
+        item.previousAnimationTransN = fighter.previousAnimationTransN;
+        item.animationTransNOffset = fighter.animationTransNOffset;
+        item.jointWorldTransforms = fighter.jointWorldTransforms;
+        item.jointWorldPositions = fighter.jointWorldPositions;
         item.poseHurtboxCapsules = fighter.poseHurtboxCapsules;
-        item.hsdModelVisibilityDefaultStates = fighter.hsdModelVisibilityDefaultStates;
-        item.hsdModelVisibilityStates = fighter.hsdModelVisibilityStates;
-        item.hsdModelPartAnimations = fighter.hsdModelPartAnimations;
+        item.modelVisibilityDefaultStates = fighter.modelVisibilityDefaultStates;
+        item.modelVisibilityStates = fighter.modelVisibilityStates;
+        item.modelPartAnimations = fighter.modelPartAnimations;
         item.hurtboxStates = fighter.hurtboxStates;
         item.bodyCollisionState = fighter.bodyCollisionState;
         item.activeHitboxes = fighter.activeHitboxes;
@@ -9235,7 +9235,7 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.lastActionFrameExecuted = item.lastActionFrameExecuted;
         fighter.runAnimationVelocity = item.runAnimationVelocity;
         fighter.facing = item.facing;
-        fighter.hsdPoseFacing = item.hsdPoseFacing == 0 ? item.facing : item.hsdPoseFacing;
+        fighter.poseFacing = item.poseFacing == 0 ? item.facing : item.poseFacing;
         fighter.jumpsUsed = item.jumpsUsed;
         fighter.grounded = item.grounded;
         fighter.percent = item.percent;
@@ -9354,19 +9354,19 @@ void loadWorld(World& world, const WorldSnapshot& snapshot) {
         fighter.stickYTiltTimer = item.stickYTiltTimer;
         fighter.input = item.input;
         fighter.bones = item.bones;
-        fighter.hsdPose = item.hsdPose;
-        fighter.hsdBlendFromPose = item.hsdBlendFromPose;
-        fighter.hsdBlendFrames = item.hsdBlendFrames;
-        fighter.hsdBlendElapsed = item.hsdBlendElapsed;
-        fighter.hsdTransN = item.hsdTransN;
-        fighter.previousHsdTransN = item.previousHsdTransN;
-        fighter.hsdTransNOffset = item.hsdTransNOffset;
-        fighter.hsdJointWorldTransforms = item.hsdJointWorldTransforms;
-        fighter.hsdJointWorldPositions = item.hsdJointWorldPositions;
+        fighter.animationPose = item.animationPose;
+        fighter.animationBlendFromPose = item.animationBlendFromPose;
+        fighter.animationBlendFrames = item.animationBlendFrames;
+        fighter.animationBlendElapsed = item.animationBlendElapsed;
+        fighter.animationTransN = item.animationTransN;
+        fighter.previousAnimationTransN = item.previousAnimationTransN;
+        fighter.animationTransNOffset = item.animationTransNOffset;
+        fighter.jointWorldTransforms = item.jointWorldTransforms;
+        fighter.jointWorldPositions = item.jointWorldPositions;
         fighter.poseHurtboxCapsules = item.poseHurtboxCapsules;
-        fighter.hsdModelVisibilityDefaultStates = item.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelVisibilityStates = item.hsdModelVisibilityStates;
-        fighter.hsdModelPartAnimations = item.hsdModelPartAnimations;
+        fighter.modelVisibilityDefaultStates = item.modelVisibilityDefaultStates;
+        fighter.modelVisibilityStates = item.modelVisibilityStates;
+        fighter.modelPartAnimations = item.modelPartAnimations;
         fighter.hurtboxStates = item.hurtboxStates;
         fighter.bodyCollisionState = item.bodyCollisionState;
         fighter.activeHitboxes = item.activeHitboxes;

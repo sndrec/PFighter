@@ -304,8 +304,8 @@ int main(int argc, char** argv) {
               << " p2=" << pf::toString(p2.position)
               << " p2_percent=" << pf::fxToFloat(p2.percent)
               << "\n";
-    std::cout << "runtime_hsd_pose_joints=" << p1.hsdPose.joints.size()
-              << " runtime_hsd_world_joints=" << p1.hsdJointWorldPositions.size()
+    std::cout << "runtime_native_pose_joints=" << p1.animationPose.joints.size()
+              << " runtime_native_world_joints=" << p1.jointWorldPositions.size()
               << " runtime_native_pose_hurtboxes=" << p1.poseHurtboxCapsules.size()
               << "\n";
 
@@ -2190,14 +2190,14 @@ int main(int argc, char** argv) {
         probeWorld.fighterDefs[0] = pf::makeDebugRook();
         probeWorld.fighterDefs[0].properties.common = common;
         for (pf::FighterRuntime& fighter : probeWorld.fighters) {
-            fighter.hsdPose.joints.clear();
-            fighter.hsdBlendFromPose.joints.clear();
-            fighter.hsdJointWorldTransforms.clear();
-            fighter.hsdJointWorldPositions.clear();
+            fighter.animationPose.joints.clear();
+            fighter.animationBlendFromPose.joints.clear();
+            fighter.jointWorldTransforms.clear();
+            fighter.jointWorldPositions.clear();
             fighter.poseHurtboxCapsules.clear();
-            fighter.hsdModelVisibilityDefaultStates.clear();
-            fighter.hsdModelVisibilityStates.clear();
-            fighter.hsdModelPartAnimations.clear();
+            fighter.modelVisibilityDefaultStates.clear();
+            fighter.modelVisibilityStates.clear();
+            fighter.modelPartAnimations.clear();
             fighter.state = probeWorld.fighterDefs[0].stateIndex("Wait");
         }
         pf::FighterRuntime& grabber = probeWorld.fighters[0];
@@ -2245,14 +2245,14 @@ int main(int argc, char** argv) {
         probeWorld.fighterDefs[0] = pf::makeDebugRook();
         probeWorld.fighterDefs[0].properties.common = common;
         for (pf::FighterRuntime& fighter : probeWorld.fighters) {
-            fighter.hsdPose.joints.clear();
-            fighter.hsdBlendFromPose.joints.clear();
-            fighter.hsdJointWorldTransforms.clear();
-            fighter.hsdJointWorldPositions.clear();
+            fighter.animationPose.joints.clear();
+            fighter.animationBlendFromPose.joints.clear();
+            fighter.jointWorldTransforms.clear();
+            fighter.jointWorldPositions.clear();
             fighter.poseHurtboxCapsules.clear();
-            fighter.hsdModelVisibilityDefaultStates.clear();
-            fighter.hsdModelVisibilityStates.clear();
-            fighter.hsdModelPartAnimations.clear();
+            fighter.modelVisibilityDefaultStates.clear();
+            fighter.modelVisibilityStates.clear();
+            fighter.modelPartAnimations.clear();
             fighter.state = probeWorld.fighterDefs[0].stateIndex("Wait");
         }
         pf::FighterRuntime& grabber = probeWorld.fighters[0];

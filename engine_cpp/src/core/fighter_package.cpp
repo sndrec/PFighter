@@ -757,7 +757,7 @@ PackageScript readPackageScript(PackageReader& reader) {
 
 void writeHitbox(PackageWriter& writer, const HitboxDefinition& hitbox) {
     writeEnum(writer, hitbox.bone, validBoneId, "hitbox bone");
-    writer.writeI32(hitbox.hsdBone);
+    writer.writeI32(hitbox.joint);
     writer.writeI32(hitbox.hitboxId);
     writeVec3(writer, hitbox.offset);
     writer.writeI32(hitbox.radius);
@@ -782,7 +782,7 @@ void writeHitbox(PackageWriter& writer, const HitboxDefinition& hitbox) {
 HitboxDefinition readHitbox(PackageReader& reader) {
     HitboxDefinition hitbox;
     hitbox.bone = readEnum<BoneId>(reader, validBoneId, "hitbox bone");
-    hitbox.hsdBone = reader.readI32();
+    hitbox.joint = reader.readI32();
     hitbox.hitboxId = reader.readI32();
     hitbox.offset = readVec3(reader);
     hitbox.radius = reader.readI32();
@@ -868,7 +868,7 @@ void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
     writer.writeI32(subaction.interruptibleFrame);
     writer.writeI32(subaction.flag);
     writer.writeI32(subaction.hurtboxIndex);
-    writer.writeI32(subaction.hsdBone);
+    writer.writeI32(subaction.joint);
     writeEnum(writer, subaction.hurtboxState, validHurtboxState, "hurtbox state");
     writer.writeU32(subaction.flagValue);
     writer.writeI32(subaction.smashChargeHoldFrames);
@@ -891,7 +891,7 @@ Subaction readSubaction(PackageReader& reader) {
     subaction.interruptibleFrame = reader.readI32();
     subaction.flag = reader.readI32();
     subaction.hurtboxIndex = reader.readI32();
-    subaction.hsdBone = reader.readI32();
+    subaction.joint = reader.readI32();
     subaction.hurtboxState = readEnum<HurtboxState>(reader, validHurtboxState, "hurtbox state");
     subaction.flagValue = reader.readU32();
     subaction.smashChargeHoldFrames = reader.readI32();
@@ -1424,7 +1424,7 @@ AnimationPose readAnimationPose(PackageReader& reader) {
     return pose;
 }
 
-void writeFighterBoneTable(PackageWriter& writer, const HsdFighterBoneTable& bones) {
+void writeFighterBoneTable(PackageWriter& writer, const FighterBoneTable& bones) {
     writer.writeI32(bones.head);
     writer.writeI32(bones.rightArm);
     writer.writeI32(bones.leftLeg);
@@ -1437,8 +1437,8 @@ void writeFighterBoneTable(PackageWriter& writer, const HsdFighterBoneTable& bon
     writer.writeI32(bones.rightFoot);
 }
 
-HsdFighterBoneTable readFighterBoneTable(PackageReader& reader) {
-    HsdFighterBoneTable bones;
+FighterBoneTable readFighterBoneTable(PackageReader& reader) {
+    FighterBoneTable bones;
     bones.head = reader.readI32();
     bones.rightArm = reader.readI32();
     bones.leftLeg = reader.readI32();
@@ -2762,7 +2762,7 @@ void validateSubactionReferences(const FighterDefinition& fighter, const Subacti
     if (subaction.type != SubactionType::SetHurtboxState) {
         return;
     }
-    if (subaction.hsdBone >= 0) {
+    if (subaction.joint >= 0) {
         return;
     }
     if (subaction.hurtboxIndex < 0) {

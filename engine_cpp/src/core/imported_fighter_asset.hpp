@@ -103,7 +103,7 @@ struct HsdFighterAnimationAsset {
     FighterMesh mesh;
     bool hasShieldPose = false;
     AnimationPose shieldPose;
-    HsdFighterBoneTable fighterBones;
+    FighterBoneTable fighterBones;
     std::array<int, 54> commonBoneLookup{};
     bool hasAttributes = false;
     HsdFighterAttributes attributes;

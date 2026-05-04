@@ -79,8 +79,10 @@ package load/save should operate on native authored data only.
   animation state resolves against native serialized model-part animation sets.
 - Shield pose base data is copied into native fighter metadata and serialized in
   packages.
-- Some runtime fields and function names still use `hsd*` naming even when the
-  value is now rollback-owned native pose state.
+- Runtime pose, joint-world, TransN, model visibility, model-part animation,
+  hitbox joint, and fighter bone metadata fields now use native names. Remaining
+  runtime `hsd*` names are limited to explicit HSD math/render provenance labels
+  or legacy-HSD rejection smoke variables, not package gameplay truth.
 
 ## Editor Dependencies To Remove Or Convert
 
@@ -132,7 +134,5 @@ package load/save should operate on native authored data only.
 
 ## First Migration Targets
 
-1. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
-   rollback state, keeping serialization compatibility in mind.
-2. Expand import provenance for optional original joint/material/source-command
+1. Expand import provenance for optional original joint/material/source-command
    IDs without letting those IDs drive gameplay behavior.

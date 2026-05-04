@@ -9,7 +9,7 @@
 
 namespace pf {
 
-struct HsdFighterBoneTable {
+struct FighterBoneTable {
     int head = -1;
     int rightArm = -1;
     int leftLeg = -1;

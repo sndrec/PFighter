@@ -394,7 +394,7 @@ struct FighterEcbDefinition {
 
 struct HitboxDefinition {
     BoneId bone = BoneId::Hip;
-    int hsdBone = -1;
+    int joint = -1;
     int hitboxId = 0;
     Vec3 offset;
     Fix radius = fx(1);
@@ -662,7 +662,7 @@ struct Subaction {
     int interruptibleFrame = 0;
     int flag = 0;
     int hurtboxIndex = -1;
-    int hsdBone = -1;
+    int joint = -1;
     HurtboxState hurtboxState = HurtboxState::Normal;
     uint32_t flagValue = 0;
     Fix smashChargeHoldFrames = 0;
@@ -812,7 +812,7 @@ struct FighterDefinition {
     FighterProperties properties;
     ShieldDefinition shield;
     FighterEcbDefinition authoredEcb;
-    HsdFighterBoneTable fighterBones;
+    FighterBoneTable fighterBones;
     std::array<int, 54> commonBoneLookup = [] {
         std::array<int, 54> lookup{};
         lookup.fill(-1);

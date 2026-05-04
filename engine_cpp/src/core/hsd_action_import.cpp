@@ -120,7 +120,7 @@ static Subaction decodeCreateHitbox(
     reader.read(5); // hit sfx kind
     sub.hitbox.hitGrounded = reader.read(1) != 0;
     sub.hitbox.hitAirborne = reader.read(1) != 0;
-    sub.hitbox.hsdBone = useCommonBoneIds ? mapCommonFighterPart(script, bone) : bone;
+    sub.hitbox.joint = useCommonBoneIds ? mapCommonFighterPart(script, bone) : bone;
     // Melee reads create_hitbox_5.x1_b4 after advancing past the five-word
     // hitbox command, so this flag comes from the following command word.
     sub.hitbox.onlyHitGrabbed = buggedOnlyHitGrabbedFromNextCommand(nextCommand);
@@ -320,7 +320,7 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             break;
         case 0x1C:
             sub.type = SubactionType::SetHurtboxState;
-            sub.hsdBone = static_cast<int>(reader.read(8));
+            sub.joint = static_cast<int>(reader.read(8));
             sub.hurtboxIndex = -1;
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(18)));
             result.push_back(sub);
