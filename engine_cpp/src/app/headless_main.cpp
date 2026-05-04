@@ -6089,12 +6089,22 @@ int main(int argc, char** argv) {
         loadedRuntimePackage.fighters.size() == 2 &&
         loadedRuntimePackage.objects.size() == 3 &&
         loadedRuntimePackage.objects.size() < sourcePackage.objects.size() &&
-        loadedRuntimePackage.hsdAssets.size() == 1 &&
+        loadedRuntimePackage.hsdAssets.empty() &&
         loadedRuntimePackageHasFighter(packageSourceWorld.fighterDefs[0].name) &&
         loadedRuntimePackageHasFighter("SmokeAlt") &&
         loadedRuntimePackageHasObject("TrainingItem") &&
         loadedRuntimePackageHasObject("PackageVelocityObject") &&
         loadedRuntimePackageHasObject("PackageProjectileObject");
+    const bool runtimePackageNativeSelfContainedOk = runtimePackageLoaded &&
+        loadedRuntimePackage.hsdAssets.empty() &&
+        std::all_of(loadedRuntimePackage.fighters.begin(), loadedRuntimePackage.fighters.end(), [](const pf::FighterDefinition& fighter) {
+            return !fighter.hasHsdAsset &&
+                !fighter.hsdAsset &&
+                !fighter.authoredSkeleton.empty() &&
+                !fighter.authoredClips.empty() &&
+                !fighter.authoredMesh.batches.empty() &&
+                !fighter.hurtboxes.empty();
+        });
     pf::World packageInstallWorld = pf::makeTrainingWorld();
     int packageInstallRoot = -1;
     const bool packageInstallOk = packageLoaded &&
@@ -8782,6 +8792,7 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_descriptor_ok=" << runtimePackageDescriptorOk
               << " fighter_package_runtime_bytes_descriptor_ok=" << runtimePackageBytesDescriptorOk
               << " fighter_package_runtime_closure_ok=" << runtimePackageClosureOk
+              << " fighter_package_runtime_native_self_contained_ok=" << runtimePackageNativeSelfContainedOk
               << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
               << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()

@@ -1371,12 +1371,59 @@ static bool runtimePackageHasObject(const FighterPackage& package, const std::st
     });
 }
 
+static FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source);
+
+static void removeOutOfRangeAnimationTracks(std::vector<AnimationClip>& clips, size_t skeletonSize) {
+    for (AnimationClip& clip : clips) {
+        clip.tracks.erase(
+            std::remove_if(clip.tracks.begin(), clip.tracks.end(), [&](const AnimationTrack& track) {
+                return track.joint < 0 || static_cast<size_t>(track.joint) >= skeletonSize;
+            }),
+            clip.tracks.end());
+    }
+}
+
+static void uniquifyAnimationClipNames(std::vector<AnimationClip>& clips) {
+    std::vector<std::string> names;
+    names.reserve(clips.size());
+    for (AnimationClip& clip : clips) {
+        std::string base = clip.name.empty() ? "Clip" : clip.name;
+        std::string candidate = base;
+        int suffix = 2;
+        while (std::find(names.begin(), names.end(), candidate) != names.end()) {
+            candidate = base + "_" + std::to_string(suffix++);
+        }
+        clip.name = candidate;
+        names.push_back(candidate);
+    }
+}
+
+static void uniquifyAnimationClipActionIndexes(std::vector<AnimationClip>& clips) {
+    int nextActionIndex = 0;
+    for (const AnimationClip& clip : clips) {
+        nextActionIndex = std::max(nextActionIndex, clip.actionIndex + 1);
+    }
+    std::vector<int> actionIndexes;
+    actionIndexes.reserve(clips.size());
+    for (AnimationClip& clip : clips) {
+        if (clip.actionIndex < 0 ||
+            std::find(actionIndexes.begin(), actionIndexes.end(), clip.actionIndex) != actionIndexes.end())
+        {
+            while (std::find(actionIndexes.begin(), actionIndexes.end(), nextActionIndex) != actionIndexes.end()) {
+                ++nextActionIndex;
+            }
+            clip.actionIndex = nextActionIndex++;
+        }
+        actionIndexes.push_back(clip.actionIndex);
+    }
+}
+
 static void appendRuntimePackageFighterDependency(FighterPackage& package, const World& world, const std::string& fighterName) {
     if (fighterName.empty() || runtimePackageHasFighter(package, fighterName)) {
         return;
     }
     if (const FighterDefinition* dependency = runtimePackageFighterByName(world, fighterName)) {
-        package.fighters.push_back(*dependency);
+        package.fighters.push_back(makeNativePackageFighterDefinition(*dependency));
     }
 }
 
@@ -1425,15 +1472,74 @@ static void collectRuntimePackageObjectDependencies(FighterPackage& package, con
     }
 }
 
-static void collectRuntimePackageAssets(FighterPackage& package) {
-    for (const FighterDefinition& fighter : package.fighters) {
-        if (!fighter.hsdAsset) {
-            continue;
-        }
-        if (std::find(package.hsdAssets.begin(), package.hsdAssets.end(), fighter.hsdAsset) == package.hsdAssets.end()) {
-            package.hsdAssets.push_back(fighter.hsdAsset);
+static HurtboxDefinition nativeHurtboxFromImported(const HsdHurtbox& source) {
+    HurtboxDefinition out;
+    out.bone = BoneId::Hip;
+    out.startOffset = source.start;
+    out.endOffset = source.end;
+    out.radius = source.radius;
+    out.grabbable = source.grabbable;
+    return out;
+}
+
+static FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source) {
+    FighterDefinition out = source;
+    if (!source.hsdAsset) {
+        return out;
+    }
+
+    if (out.authoredSkeleton.empty()) {
+        out.authoredSkeleton = source.hsdAsset->skeleton;
+    }
+    if (out.authoredClips.empty()) {
+        out.authoredClips = source.hsdAsset->clips;
+    }
+    removeOutOfRangeAnimationTracks(out.authoredClips, out.authoredSkeleton.size());
+    if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty()) {
+        out.authoredMesh = source.hsdAsset->mesh;
+    }
+    if (out.hurtboxes.empty()) {
+        out.hurtboxes.reserve(source.hsdAsset->hurtboxes.size());
+        for (const HsdHurtbox& hurtbox : source.hsdAsset->hurtboxes) {
+            out.hurtboxes.push_back(nativeHurtboxFromImported(hurtbox));
         }
     }
+    if (source.hsdAsset->hasEnvironmentCollision) {
+        out.authoredEcb.enabled = true;
+    }
+    for (FighterState& state : out.states) {
+        int actionIndex = state.animationActionIndex;
+        if (actionIndex < 0) {
+            actionIndex = fallbackActionIndex(state.animation);
+            if (actionIndex >= 0 && findClipByActionIndex(*source.hsdAsset, actionIndex)) {
+                state.animationActionIndex = actionIndex;
+            }
+        }
+        const bool hasClip = actionIndex >= 0 &&
+            std::any_of(out.authoredClips.begin(), out.authoredClips.end(), [&](const AnimationClip& clip) {
+                return clip.actionIndex == actionIndex;
+            });
+        const bool hasNamedClip = !state.animation.empty() &&
+            std::any_of(out.authoredClips.begin(), out.authoredClips.end(), [&](const AnimationClip& clip) {
+                return clip.name == state.animation;
+            });
+        if ((actionIndex >= 0 && hasClip) || (actionIndex < 0 && (state.animation.empty() || hasNamedClip))) {
+            continue;
+        }
+
+        AnimationClip clip;
+        clip.name = state.animation.empty() ? state.name : state.animation;
+        clip.actionIndex = actionIndex;
+        clip.frameCount = fx(std::max(1, state.animationLengthFrames));
+        clip.defaultBlendFrames = static_cast<int8_t>(std::clamp(state.defaultAnimationBlendFrames, 0, 127));
+        out.authoredClips.push_back(std::move(clip));
+    }
+    uniquifyAnimationClipNames(out.authoredClips);
+    uniquifyAnimationClipActionIndexes(out.authoredClips);
+
+    out.hasHsdAsset = false;
+    out.hsdAsset.reset();
+    return out;
 }
 
 FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef, const std::string& packageName) {
@@ -1445,7 +1551,7 @@ FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef,
 
     const FighterDefinition& root = world.fighterDefs[static_cast<size_t>(rootFighterDef)];
     package.name = packageName.empty() ? root.name + "_runtime" : packageName;
-    package.fighters.push_back(root);
+    package.fighters.push_back(makeNativePackageFighterDefinition(root));
 
     for (size_t fighterScan = 0, objectScan = 0; fighterScan < package.fighters.size() || objectScan < package.objects.size();) {
         if (fighterScan < package.fighters.size()) {
@@ -1460,7 +1566,6 @@ FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef,
         }
     }
 
-    collectRuntimePackageAssets(package);
     return package;
 }
 
