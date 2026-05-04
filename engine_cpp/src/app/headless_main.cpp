@@ -4745,6 +4745,18 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetPositionX, -1, -1, -1, 0, pf::fxFromFloat(-0.75f), {}},
             {pf::PackageScriptOp::SetPositionYFromVar, -1, 12, -1, 0, 0, {}},
         },
+    }, {
+        "EqualityBranchScript",
+        16,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::SkipIfVarEqualImmediate, 0, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 100, 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 1, -1, -1, 2, 0, {}},
+            {pf::PackageScriptOp::SkipIfVarEqualVar, -1, 0, 1, 0, 0, {}},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 1000, 0, {}},
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -5040,6 +5052,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidOwnedObjectCountTargetWritePackage = sourcePackage;
     invalidOwnedObjectCountTargetWritePackage.fighters[0].packageScripts[10].instructions[3].text = "MissingObject";
     const bool invalidPackageOwnedObjectCountTargetWriteRejected = pf::writeFighterPackage(invalidOwnedObjectCountTargetWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidEqualityBranchWritePackage = sourcePackage;
+    invalidEqualityBranchWritePackage.fighters[0].packageScripts[12].instructions[4].srcB = 999;
+    const bool invalidPackageEqualityBranchWriteRejected = pf::writeFighterPackage(invalidEqualityBranchWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidProjectileSubactionTargetWritePackage = sourcePackage;
     const int invalidProjectileSubactionState = invalidProjectileSubactionTargetWritePackage.fighters[0].stateIndex("Wait");
     if (invalidProjectileSubactionState >= 0) {
@@ -5240,7 +5255,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 23 &&
-        loadedPackage.fighters[0].packageScripts.size() == 12 &&
+        loadedPackage.fighters[0].packageScripts.size() == 13 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 17 &&
@@ -5324,6 +5339,22 @@ int main(int argc, char** argv) {
     const int packageScriptBranchVar = packageBranchScriptWorld.fighters[0].packageVars.empty()
         ? -1
         : packageBranchScriptWorld.fighters[0].packageVars[0];
+    pf::World packageEqualityBranchScriptWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageEqualityBranchScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageEqualityBranchScriptWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
+        const int waitIndex = packageEqualityBranchScriptWorld.fighterDefs[0].stateIndex("Wait");
+        if (waitIndex >= 0) {
+            pf::FunctionCall scriptCall;
+            scriptCall.name = "script:EqualityBranchScript";
+            packageEqualityBranchScriptWorld.fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+        }
+        packageEqualityBranchScriptWorld.fighters[0].packageVars.clear();
+    }
+    pf::tickWorld(packageEqualityBranchScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
+    const int packageScriptEqualityBranchVar = packageEqualityBranchScriptWorld.fighters[0].packageVars.empty()
+        ? -1
+        : packageEqualityBranchScriptWorld.fighters[0].packageVars[0];
     pf::World packageCallScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageCallScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5815,6 +5846,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_var=" << packageScriptVar
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar
               << " fighter_package_script_branch_var=" << packageScriptBranchVar
+              << " fighter_package_script_equality_branch_var=" << packageScriptEqualityBranchVar
               << " fighter_package_script_call_var=" << packageScriptCallVar
               << " fighter_package_script_fact_ok=" << packageFactScriptOk
               << " fighter_package_script_input_ok=" << packageInputScriptOk
@@ -5884,6 +5916,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_projectile_target_write_rejected=" << invalidPackageProjectileTargetWriteRejected
               << " fighter_package_invalid_destroy_owned_target_write_rejected=" << invalidPackageDestroyOwnedTargetWriteRejected
               << " fighter_package_invalid_owned_object_count_target_write_rejected=" << invalidPackageOwnedObjectCountTargetWriteRejected
+              << " fighter_package_invalid_equality_branch_write_rejected=" << invalidPackageEqualityBranchWriteRejected
               << " fighter_package_invalid_projectile_subaction_target_write_rejected=" << invalidPackageProjectileSubactionTargetWriteRejected
               << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_hurtbox_ref_write_rejected=" << invalidPackageHurtboxRefWriteRejected

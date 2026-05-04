@@ -1132,6 +1132,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::DestroyOwnedObjects: return "KillOwn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
+    case pf::PackageScriptOp::SkipIfVarEqualImmediate: return "IfVarEq";
+    case pf::PackageScriptOp::SkipIfVarEqualVar: return "IfEqVar";
     case pf::PackageScriptOp::JumpRelative: return "Jump";
     case pf::PackageScriptOp::CallScript: return "Call";
     case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
@@ -1293,6 +1295,8 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarShield:
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
     case pf::PackageScriptOp::SkipIfVarLessThanVar:
+    case pf::PackageScriptOp::SkipIfVarEqualImmediate:
+    case pf::PackageScriptOp::SkipIfVarEqualVar:
         instruction.op = pf::PackageScriptOp::Nop;
         break;
     default:
@@ -1568,8 +1572,14 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate:
         label += " v" + std::to_string(instruction.dst) + " < " + std::to_string(instruction.intValue);
         break;
+    case pf::PackageScriptOp::SkipIfVarEqualImmediate:
+        label += " v" + std::to_string(instruction.dst) + " == " + std::to_string(instruction.intValue);
+        break;
     case pf::PackageScriptOp::SkipIfVarLessThanVar:
         label += " v" + std::to_string(instruction.srcA) + " < v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SkipIfVarEqualVar:
+        label += " v" + std::to_string(instruction.srcA) + " == v" + std::to_string(instruction.srcB);
         break;
     case pf::PackageScriptOp::JumpRelative:
         label += " " + std::to_string(instruction.intValue);
@@ -1722,7 +1732,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::DestroyObject: return pf::PackageScriptOp::DestroyOwnedObjects;
     case pf::PackageScriptOp::DestroyOwnedObjects: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
-    case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::JumpRelative;
+    case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::SkipIfVarEqualImmediate;
+    case pf::PackageScriptOp::SkipIfVarEqualImmediate: return pf::PackageScriptOp::SkipIfVarEqualVar;
+    case pf::PackageScriptOp::SkipIfVarEqualVar: return pf::PackageScriptOp::JumpRelative;
     case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::CallScript;
     case pf::PackageScriptOp::CallScript: return pf::PackageScriptOp::SwitchFighterDefinition;
     case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::SpawnFighter;

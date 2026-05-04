@@ -271,6 +271,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::DestroyOwnedObjects:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
+    case PackageScriptOp::SkipIfVarEqualImmediate:
+    case PackageScriptOp::SkipIfVarEqualVar:
     case PackageScriptOp::JumpRelative:
     case PackageScriptOp::CallScript:
     case PackageScriptOp::SwitchFighterDefinition:
@@ -1803,12 +1805,14 @@ void validatePackageScriptInstruction(
         }
         break;
     case PackageScriptOp::SkipIfVarLessThanImmediate:
+    case PackageScriptOp::SkipIfVarEqualImmediate:
         requireVariableIndex(instruction.dst, variableCount, "condition");
         if (instructionIndex + 2 > instructionCount) {
             throw std::runtime_error("fighter package script branch target is invalid");
         }
         break;
     case PackageScriptOp::SkipIfVarLessThanVar:
+    case PackageScriptOp::SkipIfVarEqualVar:
         requireVariableIndex(instruction.srcA, variableCount, "source");
         requireVariableIndex(instruction.srcB, variableCount, "source");
         if (instructionIndex + 2 > instructionCount) {

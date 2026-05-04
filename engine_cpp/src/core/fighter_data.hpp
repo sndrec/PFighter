@@ -487,6 +487,8 @@ enum class PackageScriptOp : uint8_t {
     DestroyOwnedObjects,
     SkipIfVarLessThanImmediate,
     SkipIfVarLessThanVar,
+    SkipIfVarEqualImmediate,
+    SkipIfVarEqualVar,
     JumpRelative,
     CallScript,
     SwitchFighterDefinition,
