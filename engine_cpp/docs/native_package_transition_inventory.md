@@ -21,6 +21,10 @@ package load/save should operate on native authored data only.
   `pfighter_package_converter.exe` for one-time Melee roster conversion. Normal
   simulation consumers no longer include these conversion entry points through
   `simulation.hpp`.
+- `engine_cpp/src/core/melee_fighter_converter.cpp` owns the current PFHA/HSD
+  import-to-native conversion path, including HSD action script decoding into
+  native subactions. Runtime simulation no longer includes the HSD action import
+  API.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.
@@ -33,8 +37,8 @@ package load/save should operate on native authored data only.
   clips and state animation references, so provenance does not need to be
   gameplay truth.
 - `engine_cpp/data/packages/` contains generated native packages for the full
-  current Melee training roster. Runtime roster construction prefers these
-  packages by filename before using the imported `PFHA` fallback.
+  current Melee training roster. Runtime roster construction requires these
+  packages by filename and fails loudly when one is missing.
 
 ## Runtime Gameplay Dependencies To Remove Or Convert
 
@@ -42,12 +46,11 @@ package load/save should operate on native authored data only.
   `engine_cpp/data/packages/<fighter>_native.pfpkg`. Missing native packages now
   fail loudly instead of falling back to `*_hsd.pfighter.bin` during normal
   gameplay construction.
-- The explicit package converter still reads `*_hsd.pfighter.bin` through
-  `cachedHsdFighterAsset`, sets `FighterDefinition::hasHsdAsset`, and converts
-  attributes, ledge snap values, animation lengths, hurtboxes, action scripts,
-  skeleton, clips, mesh, model visibility, common bones, ECB source bones, and
-  shield pose into native fields. That importer code still lives in core and
-  should move to a converter/tooling boundary.
+- The explicit package converter still reads `*_hsd.pfighter.bin`, temporarily
+  sets `FighterDefinition::hasHsdAsset` inside the converter boundary, and
+  converts attributes, ledge snap values, animation lengths, hurtboxes, action
+  scripts, skeleton, clips, mesh, model visibility, common bones, ECB source
+  bones, and shield pose into native fields.
 - With the installed generated packages present, the headless roster smoke sees
   zero HSD-backed roster assets and native data for all 27 fighters.
 - Normal animation clip lookup now goes through native authored clip accessors.
@@ -73,8 +76,8 @@ package load/save should operate on native authored data only.
 
 ## Editor Dependencies To Remove Or Convert
 
-- Editor package snapshots native-convert imported fighters and clear
-  `package.hsdAssets`; package loads no longer accept an external HSD asset pool.
+- Editor package snapshots require native fighters and package loads no longer
+  accept an external HSD asset pool.
 - Clip lists, asset summaries, mesh rendering, selected-vertex overlays, and
   animation previews now read native authored data. If package-first roster data
   is still parked in source-backed native vectors, entering the assets or
@@ -120,11 +123,11 @@ package load/save should operate on native authored data only.
 
 ## First Migration Targets
 
-1. Move `animation_asset.*`, `hsd_action_import.*`, and the
-   `cachedHsdFighterAsset` importer helper out of core and behind explicit
-   importer/converter targets.
-2. Move the explicit converter's `*_hsd.pfighter.bin` import path out of core
-   gameplay files and into a converter/tooling boundary.
+1. Move `animation_asset.*` and `hsd_action_import.*` out of the shared core
+   library and behind explicit importer/converter targets.
+2. Continue shrinking the converter's temporary `FighterDefinition::hsdAsset`
+   bridge so PFHA import data is never represented by normal runtime fighter
+   definitions.
 3. Retire `FighterDefinition::hsdAsset` and `FighterDefinition::hasHsdAsset`
    after package rejection compatibility tests no longer need to construct
    legacy dependent fighter shapes in memory.

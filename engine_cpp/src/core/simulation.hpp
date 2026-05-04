@@ -484,6 +484,7 @@ class FighterPackageCache;
 struct FighterPackageDescriptor;
 
 StageDefinition makeBattlefieldTrainingStage();
+MeleeCommonData loadMeleeCommonData();
 World makeTrainingWorld();
 World makeTrainingWorld(int p1FighterDef, int p2FighterDef);
 void tickWorld(World& world, const std::vector<InputFrame>& inputs);

@@ -18,6 +18,7 @@ add_library(pfighter_core
     src/core/fighter_package.cpp
     src/core/hsd_action_import.cpp
     src/core/math.cpp
+    src/core/melee_fighter_converter.cpp
     src/core/replay.cpp
     src/core/simulation.cpp
     src/core/state_functions.cpp
