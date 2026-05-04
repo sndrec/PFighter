@@ -4905,6 +4905,12 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 2, 0, {}},
             {pf::PackageScriptOp::CallIndexedFighterScriptFromVar, -1, 0, -1, 0, 0, "CompanionTargetScript"},
         },
+    }, {
+        "OwnerCallbackTargetScript",
+        4,
+        {
+            {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 19, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -5143,6 +5149,12 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarImmediate, 39, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarAbsorbObjectFromVar, 43, 39, -1, 0, 0, {}},
         },
+    }, {
+        "ObjectOwnerCallScript",
+        4,
+        {
+            {pf::PackageScriptOp::CallOwnerFighterScript, -1, -1, -1, 0, 0, "OwnerCallbackTargetScript"},
+        },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
     pf::GameObjectDefinition packageVelocityObject = packageSourceWorld.objectDefs[1];
@@ -5165,6 +5177,10 @@ int main(int argc, char** argv) {
     packageProjectileObject.states[0].onPhysics = {{std::string{"object_linear_physics"}}};
     packageProjectileObject.states[0].onCollision.clear();
     packageSourceWorld.objectDefs.push_back(packageProjectileObject);
+    pf::GameObjectDefinition packageOwnerCallObject = packageVelocityObject;
+    packageOwnerCallObject.name = "PackageOwnerCallObject";
+    packageOwnerCallObject.onSpawned = {{std::string{"script:ObjectOwnerCallScript"}}};
+    packageSourceWorld.objectDefs.push_back(packageOwnerCallObject);
     pf::GameObjectDefinition packageDestroyObject = packageVelocityObject;
     packageDestroyObject.name = "PackageDestroyObject";
     packageDestroyObject.packageScripts = {{
@@ -5748,6 +5764,9 @@ int main(int argc, char** argv) {
         {},
     });
     const bool invalidPackageObjectOwnerVarReadRejected = pf::writeFighterPackage(invalidObjectOwnerVarReadPackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectOwnerScriptCallPackage = sourcePackage;
+    invalidObjectOwnerScriptCallPackage.objects[1].packageScripts.back().instructions[0].text = "MissingOwnerScript";
+    const bool invalidPackageObjectOwnerScriptCallRejected = pf::writeFighterPackage(invalidObjectOwnerScriptCallPackage, &invalidPackageError).empty();
     pf::FighterPackage aliasStateWritePackage = sourcePackage;
     aliasStateWritePackage.fighters[0].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::ChangeState,
@@ -5784,11 +5803,11 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
         loadedPackage.fighters[0].packageVariables.size() == 59 &&
-        loadedPackage.fighters[0].packageScripts.size() == 21 &&
+        loadedPackage.fighters[0].packageScripts.size() == 22 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 45 &&
-        loadedPackage.objects[1].packageScripts.size() == 17;
+        loadedPackage.objects[1].packageScripts.size() == 18;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -6969,6 +6988,22 @@ int main(int argc, char** argv) {
     const bool packageObjectDestroyScriptOk = packageObjectDestroyIndex >= 0 &&
         packageObjectDestroyIndex < static_cast<int>(packageObjectDestroyScriptWorld.objects.size()) &&
         !packageObjectDestroyScriptWorld.objects[static_cast<size_t>(packageObjectDestroyIndex)].active;
+    pf::World packageObjectOwnerScriptCallWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectOwnerScriptCallWorld.fighterDefs[0] = loadedPackage.fighters[0];
+        packageObjectOwnerScriptCallWorld.objectDefs = loadedPackage.objects;
+    }
+    const int packageObjectOwnerScriptCallIndex = pf::spawnGameObject(
+        packageObjectOwnerScriptCallWorld,
+        "PackageOwnerCallObject",
+        0,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const bool packageObjectOwnerScriptCallOk = packageObjectOwnerScriptCallIndex >= 0 &&
+        packageObjectOwnerScriptCallIndex < static_cast<int>(packageObjectOwnerScriptCallWorld.objects.size()) &&
+        packageObjectOwnerScriptCallWorld.fighters[0].packageVars.size() > 0 &&
+        packageObjectOwnerScriptCallWorld.fighters[0].packageVars[0] == 23;
     pf::World packageObjectOwnerContextWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectOwnerContextWorld.objectDefs = loadedPackage.objects;
@@ -7178,6 +7213,8 @@ int main(int argc, char** argv) {
               << " fighter_package_object_indexed_object_target_var=" << packageObjectIndexedTargetVar
               << " fighter_package_object_interaction_ops_ok=" << packageObjectInteractionOpsOk
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
+              << " fighter_package_object_owner_script_call_ok=" << packageObjectOwnerScriptCallOk
+              << " fighter_package_object_owner_script_call_var=" << (packageObjectOwnerScriptCallWorld.fighters[0].packageVars.empty() ? -1 : packageObjectOwnerScriptCallWorld.fighters[0].packageVars[0])
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
@@ -7280,6 +7317,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_object_context_write_rejected=" << invalidPackageObjectContextWriteRejected
               << " fighter_package_invalid_object_owner_var_write_rejected=" << invalidPackageObjectOwnerVarWriteRejected
               << " fighter_package_invalid_object_owner_var_read_rejected=" << invalidPackageObjectOwnerVarReadRejected
+              << " fighter_package_invalid_object_owner_script_call_rejected=" << invalidPackageObjectOwnerScriptCallRejected
               << " fighter_package_state_alias_write_ok=" << packageStateAliasWriteOk
               << " fighter_package_invalid_object_state_alias_write_rejected=" << invalidPackageObjectStateAliasWriteRejected
               << " sandbag_roster_ok=" << sandbagRosterOk

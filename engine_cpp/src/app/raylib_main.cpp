@@ -1136,6 +1136,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarOwnerFighterVar: return "OwnRead";
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return "OwnSet";
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return "OwnVar";
+    case pf::PackageScriptOp::CallOwnerFighterScript: return "OwnCall";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
     case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
     case pf::PackageScriptOp::SetVarStickX: return "StickX";
@@ -1421,6 +1422,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarOwnerFighterVar:
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
+    case pf::PackageScriptOp::CallOwnerFighterScript:
     case pf::PackageScriptOp::SetVarIndexedFighterVar:
     case pf::PackageScriptOp::CallIndexedFighterScriptFromVar:
     case pf::PackageScriptOp::SetVarIndexedFighterStateIndex:
@@ -1738,6 +1740,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         break;
     case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
         label += " owner v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::CallOwnerFighterScript:
+        label += " owner.call " + instruction.text;
         break;
     case pf::PackageScriptOp::SetVarButtonDown:
     case pf::PackageScriptOp::SetVarButtonPressed:
@@ -2155,7 +2160,8 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarOwnedObjectCount: return pf::PackageScriptOp::SetVarOwnerFighterVar;
     case pf::PackageScriptOp::SetVarOwnerFighterVar: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return pf::PackageScriptOp::SetOwnerFighterVarFromVar;
-    case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::SetVarObjectIndex;
+    case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::CallOwnerFighterScript;
+    case pf::PackageScriptOp::CallOwnerFighterScript: return pf::PackageScriptOp::SetVarObjectIndex;
     case pf::PackageScriptOp::SetVarObjectIndex: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
     }
@@ -2257,7 +2263,8 @@ static void normalizePackageInstruction(
     if (instruction.op == pf::PackageScriptOp::SetVarFighterThrowFlag) {
         instruction.intValue = std::clamp(instruction.intValue, 0, 31);
     }
-    if (instruction.op == pf::PackageScriptOp::CallIndexedFighterScriptFromVar &&
+    if ((instruction.op == pf::PackageScriptOp::CallIndexedFighterScriptFromVar ||
+        instruction.op == pf::PackageScriptOp::CallOwnerFighterScript) &&
         !std::any_of(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
             return script.name == instruction.text;
         }))

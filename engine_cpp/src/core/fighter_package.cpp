@@ -279,6 +279,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarOwnerFighterVar:
     case PackageScriptOp::SetOwnerFighterVarImmediate:
     case PackageScriptOp::SetOwnerFighterVarFromVar:
+    case PackageScriptOp::CallOwnerFighterScript:
     case PackageScriptOp::SetVarButtonDown:
     case PackageScriptOp::SetVarButtonPressed:
     case PackageScriptOp::SetVarStickX:
@@ -1914,6 +1915,11 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script owner fighter variable write is invalid");
         }
         requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::CallOwnerFighterScript:
+        if (!allowObjectContextReads || !hasName(fighterScriptNames, instruction.text)) {
+            throw std::runtime_error("fighter package script owner fighter script call is invalid");
+        }
         break;
     case PackageScriptOp::SetVarIndexedFighterVar:
     case PackageScriptOp::SetVarIndexedFighterStateIndex:

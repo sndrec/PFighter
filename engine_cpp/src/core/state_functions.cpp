@@ -2923,6 +2923,7 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarOwnerFighterVar:
         case PackageScriptOp::SetOwnerFighterVarImmediate:
         case PackageScriptOp::SetOwnerFighterVarFromVar:
+        case PackageScriptOp::CallOwnerFighterScript:
             break;
         case PackageScriptOp::SetVarOwnedObjectCount:
             setPackageVar(fighter, instruction.dst, countGameObjectsOwnedBy(

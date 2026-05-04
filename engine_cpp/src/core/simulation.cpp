@@ -7256,6 +7256,13 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetOwnerFighterVarFromVar:
                 setOwnerFighterVar(instruction.dst, var(instruction.srcA));
                 break;
+            case PackageScriptOp::CallOwnerFighterScript:
+                if (validFighterIndex(world, object.ownerFighter)) {
+                    FighterRuntime& owner = world.fighters[static_cast<size_t>(object.ownerFighter)];
+                    runPackageScript(world, owner, instruction.text);
+                    return;
+                }
+                break;
             case PackageScriptOp::SetVarIndexedObjectVar:
                 setVar(instruction.dst, indexedObjectVar(var(instruction.srcA), instruction.intValue));
                 break;

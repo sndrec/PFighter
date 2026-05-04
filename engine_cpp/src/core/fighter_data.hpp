@@ -495,6 +495,7 @@ enum class PackageScriptOp : uint8_t {
     SetVarOwnerFighterVar,
     SetOwnerFighterVarImmediate,
     SetOwnerFighterVarFromVar,
+    CallOwnerFighterScript,
     SetVarButtonDown,
     SetVarButtonPressed,
     SetVarStickX,
