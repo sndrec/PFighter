@@ -674,6 +674,9 @@ struct Subaction {
     int modelPartIndex = -1;
     int modelPartState = -1;
     int modelPartAnimation = -1;
+    int importSourceActionIndex = -1;
+    int importSourceCommandIndex = -1;
+    int importSourceCommandCode = -1;
     HitboxDefinition hitbox;
 };
 

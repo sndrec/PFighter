@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <utility>
 
 namespace pf {
 
@@ -158,6 +159,12 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
         const HsdActionCommand* nextCommand = commandIndex + 1 < script.commands.size() ? &script.commands[commandIndex + 1] : nullptr;
         HsdCommandBitReader reader(command.bytes);
         reader.skip(6);
+        auto pushDecoded = [&](Subaction decoded) {
+            decoded.importSourceActionIndex = script.actionIndex;
+            decoded.importSourceCommandIndex = static_cast<int>(commandIndex);
+            decoded.importSourceCommandCode = static_cast<int>(command.code);
+            result.push_back(std::move(decoded));
+        };
         Subaction sub;
         switch (command.code) {
         case 0x00:
@@ -165,165 +172,165 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
         case 0x01:
             sub.type = SubactionType::SyncTimer;
             sub.frames = static_cast<int>(reader.read(26));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x02:
             sub.type = SubactionType::AsyncTimer;
             sub.frames = static_cast<int>(reader.read(26));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x03:
             sub.type = SubactionType::SetLoop;
             sub.loopCount = static_cast<int>(reader.read(26));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x04:
             sub.type = SubactionType::ExecuteLoop;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x0B:
             if (command.bytes.size() >= 20) {
-                result.push_back(decodeCreateHitbox(script, command, nextCommand));
+                pushDecoded(decodeCreateHitbox(script, command, nextCommand));
             }
             break;
         case 0x0C:
             sub.type = SubactionType::AdjustHitboxDamage;
             sub.hitbox.hitboxId = static_cast<int>(reader.read(3));
             sub.hitbox.damage = fx(static_cast<int>(reader.read(23)));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x0D:
             sub.type = SubactionType::AdjustHitboxSize;
             sub.hitbox.hitboxId = static_cast<int>(reader.read(3));
             sub.hitbox.radius = rawFixed256(static_cast<int>(reader.read(23)));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x0E:
             sub.type = SubactionType::SetHitboxInteraction;
             sub.hitbox.hitboxId = static_cast<int>(reader.read(24));
             sub.flag = static_cast<int>(reader.read(1));
             sub.flagValue = reader.read(1);
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x0F:
             sub.type = SubactionType::RemoveHitbox;
             sub.hitbox.hitboxId = static_cast<int>(reader.read(26));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x10:
             sub.type = SubactionType::ClearHitboxes;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x13:
             sub.type = SubactionType::SetFlag;
             sub.flag = static_cast<int>(reader.read(2));
             sub.flagValue = reader.read(24);
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x14:
             sub.type = SubactionType::SetThrowFlag;
             sub.flag = static_cast<int>(reader.read(26));
             sub.flagValue = true;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x15:
             reader.read(26);
             sub.type = SubactionType::SetThrowFlagLiteral;
             sub.flag = 1;
             sub.flagValue = true;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x16:
             reader.read(26);
             sub.type = SubactionType::SetThrowFlagLiteral;
             sub.flag = 2;
             sub.flagValue = true;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x1E:
             sub.type = SubactionType::SetJabRapid;
             sub.flagValue = reader.read(26) != 0;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x17:
             sub.type = SubactionType::SetInterruptible;
             sub.interruptibleFrame = -1;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x18:
             reader.read(26);
             sub.type = SubactionType::SetThrowFlagLiteral;
             sub.flag = 0;
             sub.flagValue = true;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x19:
             sub.type = SubactionType::SetJumpState;
             sub.flagValue = reader.read(26);
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x1A:
             sub.type = SubactionType::SetBodyCollisionState;
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(26)));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x1B:
             sub.type = SubactionType::SetHurtboxState;
             sub.hurtboxIndex = -1;
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(26)));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x1D:
             sub.type = SubactionType::EnableJabFollowup;
             sub.flagValue = reader.read(26);
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x1F:
             sub.type = SubactionType::SetModelVisibility;
             sub.modelPartIndex = static_cast<int>(reader.read(7));
             reader.read(1); // HSDLib's Change Model State splits this from the signed object id.
             sub.modelPartState = static_cast<int>(reader.readSigned(18));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x20:
             reader.read(26);
             sub.type = SubactionType::RevertModelVisibility;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x21:
             reader.read(26);
             sub.type = SubactionType::RemoveModelVisibility;
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x22:
             if (command.bytes.size() >= 12) {
-                result.push_back(decodeThrowHitbox(command));
+                pushDecoded(decodeThrowHitbox(command));
             }
             break;
         case 0x25:
             reader.read(25);
             sub.type = SubactionType::SetFighterVisibility;
             sub.flagValue = reader.read(1);
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x29:
             sub.type = SubactionType::SetModelPartAnimation;
             sub.modelPartIndex = static_cast<int>(reader.read(7));
             sub.modelPartAnimation = static_cast<int>(reader.read(7));
             reader.skip(12);
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x33:
             sub.type = SubactionType::SelfDamage;
             sub.selfDamage = fx(reader.readSigned(26));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x1C:
             sub.type = SubactionType::SetHurtboxState;
             sub.joint = static_cast<int>(reader.read(8));
             sub.hurtboxIndex = -1;
             sub.hurtboxState = hurtboxStateFromMelee(static_cast<int>(reader.read(18)));
-            result.push_back(sub);
+            pushDecoded(sub);
             break;
         case 0x38:
             if (command.bytes.size() >= 8) {
@@ -332,7 +339,7 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
                 sub.type = SubactionType::StartSmashCharge;
                 sub.smashChargeDamageMultiplier = rawFixed256(damageMultiplierRaw);
                 sub.smashChargeHoldFrames = fx(holdFramesRaw);
-                result.push_back(sub);
+                pushDecoded(sub);
             }
             break;
         default:

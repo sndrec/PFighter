@@ -5523,7 +5523,7 @@ int main(int argc, char** argv) {
     pf::FighterPackageDescriptor packageDescriptor;
     const bool packageDescriptorOk = pf::describeFighterPackage(sourcePackage, packageDescriptor, packageBytes, &packageError) &&
         packageDescriptor.name == sourcePackage.name &&
-        packageDescriptor.version == 4 &&
+        packageDescriptor.version == 5 &&
         packageDescriptor.byteSize == packageBytes.size() &&
         packageDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
@@ -7477,10 +7477,19 @@ int main(int argc, char** argv) {
                 return subaction.type == pf::SubactionType::CreateHitbox ||
                     subaction.type == pf::SubactionType::CreateThrowHitbox;
             });
+            const bool nativeSubactionImportProvenance = std::any_of(
+                attackHi3.action.begin(),
+                attackHi3.action.end(),
+                [](const pf::Subaction& subaction) {
+                    return subaction.importSourceActionIndex >= 0 &&
+                        subaction.importSourceCommandIndex >= 0 &&
+                        subaction.importSourceCommandCode >= 0;
+                });
             const bool nativeClip = std::any_of(fighter.authoredClips.begin(), fighter.authoredClips.end(), [&](const pf::AnimationClip& clip) {
                 return clip.actionIndex == attackHi3.animationActionIndex;
             });
             return nativeHitboxSubaction &&
+                nativeSubactionImportProvenance &&
                 nativeClip &&
                 pf::buildEditorSessionStateTimeline(nativePackageEditorSession, attackHi3Index, nativePackageAttackHi3Timeline, &packageError) &&
                 std::any_of(nativePackageAttackHi3Timeline.markers.begin(), nativePackageAttackHi3Timeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {

@@ -13,7 +13,7 @@
 namespace pf {
 namespace {
 
-constexpr uint32_t kPackageVersion = 4;
+constexpr uint32_t kPackageVersion = 5;
 constexpr uint32_t kMaxFighters = 256;
 constexpr uint32_t kMaxAssets = 1024;
 constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
@@ -880,6 +880,9 @@ void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
     writer.writeI32(subaction.modelPartIndex);
     writer.writeI32(subaction.modelPartState);
     writer.writeI32(subaction.modelPartAnimation);
+    writer.writeI32(subaction.importSourceActionIndex);
+    writer.writeI32(subaction.importSourceCommandIndex);
+    writer.writeI32(subaction.importSourceCommandCode);
     writeHitbox(writer, subaction.hitbox);
 }
 
@@ -903,6 +906,9 @@ Subaction readSubaction(PackageReader& reader) {
     subaction.modelPartIndex = reader.readI32();
     subaction.modelPartState = reader.readI32();
     subaction.modelPartAnimation = reader.readI32();
+    subaction.importSourceActionIndex = reader.readI32();
+    subaction.importSourceCommandIndex = reader.readI32();
+    subaction.importSourceCommandCode = reader.readI32();
     subaction.hitbox = readHitbox(reader);
     return subaction;
 }
@@ -2773,6 +2779,16 @@ void validateSubactionReferences(const FighterDefinition& fighter, const Subacti
     }
 }
 
+void validateSubactionImportProvenance(const Subaction& subaction) {
+    if (subaction.importSourceActionIndex < -1 ||
+        subaction.importSourceCommandIndex < -1 ||
+        subaction.importSourceCommandCode < -1 ||
+        subaction.importSourceCommandCode > 255)
+    {
+        throw std::runtime_error("fighter package subaction import provenance is invalid");
+    }
+}
+
 void validateFighterPackageReferences(const FighterPackage& package) {
     if (package.name.empty()) {
         throw std::runtime_error("fighter package name is invalid");
@@ -2834,6 +2850,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
             for (const Subaction& subaction : state.action) {
                 validateSubactionTiming(subaction);
                 validateSubactionReferences(fighter, subaction);
+                validateSubactionImportProvenance(subaction);
                 if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {
                     throw std::runtime_error("fighter package subaction object target is invalid");
                 }

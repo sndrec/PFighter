@@ -42,8 +42,9 @@ package load/save should operate on native authored data only.
   with nonzero imported asset counts.
 - `FighterImportProvenance` now preserves source file name, source asset name,
   and importer warnings as debug metadata. Action indices are retained on native
-  clips and state animation references, so provenance does not need to be
-  gameplay truth.
+  clips and state animation references, and converted HSD action subactions keep
+  non-authoritative source action/command/code IDs for traceability, so
+  provenance does not need to be gameplay truth.
 - `engine_cpp/data/packages/` contains generated native packages for the full
   current Melee training roster. Runtime roster construction requires these
   packages by filename and fails loudly when one is missing.
@@ -127,10 +128,11 @@ package load/save should operate on native authored data only.
 - Native action subactions exist, and HSD action scripts can be decoded into
   `FighterState::action`; converted packages persist those decoded native
   subactions as package truth.
-- Provenance is still coarse. Per-joint/per-material source IDs and optional raw
-  command/source offsets are not yet serialized except where equivalent IDs
+- Provenance is still incomplete for some authoring surfaces. Per-joint and
+  per-material source IDs are not yet serialized except where equivalent IDs
   already survive in native records such as action indices, clip IDs, batch
-  object indices, model-part indices, and texture/material fields.
+  object indices, model-part indices, texture/material fields, and subaction
+  source command references.
 
 ## First Migration Targets
 
