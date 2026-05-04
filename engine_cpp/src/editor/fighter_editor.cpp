@@ -244,6 +244,260 @@ void appendTimelineMarker(
     timeline.markers.push_back(marker);
 }
 
+bool packageInstructionCallsScriptName(const PackageScriptInstruction& instruction, const std::string& scriptName) {
+    return instruction.text == scriptName &&
+        (instruction.op == PackageScriptOp::CallScript ||
+         instruction.op == PackageScriptOp::CallIndexedFighterScriptFromVar ||
+         instruction.op == PackageScriptOp::CallOwnerFighterScript ||
+         instruction.op == PackageScriptOp::CallIndexedObjectScriptFromVar);
+}
+
+void removePackageScriptCallbackRefs(std::vector<FunctionCall>& calls, const std::string& scriptName) {
+    const std::string callback = "script:" + scriptName;
+    calls.erase(
+        std::remove_if(calls.begin(), calls.end(), [&](const FunctionCall& call) {
+            return call.name == callback;
+        }),
+        calls.end());
+}
+
+void remapPackageScriptCallbackRefs(
+    std::vector<FunctionCall>& calls,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    const std::string oldCallback = "script:" + oldScriptName;
+    const std::string newCallback = "script:" + newScriptName;
+    for (FunctionCall& call : calls) {
+        if (call.name == oldCallback) {
+            call.name = newCallback;
+        }
+    }
+}
+
+void removePackageScriptInstructionRefs(std::vector<PackageScript>& scripts, const std::string& scriptName) {
+    for (PackageScript& script : scripts) {
+        for (PackageScriptInstruction& instruction : script.instructions) {
+            if (packageInstructionCallsScriptName(instruction, scriptName)) {
+                instruction.op = PackageScriptOp::Nop;
+                instruction.text.clear();
+            }
+        }
+    }
+}
+
+void remapPackageScriptInstructionRefs(
+    std::vector<PackageScript>& scripts,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (PackageScript& script : scripts) {
+        for (PackageScriptInstruction& instruction : script.instructions) {
+            if (packageInstructionCallsScriptName(instruction, oldScriptName)) {
+                instruction.text = newScriptName;
+            }
+        }
+    }
+}
+
+void removePackageScriptSubactionRefs(std::vector<FighterState>& states, const std::string& scriptName) {
+    for (FighterState& state : states) {
+        for (Subaction& subaction : state.action) {
+            if (subaction.type == SubactionType::CallScript && subaction.objectName == scriptName) {
+                subaction.type = SubactionType::SyncTimer;
+                subaction.objectName.clear();
+                subaction.frames = std::max(1, subaction.frames);
+            }
+        }
+    }
+}
+
+void remapPackageScriptSubactionRefs(
+    std::vector<FighterState>& states,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (FighterState& state : states) {
+        for (Subaction& subaction : state.action) {
+            if (subaction.type == SubactionType::CallScript && subaction.objectName == oldScriptName) {
+                subaction.objectName = newScriptName;
+            }
+        }
+    }
+}
+
+void removeFighterPackageScriptRefs(FighterDefinition& def, const std::string& scriptName) {
+    removePackageScriptInstructionRefs(def.packageScripts, scriptName);
+    removePackageScriptSubactionRefs(def.states, scriptName);
+    for (FighterState& state : def.states) {
+        removePackageScriptCallbackRefs(state.onEnter, scriptName);
+        removePackageScriptCallbackRefs(state.onFrame, scriptName);
+        removePackageScriptCallbackRefs(state.onLanding, scriptName);
+        removePackageScriptCallbackRefs(state.onAirborne, scriptName);
+    }
+}
+
+void remapFighterPackageScriptRefs(
+    FighterDefinition& def,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    remapPackageScriptInstructionRefs(def.packageScripts, oldScriptName, newScriptName);
+    remapPackageScriptSubactionRefs(def.states, oldScriptName, newScriptName);
+    for (FighterState& state : def.states) {
+        remapPackageScriptCallbackRefs(state.onEnter, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onFrame, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onLanding, oldScriptName, newScriptName);
+        remapPackageScriptCallbackRefs(state.onAirborne, oldScriptName, newScriptName);
+    }
+}
+
+void removeCrossFighterPackageScriptRefs(FighterPackage& package, const std::string& scriptName) {
+    for (FighterDefinition& fighter : package.fighters) {
+        for (PackageScript& script : fighter.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == PackageScriptOp::CallIndexedFighterScriptFromVar &&
+                    instruction.text == scriptName)
+                {
+                    instruction.op = PackageScriptOp::Nop;
+                    instruction.text.clear();
+                }
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == PackageScriptOp::CallOwnerFighterScript &&
+                    instruction.text == scriptName)
+                {
+                    instruction.op = PackageScriptOp::Nop;
+                    instruction.text.clear();
+                }
+            }
+        }
+    }
+}
+
+void remapCrossFighterPackageScriptRefs(
+    FighterPackage& package,
+    const std::string& oldScriptName,
+    const std::string& newScriptName)
+{
+    for (FighterDefinition& fighter : package.fighters) {
+        for (PackageScript& script : fighter.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == PackageScriptOp::CallIndexedFighterScriptFromVar &&
+                    instruction.text == oldScriptName)
+                {
+                    instruction.text = newScriptName;
+                }
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            for (PackageScriptInstruction& instruction : script.instructions) {
+                if (instruction.op == PackageScriptOp::CallOwnerFighterScript &&
+                    instruction.text == oldScriptName)
+                {
+                    instruction.text = newScriptName;
+                }
+            }
+        }
+    }
+}
+
+void remapRemovedPackageVariableRef(int& ref, int removedIndex, int variableCountAfterRemove) {
+    if (ref < 0) {
+        return;
+    }
+    if (ref == removedIndex) {
+        ref = variableCountAfterRemove > 0 ? std::min(removedIndex, variableCountAfterRemove - 1) : -1;
+    } else if (ref > removedIndex) {
+        --ref;
+    }
+}
+
+void sanitizeRemovedPackageVariableInstruction(PackageScriptInstruction& instruction, int variableCountAfterRemove) {
+    if (variableCountAfterRemove > 0) {
+        return;
+    }
+    if (instruction.dst < 0 && instruction.srcA < 0 && instruction.srcB < 0) {
+        return;
+    }
+    instruction.op = PackageScriptOp::Nop;
+    instruction.dst = -1;
+    instruction.srcA = -1;
+    instruction.srcB = -1;
+    instruction.text.clear();
+}
+
+void remapRemovedPackageVariable(std::vector<PackageScript>& scripts, int removedIndex, int variableCountAfterRemove) {
+    for (PackageScript& script : scripts) {
+        for (PackageScriptInstruction& instruction : script.instructions) {
+            remapRemovedPackageVariableRef(instruction.dst, removedIndex, variableCountAfterRemove);
+            remapRemovedPackageVariableRef(instruction.srcA, removedIndex, variableCountAfterRemove);
+            remapRemovedPackageVariableRef(instruction.srcB, removedIndex, variableCountAfterRemove);
+            sanitizeRemovedPackageVariableInstruction(instruction, variableCountAfterRemove);
+        }
+    }
+}
+
+void normalizeInterruptPackageVariable(InterruptRule& rule, int variableCount) {
+    if (rule.condition != InterruptCondition::PackageVarAtLeast) {
+        return;
+    }
+    if (variableCount <= 0) {
+        rule.condition = InterruptCondition::WaitInput;
+        rule.packageVariable = -1;
+        return;
+    }
+    rule.packageVariable = std::clamp(rule.packageVariable < 0 ? 0 : rule.packageVariable, 0, variableCount - 1);
+}
+
+void remapRemovedInterruptPackageVariable(std::vector<FighterState>& states, int removedIndex, int variableCountAfterRemove) {
+    for (FighterState& state : states) {
+        for (InterruptRule& rule : state.interrupts) {
+            if (rule.condition != InterruptCondition::PackageVarAtLeast) {
+                continue;
+            }
+            remapRemovedPackageVariableRef(rule.packageVariable, removedIndex, variableCountAfterRemove);
+            normalizeInterruptPackageVariable(rule, variableCountAfterRemove);
+        }
+    }
+}
+
+bool validSessionScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    FighterDefinition** fighter,
+    PackageScript** script,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& root = session.package.fighters.front();
+    if (scriptIndex < 0 || scriptIndex >= static_cast<int>(root.packageScripts.size())) {
+        setEditorError(error, "editor package script index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = &root;
+    }
+    if (script) {
+        *script = &root.packageScripts[static_cast<size_t>(scriptIndex)];
+    }
+    return true;
+}
+
+bool hasFunctionCall(const std::vector<FunctionCall>& calls, const std::string& name) {
+    return std::any_of(calls.begin(), calls.end(), [&](const FunctionCall& call) {
+        return call.name == name;
+    });
+}
+
 } // namespace
 
 void FighterEditor::clampToWorld(const World& world) {
@@ -358,6 +612,8 @@ void FighterEditorSession::clamp() {
         selectedState = 0;
         selectedSubaction = 0;
         selectedInterrupt = 0;
+        selectedPackageScript = 0;
+        selectedPackageInstruction = 0;
         return;
     }
     const FighterDefinition& def = package.fighters[static_cast<size_t>(selectedFighter)];
@@ -370,6 +626,16 @@ void FighterEditorSession::clamp() {
     const FighterState& state = def.states[static_cast<size_t>(selectedState)];
     selectedSubaction = std::clamp(selectedSubaction, 0, std::max(0, static_cast<int>(state.action.size()) - 1));
     selectedInterrupt = std::clamp(selectedInterrupt, 0, std::max(0, static_cast<int>(state.interrupts.size()) - 1));
+    selectedPackageScript = std::clamp(selectedPackageScript, 0, std::max(0, static_cast<int>(def.packageScripts.size()) - 1));
+    if (def.packageScripts.empty()) {
+        selectedPackageInstruction = 0;
+    } else {
+        const PackageScript& script = def.packageScripts[static_cast<size_t>(selectedPackageScript)];
+        selectedPackageInstruction = std::clamp(
+            selectedPackageInstruction,
+            0,
+            std::max(0, static_cast<int>(script.instructions.size()) - 1));
+    }
 }
 
 FighterDefinition* FighterEditorSession::rootFighter() {
@@ -1143,6 +1409,382 @@ bool removeEditorSessionInterrupt(
     state->interrupts.erase(state->interrupts.begin() + interruptIndex);
     session.selectedState = stateIndex;
     session.selectedInterrupt = std::clamp(interruptIndex, 0, std::max(0, static_cast<int>(state->interrupts.size()) - 1));
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+std::string uniqueEditorPackageVariableName(const FighterDefinition& def, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorPackageVariableNameAvailable(def, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+std::string uniqueEditorPackageScriptName(const FighterDefinition& def, const std::string& prefix) {
+    for (int index = 0; index < 10000; ++index) {
+        const std::string candidate = prefix + std::to_string(index);
+        if (editorPackageScriptNameAvailable(def, candidate)) {
+            return candidate;
+        }
+    }
+    return prefix + "X";
+}
+
+bool editorPackageVariableNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.packageVariables.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.packageVariables[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool editorPackageScriptNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex) {
+    if (name.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < def.packageScripts.size(); ++i) {
+        if (static_cast<int>(i) != ignoredIndex && def.packageScripts[i].name == name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool addEditorSessionPackageVariable(
+    FighterEditorSession& session,
+    const std::string& requestedName,
+    int32_t initialValue,
+    int* addedVariableIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    const std::string name = requestedName.empty() ? uniqueEditorPackageVariableName(def) : requestedName;
+    if (!editorPackageVariableNameAvailable(def, name)) {
+        setEditorError(error, "editor package variable name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    def.packageVariables.push_back({name, initialValue});
+    session.selectedFighter = 0;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedVariableIndex) {
+        *addedVariableIndex = static_cast<int>(def.packageVariables.size()) - 1;
+    }
+    return true;
+}
+
+bool renameEditorSessionPackageVariable(
+    FighterEditorSession& session,
+    int variableIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (variableIndex < 0 || variableIndex >= static_cast<int>(def.packageVariables.size())) {
+        setEditorError(error, "editor package variable index is invalid");
+        return false;
+    }
+    if (!editorPackageVariableNameAvailable(def, newName, variableIndex)) {
+        setEditorError(error, "editor package variable name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    def.packageVariables[static_cast<size_t>(variableIndex)].name = newName;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionPackageVariable(
+    FighterEditorSession& session,
+    int variableIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    if (variableIndex < 0 || variableIndex >= static_cast<int>(def.packageVariables.size())) {
+        setEditorError(error, "editor package variable index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    def.packageVariables.erase(def.packageVariables.begin() + variableIndex);
+    const int variableCountAfterRemove = static_cast<int>(def.packageVariables.size());
+    remapRemovedPackageVariable(def.packageScripts, variableIndex, variableCountAfterRemove);
+    remapRemovedInterruptPackageVariable(def.states, variableIndex, variableCountAfterRemove);
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionPackageScript(
+    FighterEditorSession& session,
+    const std::string& requestedName,
+    int instructionBudget,
+    int* addedScriptIndex,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& def = session.package.fighters.front();
+    const std::string name = requestedName.empty() ? uniqueEditorPackageScriptName(def) : requestedName;
+    if (!editorPackageScriptNameAvailable(def, name)) {
+        setEditorError(error, "editor package script name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    PackageScript script;
+    script.name = name;
+    script.instructionBudget = instructionBudget;
+    def.packageScripts.push_back(std::move(script));
+    session.selectedPackageScript = static_cast<int>(def.packageScripts.size()) - 1;
+    session.selectedPackageInstruction = 0;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedScriptIndex) {
+        *addedScriptIndex = static_cast<int>(def.packageScripts.size()) - 1;
+    }
+    return true;
+}
+
+bool duplicateEditorSessionPackageScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int* addedScriptIndex,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, &def, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    PackageScript clone = *script;
+    clone.name = uniqueEditorPackageScriptName(*def, clone.name + "Copy");
+    def->packageScripts.push_back(std::move(clone));
+    session.selectedPackageScript = static_cast<int>(def->packageScripts.size()) - 1;
+    session.selectedPackageInstruction = 0;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedScriptIndex) {
+        *addedScriptIndex = static_cast<int>(def->packageScripts.size()) - 1;
+    }
+    return true;
+}
+
+bool renameEditorSessionPackageScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const std::string& newName,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, &def, &script, error)) {
+        return false;
+    }
+    if (!editorPackageScriptNameAvailable(*def, newName, scriptIndex)) {
+        setEditorError(error, "editor package script name is empty or already used");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string oldName = script->name;
+    script->name = newName;
+    remapFighterPackageScriptRefs(*def, oldName, newName);
+    remapCrossFighterPackageScriptRefs(session.package, oldName, newName);
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionPackageScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, &def, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string removed = script->name;
+    def->packageScripts.erase(def->packageScripts.begin() + scriptIndex);
+    removeFighterPackageScriptRefs(*def, removed);
+    removeCrossFighterPackageScriptRefs(session.package, removed);
+    session.selectedPackageScript = std::clamp(scriptIndex, 0, std::max(0, static_cast<int>(def->packageScripts.size()) - 1));
+    session.selectedPackageInstruction = 0;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionPackageScriptBudget(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionBudget,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    script->instructionBudget = instructionBudget;
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptInstruction& instruction,
+    int insertIndex,
+    int* addedInstructionIndex,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(script->instructions.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(script->instructions.size()));
+    script->instructions.insert(script->instructions.begin() + index, instruction);
+    session.selectedPackageScript = scriptIndex;
+    session.selectedPackageInstruction = index;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedInstructionIndex) {
+        *addedInstructionIndex = index;
+    }
+    return true;
+}
+
+bool setEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionIndex,
+    const PackageScriptInstruction& instruction,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    if (instructionIndex < 0 || instructionIndex >= static_cast<int>(script->instructions.size())) {
+        setEditorError(error, "editor package instruction index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    script->instructions[static_cast<size_t>(instructionIndex)] = instruction;
+    session.selectedPackageScript = scriptIndex;
+    session.selectedPackageInstruction = instructionIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool removeEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionIndex,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    if (instructionIndex < 0 || instructionIndex >= static_cast<int>(script->instructions.size())) {
+        setEditorError(error, "editor package instruction index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    script->instructions.erase(script->instructions.begin() + instructionIndex);
+    session.selectedPackageScript = scriptIndex;
+    session.selectedPackageInstruction = std::clamp(instructionIndex, 0, std::max(0, static_cast<int>(script->instructions.size()) - 1));
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool moveEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionIndex,
+    int delta,
+    int* movedInstructionIndex,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    if (delta == 0) {
+        if (movedInstructionIndex) {
+            *movedInstructionIndex = instructionIndex;
+        }
+        return true;
+    }
+    const int targetIndex = instructionIndex + delta;
+    if (instructionIndex < 0 || instructionIndex >= static_cast<int>(script->instructions.size()) ||
+        targetIndex < 0 || targetIndex >= static_cast<int>(script->instructions.size()))
+    {
+        setEditorError(error, "editor package instruction move is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    std::swap(script->instructions[static_cast<size_t>(instructionIndex)], script->instructions[static_cast<size_t>(targetIndex)]);
+    session.selectedPackageScript = scriptIndex;
+    session.selectedPackageInstruction = targetIndex;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (movedInstructionIndex) {
+        *movedInstructionIndex = targetIndex;
+    }
+    return true;
+}
+
+bool bindEditorSessionPackageScriptCallback(
+    FighterEditorSession& session,
+    int stateIndex,
+    FighterEditorStateCallbackSlot slot,
+    const std::string& scriptName,
+    std::string* error)
+{
+    FighterDefinition* def = nullptr;
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, &def, &state, error)) {
+        return false;
+    }
+    const bool scriptExists = std::any_of(def->packageScripts.begin(), def->packageScripts.end(), [&](const PackageScript& script) {
+        return script.name == scriptName;
+    });
+    if (!scriptExists) {
+        setEditorError(error, "editor package script callback target is invalid");
+        return false;
+    }
+    std::vector<FunctionCall>* calls = stateCallbacks(*state, slot);
+    if (!calls) {
+        setEditorError(error, "editor state callback slot is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const std::string callback = "script:" + scriptName;
+    if (!hasFunctionCall(*calls, callback)) {
+        calls->push_back({callback});
+    }
+    session.selectedState = stateIndex;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 

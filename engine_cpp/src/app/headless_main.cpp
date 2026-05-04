@@ -6149,8 +6149,105 @@ int main(int argc, char** argv) {
         });
     const bool editorSessionRemoveInterruptOk = editorSessionTimelineOk &&
         pf::removeEditorSessionInterrupt(editorSession, 0, editorInterruptIndex, &packageError);
+    int editorAddedVariable = -1;
+    const bool editorSessionAddVariableOk = editorSessionRemoveInterruptOk &&
+        pf::addEditorSessionPackageVariable(editorSession, "EditorVar", 5, &editorAddedVariable, &packageError) &&
+        editorAddedVariable >= 0;
+    const bool editorSessionRenameVariableOk = editorSessionAddVariableOk &&
+        pf::renameEditorSessionPackageVariable(editorSession, editorAddedVariable, "EditorVarRenamed", &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageVariables[static_cast<size_t>(editorAddedVariable)].name == "EditorVarRenamed";
+    int editorLogicScriptIndex = -1;
+    const bool editorSessionAddScriptOk = editorSessionRenameVariableOk &&
+        pf::addEditorSessionPackageScript(editorSession, "EditorLogicScript", 64, &editorLogicScriptIndex, &packageError) &&
+        editorLogicScriptIndex >= 0;
+    pf::PackageScriptInstruction editorSetVarInstruction;
+    editorSetVarInstruction.op = pf::PackageScriptOp::SetVarImmediate;
+    editorSetVarInstruction.dst = editorAddedVariable;
+    editorSetVarInstruction.intValue = 9;
+    int editorSetVarInstructionIndex = -1;
+    const bool editorSessionAddInstructionOk = editorSessionAddScriptOk &&
+        pf::addEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, editorSetVarInstruction, -1, &editorSetVarInstructionIndex, &packageError) &&
+        editorSetVarInstructionIndex == 0;
+    pf::PackageScriptInstruction editorNopInstruction;
+    editorNopInstruction.op = pf::PackageScriptOp::Nop;
+    int editorNopInstructionIndex = -1;
+    const bool editorSessionAddSecondInstructionOk = editorSessionAddInstructionOk &&
+        pf::addEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, editorNopInstruction, -1, &editorNopInstructionIndex, &packageError) &&
+        editorNopInstructionIndex == 1;
+    int editorMovedInstructionIndex = -1;
+    const bool editorSessionMoveInstructionOk = editorSessionAddSecondInstructionOk &&
+        pf::moveEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, 1, -1, &editorMovedInstructionIndex, &packageError) &&
+        editorMovedInstructionIndex == 0;
+    pf::PackageScriptInstruction editorInvalidInstruction = editorSetVarInstruction;
+    editorInvalidInstruction.dst = 9999;
+    const bool editorSessionInvalidInstructionRejected = editorSessionMoveInstructionOk &&
+        !pf::setEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, 1, editorInvalidInstruction, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions[1].dst == editorAddedVariable;
+    int editorCallerScriptIndex = -1;
+    const bool editorSessionAddCallerScriptOk = editorSessionInvalidInstructionRejected &&
+        pf::addEditorSessionPackageScript(editorSession, "EditorCallerScript", 64, &editorCallerScriptIndex, &packageError) &&
+        editorCallerScriptIndex >= 0;
+    pf::PackageScriptInstruction editorCallInstruction;
+    editorCallInstruction.op = pf::PackageScriptOp::CallScript;
+    editorCallInstruction.text = "EditorLogicScript";
+    int editorCallInstructionIndex = -1;
+    const bool editorSessionAddCallInstructionOk = editorSessionAddCallerScriptOk &&
+        pf::addEditorSessionPackageInstruction(editorSession, editorCallerScriptIndex, editorCallInstruction, -1, &editorCallInstructionIndex, &packageError) &&
+        editorCallInstructionIndex == 0;
+    const bool editorSessionBindScriptCallbackOk = editorSessionAddCallInstructionOk &&
+        pf::bindEditorSessionPackageScriptCallback(
+            editorSession,
+            0,
+            pf::FighterEditorStateCallbackSlot::Frame,
+            "EditorLogicScript",
+            &packageError);
+    pf::Subaction editorScriptSubaction;
+    editorScriptSubaction.type = pf::SubactionType::CallScript;
+    editorScriptSubaction.frames = 1;
+    editorScriptSubaction.objectName = "EditorLogicScript";
+    int editorScriptSubactionIndex = -1;
+    const bool editorSessionAddScriptSubactionOk = editorSessionBindScriptCallbackOk &&
+        pf::addEditorSessionSubaction(editorSession, 0, editorScriptSubaction, -1, &editorScriptSubactionIndex, &packageError) &&
+        editorScriptSubactionIndex >= 0;
+    const bool editorSessionRenameScriptOk = editorSessionAddScriptSubactionOk &&
+        pf::renameEditorSessionPackageScript(editorSession, editorLogicScriptIndex, "EditorLogicRenamed", &packageError);
+    const pf::FighterDefinition* editorRootAfterScriptRename = editorSession.rootFighter();
+    const bool editorSessionScriptRemapOk = editorSessionRenameScriptOk &&
+        editorRootAfterScriptRename &&
+        std::any_of(editorRootAfterScriptRename->states[0].onFrame.begin(), editorRootAfterScriptRename->states[0].onFrame.end(), [](const pf::FunctionCall& call) {
+            return call.name == "script:EditorLogicRenamed";
+        }) &&
+        editorRootAfterScriptRename->states[0].action[static_cast<size_t>(editorScriptSubactionIndex)].objectName == "EditorLogicRenamed" &&
+        editorRootAfterScriptRename->packageScripts[static_cast<size_t>(editorCallerScriptIndex)].instructions[0].text == "EditorLogicRenamed";
+    int editorClonedScriptIndex = -1;
+    const bool editorSessionCloneScriptOk = editorSessionScriptRemapOk &&
+        pf::duplicateEditorSessionPackageScript(editorSession, editorLogicScriptIndex, &editorClonedScriptIndex, &packageError) &&
+        editorClonedScriptIndex >= 0;
+    const bool editorSessionRemoveClonedScriptOk = editorSessionCloneScriptOk &&
+        pf::removeEditorSessionPackageScript(editorSession, editorClonedScriptIndex, &packageError);
+    const bool editorSessionRemoveScriptOk = editorSessionRemoveClonedScriptOk &&
+        pf::removeEditorSessionPackageScript(editorSession, editorLogicScriptIndex, &packageError);
+    const pf::FighterDefinition* editorRootAfterScriptRemove = editorSession.rootFighter();
+    const auto editorCallerScriptAfterRemove = editorRootAfterScriptRemove
+        ? std::find_if(editorRootAfterScriptRemove->packageScripts.begin(), editorRootAfterScriptRemove->packageScripts.end(), [](const pf::PackageScript& script) {
+            return script.name == "EditorCallerScript";
+        })
+        : std::vector<pf::PackageScript>::const_iterator{};
+    const bool editorSessionScriptRefsRemovedOk = editorSessionRemoveScriptOk &&
+        editorRootAfterScriptRemove &&
+        std::none_of(editorRootAfterScriptRemove->states[0].onFrame.begin(), editorRootAfterScriptRemove->states[0].onFrame.end(), [](const pf::FunctionCall& call) {
+            return call.name == "script:EditorLogicRenamed";
+        }) &&
+        editorRootAfterScriptRemove->states[0].action[static_cast<size_t>(editorScriptSubactionIndex)].type == pf::SubactionType::SyncTimer &&
+        editorCallerScriptAfterRemove != editorRootAfterScriptRemove->packageScripts.end() &&
+        !editorCallerScriptAfterRemove->instructions.empty() &&
+        editorCallerScriptAfterRemove->instructions[0].op == pf::PackageScriptOp::Nop;
+    const bool editorSessionRemoveVariableOk = editorSessionScriptRefsRemovedOk &&
+        pf::removeEditorSessionPackageVariable(editorSession, editorAddedVariable, &packageError);
     pf::FighterEditorPackageSnapshot editorSnapshot;
-    const bool editorSessionExportOk = editorSessionRemoveInterruptOk &&
+    const bool editorSessionExportOk = editorSessionRemoveVariableOk &&
         pf::exportFighterEditorSessionPackage(editorSession, editorSnapshot, &packageError) &&
         !editorSnapshot.bytes.empty() &&
         editorSnapshot.descriptor.name == "headless_editor_session" &&
@@ -7587,6 +7684,24 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_interrupt_ok=" << editorSessionAddInterruptOk
               << " fighter_editor_session_timeline_ok=" << editorSessionTimelineOk
               << " fighter_editor_session_remove_interrupt_ok=" << editorSessionRemoveInterruptOk
+              << " fighter_editor_session_add_variable_ok=" << editorSessionAddVariableOk
+              << " fighter_editor_session_rename_variable_ok=" << editorSessionRenameVariableOk
+              << " fighter_editor_session_add_script_ok=" << editorSessionAddScriptOk
+              << " fighter_editor_session_add_instruction_ok=" << editorSessionAddInstructionOk
+              << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
+              << " fighter_editor_session_move_instruction_ok=" << editorSessionMoveInstructionOk
+              << " fighter_editor_session_invalid_instruction_rejected=" << editorSessionInvalidInstructionRejected
+              << " fighter_editor_session_add_caller_script_ok=" << editorSessionAddCallerScriptOk
+              << " fighter_editor_session_add_call_instruction_ok=" << editorSessionAddCallInstructionOk
+              << " fighter_editor_session_bind_script_callback_ok=" << editorSessionBindScriptCallbackOk
+              << " fighter_editor_session_add_script_subaction_ok=" << editorSessionAddScriptSubactionOk
+              << " fighter_editor_session_rename_script_ok=" << editorSessionRenameScriptOk
+              << " fighter_editor_session_script_remap_ok=" << editorSessionScriptRemapOk
+              << " fighter_editor_session_clone_script_ok=" << editorSessionCloneScriptOk
+              << " fighter_editor_session_remove_cloned_script_ok=" << editorSessionRemoveClonedScriptOk
+              << " fighter_editor_session_remove_script_ok=" << editorSessionRemoveScriptOk
+              << " fighter_editor_session_script_refs_removed_ok=" << editorSessionScriptRefsRemovedOk
+              << " fighter_editor_session_remove_variable_ok=" << editorSessionRemoveVariableOk
               << " fighter_editor_session_export_ok=" << editorSessionExportOk
               << " fighter_editor_session_test_world_ok=" << editorSessionTestWorldOk
               << " fighter_editor_blank_session_ok=" << blankEditorSessionBeginOk

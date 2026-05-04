@@ -114,6 +114,8 @@ struct FighterEditorSession {
     int selectedState = 0;
     int selectedSubaction = 0;
     int selectedInterrupt = 0;
+    int selectedPackageScript = 0;
+    int selectedPackageInstruction = 0;
     bool dirty = false;
     FighterPackageDescriptor lastDescriptor;
     std::vector<uint8_t> lastBytes;
@@ -252,6 +254,81 @@ bool removeEditorSessionInterrupt(
     FighterEditorSession& session,
     int stateIndex,
     int interruptIndex,
+    std::string* error = nullptr);
+std::string uniqueEditorPackageVariableName(const FighterDefinition& def, const std::string& prefix = "var");
+std::string uniqueEditorPackageScriptName(const FighterDefinition& def, const std::string& prefix = "Script");
+bool editorPackageVariableNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex = -1);
+bool editorPackageScriptNameAvailable(const FighterDefinition& def, const std::string& name, int ignoredIndex = -1);
+bool addEditorSessionPackageVariable(
+    FighterEditorSession& session,
+    const std::string& requestedName = {},
+    int32_t initialValue = 0,
+    int* addedVariableIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionPackageVariable(
+    FighterEditorSession& session,
+    int variableIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionPackageVariable(
+    FighterEditorSession& session,
+    int variableIndex,
+    std::string* error = nullptr);
+bool addEditorSessionPackageScript(
+    FighterEditorSession& session,
+    const std::string& requestedName = {},
+    int instructionBudget = 64,
+    int* addedScriptIndex = nullptr,
+    std::string* error = nullptr);
+bool duplicateEditorSessionPackageScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int* addedScriptIndex = nullptr,
+    std::string* error = nullptr);
+bool renameEditorSessionPackageScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const std::string& newName,
+    std::string* error = nullptr);
+bool removeEditorSessionPackageScript(
+    FighterEditorSession& session,
+    int scriptIndex,
+    std::string* error = nullptr);
+bool setEditorSessionPackageScriptBudget(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionBudget,
+    std::string* error = nullptr);
+bool addEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptInstruction& instruction,
+    int insertIndex = -1,
+    int* addedInstructionIndex = nullptr,
+    std::string* error = nullptr);
+bool setEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionIndex,
+    const PackageScriptInstruction& instruction,
+    std::string* error = nullptr);
+bool removeEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionIndex,
+    std::string* error = nullptr);
+bool moveEditorSessionPackageInstruction(
+    FighterEditorSession& session,
+    int scriptIndex,
+    int instructionIndex,
+    int delta,
+    int* movedInstructionIndex = nullptr,
+    std::string* error = nullptr);
+bool bindEditorSessionPackageScriptCallback(
+    FighterEditorSession& session,
+    int stateIndex,
+    FighterEditorStateCallbackSlot slot,
+    const std::string& scriptName,
     std::string* error = nullptr);
 
 } // namespace pf
