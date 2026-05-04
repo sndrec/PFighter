@@ -1203,6 +1203,14 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetIndexedObjectVarImmediate: return "IdxOSet";
     case pf::PackageScriptOp::SetIndexedObjectVarFromVar: return "IdxOVar";
     case pf::PackageScriptOp::CallIndexedObjectScriptFromVar: return "IdxOCall";
+    case pf::PackageScriptOp::SetVarLessThanImmediate: return "LtImm";
+    case pf::PackageScriptOp::SetVarLessThanVar: return "LtVar";
+    case pf::PackageScriptOp::SetVarEqualImmediate: return "EqImm";
+    case pf::PackageScriptOp::SetVarEqualVar: return "EqVar";
+    case pf::PackageScriptOp::SetVarNotEqualImmediate: return "NeImm";
+    case pf::PackageScriptOp::SetVarNotEqualVar: return "NeVar";
+    case pf::PackageScriptOp::SetVarGreaterThanImmediate: return "GtImm";
+    case pf::PackageScriptOp::SetVarGreaterThanVar: return "GtVar";
     }
     return "Op";
 }
@@ -1401,6 +1409,14 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::AddVar:
     case pf::PackageScriptOp::ScaleVarFixed:
     case pf::PackageScriptOp::SetVarRandom:
+    case pf::PackageScriptOp::SetVarLessThanImmediate:
+    case pf::PackageScriptOp::SetVarLessThanVar:
+    case pf::PackageScriptOp::SetVarEqualImmediate:
+    case pf::PackageScriptOp::SetVarEqualVar:
+    case pf::PackageScriptOp::SetVarNotEqualImmediate:
+    case pf::PackageScriptOp::SetVarNotEqualVar:
+    case pf::PackageScriptOp::SetVarGreaterThanImmediate:
+    case pf::PackageScriptOp::SetVarGreaterThanVar:
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarStateFrame:
     case pf::PackageScriptOp::SetVarStateIndex:
@@ -1780,8 +1796,32 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarRandom:
         label += " v" + std::to_string(instruction.dst) + " rng < " + std::to_string(instruction.intValue);
         break;
+    case pf::PackageScriptOp::SetVarLessThanImmediate:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " < " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetVarEqualImmediate:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " == " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetVarNotEqualImmediate:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " != " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetVarGreaterThanImmediate:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " > " + std::to_string(instruction.intValue);
+        break;
     case pf::PackageScriptOp::AddVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetVarLessThanVar:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " < v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetVarEqualVar:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " == v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetVarNotEqualVar:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " != v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetVarGreaterThanVar:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " > v" + std::to_string(instruction.srcB);
         break;
     case pf::PackageScriptOp::SetGroundVelocityFromVar:
     case pf::PackageScriptOp::SetAirVelocityXFromVar:
@@ -2022,7 +2062,15 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::AddVarImmediate: return pf::PackageScriptOp::AddVar;
     case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::ScaleVarFixed;
     case pf::PackageScriptOp::ScaleVarFixed: return pf::PackageScriptOp::SetVarRandom;
-    case pf::PackageScriptOp::SetVarRandom: return pf::PackageScriptOp::SetVarFrame;
+    case pf::PackageScriptOp::SetVarRandom: return pf::PackageScriptOp::SetVarLessThanImmediate;
+    case pf::PackageScriptOp::SetVarLessThanImmediate: return pf::PackageScriptOp::SetVarLessThanVar;
+    case pf::PackageScriptOp::SetVarLessThanVar: return pf::PackageScriptOp::SetVarEqualImmediate;
+    case pf::PackageScriptOp::SetVarEqualImmediate: return pf::PackageScriptOp::SetVarEqualVar;
+    case pf::PackageScriptOp::SetVarEqualVar: return pf::PackageScriptOp::SetVarNotEqualImmediate;
+    case pf::PackageScriptOp::SetVarNotEqualImmediate: return pf::PackageScriptOp::SetVarNotEqualVar;
+    case pf::PackageScriptOp::SetVarNotEqualVar: return pf::PackageScriptOp::SetVarGreaterThanImmediate;
+    case pf::PackageScriptOp::SetVarGreaterThanImmediate: return pf::PackageScriptOp::SetVarGreaterThanVar;
+    case pf::PackageScriptOp::SetVarGreaterThanVar: return pf::PackageScriptOp::SetVarFrame;
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarStateIndex;
     case pf::PackageScriptOp::SetVarStateIndex: return pf::PackageScriptOp::SetVarGrounded;

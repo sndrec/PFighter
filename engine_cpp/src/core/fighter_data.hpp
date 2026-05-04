@@ -562,6 +562,14 @@ enum class PackageScriptOp : uint8_t {
     SetIndexedObjectVarImmediate,
     SetIndexedObjectVarFromVar,
     CallIndexedObjectScriptFromVar,
+    SetVarLessThanImmediate,
+    SetVarLessThanVar,
+    SetVarEqualImmediate,
+    SetVarEqualVar,
+    SetVarNotEqualImmediate,
+    SetVarNotEqualVar,
+    SetVarGreaterThanImmediate,
+    SetVarGreaterThanVar,
 };
 
 struct PackageScriptInstruction {

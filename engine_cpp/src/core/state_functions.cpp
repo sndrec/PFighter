@@ -2680,6 +2680,30 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarFromVar:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA));
             break;
+        case PackageScriptOp::SetVarLessThanImmediate:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) < instruction.intValue ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarLessThanVar:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) < packageVar(fighter, instruction.srcB) ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarEqualImmediate:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) == instruction.intValue ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarEqualVar:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) == packageVar(fighter, instruction.srcB) ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarNotEqualImmediate:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != instruction.intValue ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarNotEqualVar:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != packageVar(fighter, instruction.srcB) ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarGreaterThanImmediate:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) > instruction.intValue ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarGreaterThanVar:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) > packageVar(fighter, instruction.srcB) ? 1 : 0);
+            break;
         case PackageScriptOp::AddVarImmediate:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.dst) + instruction.intValue);
             break;

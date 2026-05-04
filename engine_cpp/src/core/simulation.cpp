@@ -7388,6 +7388,30 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFromVar:
                 setVar(instruction.dst, var(instruction.srcA));
                 break;
+            case PackageScriptOp::SetVarLessThanImmediate:
+                setVar(instruction.dst, var(instruction.srcA) < instruction.intValue ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarLessThanVar:
+                setVar(instruction.dst, var(instruction.srcA) < var(instruction.srcB) ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarEqualImmediate:
+                setVar(instruction.dst, var(instruction.srcA) == instruction.intValue ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarEqualVar:
+                setVar(instruction.dst, var(instruction.srcA) == var(instruction.srcB) ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarNotEqualImmediate:
+                setVar(instruction.dst, var(instruction.srcA) != instruction.intValue ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarNotEqualVar:
+                setVar(instruction.dst, var(instruction.srcA) != var(instruction.srcB) ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarGreaterThanImmediate:
+                setVar(instruction.dst, var(instruction.srcA) > instruction.intValue ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarGreaterThanVar:
+                setVar(instruction.dst, var(instruction.srcA) > var(instruction.srcB) ? 1 : 0);
+                break;
             case PackageScriptOp::AddVarImmediate:
                 setVar(instruction.dst, var(instruction.dst) + instruction.intValue);
                 break;

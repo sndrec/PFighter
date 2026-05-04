@@ -358,6 +358,14 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetIndexedObjectVarImmediate:
     case PackageScriptOp::SetIndexedObjectVarFromVar:
     case PackageScriptOp::CallIndexedObjectScriptFromVar:
+    case PackageScriptOp::SetVarLessThanImmediate:
+    case PackageScriptOp::SetVarLessThanVar:
+    case PackageScriptOp::SetVarEqualImmediate:
+    case PackageScriptOp::SetVarEqualVar:
+    case PackageScriptOp::SetVarNotEqualImmediate:
+    case PackageScriptOp::SetVarNotEqualVar:
+    case PackageScriptOp::SetVarGreaterThanImmediate:
+    case PackageScriptOp::SetVarGreaterThanVar:
         return true;
     }
     return false;
@@ -1789,6 +1797,21 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarFromVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarLessThanImmediate:
+    case PackageScriptOp::SetVarEqualImmediate:
+    case PackageScriptOp::SetVarNotEqualImmediate:
+    case PackageScriptOp::SetVarGreaterThanImmediate:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarLessThanVar:
+    case PackageScriptOp::SetVarEqualVar:
+    case PackageScriptOp::SetVarNotEqualVar:
+    case PackageScriptOp::SetVarGreaterThanVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
         break;
     case PackageScriptOp::SetVarFighterStateFrame:
     case PackageScriptOp::SetVarFighterStateIndex:
