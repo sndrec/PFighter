@@ -226,6 +226,7 @@ int main(int argc, char** argv) {
     size_t rosterActionScriptsReady = 0;
     size_t rosterNativeAttackEventsReady = 0;
     size_t rosterNativeHurtboxesReady = 0;
+    size_t rosterNativePackageReady = 0;
     for (const pf::FighterDefinition& def : world.fighterDefs) {
         if (def.hasHsdAsset && def.hsdAsset &&
             !def.hsdAsset->skeleton.empty() &&
@@ -247,6 +248,16 @@ int main(int argc, char** argv) {
         if (def.hasHsdAsset && def.hsdAsset && !def.hsdAsset->actionScripts.empty()) {
             ++rosterActionScriptsReady;
         }
+        const bool hasNativeAuthoredData =
+            !def.hasHsdAsset &&
+            !def.hsdAsset &&
+            !def.authoredSkeleton.empty() &&
+            !pf::authoredAnimationClips(def).empty() &&
+            !pf::authoredFighterMesh(def).batches.empty() &&
+            !def.hurtboxes.empty();
+        if (hasNativeAuthoredData) {
+            ++rosterNativePackageReady;
+        }
         const int attackHi3Index = def.stateIndex("AttackHi3");
         if (attackHi3Index >= 0) {
             const pf::FighterState& attackHi3 = def.states[static_cast<size_t>(attackHi3Index)];
@@ -264,6 +275,7 @@ int main(int argc, char** argv) {
               << " fighter_roster_scripts_ready=" << rosterActionScriptsReady
               << " fighter_roster_native_attack_events_ready=" << rosterNativeAttackEventsReady
               << " fighter_roster_native_hurtboxes_ready=" << rosterNativeHurtboxesReady
+              << " fighter_roster_native_packages_ready=" << rosterNativePackageReady
               << "\n";
 
     pf::WorldSnapshot rewindPoint;

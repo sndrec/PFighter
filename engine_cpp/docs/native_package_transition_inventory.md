@@ -32,12 +32,15 @@ package load/save should operate on native authored data only.
 ## Runtime Gameplay Dependencies To Remove Or Convert
 
 - Fighter roster construction in `simulation.cpp` first attempts to load
-  `engine_cpp/data/packages/<fighter>_native.pfpkg`. If no native package is
-  installed, it falls back to `*_hsd.pfighter.bin` through
+  `engine_cpp/data/packages/<fighter>_native.pfpkg`. Missing native packages now
+  fail loudly instead of falling back to `*_hsd.pfighter.bin` during normal
+  gameplay construction.
+- The explicit package converter still reads `*_hsd.pfighter.bin` through
   `cachedHsdFighterAsset`, sets `FighterDefinition::hasHsdAsset`, and converts
   attributes, ledge snap values, animation lengths, hurtboxes, action scripts,
   skeleton, clips, mesh, model visibility, common bones, ECB source bones, and
-  shield pose into native fields. This fallback is still runtime importer debt.
+  shield pose into native fields. That importer code still lives in core and
+  should move to a converter/tooling boundary.
 - With the installed generated packages present, the headless roster smoke sees
   zero HSD-backed roster assets and native data for all 27 fighters.
 - Normal animation clip lookup now goes through native authored clip accessors.
@@ -113,11 +116,8 @@ package load/save should operate on native authored data only.
 1. Move `animation_asset.*`, `action.cpp` HSD script decode helpers, and the
    `cachedHsdFighterAsset` fallback out of normal core gameplay construction and
    behind explicit importer/converter entry points.
-2. Make native `.pfpkg` files the installed roster default for every converted
-   Melee fighter, then remove the automatic runtime `*_hsd.pfighter.bin`
-   fallback for normal gameplay. The files are now generated and installed; the
-   fallback remains for importer/debug coverage and should be removed from the
-   normal gameplay path once replacement tests no longer depend on it.
+2. Move the explicit converter's `*_hsd.pfighter.bin` import path out of core
+   gameplay files and into a converter/tooling boundary.
 3. Retire `FighterDefinition::hsdAsset`, `FighterDefinition::hasHsdAsset`, and
    `FighterPackage::hsdAssets` after package rejection compatibility tests no
    longer need to construct legacy dependent shapes in memory.

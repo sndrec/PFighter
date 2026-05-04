@@ -891,10 +891,6 @@ static FighterDefinition makeImportedFighterDefinition(
     return def;
 }
 
-static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spec, const MeleeCommonData& common) {
-    return makeImportedFighterDefinition(spec, common, cachedHsdFighterAsset(spec.fileName));
-}
-
 static bool tryLoadNativePackageFighterDefinition(const HsdFighterAssetSpec& spec, FighterDefinition& out) {
     const std::filesystem::path packagePath = findNativeFighterPackagePath(spec);
     if (packagePath.empty()) {
@@ -943,7 +939,10 @@ static FighterDefinition makeTrainingRosterFighterDefinition(const HsdFighterAss
     if (tryLoadNativePackageFighterDefinition(spec, native)) {
         return native;
     }
-    return makeHsdFighterDefinition(spec, common);
+    (void)common;
+    throw std::runtime_error(
+        std::string("missing native fighter package for ") + spec.displayName +
+        ": expected engine_cpp/data/packages/" + nativePackageFileName(spec));
 }
 
 static std::array<Fix, 16> multiplyMatrix4(const std::array<Fix, 16>& a, const std::array<Fix, 16>& b) {
