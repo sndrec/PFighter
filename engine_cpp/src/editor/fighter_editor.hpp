@@ -24,6 +24,39 @@ enum class ObjectEditorPanel : uint8_t {
     Boxes,
 };
 
+enum class FighterEditorTimelineMarkerKind : uint8_t {
+    Subaction,
+    Hitbox,
+    ThrowHitbox,
+    Interruptible,
+    InterruptEnable,
+    InterruptDisable,
+};
+
+enum class FighterEditorStateCallbackSlot : uint8_t {
+    Enter,
+    Frame,
+    Landing,
+    Airborne,
+};
+
+struct FighterEditorTimelineMarker {
+    FighterEditorTimelineMarkerKind kind = FighterEditorTimelineMarkerKind::Subaction;
+    int frame = 0;
+    int sourceIndex = -1;
+    SubactionType subactionType = SubactionType::SyncTimer;
+    InterruptCondition interruptCondition = InterruptCondition::JumpPressed;
+};
+
+struct FighterEditorStateTimeline {
+    int animationLengthFrames = 0;
+    int actionLengthFrames = 0;
+    int frameCount = 0;
+    int initialInterruptibleFrame = 0;
+    std::vector<int> subactionFrames;
+    std::vector<FighterEditorTimelineMarker> markers;
+};
+
 struct FighterEditor {
     int selectedFighter = 0;
     int selectedState = 0;
@@ -158,6 +191,67 @@ bool addEditorSessionObject(
     const std::string& requestedName,
     GameObjectKind kind,
     int* objectIndex = nullptr,
+    std::string* error = nullptr);
+bool buildEditorSessionStateTimeline(
+    const FighterEditorSession& session,
+    int stateIndex,
+    FighterEditorStateTimeline& timeline,
+    std::string* error = nullptr);
+bool setEditorSessionStateTiming(
+    FighterEditorSession& session,
+    int stateIndex,
+    int animationLengthFrames,
+    int initialInterruptibleFrame,
+    int defaultAnimationBlendFrames,
+    int onAnimationFinishedBlendFrames,
+    std::string* error = nullptr);
+bool setEditorSessionStateCollisionFlags(
+    FighterEditorSession& session,
+    int stateIndex,
+    bool useAnimPhysics,
+    bool allowSlideoff,
+    bool allowLedgeGrab,
+    bool allowBackwardsLedgeGrab,
+    bool allowWallCollision,
+    bool allowCeilingCollision,
+    bool convertFloorCollisionToGround,
+    std::string* error = nullptr);
+bool setEditorSessionStateCallbacks(
+    FighterEditorSession& session,
+    int stateIndex,
+    FighterEditorStateCallbackSlot slot,
+    const std::vector<FunctionCall>& calls,
+    std::string* error = nullptr);
+bool addEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    const Subaction& subaction,
+    int insertIndex = -1,
+    int* addedSubactionIndex = nullptr,
+    std::string* error = nullptr);
+bool removeEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    int subactionIndex,
+    std::string* error = nullptr);
+bool moveEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    int subactionIndex,
+    int delta,
+    int* movedSubactionIndex = nullptr,
+    std::string* error = nullptr);
+bool addEditorSessionInterrupt(
+    FighterEditorSession& session,
+    int stateIndex,
+    const InterruptRule& interrupt,
+    int insertIndex = -1,
+    int* addedInterruptIndex = nullptr,
+    std::string* error = nullptr);
+bool removeEditorSessionInterrupt(
+    FighterEditorSession& session,
+    int stateIndex,
+    int interruptIndex,
     std::string* error = nullptr);
 
 } // namespace pf

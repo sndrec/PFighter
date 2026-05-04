@@ -1,5 +1,7 @@
 #include "editor/fighter_editor.hpp"
 
+#include "core/action.hpp"
+
 #include <algorithm>
 #include <utility>
 
@@ -99,6 +101,147 @@ bool validRootFighter(const FighterEditorSession& session, std::string* error) {
         return false;
     }
     return true;
+}
+
+bool validSessionState(
+    const FighterEditorSession& session,
+    int stateIndex,
+    const FighterDefinition** fighter,
+    const FighterState** state,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    const FighterDefinition& root = session.package.fighters.front();
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(root.states.size())) {
+        setEditorError(error, "editor state index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = &root;
+    }
+    if (state) {
+        *state = &root.states[static_cast<size_t>(stateIndex)];
+    }
+    return true;
+}
+
+bool validSessionState(
+    FighterEditorSession& session,
+    int stateIndex,
+    FighterDefinition** fighter,
+    FighterState** state,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return false;
+    }
+    FighterDefinition& root = session.package.fighters.front();
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(root.states.size())) {
+        setEditorError(error, "editor state index is invalid");
+        return false;
+    }
+    if (fighter) {
+        *fighter = &root;
+    }
+    if (state) {
+        *state = &root.states[static_cast<size_t>(stateIndex)];
+    }
+    return true;
+}
+
+bool validateEditorSessionAfterMutation(
+    FighterEditorSession& session,
+    FighterPackage&& previous,
+    std::string* error)
+{
+    std::string validationError;
+    if (!validateFighterPackage(session.package, &validationError)) {
+        session.package = std::move(previous);
+        session.clamp();
+        setEditorError(error, validationError);
+        session.lastMessage = validationError;
+        return false;
+    }
+    session.dirty = true;
+    session.lastMessage = "OK";
+    session.clamp();
+    return true;
+}
+
+std::vector<FunctionCall>* stateCallbacks(FighterState& state, FighterEditorStateCallbackSlot slot) {
+    switch (slot) {
+    case FighterEditorStateCallbackSlot::Enter:
+        return &state.onEnter;
+    case FighterEditorStateCallbackSlot::Frame:
+        return &state.onFrame;
+    case FighterEditorStateCallbackSlot::Landing:
+        return &state.onLanding;
+    case FighterEditorStateCallbackSlot::Airborne:
+        return &state.onAirborne;
+    }
+    return nullptr;
+}
+
+std::vector<int> editorSubactionFirstFrames(const std::vector<Subaction>& action) {
+    std::vector<int> frames(action.size(), -1);
+    int currentFrame = 0;
+    int loopCount = 0;
+    size_t loopStart = 0;
+    size_t index = 0;
+    int safety = 0;
+    while (index < action.size() && safety < 10000) {
+        ++safety;
+        const Subaction& subaction = action[index];
+        if (subaction.type == SubactionType::SetLoop) {
+            loopStart = index + 1;
+            loopCount = std::max(0, subaction.loopCount - 1);
+            ++index;
+            continue;
+        }
+        if (subaction.type == SubactionType::ExecuteLoop) {
+            if (loopCount > 0) {
+                index = loopStart;
+                --loopCount;
+            } else {
+                ++index;
+            }
+            continue;
+        }
+        if (subaction.type == SubactionType::SyncTimer) {
+            currentFrame += subaction.frames;
+            ++index;
+            continue;
+        }
+        if (subaction.type == SubactionType::AsyncTimer) {
+            currentFrame = std::max(currentFrame, subaction.frames);
+            ++index;
+            continue;
+        }
+        if (frames[index] < 0) {
+            frames[index] = currentFrame;
+        }
+        ++index;
+    }
+    return frames;
+}
+
+void appendTimelineMarker(
+    FighterEditorStateTimeline& timeline,
+    FighterEditorTimelineMarkerKind kind,
+    int frame,
+    int sourceIndex,
+    SubactionType subactionType = SubactionType::SyncTimer,
+    InterruptCondition interruptCondition = InterruptCondition::JumpPressed)
+{
+    FighterEditorTimelineMarker marker;
+    marker.kind = kind;
+    marker.frame = std::max(0, frame);
+    marker.sourceIndex = sourceIndex;
+    marker.subactionType = subactionType;
+    marker.interruptCondition = interruptCondition;
+    timeline.markers.push_back(marker);
 }
 
 } // namespace
@@ -719,6 +862,288 @@ bool addEditorSessionObject(
     }
     session.dirty = true;
     return true;
+}
+
+bool buildEditorSessionStateTimeline(
+    const FighterEditorSession& session,
+    int stateIndex,
+    FighterEditorStateTimeline& timeline,
+    std::string* error)
+{
+    const FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    timeline = {};
+    timeline.animationLengthFrames = state->animationLengthFrames;
+    timeline.initialInterruptibleFrame = state->initialInterruptibleFrame;
+    const UnfoldedAction actionFrames = unfoldAction(state->action);
+    timeline.actionLengthFrames = std::max(0, static_cast<int>(actionFrames.size()) - 1);
+    timeline.frameCount = std::max(1, std::max(timeline.animationLengthFrames, timeline.actionLengthFrames));
+    timeline.subactionFrames = editorSubactionFirstFrames(state->action);
+
+    for (size_t i = 0; i < state->action.size(); ++i) {
+        const Subaction& subaction = state->action[i];
+        const int frame = i < timeline.subactionFrames.size() ? timeline.subactionFrames[i] : -1;
+        if (frame < 0) {
+            continue;
+        }
+        FighterEditorTimelineMarkerKind kind = FighterEditorTimelineMarkerKind::Subaction;
+        if (subaction.type == SubactionType::CreateHitbox) {
+            kind = FighterEditorTimelineMarkerKind::Hitbox;
+        } else if (subaction.type == SubactionType::CreateThrowHitbox) {
+            kind = FighterEditorTimelineMarkerKind::ThrowHitbox;
+        } else if (subaction.type == SubactionType::SetInterruptible) {
+            kind = FighterEditorTimelineMarkerKind::Interruptible;
+        }
+        appendTimelineMarker(timeline, kind, frame, static_cast<int>(i), subaction.type);
+    }
+
+    if (state->initialInterruptibleFrame > 0) {
+        appendTimelineMarker(
+            timeline,
+            FighterEditorTimelineMarkerKind::Interruptible,
+            state->initialInterruptibleFrame,
+            -1);
+    }
+    for (size_t i = 0; i < state->interrupts.size(); ++i) {
+        const InterruptRule& interrupt = state->interrupts[i];
+        appendTimelineMarker(
+            timeline,
+            FighterEditorTimelineMarkerKind::InterruptEnable,
+            interrupt.enableFrame,
+            static_cast<int>(i),
+            SubactionType::SyncTimer,
+            interrupt.condition);
+        if (interrupt.disableFrame > 0) {
+            appendTimelineMarker(
+                timeline,
+                FighterEditorTimelineMarkerKind::InterruptDisable,
+                interrupt.disableFrame,
+                static_cast<int>(i),
+                SubactionType::SyncTimer,
+                interrupt.condition);
+        }
+    }
+
+    std::sort(timeline.markers.begin(), timeline.markers.end(), [](const FighterEditorTimelineMarker& a, const FighterEditorTimelineMarker& b) {
+        if (a.frame != b.frame) {
+            return a.frame < b.frame;
+        }
+        if (a.kind != b.kind) {
+            return static_cast<int>(a.kind) < static_cast<int>(b.kind);
+        }
+        return a.sourceIndex < b.sourceIndex;
+    });
+    return true;
+}
+
+bool setEditorSessionStateTiming(
+    FighterEditorSession& session,
+    int stateIndex,
+    int animationLengthFrames,
+    int initialInterruptibleFrame,
+    int defaultAnimationBlendFrames,
+    int onAnimationFinishedBlendFrames,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->animationLengthFrames = animationLengthFrames;
+    state->initialInterruptibleFrame = initialInterruptibleFrame;
+    state->defaultAnimationBlendFrames = defaultAnimationBlendFrames;
+    state->onAnimationFinishedBlendFrames = onAnimationFinishedBlendFrames;
+    session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionStateCollisionFlags(
+    FighterEditorSession& session,
+    int stateIndex,
+    bool useAnimPhysics,
+    bool allowSlideoff,
+    bool allowLedgeGrab,
+    bool allowBackwardsLedgeGrab,
+    bool allowWallCollision,
+    bool allowCeilingCollision,
+    bool convertFloorCollisionToGround,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->useAnimPhysics = useAnimPhysics;
+    state->allowSlideoff = allowSlideoff;
+    state->allowLedgeGrab = allowLedgeGrab;
+    state->allowBackwardsLedgeGrab = allowBackwardsLedgeGrab;
+    state->allowWallCollision = allowWallCollision;
+    state->allowCeilingCollision = allowCeilingCollision;
+    state->convertFloorCollisionToGround = convertFloorCollisionToGround;
+    session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool setEditorSessionStateCallbacks(
+    FighterEditorSession& session,
+    int stateIndex,
+    FighterEditorStateCallbackSlot slot,
+    const std::vector<FunctionCall>& calls,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    std::vector<FunctionCall>* target = stateCallbacks(*state, slot);
+    if (!target) {
+        setEditorError(error, "editor state callback slot is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    *target = calls;
+    session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool addEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    const Subaction& subaction,
+    int insertIndex,
+    int* addedSubactionIndex,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(state->action.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(state->action.size()));
+    state->action.insert(state->action.begin() + index, subaction);
+    session.selectedState = stateIndex;
+    session.selectedSubaction = index;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedSubactionIndex) {
+        *addedSubactionIndex = index;
+    }
+    return true;
+}
+
+bool removeEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    int subactionIndex,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    if (subactionIndex < 0 || subactionIndex >= static_cast<int>(state->action.size())) {
+        setEditorError(error, "editor subaction index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->action.erase(state->action.begin() + subactionIndex);
+    session.selectedState = stateIndex;
+    session.selectedSubaction = std::clamp(subactionIndex, 0, std::max(0, static_cast<int>(state->action.size()) - 1));
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool moveEditorSessionSubaction(
+    FighterEditorSession& session,
+    int stateIndex,
+    int subactionIndex,
+    int delta,
+    int* movedSubactionIndex,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    if (delta == 0) {
+        if (movedSubactionIndex) {
+            *movedSubactionIndex = subactionIndex;
+        }
+        return true;
+    }
+    const int targetIndex = subactionIndex + delta;
+    if (subactionIndex < 0 || subactionIndex >= static_cast<int>(state->action.size()) ||
+        targetIndex < 0 || targetIndex >= static_cast<int>(state->action.size()))
+    {
+        setEditorError(error, "editor subaction move is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    std::swap(state->action[static_cast<size_t>(subactionIndex)], state->action[static_cast<size_t>(targetIndex)]);
+    session.selectedState = stateIndex;
+    session.selectedSubaction = targetIndex;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (movedSubactionIndex) {
+        *movedSubactionIndex = targetIndex;
+    }
+    return true;
+}
+
+bool addEditorSessionInterrupt(
+    FighterEditorSession& session,
+    int stateIndex,
+    const InterruptRule& interrupt,
+    int insertIndex,
+    int* addedInterruptIndex,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    const int index = insertIndex < 0
+        ? static_cast<int>(state->interrupts.size())
+        : std::clamp(insertIndex, 0, static_cast<int>(state->interrupts.size()));
+    state->interrupts.insert(state->interrupts.begin() + index, interrupt);
+    session.selectedState = stateIndex;
+    session.selectedInterrupt = index;
+    if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
+        return false;
+    }
+    if (addedInterruptIndex) {
+        *addedInterruptIndex = index;
+    }
+    return true;
+}
+
+bool removeEditorSessionInterrupt(
+    FighterEditorSession& session,
+    int stateIndex,
+    int interruptIndex,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    if (interruptIndex < 0 || interruptIndex >= static_cast<int>(state->interrupts.size())) {
+        setEditorError(error, "editor interrupt index is invalid");
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->interrupts.erase(state->interrupts.begin() + interruptIndex);
+    session.selectedState = stateIndex;
+    session.selectedInterrupt = std::clamp(interruptIndex, 0, std::max(0, static_cast<int>(state->interrupts.size()) - 1));
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
 } // namespace pf

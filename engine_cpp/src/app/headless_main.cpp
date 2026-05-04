@@ -6020,20 +6020,32 @@ int main(int argc, char** argv) {
                     "EditorSmokeRenamed",
                 }},
             });
+            root->packageScripts.push_back({
+                "EditorCallbackScript",
+                64,
+                {{
+                    pf::PackageScriptOp::Nop,
+                }},
+            });
         }
     }
     const bool editorSessionRemoveStateOk = editorSessionRenameStateOk &&
         pf::removeEditorSessionState(editorSession, editorCreatedState, "Wait", &packageError);
     const pf::FighterDefinition* editorRootAfterRemove = editorSession.rootFighter();
+    const auto editorStateScript = editorRootAfterRemove
+        ? std::find_if(editorRootAfterRemove->packageScripts.begin(), editorRootAfterRemove->packageScripts.end(), [](const pf::PackageScript& script) {
+            return script.name == "EditorStateScript";
+        })
+        : std::vector<pf::PackageScript>::const_iterator{};
     const bool editorSessionRemapOk = editorSessionRemoveStateOk &&
         editorRootAfterRemove &&
         editorRootAfterRemove->stateIndex("EditorSmokeRenamed") < 0 &&
         editorRootAfterRemove->states[0].onAnimationFinishedState == "Wait" &&
         !editorRootAfterRemove->states[0].interrupts.empty() &&
         editorRootAfterRemove->states[0].interrupts.back().targetState == "Wait" &&
-        !editorRootAfterRemove->packageScripts.empty() &&
-        !editorRootAfterRemove->packageScripts.back().instructions.empty() &&
-        editorRootAfterRemove->packageScripts.back().instructions[0].text == "Wait";
+        editorStateScript != editorRootAfterRemove->packageScripts.end() &&
+        !editorStateScript->instructions.empty() &&
+        editorStateScript->instructions[0].text == "Wait";
     int editorDuplicatedState = -1;
     const bool editorSessionDuplicateStateOk = editorSessionRemapOk &&
         pf::duplicateEditorSessionState(editorSession, 0, &editorDuplicatedState, &packageError) &&
@@ -6042,8 +6054,103 @@ int main(int argc, char** argv) {
     const bool editorSessionObjectOk = editorSessionDuplicateStateOk &&
         pf::addEditorSessionObject(editorSession, "EditorSmokeProjectile", pf::GameObjectKind::Projectile, &editorObjectIndex, &packageError) &&
         editorObjectIndex >= 0;
+    const bool editorSessionTimingOk = editorSessionObjectOk &&
+        pf::setEditorSessionStateTiming(
+            editorSession,
+            0,
+            72,
+            5,
+            2,
+            pf::kUseDefaultAnimationBlendFrames,
+            &packageError);
+    const bool editorSessionInvalidTimingRejected =
+        editorSessionTimingOk &&
+        !pf::setEditorSessionStateTiming(editorSession, 0, 0, 5, 2, pf::kUseDefaultAnimationBlendFrames, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].animationLengthFrames == 72;
+    const bool editorSessionCollisionFlagsOk = editorSessionInvalidTimingRejected &&
+        pf::setEditorSessionStateCollisionFlags(
+            editorSession,
+            0,
+            true,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].useAnimPhysics &&
+        !editorSession.rootFighter()->states[0].allowSlideoff &&
+        editorSession.rootFighter()->states[0].allowBackwardsLedgeGrab;
+    const bool editorSessionCallbacksOk = editorSessionCollisionFlagsOk &&
+        pf::setEditorSessionStateCallbacks(
+            editorSession,
+            0,
+            pf::FighterEditorStateCallbackSlot::Enter,
+            {{std::string{"script:EditorCallbackScript"}}},
+            &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->states[0].onEnter.size() == 1;
+    pf::Subaction editorTempSubaction;
+    editorTempSubaction.type = pf::SubactionType::SyncTimer;
+    editorTempSubaction.frames = 3;
+    int editorTempSubactionIndex = -1;
+    const bool editorSessionAddRemoveSubactionOk = editorSessionCallbacksOk &&
+        pf::addEditorSessionSubaction(editorSession, 0, editorTempSubaction, -1, &editorTempSubactionIndex, &packageError) &&
+        editorTempSubactionIndex >= 0 &&
+        pf::removeEditorSessionSubaction(editorSession, 0, editorTempSubactionIndex, &packageError);
+    pf::Subaction editorHitboxSubaction;
+    editorHitboxSubaction.type = pf::SubactionType::CreateHitbox;
+    editorHitboxSubaction.frames = 2;
+    editorHitboxSubaction.hitbox.hitboxId = 7;
+    editorHitboxSubaction.hitbox.damage = pf::fxFromFloat(4.0f);
+    editorHitboxSubaction.hitbox.radius = pf::fxFromFloat(0.25f);
+    editorHitboxSubaction.hitbox.knockbackAngleDegrees = pf::fx(45);
+    editorHitboxSubaction.hitbox.knockbackBase = pf::fx(10);
+    editorHitboxSubaction.hitbox.knockbackGrowth = pf::fx(80);
+    int editorHitboxSubactionIndex = -1;
+    const bool editorSessionAddHitboxSubactionOk = editorSessionAddRemoveSubactionOk &&
+        pf::addEditorSessionSubaction(editorSession, 0, editorHitboxSubaction, 0, &editorHitboxSubactionIndex, &packageError) &&
+        editorHitboxSubactionIndex == 0;
+    int editorMovePadSubactionIndex = -1;
+    const bool editorSessionMovePadSubactionOk = editorSessionAddHitboxSubactionOk &&
+        pf::addEditorSessionSubaction(editorSession, 0, editorTempSubaction, -1, &editorMovePadSubactionIndex, &packageError) &&
+        editorMovePadSubactionIndex >= 1;
+    int editorMovedSubactionIndex = -1;
+    const bool editorSessionMoveSubactionOk = editorSessionMovePadSubactionOk &&
+        pf::moveEditorSessionSubaction(editorSession, 0, 0, 1, &editorMovedSubactionIndex, &packageError) &&
+        editorMovedSubactionIndex == 1;
+    pf::InterruptRule editorTempInterrupt;
+    editorTempInterrupt.targetState = "Wait";
+    editorTempInterrupt.condition = pf::InterruptCondition::WaitInput;
+    editorTempInterrupt.enableFrame = 3;
+    editorTempInterrupt.disableFrame = 12;
+    int editorInterruptIndex = -1;
+    const bool editorSessionAddInterruptOk = editorSessionMoveSubactionOk &&
+        pf::addEditorSessionInterrupt(editorSession, 0, editorTempInterrupt, -1, &editorInterruptIndex, &packageError) &&
+        editorInterruptIndex >= 0;
+    pf::FighterEditorStateTimeline editorTimeline;
+    const bool editorSessionTimelineOk = editorSessionAddInterruptOk &&
+        pf::buildEditorSessionStateTimeline(editorSession, 0, editorTimeline, &packageError) &&
+        editorTimeline.animationLengthFrames == 72 &&
+        editorTimeline.initialInterruptibleFrame == 5 &&
+        editorTimeline.frameCount >= 72 &&
+        std::find(editorTimeline.subactionFrames.begin(), editorTimeline.subactionFrames.end(), 3) != editorTimeline.subactionFrames.end() &&
+        std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox && marker.frame == 3;
+        }) &&
+        std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable && marker.frame == 3;
+        }) &&
+        std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable && marker.frame == 12;
+        });
+    const bool editorSessionRemoveInterruptOk = editorSessionTimelineOk &&
+        pf::removeEditorSessionInterrupt(editorSession, 0, editorInterruptIndex, &packageError);
     pf::FighterEditorPackageSnapshot editorSnapshot;
-    const bool editorSessionExportOk = editorSessionObjectOk &&
+    const bool editorSessionExportOk = editorSessionRemoveInterruptOk &&
         pf::exportFighterEditorSessionPackage(editorSession, editorSnapshot, &packageError) &&
         !editorSnapshot.bytes.empty() &&
         editorSnapshot.descriptor.name == "headless_editor_session" &&
@@ -7469,6 +7576,17 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_remap_ok=" << editorSessionRemapOk
               << " fighter_editor_session_duplicate_state_ok=" << editorSessionDuplicateStateOk
               << " fighter_editor_session_object_ok=" << editorSessionObjectOk
+              << " fighter_editor_session_timing_ok=" << editorSessionTimingOk
+              << " fighter_editor_session_invalid_timing_rejected=" << editorSessionInvalidTimingRejected
+              << " fighter_editor_session_collision_flags_ok=" << editorSessionCollisionFlagsOk
+              << " fighter_editor_session_callbacks_ok=" << editorSessionCallbacksOk
+              << " fighter_editor_session_add_remove_subaction_ok=" << editorSessionAddRemoveSubactionOk
+              << " fighter_editor_session_add_hitbox_subaction_ok=" << editorSessionAddHitboxSubactionOk
+              << " fighter_editor_session_move_pad_subaction_ok=" << editorSessionMovePadSubactionOk
+              << " fighter_editor_session_move_subaction_ok=" << editorSessionMoveSubactionOk
+              << " fighter_editor_session_add_interrupt_ok=" << editorSessionAddInterruptOk
+              << " fighter_editor_session_timeline_ok=" << editorSessionTimelineOk
+              << " fighter_editor_session_remove_interrupt_ok=" << editorSessionRemoveInterruptOk
               << " fighter_editor_session_export_ok=" << editorSessionExportOk
               << " fighter_editor_session_test_world_ok=" << editorSessionTestWorldOk
               << " fighter_editor_blank_session_ok=" << blankEditorSessionBeginOk
