@@ -5383,8 +5383,10 @@ int main(int argc, char** argv) {
     packageSourceWorld.objectDefs.push_back(packageFighterCallerObject);
     pf::FighterPackage sourcePackage;
     sourcePackage.name = "headless_smoke_package";
-    sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
-    sourcePackage.fighters = {packageSourceWorld.fighterDefs[0], packageSourceWorld.fighterDefs.back()};
+    sourcePackage.fighters = {
+        pf::makeNativePackageFighterDefinition(packageSourceWorld.fighterDefs[0]),
+        pf::makeNativePackageFighterDefinition(packageSourceWorld.fighterDefs.back()),
+    };
     sourcePackage.objects = packageSourceWorld.objectDefs;
     sourcePackage.fighters[0].packageScripts[0].graph = pf::makePackageScriptLinearGraph(sourcePackage.fighters[0].packageScripts[0]);
     sourcePackage.objects[1].packageScripts[0].graph = pf::makePackageScriptLinearGraph(sourcePackage.objects[1].packageScripts[0]);
@@ -7330,15 +7332,21 @@ int main(int argc, char** argv) {
     pf::World missingPackageCacheTestWorld;
     const bool missingPackageCacheTestWorldRejected =
         !pf::makeCachedPackageTestWorld(missingPackageCacheTestWorld, packageCache, 0xFFFFFFFFu, nullptr, nullptr, &invalidPackageError);
-    const bool packageAssetOk = packageShapeOk &&
-        loadedPackage.fighters[0].hasHsdAsset &&
-        loadedPackage.fighters[0].hsdAsset != nullptr &&
-        loadedPackage.fighters[0].hsdAsset != packageSourceWorld.fighterDefs[0].hsdAsset &&
-        loadedPackage.fighters[0].hsdAsset->name == packageSourceWorld.fighterDefs[0].hsdAsset->name &&
-        loadedPackage.fighters[0].hsdAsset->sourceBytes.size() == packageSourceWorld.fighterDefs[0].hsdAsset->sourceBytes.size() &&
-        loadedPackage.fighters[0].hsdAsset->skeleton.size() == packageSourceWorld.fighterDefs[0].hsdAsset->skeleton.size() &&
-        loadedPackage.fighters[0].hsdAsset->clips.size() == packageSourceWorld.fighterDefs[0].hsdAsset->clips.size() &&
-        loadedPackage.fighters[0].hsdAsset->mesh.batches.size() == packageSourceWorld.fighterDefs[0].hsdAsset->mesh.batches.size();
+    const bool packageNativeAssetOk = packageShapeOk &&
+        loadedPackage.hsdAssets.empty() &&
+        !loadedPackage.fighters[0].hasHsdAsset &&
+        !loadedPackage.fighters[0].hsdAsset &&
+        !loadedPackage.fighters[0].authoredSkeleton.empty() &&
+        !loadedPackage.fighters[0].authoredClips.empty() &&
+        !loadedPackage.fighters[0].authoredMesh.batches.empty() &&
+        !loadedPackage.fighters[0].hurtboxes.empty();
+    pf::FighterPackage hsdDependentPackage = sourcePackage;
+    hsdDependentPackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
+    hsdDependentPackage.fighters[0].hasHsdAsset = true;
+    hsdDependentPackage.fighters[0].hsdAsset = packageSourceWorld.fighterDefs[0].hsdAsset;
+    const bool hsdDependentPackageRejected =
+        pf::writeFighterPackage(hsdDependentPackage, &invalidPackageError).empty() &&
+        !pf::validateFighterPackage(hsdDependentPackage, &invalidPackageError);
     const bool sandbagRosterOk = std::any_of(packageSourceWorld.fighterDefs.begin(), packageSourceWorld.fighterDefs.end(), [](const pf::FighterDefinition& def) {
         return def.name == "Sandbag" && def.hasHsdAsset && def.hsdAsset != nullptr;
     });
@@ -7346,6 +7354,9 @@ int main(int argc, char** argv) {
     pf::World packageBaselineWorld = pf::makeTrainingWorld();
     pf::World packageLoadedWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
+        packageBaselineWorld.fighterDefs[0] = sourcePackage.fighters[0];
+        packageBaselineWorld.fighterDefs.push_back(sourcePackage.fighters[1]);
+        packageBaselineWorld.objectDefs = sourcePackage.objects;
         packageLoadedWorld.fighterDefs[0] = loadedPackage.fighters[0];
         packageLoadedWorld.fighterDefs.push_back(loadedPackage.fighters[1]);
         packageLoadedWorld.objectDefs = loadedPackage.objects;
@@ -8935,7 +8946,8 @@ int main(int argc, char** argv) {
               << " fighter_editor_blank_export_states_ok=" << blankEditorSessionExportStatesOk
               << " fighter_editor_blank_export_authored_ok=" << blankEditorSessionExportAuthoredOk
               << " fighter_editor_blank_export_ok=" << blankEditorSessionExportOk
-              << " fighter_package_asset_ok=" << packageAssetOk
+              << " fighter_package_native_asset_ok=" << packageNativeAssetOk
+              << " fighter_package_hsd_dependent_rejected=" << hsdDependentPackageRejected
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar

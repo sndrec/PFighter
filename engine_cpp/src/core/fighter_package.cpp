@@ -962,17 +962,6 @@ FighterState readFighterState(PackageReader& reader) {
     return state;
 }
 
-int32_t assetIndexFor(const FighterPackage& package, const std::shared_ptr<const HsdFighterAnimationAsset>& asset) {
-    if (!asset) {
-        return -1;
-    }
-    const auto found = std::find(package.hsdAssets.begin(), package.hsdAssets.end(), asset);
-    if (found == package.hsdAssets.end()) {
-        return -1;
-    }
-    return static_cast<int32_t>(std::distance(package.hsdAssets.begin(), found));
-}
-
 #define PF_PACKAGE_MELEE_COMMON_FIELDS(X) \
     X(stickXTiltThresholdX8) \
     X(stickYTiltThresholdXC) \
@@ -2554,7 +2543,7 @@ bool hasAnimationClipName(const std::vector<AnimationClip>& clips, const std::st
 }
 
 void validateAuthoredStateAnimationReference(const FighterDefinition& fighter, const FighterState& state) {
-    if (fighter.hasHsdAsset || fighter.authoredClips.empty()) {
+    if (fighter.authoredClips.empty()) {
         return;
     }
     if (state.animationActionIndex >= 0) {
@@ -2581,9 +2570,6 @@ void validateSubactionTiming(const Subaction& subaction) {
 }
 
 size_t fighterHurtboxCount(const FighterDefinition& fighter) {
-    if (fighter.hasHsdAsset && fighter.hsdAsset) {
-        return fighter.hsdAsset->hurtboxes.size();
-    }
     return fighter.hurtboxes.size();
 }
 
@@ -2603,6 +2589,9 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     if (package.version != kPackageVersion) {
         throw std::runtime_error("fighter package version is invalid");
     }
+    if (!package.hsdAssets.empty()) {
+        throw std::runtime_error("fighter package imported HSD assets are not supported");
+    }
     const std::vector<std::string> packageFighterNames = fighterNames(package);
     requireUniqueNonemptyNames(packageFighterNames, "fighter");
     const std::vector<std::string> packageFighterScriptNames = fighterScriptNames(package.fighters);
@@ -2610,6 +2599,9 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     const std::vector<std::string> packageObjectNames = objectNames(package);
     requireUniqueNonemptyNames(packageObjectNames, "object");
     for (const FighterDefinition& fighter : package.fighters) {
+        if (fighter.hasHsdAsset || fighter.hsdAsset) {
+            throw std::runtime_error("fighter package fighter depends on imported HSD asset");
+        }
         if (fighter.states.empty()) {
             throw std::runtime_error("fighter package fighter states are missing");
         }
@@ -2757,16 +2749,9 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
         writeAnimationClip(writer, clip);
     });
     writeFighterMesh(writer, fighter.authoredMesh);
-    writer.writeBool(fighter.hasHsdAsset);
-    const int32_t assetIndex = assetIndexFor(package, fighter.hsdAsset);
-    if (fighter.hasHsdAsset && assetIndex < 0) {
-        throw std::runtime_error("fighter package hsd asset reference is missing");
-    }
-    if (fighter.hasHsdAsset && (!fighter.hsdAsset || fighter.hsdAsset->sourceBytes.empty())) {
-        throw std::runtime_error("fighter package hsd asset bytes are missing");
-    }
-    writer.writeI32(assetIndex);
-    writer.writeString(fighter.hsdAsset ? fighter.hsdAsset->name : std::string{});
+    writer.writeBool(false);
+    writer.writeI32(-1);
+    writer.writeString({});
     writeVector(writer, fighter.packageVariables, [&](const PackageVariableDefinition& variable) {
         writePackageVariable(writer, variable);
     });
@@ -2785,6 +2770,7 @@ FighterDefinition readFighterDefinition(
     PackageReader& reader,
     const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
 {
+    (void)hsdAssetPool;
     FighterDefinition fighter;
     fighter.name = reader.readString();
     fighter.properties = readFighterProperties(reader);
@@ -2802,16 +2788,11 @@ FighterDefinition readFighterDefinition(
     fighter.hasHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();
-    if (fighter.hasHsdAsset && (assetIndex < 0 || assetIndex >= static_cast<int32_t>(hsdAssetPool.size()) ||
-        !hsdAssetPool[static_cast<size_t>(assetIndex)]))
-    {
-        throw std::runtime_error("fighter package hsd asset reference is invalid");
-    }
     if (fighter.hasHsdAsset) {
-        fighter.hsdAsset = hsdAssetPool[static_cast<size_t>(assetIndex)];
-        if (!assetName.empty() && fighter.hsdAsset->name != assetName) {
-            throw std::runtime_error("fighter package fighter asset name mismatch");
-        }
+        throw std::runtime_error("fighter package imported HSD fighter asset is not supported");
+    }
+    if (assetIndex != -1 || !assetName.empty()) {
+        throw std::runtime_error("fighter package imported HSD fighter asset reference is not supported");
     }
     fighter.packageVariables = readVector<PackageVariableDefinition>(reader, kMaxCallbacks, "package variable", [&]() {
         return readPackageVariable(reader);
@@ -2997,34 +2978,6 @@ bool fail(std::string* error, const std::string& message) {
     return false;
 }
 
-void writeHsdAsset(PackageWriter& writer, const std::shared_ptr<const HsdFighterAnimationAsset>& asset) {
-    writer.writeString(asset ? asset->name : std::string{});
-    writer.writeBytes(asset ? asset->sourceBytes : std::vector<uint8_t>{});
-}
-
-std::shared_ptr<const HsdFighterAnimationAsset> readHsdAsset(
-    PackageReader& reader,
-    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool,
-    size_t index)
-{
-    const std::string assetName = reader.readString();
-    const std::vector<uint8_t> assetBytes = reader.readBytes(kMaxAssetBytes, "asset bytes");
-    if (!assetBytes.empty()) {
-        HsdFighterAnimationAsset asset = loadHsdFighterAnimationAssetFromBytes(assetBytes);
-        if (!assetName.empty() && asset.name != assetName) {
-            throw std::runtime_error("fighter package embedded asset name mismatch");
-        }
-        return std::make_shared<const HsdFighterAnimationAsset>(std::move(asset));
-    }
-    if (index < hsdAssetPool.size()) {
-        if (!assetName.empty() && hsdAssetPool[index] && hsdAssetPool[index]->name != assetName) {
-            throw std::runtime_error("fighter package pooled asset name mismatch");
-        }
-        return hsdAssetPool[index];
-    }
-    return nullptr;
-}
-
 FighterPackageDescriptor makePackageDescriptor(const FighterPackage& package, const std::vector<uint8_t>* bytes = nullptr) {
     FighterPackageDescriptor out;
     out.name = package.name;
@@ -3062,6 +3015,9 @@ void validatePackageDescriptorManifest(const FighterPackageDescriptor& descripto
     requireUniqueNonemptyNames(descriptor.objectNames, "manifest object");
     requireUniqueNonemptyNames(descriptor.fighterScriptNames, "manifest fighter script");
     requireUniqueNonemptyNames(descriptor.objectScriptNames, "manifest object script");
+    if (!descriptor.assetNames.empty()) {
+        throw std::runtime_error("fighter package manifest imported assets are not supported");
+    }
     if (descriptor.fighterNames.empty() || descriptor.rootFighterName != descriptor.fighterNames.front()) {
         throw std::runtime_error("fighter package manifest root fighter is invalid");
     }
@@ -3274,9 +3230,7 @@ std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::str
         writer.writeString(package.name);
         writer.writeU32(package.version);
         writePackageDescriptorManifest(writer, manifest);
-        writeVector(writer, package.hsdAssets, [&](const std::shared_ptr<const HsdFighterAnimationAsset>& asset) {
-            writeHsdAsset(writer, asset);
-        });
+        writer.writeU32(0);
         writeVector(writer, package.fighters, [&](const FighterDefinition& fighter) {
             writeFighterDefinition(writer, package, fighter);
         });
@@ -3314,6 +3268,7 @@ bool readFighterPackage(
     std::string* error,
     const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
 {
+    (void)hsdAssetPool;
     try {
         PackageReader reader(bytes);
         reader.readMagic("PFFP");
@@ -3327,10 +3282,10 @@ bool readFighterPackage(
         loaded.version = reader.readU32();
         const FighterPackageDescriptor manifest = readPackageDescriptorManifest(reader, loaded.name, loaded.version, bytes);
         const uint32_t assetCount = reader.readCount(kMaxAssets, "asset");
-        loaded.hsdAssets.reserve(assetCount);
-        for (uint32_t i = 0; i < assetCount; ++i) {
-            loaded.hsdAssets.push_back(readHsdAsset(reader, hsdAssetPool, i));
+        if (assetCount != 0) {
+            return fail(error, "fighter package imported HSD assets are not supported");
         }
+        loaded.hsdAssets.reserve(assetCount);
         loaded.fighters = readVector<FighterDefinition>(reader, kMaxFighters, "fighter", [&]() {
             return readFighterDefinition(reader, loaded.hsdAssets);
         });

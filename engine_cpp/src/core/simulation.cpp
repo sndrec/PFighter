@@ -1371,8 +1371,6 @@ static bool runtimePackageHasObject(const FighterPackage& package, const std::st
     });
 }
 
-static FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source);
-
 static void removeOutOfRangeAnimationTracks(std::vector<AnimationClip>& clips, size_t skeletonSize) {
     for (AnimationClip& clip : clips) {
         clip.tracks.erase(
@@ -1482,7 +1480,7 @@ static HurtboxDefinition nativeHurtboxFromImported(const HsdHurtbox& source) {
     return out;
 }
 
-static FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source) {
+FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source) {
     FighterDefinition out = source;
     if (!source.hsdAsset) {
         return out;

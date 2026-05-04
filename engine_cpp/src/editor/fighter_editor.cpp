@@ -58,7 +58,7 @@ void remapPackageFighterTargetRefs(FighterPackage& package, const std::string& o
 
 std::vector<FighterDefinition> collectEditorPackageFighters(const World& world, const FighterDefinition& root) {
     std::vector<FighterDefinition> fighters;
-    fighters.push_back(root);
+    fighters.push_back(makeNativePackageFighterDefinition(root));
     for (size_t scan = 0; scan < fighters.size(); ++scan) {
         const FighterDefinition& fighter = fighters[scan];
         for (const PackageScript& script : fighter.packageScripts) {
@@ -70,7 +70,7 @@ std::vector<FighterDefinition> collectEditorPackageFighters(const World& world, 
                     continue;
                 }
                 if (const FighterDefinition* dependency = fighterDefinitionByName(world, instruction.text)) {
-                    fighters.push_back(*dependency);
+                    fighters.push_back(makeNativePackageFighterDefinition(*dependency));
                 }
             }
         }
@@ -79,14 +79,8 @@ std::vector<FighterDefinition> collectEditorPackageFighters(const World& world, 
 }
 
 void collectEditorPackageAssets(const std::vector<FighterDefinition>& fighters, FighterPackage& package) {
-    for (const FighterDefinition& fighter : fighters) {
-        if (!fighter.hsdAsset) {
-            continue;
-        }
-        if (std::find(package.hsdAssets.begin(), package.hsdAssets.end(), fighter.hsdAsset) == package.hsdAssets.end()) {
-            package.hsdAssets.push_back(fighter.hsdAsset);
-        }
-    }
+    (void)fighters;
+    package.hsdAssets.clear();
 }
 
 bool fighterStateAliasLostByRemovingState(const FighterDefinition& def, const std::string& target, const std::string& removedStateName) {
@@ -2275,7 +2269,7 @@ bool addEditorSessionPackageFighter(
     if (!validRootFighter(session, error)) {
         return false;
     }
-    FighterDefinition added = fighter;
+    FighterDefinition added = makeNativePackageFighterDefinition(fighter);
     added.name = requestedName.empty()
         ? uniqueEditorPackageFighterName(session.package, added.name.empty() ? "Fighter" : added.name)
         : requestedName;
