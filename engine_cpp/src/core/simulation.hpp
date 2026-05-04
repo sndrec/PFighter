@@ -480,6 +480,7 @@ struct World {
 };
 
 struct FighterPackage;
+struct FighterPackageDescriptor;
 
 StageDefinition makeBattlefieldTrainingStage();
 World makeTrainingWorld();
@@ -495,6 +496,13 @@ int spawnGameObjectOfKind(World& world, const std::string& objectName, GameObjec
 int countGameObjectsOwnedBy(const World& world, int ownerFighter, const std::string& objectName);
 FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef, const std::string& packageName = {});
 bool installFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef = nullptr, std::string* error = nullptr);
+bool installFighterPackageBytes(
+    World& world,
+    const std::vector<uint8_t>& bytes,
+    int* rootFighterDef = nullptr,
+    FighterPackageDescriptor* descriptor = nullptr,
+    std::string* error = nullptr,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool = {});
 bool destroyGameObjectByIndex(World& world, int objectIndex);
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName);
 bool pickUpGameObject(World& world, int objectIndex, int fighterIndex);

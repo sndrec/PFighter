@@ -1459,17 +1459,12 @@ static int upsertGameObjectDefinition(std::vector<GameObjectDefinition>& defs, c
     return static_cast<int>(defs.size()) - 1;
 }
 
-bool installFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef, std::string* error) {
+static bool installValidatedFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef, std::string* error) {
     if (rootFighterDef) {
         *rootFighterDef = -1;
     }
     if (package.fighters.empty()) {
         return setPackageInstallError(error, "fighter package has no root fighter");
-    }
-
-    std::string validationError;
-    if (!validateFighterPackage(package, &validationError)) {
-        return setPackageInstallError(error, validationError.empty() ? "fighter package validation failed" : validationError);
     }
 
     for (const GameObjectDefinition& object : package.objects) {
@@ -1494,6 +1489,50 @@ bool installFighterPackage(World& world, const FighterPackage& package, int* roo
         error->clear();
     }
     return true;
+}
+
+bool installFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef, std::string* error) {
+    if (rootFighterDef) {
+        *rootFighterDef = -1;
+    }
+    if (package.fighters.empty()) {
+        return setPackageInstallError(error, "fighter package has no root fighter");
+    }
+
+    std::string validationError;
+    if (!validateFighterPackage(package, &validationError)) {
+        return setPackageInstallError(error, validationError.empty() ? "fighter package validation failed" : validationError);
+    }
+
+    return installValidatedFighterPackage(world, package, rootFighterDef, error);
+}
+
+bool installFighterPackageBytes(
+    World& world,
+    const std::vector<uint8_t>& bytes,
+    int* rootFighterDef,
+    FighterPackageDescriptor* descriptor,
+    std::string* error,
+    const std::vector<std::shared_ptr<const HsdFighterAnimationAsset>>& hsdAssetPool)
+{
+    if (rootFighterDef) {
+        *rootFighterDef = -1;
+    }
+    if (descriptor) {
+        *descriptor = {};
+    }
+
+    FighterPackage package;
+    std::string packageError;
+    if (!readFighterPackage(bytes, package, &packageError, hsdAssetPool)) {
+        return setPackageInstallError(error, packageError.empty() ? "fighter package read failed" : packageError);
+    }
+
+    if (descriptor && !describeFighterPackage(package, *descriptor, bytes, &packageError)) {
+        return setPackageInstallError(error, packageError.empty() ? "fighter package descriptor failed" : packageError);
+    }
+
+    return installValidatedFighterPackage(world, package, rootFighterDef, error);
 }
 
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {

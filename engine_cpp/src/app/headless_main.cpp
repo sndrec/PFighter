@@ -5888,6 +5888,16 @@ int main(int argc, char** argv) {
         packageInstallRoot < static_cast<int>(packageInstallWorld.fighterDefs.size()) &&
         packageInstallWorld.fighterDefs[static_cast<size_t>(packageInstallRoot)].name == loadedPackage.fighters[0].name &&
         packageInstallWorld.objectDefs.size() >= loadedPackage.objects.size();
+    pf::World packageBytesInstallWorld = pf::makeTrainingWorld();
+    int packageBytesInstallRoot = -1;
+    pf::FighterPackageDescriptor packageBytesInstallDescriptor;
+    const bool packageBytesInstallOk =
+        pf::installFighterPackageBytes(packageBytesInstallWorld, packageBytes, &packageBytesInstallRoot, &packageBytesInstallDescriptor, &packageError) &&
+        packageBytesInstallRoot >= 0 &&
+        packageBytesInstallRoot < static_cast<int>(packageBytesInstallWorld.fighterDefs.size()) &&
+        packageBytesInstallWorld.fighterDefs[static_cast<size_t>(packageBytesInstallRoot)].name == loadedPackage.fighters[0].name &&
+        packageBytesInstallDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
+        packageBytesInstallDescriptor.byteSize == packageBytes.size();
     pf::World runtimePackageInstallWorld = pf::makeTrainingWorld();
     int runtimePackageInstallRoot = -1;
     const bool runtimePackageInstallOk = runtimePackageLoaded &&
@@ -5898,6 +5908,16 @@ int main(int argc, char** argv) {
         std::any_of(runtimePackageInstallWorld.objectDefs.begin(), runtimePackageInstallWorld.objectDefs.end(), [](const pf::GameObjectDefinition& object) {
             return object.name == "PackageProjectileObject";
         });
+    pf::World runtimePackageBytesInstallWorld = pf::makeTrainingWorld();
+    int runtimePackageBytesInstallRoot = -1;
+    pf::FighterPackageDescriptor runtimePackageBytesInstallDescriptor;
+    const bool runtimePackageBytesInstallOk =
+        pf::installFighterPackageBytes(runtimePackageBytesInstallWorld, runtimePackageBytes, &runtimePackageBytesInstallRoot, &runtimePackageBytesInstallDescriptor, &packageError) &&
+        runtimePackageBytesInstallRoot >= 0 &&
+        runtimePackageBytesInstallRoot < static_cast<int>(runtimePackageBytesInstallWorld.fighterDefs.size()) &&
+        runtimePackageBytesInstallWorld.fighterDefs[static_cast<size_t>(runtimePackageBytesInstallRoot)].name == loadedRuntimePackage.fighters[0].name &&
+        runtimePackageBytesInstallDescriptor.checksum == pf::fighterPackageChecksum(runtimePackageBytes) &&
+        runtimePackageBytesInstallDescriptor.byteSize == runtimePackageBytes.size();
     pf::FighterPackage invalidInstallPackage = sourcePackage;
     invalidInstallPackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
     pf::World invalidPackageInstallWorld = pf::makeTrainingWorld();
@@ -5908,6 +5928,9 @@ int main(int argc, char** argv) {
     pf::FighterPackageDescriptor invalidPackageDescriptor;
     const bool invalidPackageDescriptorRejected =
         !pf::describeFighterPackage(invalidInstallPackage, invalidPackageDescriptor, {}, &invalidPackageError);
+    pf::World invalidPackageBytesInstallWorld = pf::makeTrainingWorld();
+    const bool invalidPackageBytesInstallRejected = invalidPackageMutated &&
+        !pf::installFighterPackageBytes(invalidPackageBytesInstallWorld, invalidPackageBytes, nullptr, nullptr, &invalidPackageError);
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -7242,7 +7265,9 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
               << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()
               << " fighter_package_install_ok=" << packageInstallOk
+              << " fighter_package_bytes_install_ok=" << packageBytesInstallOk
               << " fighter_package_runtime_install_ok=" << runtimePackageInstallOk
+              << " fighter_package_runtime_bytes_install_ok=" << runtimePackageBytesInstallOk
               << " fighter_package_asset_ok=" << packageAssetOk
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
@@ -7400,6 +7425,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_validation_rejected=" << invalidPackageValidationRejected
               << " fighter_package_invalid_descriptor_rejected=" << invalidPackageDescriptorRejected
               << " fighter_package_invalid_install_rejected=" << invalidPackageInstallRejected
+              << " fighter_package_invalid_bytes_install_rejected=" << invalidPackageBytesInstallRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected

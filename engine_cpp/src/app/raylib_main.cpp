@@ -4725,6 +4725,20 @@ static void updateEditorPackageSummary(
     editor.lastPackageMessage = "OK";
 }
 
+static void updateEditorPackageSummary(
+    pf::FighterEditor& editor,
+    const pf::FighterPackageDescriptor& descriptor)
+{
+    editor.lastPackageName = descriptor.name;
+    editor.lastPackageBytes = descriptor.byteSize;
+    editor.lastPackageChecksum = descriptor.checksum;
+    editor.lastPackageFighters = static_cast<int>(descriptor.fighterNames.size());
+    editor.lastPackageObjects = static_cast<int>(descriptor.objectNames.size());
+    editor.lastPackageAssets = static_cast<int>(descriptor.assetNames.size());
+    editor.lastPackageValid = true;
+    editor.lastPackageMessage = "OK";
+}
+
 static void updateEditorPackageFailure(pf::FighterEditor& editor, const std::string& message) {
     editor.lastPackageValid = false;
     editor.lastPackageMessage = message;
@@ -7875,21 +7889,16 @@ static void launchEditorTestWorld(
         editor.status = "Editor test failed: package validation failed: " + packageError;
         return;
     }
-    pf::FighterPackage testPackage;
-    if (!pf::readFighterPackage(packageBytes, testPackage, &packageError) || testPackage.fighters.empty()) {
-        updateEditorPackageFailure(editor, packageError.empty() ? "package had no fighters" : packageError);
-        editor.status = "Editor test failed: package round-trip failed: " + editor.lastPackageMessage;
-        return;
-    }
-    updateEditorPackageSummary(editor, testPackage, packageBytes);
     const int sandbagFighterDef = fighterDefByName(world, "Sandbag", 0);
     world = pf::makeTrainingWorld(0, sandbagFighterDef);
     int testFighterIndex = -1;
-    if (!pf::installFighterPackage(world, testPackage, &testFighterIndex, &packageError)) {
+    pf::FighterPackageDescriptor testDescriptor;
+    if (!pf::installFighterPackageBytes(world, packageBytes, &testFighterIndex, &testDescriptor, &packageError)) {
         updateEditorPackageFailure(editor, packageError);
-        editor.status = "Editor test failed: package install failed: " + editor.lastPackageMessage;
+        editor.status = "Editor test failed: package byte install failed: " + editor.lastPackageMessage;
         return;
     }
+    updateEditorPackageSummary(editor, testDescriptor);
     pf::resetTrainingFighter(world, 0, testFighterIndex, {-pf::fx(2), 0}, 1);
     selectedFighterDef = testFighterIndex;
     editor.selectedFighter = 0;
