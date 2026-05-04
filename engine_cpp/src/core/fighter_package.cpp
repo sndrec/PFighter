@@ -263,6 +263,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::CallScript:
     case PackageScriptOp::SwitchFighterDefinition:
     case PackageScriptOp::SpawnFighter:
+    case PackageScriptOp::SetAnimationRate:
+    case PackageScriptOp::SetAnimationRateFromVar:
         return true;
     }
     return false;
@@ -1707,11 +1709,13 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetGroundVelocity:
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
+    case PackageScriptOp::SetAnimationRate:
     case PackageScriptOp::SetFacing:
         break;
     case PackageScriptOp::SetGroundVelocityFromVar:
     case PackageScriptOp::SetAirVelocityXFromVar:
     case PackageScriptOp::SetAirVelocityYFromVar:
+    case PackageScriptOp::SetAnimationRateFromVar:
     case PackageScriptOp::SetFacingFromVar:
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;

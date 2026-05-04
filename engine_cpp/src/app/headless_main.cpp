@@ -4691,6 +4691,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetGroundVelocityFromVar, -1, 12, -1, 0, 0, {}},
             {pf::PackageScriptOp::SpawnObjectFromVars, -1, 12, 8, 0, pf::fxFromFloat(1.0f), "PackageVelocityObject"},
             {pf::PackageScriptOp::SetFacingFromVar, -1, 9, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetAnimationRateFromVar, -1, 12, -1, 0, 0, {}},
         },
     }, {
         "InterruptScript",
@@ -4760,6 +4761,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarObjectVelocityX, 12, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectVelocityY, 13, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
+            {pf::PackageScriptOp::SetAnimationRate, -1, -1, -1, 0, pf::fxFromFloat(0.25f), {}},
             {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 10, 0, {}},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 100, 0, {}},
             {pf::PackageScriptOp::JumpRelative, -1, -1, -1, 2, 0, {}},
@@ -5351,6 +5353,7 @@ int main(int argc, char** argv) {
         packageInputScriptWorld.fighters[0].packageVars[11] == pf::fxFromFloat(0.3f) &&
         packageInputScriptWorld.fighters[0].packageVars[12] == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].groundVelocity == pf::fxFromFloat(0.5f) &&
+        packageInputScriptWorld.fighters[0].animationRate == pf::fxFromFloat(0.5f) &&
         packageInputScriptWorld.fighters[0].facing == -1;
     bool packageVarSpawnObjectOk = false;
     for (const pf::GameObjectRuntime& object : packageInputScriptWorld.objects) {
@@ -5570,7 +5573,8 @@ int main(int argc, char** argv) {
         packageObject->packageVars[10] == pf::fxFromFloat(1.0f) &&
         packageObject->packageVars[11] == pf::fxFromFloat(4.17f) &&
         packageObject->packageVars[12] == pf::fxFromFloat(-0.25f) &&
-        packageObject->packageVars[13] == pf::fxFromFloat(0.67f);
+        packageObject->packageVars[13] == pf::fxFromFloat(0.67f) &&
+        packageObject->animationRate == pf::fxFromFloat(0.25f);
     const pf::Fix packageObjectScriptVelX = packageObject ? packageObject->velocity.x : pf::Fix{-1};
     pf::World packageObjectStateScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
@@ -5700,6 +5704,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_fact_ok=" << packageFactScriptOk
               << " fighter_package_script_input_ok=" << packageInputScriptOk
               << " fighter_package_script_spawn_vars_ok=" << packageVarSpawnObjectOk
+              << " fighter_package_script_animation_rate_ok=" << (packageInputScriptWorld.fighters[0].animationRate == pf::fxFromFloat(0.5f))
               << " fighter_package_script_interrupt_ok=" << packageInterruptScriptOk
               << " fighter_package_script_projectile_ok=" << packageProjectileScriptOk
               << " fighter_package_script_projectile_count=" << packageProjectileSpawnCount
@@ -5722,6 +5727,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_vel_x_read=" << pf::fxToFloat(packageObjectCtxVelX)
               << " fighter_package_object_script_vel_y_read=" << pf::fxToFloat(packageObjectCtxVelY)
               << " fighter_package_object_script_vel_x=" << pf::fxToFloat(packageObjectScriptVelX)
+              << " fighter_package_object_script_animation_rate_ok=" << (packageObject && packageObject->animationRate == pf::fxFromFloat(0.25f))
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk

@@ -6983,6 +6983,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetAirVelocityY:
                 object.velocity.y = instruction.fixValue;
                 break;
+            case PackageScriptOp::SetAnimationRate:
+                object.animationRate = instruction.fixValue;
+                break;
             case PackageScriptOp::SetFacing:
                 object.facing = instruction.intValue < 0 ? -1 : 1;
                 break;
@@ -6992,6 +6995,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetAirVelocityYFromVar:
                 object.velocity.y = var(instruction.srcA);
+                break;
+            case PackageScriptOp::SetAnimationRateFromVar:
+                object.animationRate = var(instruction.srcA);
                 break;
             case PackageScriptOp::SetFacingFromVar:
                 object.facing = var(instruction.srcA) < 0 ? -1 : 1;

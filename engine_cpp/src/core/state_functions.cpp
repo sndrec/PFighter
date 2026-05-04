@@ -2681,6 +2681,9 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetAirVelocityY:
             fighter.fighterVelocity.y = instruction.fixValue;
             break;
+        case PackageScriptOp::SetAnimationRate:
+            fighter.animationRate = instruction.fixValue;
+            break;
         case PackageScriptOp::SetFacing:
             fighter.facing = instruction.intValue < 0 ? -1 : 1;
             break;
@@ -2692,6 +2695,9 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             break;
         case PackageScriptOp::SetAirVelocityYFromVar:
             fighter.fighterVelocity.y = packageVar(fighter, instruction.srcA);
+            break;
+        case PackageScriptOp::SetAnimationRateFromVar:
+            fighter.animationRate = packageVar(fighter, instruction.srcA);
             break;
         case PackageScriptOp::SetFacingFromVar:
             fighter.facing = packageVar(fighter, instruction.srcA) < 0 ? -1 : 1;
