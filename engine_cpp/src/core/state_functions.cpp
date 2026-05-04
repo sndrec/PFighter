@@ -2906,6 +2906,18 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             spawnFighter(world, instruction.text, position, fighter.facing);
             return;
         }
+        case PackageScriptOp::SpawnFighterSetVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const Vec2 position{
+                fighter.position.x + fighter.facing * instruction.fixValue,
+                fighter.position.y,
+            };
+            const int spawnedIndex = spawnFighter(world, instruction.text, position, fighter.facing);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, spawnedIndex);
+            }
+            return;
+        }
         }
         ++frame.instructionIndex;
     }

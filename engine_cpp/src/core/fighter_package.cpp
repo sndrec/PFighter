@@ -315,6 +315,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetAnimationRateFromVar:
     case PackageScriptOp::SetAnimationFrame:
     case PackageScriptOp::SetAnimationFrameFromVar:
+    case PackageScriptOp::SpawnFighterSetVar:
         return true;
     }
     return false;
@@ -1987,6 +1988,12 @@ void validatePackageScriptInstruction(
         }
         break;
     case PackageScriptOp::SpawnFighter:
+        if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
+            throw std::runtime_error("fighter package script fighter target is invalid");
+        }
+        break;
+    case PackageScriptOp::SpawnFighterSetVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
         if (!allowFighterTargets || !hasName(fighterNames, instruction.text)) {
             throw std::runtime_error("fighter package script fighter target is invalid");
         }

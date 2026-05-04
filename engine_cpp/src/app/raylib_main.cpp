@@ -1172,6 +1172,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::CallScript: return "Call";
     case pf::PackageScriptOp::SwitchFighterDefinition: return "Fighter";
     case pf::PackageScriptOp::SpawnFighter: return "SpawnF";
+    case pf::PackageScriptOp::SpawnFighterSetVar: return "SpawnFV";
     }
     return "Op";
 }
@@ -1291,6 +1292,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetFighterThrowFlagFromVar:
         instruction.op = pf::PackageScriptOp::SetFighterThrowFlagImmediate;
+        break;
+    case pf::PackageScriptOp::SpawnFighterSetVar:
+        instruction.op = pf::PackageScriptOp::SpawnFighter;
         break;
     case pf::PackageScriptOp::SetObjectDamageFromVar:
         instruction.op = pf::PackageScriptOp::SetObjectDamage;
@@ -1731,6 +1735,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SpawnFighter:
         label += " " + instruction.text;
         break;
+    case pf::PackageScriptOp::SpawnFighterSetVar:
+        label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
+        break;
     case pf::PackageScriptOp::Nop:
         break;
     }
@@ -1900,7 +1907,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::JumpRelative: return pf::PackageScriptOp::CallScript;
     case pf::PackageScriptOp::CallScript: return pf::PackageScriptOp::SwitchFighterDefinition;
     case pf::PackageScriptOp::SwitchFighterDefinition: return pf::PackageScriptOp::SpawnFighter;
-    case pf::PackageScriptOp::SpawnFighter: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::SpawnFighter: return pf::PackageScriptOp::SpawnFighterSetVar;
+    case pf::PackageScriptOp::SpawnFighterSetVar: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
 }
@@ -1908,6 +1916,7 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
 static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
     return op != pf::PackageScriptOp::SwitchFighterDefinition &&
         op != pf::PackageScriptOp::SpawnFighter &&
+        op != pf::PackageScriptOp::SpawnFighterSetVar &&
         op != pf::PackageScriptOp::SetVarButtonDown &&
         op != pf::PackageScriptOp::SetVarButtonPressed &&
         op != pf::PackageScriptOp::SetVarStickX &&
@@ -2086,7 +2095,11 @@ static void normalizePackageInstruction(
     if (instruction.op == pf::PackageScriptOp::SwitchFighterDefinition && instruction.text.empty() && !world.fighterDefs.empty()) {
         instruction.text = packageFighterTargetName(world, currentFighterDef);
     }
-    if (instruction.op == pf::PackageScriptOp::SpawnFighter && instruction.text.empty() && !world.fighterDefs.empty()) {
+    if ((instruction.op == pf::PackageScriptOp::SpawnFighter ||
+         instruction.op == pf::PackageScriptOp::SpawnFighterSetVar) &&
+        instruction.text.empty() &&
+        !world.fighterDefs.empty())
+    {
         instruction.text = packageFighterTargetName(world, currentFighterDef);
     }
 }
@@ -2359,7 +2372,8 @@ static bool objectNameAvailable(const pf::World& world, const std::string& name,
 static void remapPackageFighterTargets(pf::World& world, const std::string& oldFighterName, const std::string& newFighterName) {
     auto remapInstruction = [&](pf::PackageScriptInstruction& instruction) {
         if ((instruction.op == pf::PackageScriptOp::SwitchFighterDefinition ||
-             instruction.op == pf::PackageScriptOp::SpawnFighter) &&
+             instruction.op == pf::PackageScriptOp::SpawnFighter ||
+             instruction.op == pf::PackageScriptOp::SpawnFighterSetVar) &&
             instruction.text == oldFighterName)
         {
             instruction.text = newFighterName;
@@ -4260,7 +4274,8 @@ static void demoteProjectileSpawnsForObject(pf::World& world, const std::string&
 
 static bool packageScriptInstructionTargetsFighter(const pf::PackageScriptInstruction& instruction) {
     return instruction.op == pf::PackageScriptOp::SwitchFighterDefinition ||
-        instruction.op == pf::PackageScriptOp::SpawnFighter;
+        instruction.op == pf::PackageScriptOp::SpawnFighter ||
+        instruction.op == pf::PackageScriptOp::SpawnFighterSetVar;
 }
 
 static const pf::FighterDefinition* fighterDefinitionByName(const pf::World& world, const std::string& name) {

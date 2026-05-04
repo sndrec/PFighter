@@ -531,6 +531,7 @@ enum class PackageScriptOp : uint8_t {
     SetAnimationRateFromVar,
     SetAnimationFrame,
     SetAnimationFrameFromVar,
+    SpawnFighterSetVar,
 };
 
 struct PackageScriptInstruction {
