@@ -1080,6 +1080,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarStateIndex: return "StateIdx";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
+    case pf::PackageScriptOp::SetVarFighterIndex: return "FighterId";
+    case pf::PackageScriptOp::SetVarObjectIndex: return "ObjectId";
     case pf::PackageScriptOp::SetVarFighterStateFrame: return "FStateFrm";
     case pf::PackageScriptOp::SetVarFighterStateIndex: return "FStateIdx";
     case pf::PackageScriptOp::SetVarFighterGrounded: return "FGround";
@@ -1370,6 +1372,8 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarStateIndex:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarFighterIndex:
+    case pf::PackageScriptOp::SetVarObjectIndex:
     case pf::PackageScriptOp::SetVarFighterStateFrame:
     case pf::PackageScriptOp::SetVarFighterStateIndex:
     case pf::PackageScriptOp::SetVarFighterGrounded:
@@ -1628,6 +1632,8 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarStateIndex:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarFighterIndex:
+    case pf::PackageScriptOp::SetVarObjectIndex:
     case pf::PackageScriptOp::SetVarFighterStateFrame:
     case pf::PackageScriptOp::SetVarFighterStateIndex:
     case pf::PackageScriptOp::SetVarFighterGrounded:
@@ -1952,7 +1958,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarStateIndex;
     case pf::PackageScriptOp::SetVarStateIndex: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
-    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarFighterStateFrame;
+    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarFighterIndex;
+    case pf::PackageScriptOp::SetVarFighterIndex: return pf::PackageScriptOp::SetVarFighterStateFrame;
     case pf::PackageScriptOp::SetVarFighterStateFrame: return pf::PackageScriptOp::SetVarFighterStateIndex;
     case pf::PackageScriptOp::SetVarFighterStateIndex: return pf::PackageScriptOp::SetVarFighterGrounded;
     case pf::PackageScriptOp::SetVarFighterGrounded: return pf::PackageScriptOp::SetVarFighterFacing;
@@ -2099,7 +2106,8 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarOwnedObjectCount: return pf::PackageScriptOp::SetVarOwnerFighterVar;
     case pf::PackageScriptOp::SetVarOwnerFighterVar: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return pf::PackageScriptOp::SetOwnerFighterVarFromVar;
-    case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::SetVarObjectOwner;
+    case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::SetVarObjectIndex;
+    case pf::PackageScriptOp::SetVarObjectIndex: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
     }
 }
@@ -2107,6 +2115,7 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
 static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
     switch (op) {
     case pf::PackageScriptOp::SetVarFighterStateFrame:
+    case pf::PackageScriptOp::SetVarFighterIndex:
     case pf::PackageScriptOp::SetVarFighterStateIndex:
     case pf::PackageScriptOp::SetVarFighterGrounded:
     case pf::PackageScriptOp::SetVarFighterFacing:
@@ -2138,7 +2147,8 @@ static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
 
 static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
     switch (op) {
-    case pf::PackageScriptOp::SetVarFighterStateFrame: return pf::PackageScriptOp::SetVarFighterStateIndex;
+    case pf::PackageScriptOp::SetVarFighterStateFrame: return pf::PackageScriptOp::SetVarFighterIndex;
+    case pf::PackageScriptOp::SetVarFighterIndex: return pf::PackageScriptOp::SetVarFighterStateIndex;
     case pf::PackageScriptOp::SetVarFighterStateIndex: return pf::PackageScriptOp::SetVarFighterGrounded;
     case pf::PackageScriptOp::SetVarFighterGrounded: return pf::PackageScriptOp::SetVarFighterFacing;
     case pf::PackageScriptOp::SetVarFighterFacing: return pf::PackageScriptOp::SetVarFighterJumpsUsed;

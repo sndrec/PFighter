@@ -223,6 +223,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarStateIndex:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
+    case PackageScriptOp::SetVarFighterIndex:
+    case PackageScriptOp::SetVarObjectIndex:
     case PackageScriptOp::SetVarFighterStateFrame:
     case PackageScriptOp::SetVarFighterStateIndex:
     case PackageScriptOp::SetVarFighterGrounded:
@@ -1724,6 +1726,18 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");
+        break;
+    case PackageScriptOp::SetVarFighterIndex:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowFighterContextReads) {
+            throw std::runtime_error("fighter package script fighter index read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetVarObjectIndex:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowObjectContextReads) {
+            throw std::runtime_error("fighter package script object index read is invalid");
+        }
         break;
     case PackageScriptOp::SetVarFromVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");

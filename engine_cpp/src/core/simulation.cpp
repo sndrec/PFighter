@@ -7057,6 +7057,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFacing:
                 setVar(instruction.dst, object.facing);
                 break;
+            case PackageScriptOp::SetVarObjectIndex:
+                setVar(instruction.dst, static_cast<int32_t>(objectIndex));
+                break;
             case PackageScriptOp::SetVarFighterPercent:
             case PackageScriptOp::SetVarFighterShield:
             case PackageScriptOp::SetVarFighterPositionX:
@@ -7080,7 +7083,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterHitlag:
             case PackageScriptOp::SetVarFighterHitstun:
             case PackageScriptOp::SetVarFighterDamageHitboxOwner:
-            case PackageScriptOp::SetVarFighterThrownHitboxOwner: {
+            case PackageScriptOp::SetVarFighterThrownHitboxOwner:
+            case PackageScriptOp::SetVarFighterIndex: {
+                if (instruction.op == PackageScriptOp::SetVarFighterIndex) {
+                    setVar(instruction.dst, object.ownerFighter);
+                    break;
+                }
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;

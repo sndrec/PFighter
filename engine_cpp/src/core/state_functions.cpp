@@ -2697,6 +2697,9 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarFacing:
             setPackageVar(fighter, instruction.dst, fighter.facing);
             break;
+        case PackageScriptOp::SetVarFighterIndex:
+            setPackageVar(fighter, instruction.dst, static_cast<int32_t>(&fighter - world.fighters.data()));
+            break;
         case PackageScriptOp::SetVarFighterStateFrame:
             setPackageVar(fighter, instruction.dst, frameInState(fighter));
             break;
@@ -2839,6 +2842,7 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarObjectVelocityY:
         case PackageScriptOp::SetVarObjectAnimationFrame:
         case PackageScriptOp::SetVarObjectAnimationRate:
+        case PackageScriptOp::SetVarObjectIndex:
         case PackageScriptOp::SetObjectOwner:
         case PackageScriptOp::SetObjectOwnerFromVar:
         case PackageScriptOp::SetVarOwnerFighterVar:
