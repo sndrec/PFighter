@@ -6094,8 +6094,30 @@ int main(int argc, char** argv) {
     });
     const bool invalidPackageObjectOwnerVarReadRejected = pf::writeFighterPackage(invalidObjectOwnerVarReadPackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectOwnerScriptCallPackage = sourcePackage;
-    invalidObjectOwnerScriptCallPackage.objects[1].packageScripts.back().instructions[0].text = "MissingOwnerScript";
-    const bool invalidPackageObjectOwnerScriptCallRejected = pf::writeFighterPackage(invalidObjectOwnerScriptCallPackage, &invalidPackageError).empty();
+    const bool invalidObjectOwnerScriptCallMutated = [&]() {
+        auto object = std::find_if(
+            invalidObjectOwnerScriptCallPackage.objects.begin(),
+            invalidObjectOwnerScriptCallPackage.objects.end(),
+            [](const pf::GameObjectDefinition& candidate) {
+                return candidate.name == "PackageOwnerCallObject";
+            });
+        if (object == invalidObjectOwnerScriptCallPackage.objects.end()) {
+            return false;
+        }
+        auto script = std::find_if(
+            object->packageScripts.begin(),
+            object->packageScripts.end(),
+            [](const pf::PackageScript& candidate) {
+                return candidate.name == "ObjectOwnerCallScript";
+            });
+        if (script == object->packageScripts.end() || script->instructions.empty()) {
+            return false;
+        }
+        script->instructions[0].text = "MissingOwnerScript";
+        return true;
+    }();
+    const bool invalidPackageObjectOwnerScriptCallRejected = invalidObjectOwnerScriptCallMutated &&
+        pf::writeFighterPackage(invalidObjectOwnerScriptCallPackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectIndexedObjectScriptCallPackage = sourcePackage;
     invalidObjectIndexedObjectScriptCallPackage.objects[1].packageScripts[14].instructions[0].text = "MissingObjectScript";
     const bool invalidPackageObjectIndexedObjectScriptCallRejected = pf::writeFighterPackage(invalidObjectIndexedObjectScriptCallPackage, &invalidPackageError).empty();
@@ -7424,6 +7446,40 @@ int main(int argc, char** argv) {
         !loadedPackage.fighters[0].authoredClips.empty() &&
         !loadedPackage.fighters[0].authoredMesh.batches.empty() &&
         !loadedPackage.fighters[0].hurtboxes.empty();
+    pf::FighterEditorSession nativePackageEditorSession;
+    pf::FighterEditorStateTimeline nativePackageAttackHi3Timeline;
+    const bool nativePackageAttackHi3TimelineOk = packageNativeAssetOk &&
+        pf::loadFighterEditorSessionPackage(packageBytes, nativePackageEditorSession, &packageError) &&
+        nativePackageEditorSession.package.hsdAssets.empty() &&
+        nativePackageEditorSession.rootFighter() &&
+        !nativePackageEditorSession.rootFighter()->hasHsdAsset &&
+        !nativePackageEditorSession.rootFighter()->hsdAsset &&
+        ([&]() {
+            const pf::FighterDefinition& fighter = *nativePackageEditorSession.rootFighter();
+            const int attackHi3Index = fighter.stateIndex("AttackHi3");
+            if (attackHi3Index < 0) {
+                return false;
+            }
+            const pf::FighterState& attackHi3 = fighter.states[static_cast<size_t>(attackHi3Index)];
+            const bool nativeHitboxSubaction = std::any_of(attackHi3.action.begin(), attackHi3.action.end(), [](const pf::Subaction& subaction) {
+                return subaction.type == pf::SubactionType::CreateHitbox ||
+                    subaction.type == pf::SubactionType::CreateThrowHitbox;
+            });
+            const bool nativeClip = std::any_of(fighter.authoredClips.begin(), fighter.authoredClips.end(), [&](const pf::AnimationClip& clip) {
+                return clip.actionIndex == attackHi3.animationActionIndex;
+            });
+            return nativeHitboxSubaction &&
+                nativeClip &&
+                pf::buildEditorSessionStateTimeline(nativePackageEditorSession, attackHi3Index, nativePackageAttackHi3Timeline, &packageError) &&
+                std::any_of(nativePackageAttackHi3Timeline.markers.begin(), nativePackageAttackHi3Timeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+                    return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox ||
+                        marker.kind == pf::FighterEditorTimelineMarkerKind::ThrowHitbox;
+                }) &&
+                std::any_of(nativePackageAttackHi3Timeline.markers.begin(), nativePackageAttackHi3Timeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+                    return marker.kind == pf::FighterEditorTimelineMarkerKind::AnimationKey ||
+                        marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction;
+                });
+        }());
     pf::FighterPackage hsdDependentPackage = sourcePackage;
     hsdDependentPackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
     hsdDependentPackage.fighters[0].hasHsdAsset = true;
@@ -9032,6 +9088,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_blank_export_authored_ok=" << blankEditorSessionExportAuthoredOk
               << " fighter_editor_blank_export_ok=" << blankEditorSessionExportOk
               << " fighter_package_native_asset_ok=" << packageNativeAssetOk
+              << " fighter_package_attackhi3_native_timeline_ok=" << nativePackageAttackHi3TimelineOk
               << " fighter_package_hsd_dependent_rejected=" << hsdDependentPackageRejected
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
