@@ -2626,6 +2626,12 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarFacing:
             setPackageVar(fighter, instruction.dst, fighter.facing);
             break;
+        case PackageScriptOp::SetVarFighterStateFrame:
+            setPackageVar(fighter, instruction.dst, frameInState(fighter));
+            break;
+        case PackageScriptOp::SetVarFighterStateIndex:
+            setPackageVar(fighter, instruction.dst, fighter.state);
+            break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
             break;

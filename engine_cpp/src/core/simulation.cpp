@@ -6976,13 +6976,21 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterAirVelocityX:
             case PackageScriptOp::SetVarFighterAirVelocityY:
             case PackageScriptOp::SetVarFighterAnimationFrame:
-            case PackageScriptOp::SetVarFighterAnimationRate: {
+            case PackageScriptOp::SetVarFighterAnimationRate:
+            case PackageScriptOp::SetVarFighterStateFrame:
+            case PackageScriptOp::SetVarFighterStateIndex: {
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;
                 }
                 const FighterRuntime& owner = world.fighters[static_cast<size_t>(object.ownerFighter)];
                 switch (instruction.op) {
+                case PackageScriptOp::SetVarFighterStateFrame:
+                    setVar(instruction.dst, frameInState(owner));
+                    break;
+                case PackageScriptOp::SetVarFighterStateIndex:
+                    setVar(instruction.dst, owner.state);
+                    break;
                 case PackageScriptOp::SetVarFighterPercent:
                     setVar(instruction.dst, owner.percent);
                     break;

@@ -1079,6 +1079,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarStateIndex: return "StateIdx";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
+    case pf::PackageScriptOp::SetVarFighterStateFrame: return "FStateFrm";
+    case pf::PackageScriptOp::SetVarFighterStateIndex: return "FStateIdx";
     case pf::PackageScriptOp::SetVarFighterPercent: return "Pct";
     case pf::PackageScriptOp::SetVarFighterShield: return "ShieldHp";
     case pf::PackageScriptOp::SetVarFighterPositionX: return "PosX";
@@ -1267,6 +1269,8 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarStateIndex:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarFighterStateFrame:
+    case pf::PackageScriptOp::SetVarFighterStateIndex:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1493,6 +1497,8 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarStateIndex:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
+    case pf::PackageScriptOp::SetVarFighterStateFrame:
+    case pf::PackageScriptOp::SetVarFighterStateIndex:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1700,7 +1706,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarStateIndex;
     case pf::PackageScriptOp::SetVarStateIndex: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
-    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarFighterStateFrame;
+    case pf::PackageScriptOp::SetVarFighterStateFrame: return pf::PackageScriptOp::SetVarFighterStateIndex;
+    case pf::PackageScriptOp::SetVarFighterStateIndex: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
@@ -1795,6 +1803,8 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
 
 static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
     switch (op) {
+    case pf::PackageScriptOp::SetVarFighterStateFrame:
+    case pf::PackageScriptOp::SetVarFighterStateIndex:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1812,6 +1822,8 @@ static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
 
 static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
     switch (op) {
+    case pf::PackageScriptOp::SetVarFighterStateFrame: return pf::PackageScriptOp::SetVarFighterStateIndex;
+    case pf::PackageScriptOp::SetVarFighterStateIndex: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
@@ -1820,8 +1832,8 @@ static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterAirVelocityX: return pf::PackageScriptOp::SetVarFighterAirVelocityY;
     case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarFighterAnimationFrame;
     case pf::PackageScriptOp::SetVarFighterAnimationFrame: return pf::PackageScriptOp::SetVarFighterAnimationRate;
-    case pf::PackageScriptOp::SetVarFighterAnimationRate: return pf::PackageScriptOp::SetVarFighterPercent;
-    default: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterAnimationRate: return pf::PackageScriptOp::SetVarFighterStateFrame;
+    default: return pf::PackageScriptOp::SetVarFighterStateFrame;
     }
 }
 
