@@ -2725,9 +2725,12 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             break;
         case PackageScriptOp::SetVarObjectOwner:
         case PackageScriptOp::SetVarObjectHeldBy:
+        case PackageScriptOp::SetVarObjectGrabVictim:
         case PackageScriptOp::SetVarObjectLastFighter:
         case PackageScriptOp::SetVarObjectLastObject:
         case PackageScriptOp::SetVarObjectDamage:
+        case PackageScriptOp::SetVarObjectHitlag:
+        case PackageScriptOp::SetVarObjectGroundSegment:
         case PackageScriptOp::SetVarObjectPositionX:
         case PackageScriptOp::SetVarObjectPositionY:
         case PackageScriptOp::SetVarObjectVelocityX:

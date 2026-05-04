@@ -7124,6 +7124,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarObjectHeldBy:
                 setVar(instruction.dst, object.heldByFighter);
                 break;
+            case PackageScriptOp::SetVarObjectGrabVictim:
+                setVar(instruction.dst, object.grabVictimFighter);
+                break;
             case PackageScriptOp::SetVarObjectLastFighter:
                 setVar(instruction.dst, object.lastInteractionFighter);
                 break;
@@ -7132,6 +7135,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetVarObjectDamage:
                 setVar(instruction.dst, object.damageTaken);
+                break;
+            case PackageScriptOp::SetVarObjectHitlag:
+                setVar(instruction.dst, object.hitlag);
+                break;
+            case PackageScriptOp::SetVarObjectGroundSegment:
+                setVar(instruction.dst, object.groundSegment);
                 break;
             case PackageScriptOp::SetVarObjectPositionX:
                 setVar(instruction.dst, object.position.x);

@@ -4869,10 +4869,13 @@ int main(int argc, char** argv) {
         {"ObjectOwnerHitstun", 0},
         {"ObjectOwnerDamageHitboxOwner", 0},
         {"ObjectOwnerThrownHitboxOwner", 0},
+        {"ObjectGrabVictimFighter", 0},
+        {"ObjectHitlag", 0},
+        {"ObjectGroundSegment", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
-        48,
+        56,
         {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
             {pf::PackageScriptOp::SetVarFrame, 1, -1, -1, 0, 0, {}},
@@ -4897,9 +4900,12 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarFacing, 4, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectOwner, 5, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectHeldBy, 6, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectGrabVictim, 36, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectLastFighter, 7, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectLastObject, 8, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectDamage, 9, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectHitlag, 37, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectGroundSegment, 38, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectPositionX, 10, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectPositionY, 11, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectVelocityX, 12, -1, -1, 0, 0, {}},
@@ -5439,7 +5445,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].packageScripts.size() == 17 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 36 &&
+        loadedPackage.objects[1].packageVariables.size() == 39 &&
         loadedPackage.objects[1].packageScripts.size() == 5;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
@@ -5978,6 +5984,8 @@ int main(int argc, char** argv) {
         object.lastInteractionFighter = 1;
         object.lastInteractionObject = packageObjectIndex;
         object.damageTaken = pf::fxFromFloat(2.0f);
+        object.grabVictimFighter = 1;
+        object.hitlag = 0;
         object.position = {pf::fxFromFloat(1.25f), pf::fxFromFloat(3.5f)};
         object.previousPosition = object.position;
         object.velocity = {pf::fxFromFloat(-0.25f), pf::fxFromFloat(0.75f)};
@@ -5992,7 +6000,7 @@ int main(int argc, char** argv) {
     const pf::Fix packageObjectCtxVelX = packageObject && packageObject->packageVars.size() > 12 ? packageObject->packageVars[12] : pf::Fix{-1};
     const pf::Fix packageObjectCtxVelY = packageObject && packageObject->packageVars.size() > 13 ? packageObject->packageVars[13] : pf::Fix{-1};
     const bool packageObjectFactScriptOk = packageObject &&
-        packageObject->packageVars.size() >= 36 &&
+        packageObject->packageVars.size() >= 39 &&
         packageObject->packageVars[1] == 1 &&
         packageObject->packageVars[2] == 1 &&
         packageObject->packageVars[3] == 0 &&
@@ -6027,6 +6035,9 @@ int main(int argc, char** argv) {
         packageObject->packageVars[33] == 0 &&
         packageObject->packageVars[34] == 1 &&
         packageObject->packageVars[35] == -1 &&
+        packageObject->packageVars[36] == 1 &&
+        packageObject->packageVars[37] == 0 &&
+        packageObject->packageVars[38] == -1 &&
         packageObject->animationRate == pf::fxFromFloat(0.25f) &&
         packageObject->animationFrame == pf::fxFromFloat(2.25f);
     const bool packageObjectOwnerVarWriteOk =
@@ -6289,6 +6300,9 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_hitstun=" << (packageObject && packageObject->packageVars.size() > 33 ? packageObject->packageVars[33] : -1)
               << " fighter_package_object_owner_damage_hitbox_owner=" << (packageObject && packageObject->packageVars.size() > 34 ? packageObject->packageVars[34] : -1)
               << " fighter_package_object_owner_thrown_hitbox_owner=" << (packageObject && packageObject->packageVars.size() > 35 ? packageObject->packageVars[35] : -1)
+              << " fighter_package_object_grab_victim=" << (packageObject && packageObject->packageVars.size() > 36 ? packageObject->packageVars[36] : -1)
+              << " fighter_package_object_hitlag=" << (packageObject && packageObject->packageVars.size() > 37 ? packageObject->packageVars[37] : -1)
+              << " fighter_package_object_ground_segment=" << (packageObject && packageObject->packageVars.size() > 38 ? packageObject->packageVars[38] : -1)
               << " fighter_package_object_owner_var_write_ok=" << packageObjectOwnerVarWriteOk
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
