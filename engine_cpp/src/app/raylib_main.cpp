@@ -1074,6 +1074,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::AddVarImmediate: return "AddVar";
     case pf::PackageScriptOp::AddVar: return "AddVars";
     case pf::PackageScriptOp::ScaleVarFixed: return "ScaleVar";
+    case pf::PackageScriptOp::SetVarRandom: return "Rand";
     case pf::PackageScriptOp::SetVarFrame: return "ReadFrame";
     case pf::PackageScriptOp::SetVarStateFrame: return "StateFrm";
     case pf::PackageScriptOp::SetVarStateIndex: return "StateIdx";
@@ -1274,6 +1275,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::AddVarImmediate:
     case pf::PackageScriptOp::AddVar:
     case pf::PackageScriptOp::ScaleVarFixed:
+    case pf::PackageScriptOp::SetVarRandom:
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarStateFrame:
     case pf::PackageScriptOp::SetVarStateIndex:
@@ -1567,6 +1569,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::ScaleVarFixed:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " * " + std::to_string(pf::fxToFloat(instruction.fixValue));
         break;
+    case pf::PackageScriptOp::SetVarRandom:
+        label += " v" + std::to_string(instruction.dst) + " rng < " + std::to_string(instruction.intValue);
+        break;
     case pf::PackageScriptOp::AddVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " + v" + std::to_string(instruction.srcB);
         break;
@@ -1727,7 +1732,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFromVar: return pf::PackageScriptOp::AddVarImmediate;
     case pf::PackageScriptOp::AddVarImmediate: return pf::PackageScriptOp::AddVar;
     case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::ScaleVarFixed;
-    case pf::PackageScriptOp::ScaleVarFixed: return pf::PackageScriptOp::SetVarFrame;
+    case pf::PackageScriptOp::ScaleVarFixed: return pf::PackageScriptOp::SetVarRandom;
+    case pf::PackageScriptOp::SetVarRandom: return pf::PackageScriptOp::SetVarFrame;
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarStateIndex;
     case pf::PackageScriptOp::SetVarStateIndex: return pf::PackageScriptOp::SetVarGrounded;
@@ -1901,6 +1907,9 @@ static void normalizePackageInstruction(
     if (instruction.op == pf::PackageScriptOp::SetFacing && instruction.intValue == 0) {
         instruction.intValue = 1;
     }
+    if (instruction.op == pf::PackageScriptOp::SetVarRandom && instruction.intValue <= 0) {
+        instruction.intValue = 2;
+    }
     if ((instruction.op == pf::PackageScriptOp::SetVarButtonDown ||
          instruction.op == pf::PackageScriptOp::SetVarButtonPressed) &&
         instruction.intValue == 0)
@@ -1950,6 +1959,9 @@ static void normalizeObjectPackageInstruction(
 
     if (instruction.op == pf::PackageScriptOp::SetFacing && instruction.intValue == 0) {
         instruction.intValue = 1;
+    }
+    if (instruction.op == pf::PackageScriptOp::SetVarRandom && instruction.intValue <= 0) {
+        instruction.intValue = 2;
     }
     if (instruction.op == pf::PackageScriptOp::ChangeState && instruction.text.empty() && !def.states.empty()) {
         const int stateIndex = std::clamp(selectedObjectState, 0, static_cast<int>(def.states.size()) - 1);

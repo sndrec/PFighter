@@ -217,6 +217,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::AddVarImmediate:
     case PackageScriptOp::AddVar:
     case PackageScriptOp::ScaleVarFixed:
+    case PackageScriptOp::SetVarRandom:
     case PackageScriptOp::SetVarFrame:
     case PackageScriptOp::SetVarStateFrame:
     case PackageScriptOp::SetVarStateIndex:
@@ -1781,6 +1782,12 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::ScaleVarFixed:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarRandom:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (instruction.intValue <= 0) {
+            throw std::runtime_error("fighter package script random bound is invalid");
+        }
         break;
     case PackageScriptOp::SetGroundVelocity:
     case PackageScriptOp::SetAirVelocityX:

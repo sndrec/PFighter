@@ -483,6 +483,8 @@ StageDefinition makeBattlefieldTrainingStage();
 World makeTrainingWorld();
 World makeTrainingWorld(int p1FighterDef, int p2FighterDef);
 void tickWorld(World& world, const std::vector<InputFrame>& inputs);
+uint32_t nextWorldRandom(World& world);
+int32_t nextWorldRandomBounded(World& world, int32_t upperExclusive);
 void resetTrainingFighter(World& world, size_t fighterIndex, int fighterDefIndex, Vec2 position, int facing);
 bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::string& fighterName, const std::string& stateName = {});
 int spawnFighter(World& world, const std::string& fighterName, Vec2 position, int facing);

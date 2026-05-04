@@ -4640,6 +4640,7 @@ int main(int argc, char** argv) {
         {"FighterFacingVar", 0},
         {"FighterJumpsUsedVar", 0},
         {"FighterJumpsRemainingVar", 0},
+        {"RandomVar", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4782,6 +4783,12 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetFighterJumpsUsedFromVar, -1, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterJumpsRemaining, 29, -1, -1, 0, 0, {}},
         },
+    }, {
+        "RandomScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarRandom, 30, -1, -1, 100, 0, {}},
+        },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
     packageAltFighter.name = "SmokeAlt";
@@ -4814,6 +4821,7 @@ int main(int argc, char** argv) {
         {"ObjectOwnerJumpsUsedVar", 0},
         {"ObjectOwnerJumpsRemainingVar", 0},
         {"ObjectOwnerVarRead", 0},
+        {"ObjectRandomVar", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
@@ -4877,6 +4885,12 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarImmediate, 12, -1, -1, pf::fxFromFloat(0.6f), 0, {}},
             {pf::PackageScriptOp::SetVarImmediate, 13, -1, -1, pf::fxFromFloat(-0.2f), 0, {}},
             {pf::PackageScriptOp::SpawnProjectileFromVars, -1, 12, 13, pf::fxFromFloat(0.35f), pf::fxFromFloat(1.25f), "PackageProjectileObject"},
+        },
+    }, {
+        "ObjectRandomScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarRandom, 26, -1, -1, 50, 0, {}},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -5221,6 +5235,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidScaleWritePackage = sourcePackage;
     invalidScaleWritePackage.fighters[0].packageScripts[5].instructions[7].srcA = 999;
     const bool invalidPackageScaleWriteRejected = pf::writeFighterPackage(invalidScaleWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidRandomWritePackage = sourcePackage;
+    invalidRandomWritePackage.fighters[0].packageScripts[14].instructions[0].intValue = 0;
+    const bool invalidPackageRandomWriteRejected = pf::writeFighterPackage(invalidRandomWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectSwitchWritePackage = sourcePackage;
     invalidObjectSwitchWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SwitchFighterDefinition,
@@ -5325,12 +5342,12 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 30 &&
-        loadedPackage.fighters[0].packageScripts.size() == 14 &&
+        loadedPackage.fighters[0].packageVariables.size() == 31 &&
+        loadedPackage.fighters[0].packageScripts.size() == 15 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 26 &&
-        loadedPackage.objects[1].packageScripts.size() == 4;
+        loadedPackage.objects[1].packageVariables.size() == 27 &&
+        loadedPackage.objects[1].packageScripts.size() == 5;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -5503,6 +5520,35 @@ int main(int argc, char** argv) {
         packageJumpResourceScriptWorld.fighters[0].packageVars.size() >= 30 &&
         packageJumpResourceScriptWorld.fighters[0].packageVars[28] == 1 &&
         packageJumpResourceScriptWorld.fighters[0].packageVars[29] == 0;
+    pf::World packageRandomScriptWorldA = pf::makeTrainingWorld();
+    pf::World packageRandomScriptWorldB = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        for (pf::World* randomWorld : {&packageRandomScriptWorldA, &packageRandomScriptWorldB}) {
+            randomWorld->fighterDefs[0] = loadedPackage.fighters[0];
+            randomWorld->rngState = 0x12345678u;
+            const int waitIndex = randomWorld->fighterDefs[0].stateIndex("Wait");
+            if (waitIndex >= 0) {
+                pf::FunctionCall scriptCall;
+                scriptCall.name = "script:RandomScript";
+                randomWorld->fighterDefs[0].states[static_cast<size_t>(waitIndex)].onFrame.push_back(scriptCall);
+            }
+            randomWorld->fighters[0].packageVars.clear();
+        }
+    }
+    pf::tickWorld(packageRandomScriptWorldA, {pf::InputFrame{}, pf::InputFrame{}});
+    pf::tickWorld(packageRandomScriptWorldB, {pf::InputFrame{}, pf::InputFrame{}});
+    const int packageRandomScriptVarA = packageRandomScriptWorldA.fighters[0].packageVars.size() > 30
+        ? packageRandomScriptWorldA.fighters[0].packageVars[30]
+        : -1;
+    const int packageRandomScriptVarB = packageRandomScriptWorldB.fighters[0].packageVars.size() > 30
+        ? packageRandomScriptWorldB.fighters[0].packageVars[30]
+        : -1;
+    const bool packageRandomScriptOk = packageShapeOk &&
+        packageRandomScriptVarA >= 0 &&
+        packageRandomScriptVarA < 100 &&
+        packageRandomScriptVarA == packageRandomScriptVarB &&
+        packageRandomScriptWorldA.rngState == packageRandomScriptWorldB.rngState &&
+        packageRandomScriptWorldA.rngState != 0x12345678u;
     pf::World packageInputScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageInputScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5792,7 +5838,7 @@ int main(int argc, char** argv) {
     const pf::Fix packageObjectCtxVelX = packageObject && packageObject->packageVars.size() > 12 ? packageObject->packageVars[12] : pf::Fix{-1};
     const pf::Fix packageObjectCtxVelY = packageObject && packageObject->packageVars.size() > 13 ? packageObject->packageVars[13] : pf::Fix{-1};
     const bool packageObjectFactScriptOk = packageObject &&
-        packageObject->packageVars.size() >= 26 &&
+        packageObject->packageVars.size() >= 27 &&
         packageObject->packageVars[1] == 1 &&
         packageObject->packageVars[2] == 1 &&
         packageObject->packageVars[3] == 0 &&
@@ -5871,6 +5917,49 @@ int main(int argc, char** argv) {
         ? &packageObjectCallScriptWorld.objects[static_cast<size_t>(packageObjectCallScriptIndex)]
         : nullptr;
     const int packageObjectCallScriptVar = packageObjectCallScript && !packageObjectCallScript->packageVars.empty() ? packageObjectCallScript->packageVars[0] : -1;
+    pf::World packageObjectRandomScriptWorldA = pf::makeTrainingWorld();
+    pf::World packageObjectRandomScriptWorldB = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        for (pf::World* randomWorld : {&packageObjectRandomScriptWorldA, &packageObjectRandomScriptWorldB}) {
+            randomWorld->objectDefs = loadedPackage.objects;
+            randomWorld->objectDefs[1].onSpawned = {{std::string{"script:ObjectRandomScript"}}};
+            randomWorld->rngState = 0x87654321u;
+        }
+    }
+    const int packageObjectRandomIndexA = pf::spawnGameObject(
+        packageObjectRandomScriptWorldA,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const int packageObjectRandomIndexB = pf::spawnGameObject(
+        packageObjectRandomScriptWorldB,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const pf::GameObjectRuntime* packageObjectRandomA = packageObjectRandomIndexA >= 0 &&
+            packageObjectRandomIndexA < static_cast<int>(packageObjectRandomScriptWorldA.objects.size())
+        ? &packageObjectRandomScriptWorldA.objects[static_cast<size_t>(packageObjectRandomIndexA)]
+        : nullptr;
+    const pf::GameObjectRuntime* packageObjectRandomB = packageObjectRandomIndexB >= 0 &&
+            packageObjectRandomIndexB < static_cast<int>(packageObjectRandomScriptWorldB.objects.size())
+        ? &packageObjectRandomScriptWorldB.objects[static_cast<size_t>(packageObjectRandomIndexB)]
+        : nullptr;
+    const int packageObjectRandomVarA = packageObjectRandomA && packageObjectRandomA->packageVars.size() > 26
+        ? packageObjectRandomA->packageVars[26]
+        : -1;
+    const int packageObjectRandomVarB = packageObjectRandomB && packageObjectRandomB->packageVars.size() > 26
+        ? packageObjectRandomB->packageVars[26]
+        : -1;
+    const bool packageObjectRandomScriptOk = packageShapeOk &&
+        packageObjectRandomVarA >= 0 &&
+        packageObjectRandomVarA < 50 &&
+        packageObjectRandomVarA == packageObjectRandomVarB &&
+        packageObjectRandomScriptWorldA.rngState == packageObjectRandomScriptWorldB.rngState &&
+        packageObjectRandomScriptWorldA.rngState != 0x87654321u;
     pf::World packageObjectDestroyScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectDestroyScriptWorld.objectDefs = loadedPackage.objects;
@@ -5990,6 +6079,8 @@ int main(int argc, char** argv) {
               << " fighter_package_script_fighter_jumps_remaining=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 29 ? packageFactScriptWorld.fighters[0].packageVars[29] : -1)
               << " fighter_package_script_jump_write_ok=" << packageJumpResourceScriptOk
               << " fighter_package_script_jump_write_used=" << packageJumpResourceScriptWorld.fighters[0].jumpsUsed
+              << " fighter_package_script_random_ok=" << packageRandomScriptOk
+              << " fighter_package_script_random_var=" << packageRandomScriptVarA
               << " fighter_package_script_spawn_ok=" << (packageScriptSpawnCount > 0)
               << " fighter_package_script_spawn_count=" << packageScriptSpawnCount
               << " fighter_package_object_script_var=" << packageObjectScriptVar
@@ -6016,6 +6107,8 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_var_write_ok=" << packageObjectOwnerVarWriteOk
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
+              << " fighter_package_object_random_ok=" << packageObjectRandomScriptOk
+              << " fighter_package_object_random_var=" << packageObjectRandomVarA
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
@@ -6067,6 +6160,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_jump_write_rejected=" << invalidPackageJumpWriteRejected
               << " fighter_package_invalid_input_write_rejected=" << invalidPackageInputWriteRejected
               << " fighter_package_invalid_scale_write_rejected=" << invalidPackageScaleWriteRejected
+              << " fighter_package_invalid_random_write_rejected=" << invalidPackageRandomWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected

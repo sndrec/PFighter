@@ -5724,7 +5724,7 @@ static void integrateAndCollide(World& world, size_t fighterIndex) {
     updateKnockbackVelocity(world, fighter);
 }
 
-static uint32_t nextRandom(World& world) {
+uint32_t nextWorldRandom(World& world) {
     uint32_t x = world.rngState == 0 ? 0x4D454C45 : world.rngState;
     x ^= x << 13;
     x ^= x >> 17;
@@ -5733,8 +5733,15 @@ static uint32_t nextRandom(World& world) {
     return x;
 }
 
+int32_t nextWorldRandomBounded(World& world, int32_t upperExclusive) {
+    if (upperExclusive <= 0) {
+        return 0;
+    }
+    return static_cast<int32_t>(nextWorldRandom(world) % static_cast<uint32_t>(upperExclusive));
+}
+
 static Fix nextRandomUnit(World& world) {
-    return fxFromFloat(static_cast<float>(nextRandom(world) & 0x00FFFFFF) / static_cast<float>(0x01000000));
+    return fxFromFloat(static_cast<float>(nextWorldRandom(world) & 0x00FFFFFF) / static_cast<float>(0x01000000));
 }
 
 static Fix calculateKnockbackWithWeight(const HitboxDefinition& hitbox, const MeleeCommonData& common, Fix victimPercent, Fix weight) {
@@ -6973,6 +6980,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::ScaleVarFixed:
                 setVar(instruction.dst, fxMul(var(instruction.srcA), instruction.fixValue));
+                break;
+            case PackageScriptOp::SetVarRandom:
+                setVar(instruction.dst, nextWorldRandomBounded(world, instruction.intValue));
                 break;
             case PackageScriptOp::SetVarFrame:
                 setVar(instruction.dst, object.internalFrame);
