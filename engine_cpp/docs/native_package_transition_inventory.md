@@ -46,11 +46,11 @@ package load/save should operate on native authored data only.
   `engine_cpp/data/packages/<fighter>_native.pfpkg`. Missing native packages now
   fail loudly instead of falling back to `*_hsd.pfighter.bin` during normal
   gameplay construction.
-- The explicit package converter still reads `*_hsd.pfighter.bin`, temporarily
-  sets `FighterDefinition::hasHsdAsset` inside the converter boundary, and
-  converts attributes, ledge snap values, animation lengths, hurtboxes, action
-  scripts, skeleton, clips, mesh, model visibility, common bones, ECB source
-  bones, and shield pose into native fields.
+- The explicit package converter still reads `*_hsd.pfighter.bin` inside
+  `melee_fighter_converter.cpp` and converts attributes, ledge snap values,
+  animation lengths, hurtboxes, action scripts, skeleton, clips, mesh, model
+  visibility, common bones, ECB source bones, and shield pose into native
+  fields without storing imported assets on `FighterDefinition`.
 - With the installed generated packages present, the headless roster smoke sees
   zero HSD-backed roster assets and native data for all 27 fighters.
 - Normal animation clip lookup now goes through native authored clip accessors.
@@ -92,17 +92,19 @@ package load/save should operate on native authored data only.
 
 - `FighterPackage` no longer stores imported assets. The writer emits an asset
   count of zero, and the reader rejects any nonzero imported asset count.
-- `readFighterPackage` rejects nonzero imported asset counts and rejects fighter
-  records that set `hasHsdAsset`, asset index, or asset name. It no longer
-  accepts an external `hsdAssetPool`.
+- `readFighterPackage` rejects nonzero imported asset counts and rejects legacy
+  fighter records that set the serialized imported-HSD flag, asset index, or
+  asset name. It no longer accepts an external imported asset pool.
 - Package validation checks native authored animation references and native
   hurtbox-index references. Imported HSD-dependent packages are rejected by
   write/read/install/test-world paths.
 - Current package format version is native-only and rejects packages that embed
-  raw imported assets, set `hasHsdAsset`, use invalid old versions, or depend on
-  HSD action/animation interpretation at package load time.
-- Runtime/editor package export now refuses HSD-backed fighter definitions. The
-  one-time converter owns imported-HSD conversion into native package data.
+  raw imported assets, set legacy imported-HSD fighter fields, use invalid old
+  versions, or depend on HSD action/animation interpretation at package load
+  time.
+- Runtime/editor package export no longer has an HSD-backed fighter-definition
+  path. The one-time converter owns imported-HSD conversion into native package
+  data.
 
 ## Native Data Already Present But Incomplete
 
@@ -125,13 +127,10 @@ package load/save should operate on native authored data only.
 
 1. Move `animation_asset.*` and `hsd_action_import.*` out of the shared core
    library and behind explicit importer/converter targets.
-2. Continue shrinking the converter's temporary `FighterDefinition::hsdAsset`
-   bridge so PFHA import data is never represented by normal runtime fighter
-   definitions.
-3. Retire `FighterDefinition::hsdAsset` and `FighterDefinition::hasHsdAsset`
-   after package rejection compatibility tests no longer need to construct
-   legacy dependent fighter shapes in memory.
-4. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
+2. Move the PFHA imported-asset structs in `animation_asset.*` behind a true
+   converter/importer library boundary, leaving only renamed native authored
+   package structs in shared runtime headers.
+3. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
    rollback state, keeping serialization compatibility in mind.
-5. Expand import provenance for optional original joint/material/source-command
+4. Expand import provenance for optional original joint/material/source-command
    IDs without letting those IDs drive gameplay behavior.

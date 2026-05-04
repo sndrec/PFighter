@@ -3467,7 +3467,6 @@ static pf::GameObjectDefinition makeEditorObjectDefinition(const std::string& na
 static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string& name, const pf::MeleeCommonData& common) {
     pf::FighterDefinition def;
     def.name = name;
-    def.hasHsdAsset = false;
     def.authoredEcb.enabled = true;
     def.properties.common = common;
     def.authoredSkeleton = {

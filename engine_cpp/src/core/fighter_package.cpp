@@ -2787,9 +2787,6 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     const std::vector<std::string> packageObjectNames = objectNames(package);
     requireUniqueNonemptyNames(packageObjectNames, "object");
     for (const FighterDefinition& fighter : package.fighters) {
-        if (fighter.hasHsdAsset || fighter.hsdAsset) {
-            throw std::runtime_error("fighter package fighter depends on imported HSD asset");
-        }
         if (fighter.states.empty()) {
             throw std::runtime_error("fighter package fighter states are missing");
         }
@@ -2990,10 +2987,10 @@ FighterDefinition readFighterDefinition(PackageReader& reader) {
     validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     fighter.authoredMesh = readFighterMesh(reader);
     validateAuthoredMeshData(fighter.authoredMesh, fighter.authoredSkeleton);
-    fighter.hasHsdAsset = reader.readBool();
+    const bool hasImportedHsdAsset = reader.readBool();
     const int32_t assetIndex = reader.readI32();
     const std::string assetName = reader.readString();
-    if (fighter.hasHsdAsset) {
+    if (hasImportedHsdAsset) {
         throw std::runtime_error("fighter package imported HSD fighter asset is not supported");
     }
     if (assetIndex != -1 || !assetName.empty()) {

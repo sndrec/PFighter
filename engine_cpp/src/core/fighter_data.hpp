@@ -811,8 +811,6 @@ struct FighterDefinition {
     FighterImportProvenance importProvenance;
     FighterProperties properties;
     ShieldDefinition shield;
-    std::shared_ptr<const HsdFighterAnimationAsset> hsdAsset;
-    bool hasHsdAsset = false;
     FighterEcbDefinition authoredEcb;
     HsdFighterBoneTable fighterBones;
     std::array<int, 54> commonBoneLookup = [] {

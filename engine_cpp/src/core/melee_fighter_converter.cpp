@@ -7,7 +7,6 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
-#include <memory>
 #include <sstream>
 #include <stdexcept>
 
@@ -349,10 +348,7 @@ static void applyHsdFighterAttributes(FighterDefinition& def, const HsdFighterAt
     def.shield.maxHealth = attr.common.startShieldHealthX260;
 }
 
-static void applyHsdAnimationLengths(FighterDefinition& def) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
-        return;
-    }
+static void applyHsdAnimationLengths(FighterDefinition& def, const HsdFighterAnimationAsset& asset) {
     constexpr uint32_t kMeleeActionFlagAnimPhysics = 0x80000000u;
     constexpr uint32_t kMeleeActionFlagLoopAnimation = 0x40000000u;
     const auto usesGenericTransNPhysics = [](const FighterState& state, const AnimationClip& clip) {
@@ -373,7 +369,7 @@ static void applyHsdAnimationLengths(FighterDefinition& def) {
         if (actionIndex < 0) {
             continue;
         }
-        if (const AnimationClip* clip = findClipByActionIndex(*def.hsdAsset, actionIndex)) {
+        if (const AnimationClip* clip = findClipByActionIndex(asset, actionIndex)) {
             if (state.name != "JumpSquat") {
                 state.animationLengthFrames = std::max(1, static_cast<int>(fxToFloat(clip->frameCount) + 0.5f));
             }
@@ -403,16 +399,13 @@ static const HsdActionScript* hsdActionScriptForNativeImport(const HsdFighterAni
     return nullptr;
 }
 
-static void importHsdActionScriptsAsNativeSubactions(FighterDefinition& def) {
-    if (!def.hasHsdAsset || !def.hsdAsset) {
-        return;
-    }
+static void importHsdActionScriptsAsNativeSubactions(FighterDefinition& def, const HsdFighterAnimationAsset& asset) {
     for (FighterState& state : def.states) {
-        const HsdActionScript* script = hsdActionScriptForNativeImport(*def.hsdAsset, state);
+        const HsdActionScript* script = hsdActionScriptForNativeImport(asset, state);
         if (!script) {
             continue;
         }
-        state.action = decodeHsdActionScript(*def.hsdAsset, *script);
+        state.action = decodeHsdActionScript(asset, *script);
         if (state.animationActionIndex < 0) {
             state.animationActionIndex = script->actionIndex;
         }
@@ -459,43 +452,41 @@ static HurtboxDefinition nativeHurtboxFromImported(const HsdHurtbox& source) {
 static FighterDefinition makeImportedFighterDefinition(
     const HsdFighterAssetSpec& spec,
     const MeleeCommonData& common,
-    std::shared_ptr<const HsdFighterAnimationAsset> asset)
+    const HsdFighterAnimationAsset& asset)
 {
     FighterDefinition def = makeDebugRook();
     def.name = spec.displayName;
     def.importProvenance.sourceFileName = spec.fileName;
-    def.importProvenance.sourceAssetName = asset ? asset->name : std::string{};
+    def.importProvenance.sourceAssetName = asset.name;
     def.properties.common = common;
     def.shield.maxHealth = common.startShieldHealthX260;
     applyCommonStateTimings(def);
-    def.hsdAsset = std::move(asset);
-    def.hasHsdAsset = true;
-    def.authoredSkeleton = def.hsdAsset->skeleton;
-    def.authoredClipSource = std::shared_ptr<const std::vector<AnimationClip>>(def.hsdAsset, &def.hsdAsset->clips);
-    def.authoredMeshSource = std::shared_ptr<const HsdFighterMesh>(def.hsdAsset, &def.hsdAsset->mesh);
-    def.modelPartAnimations = def.hsdAsset->modelPartAnimations;
-    def.fighterBones = def.hsdAsset->fighterBones;
-    def.commonBoneLookup = def.hsdAsset->commonBoneLookup;
-    def.hasShieldPose = def.hsdAsset->hasShieldPose;
-    def.shieldPose = def.hasShieldPose ? def.hsdAsset->shieldPose : AnimationPose{};
+    def.authoredSkeleton = asset.skeleton;
+    def.authoredClips = asset.clips;
+    def.authoredMesh = asset.mesh;
+    def.modelPartAnimations = asset.modelPartAnimations;
+    def.fighterBones = asset.fighterBones;
+    def.commonBoneLookup = asset.commonBoneLookup;
+    def.hasShieldPose = asset.hasShieldPose;
+    def.shieldPose = def.hasShieldPose ? asset.shieldPose : AnimationPose{};
     def.hurtboxes.clear();
-    def.hurtboxes.reserve(def.hsdAsset->hurtboxes.size());
-    for (const HsdHurtbox& hurtbox : def.hsdAsset->hurtboxes) {
+    def.hurtboxes.reserve(asset.hurtboxes.size());
+    for (const HsdHurtbox& hurtbox : asset.hurtboxes) {
         def.hurtboxes.push_back(nativeHurtboxFromImported(hurtbox));
     }
-    if (def.hsdAsset->hasAttributes) {
-        applyHsdFighterAttributes(def, def.hsdAsset->attributes);
+    if (asset.hasAttributes) {
+        applyHsdFighterAttributes(def, asset.attributes);
     }
     def.properties.shieldSizeScalesWithHealth = spec.shieldSizeScalesWithHealth;
-    if (def.hsdAsset->hasEnvironmentCollision) {
-        def.environmentCollisionBones = def.hsdAsset->environmentCollision.bones;
-        def.environmentCollisionMultiplier = def.hsdAsset->environmentCollision.multiplier;
-        def.properties.ledgeSnapX = def.hsdAsset->environmentCollision.ledgeGrabWidth;
-        def.properties.ledgeSnapY = def.hsdAsset->environmentCollision.ledgeGrabYOffset;
-        def.properties.ledgeSnapHeight = def.hsdAsset->environmentCollision.ledgeGrabHeight;
+    if (asset.hasEnvironmentCollision) {
+        def.environmentCollisionBones = asset.environmentCollision.bones;
+        def.environmentCollisionMultiplier = asset.environmentCollision.multiplier;
+        def.properties.ledgeSnapX = asset.environmentCollision.ledgeGrabWidth;
+        def.properties.ledgeSnapY = asset.environmentCollision.ledgeGrabYOffset;
+        def.properties.ledgeSnapHeight = asset.environmentCollision.ledgeGrabHeight;
     }
-    applyHsdAnimationLengths(def);
-    importHsdActionScriptsAsNativeSubactions(def);
+    applyHsdAnimationLengths(def, asset);
+    importHsdActionScriptsAsNativeSubactions(def, asset);
     return def;
 }
 
@@ -569,41 +560,43 @@ static bool validateImportedFighterConversionSource(
 }
 
 
-static bool makeImportedNativePackageFighterDefinition(const FighterDefinition& source, FighterDefinition& out, std::string* error) {
+static bool makeImportedNativePackageFighterDefinition(
+    const FighterDefinition& source,
+    const HsdFighterAnimationAsset& asset,
+    FighterDefinition& out,
+    std::string* error)
+{
     out = source;
-    if (!source.hsdAsset) {
-        return makeNativePackageFighterDefinition(source, out, error);
-    }
-    if (!validateImportedFighterConversionSource(source, *source.hsdAsset, error)) {
+    if (!validateImportedFighterConversionSource(source, asset, error)) {
         return false;
     }
 
     if (out.authoredSkeleton.empty()) {
-        out.authoredSkeleton = source.hsdAsset->skeleton;
+        out.authoredSkeleton = asset.skeleton;
     }
     if (out.authoredClips.empty()) {
-        out.authoredClips = source.hsdAsset->clips;
+        out.authoredClips = asset.clips;
     }
     removeOutOfRangeAnimationTracks(out.authoredClips, out.authoredSkeleton.size());
     if (out.modelPartAnimations.empty()) {
-        out.modelPartAnimations = source.hsdAsset->modelPartAnimations;
+        out.modelPartAnimations = asset.modelPartAnimations;
     }
     if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty()) {
-        out.authoredMesh = source.hsdAsset->mesh;
+        out.authoredMesh = asset.mesh;
     }
-    out.fighterBones = source.hsdAsset->fighterBones;
-    out.commonBoneLookup = source.hsdAsset->commonBoneLookup;
-    out.hasShieldPose = source.hsdAsset->hasShieldPose;
-    out.shieldPose = out.hasShieldPose ? source.hsdAsset->shieldPose : AnimationPose{};
+    out.fighterBones = asset.fighterBones;
+    out.commonBoneLookup = asset.commonBoneLookup;
+    out.hasShieldPose = asset.hasShieldPose;
+    out.shieldPose = out.hasShieldPose ? asset.shieldPose : AnimationPose{};
     if (out.hurtboxes.empty()) {
-        out.hurtboxes.reserve(source.hsdAsset->hurtboxes.size());
-        for (const HsdHurtbox& hurtbox : source.hsdAsset->hurtboxes) {
+        out.hurtboxes.reserve(asset.hurtboxes.size());
+        for (const HsdHurtbox& hurtbox : asset.hurtboxes) {
             out.hurtboxes.push_back(nativeHurtboxFromImported(hurtbox));
         }
     }
-    if (source.hsdAsset->hasEnvironmentCollision) {
-        out.environmentCollisionBones = source.hsdAsset->environmentCollision.bones;
-        out.environmentCollisionMultiplier = source.hsdAsset->environmentCollision.multiplier;
+    if (asset.hasEnvironmentCollision) {
+        out.environmentCollisionBones = asset.environmentCollision.bones;
+        out.environmentCollisionMultiplier = asset.environmentCollision.multiplier;
         out.authoredEcb.enabled = true;
     }
     int generatedFallbackClipCount = 0;
@@ -611,7 +604,7 @@ static bool makeImportedNativePackageFighterDefinition(const FighterDefinition& 
         int actionIndex = state.animationActionIndex;
         if (actionIndex < 0) {
             actionIndex = fallbackActionIndex(state.animation);
-            if (actionIndex >= 0 && findClipByActionIndex(*source.hsdAsset, actionIndex)) {
+            if (actionIndex >= 0 && findClipByActionIndex(asset, actionIndex)) {
                 state.animationActionIndex = actionIndex;
             }
         }
@@ -637,7 +630,7 @@ static bool makeImportedNativePackageFighterDefinition(const FighterDefinition& 
         ++generatedFallbackClipCount;
     }
     if (out.importProvenance.sourceAssetName.empty()) {
-        out.importProvenance.sourceAssetName = source.hsdAsset->name;
+        out.importProvenance.sourceAssetName = asset.name;
     }
     if (generatedFallbackClipCount > 0) {
         out.importProvenance.warnings.push_back(
@@ -647,8 +640,6 @@ static bool makeImportedNativePackageFighterDefinition(const FighterDefinition& 
     uniquifyAnimationClipNames(out.authoredClips);
     uniquifyAnimationClipActionIndexes(out.authoredClips);
 
-    out.hasHsdAsset = false;
-    out.hsdAsset.reset();
     out.authoredClipSource.reset();
     out.authoredMeshSource.reset();
     out.modelPartAnimationSource.reset();
@@ -678,10 +669,10 @@ bool makeConvertedMeleeFighterPackage(
 
     try {
         const MeleeCommonData common = loadMeleeCommonData();
-        auto asset = std::make_shared<HsdFighterAnimationAsset>(loadHsdFighterAnimationAsset(assetPath.string()));
-        FighterDefinition imported = makeImportedFighterDefinition(*spec, common, std::move(asset));
+        HsdFighterAnimationAsset asset = loadHsdFighterAnimationAsset(assetPath.string());
+        FighterDefinition imported = makeImportedFighterDefinition(*spec, common, asset);
         FighterDefinition native;
-        if (!makeImportedNativePackageFighterDefinition(imported, native, error)) {
+        if (!makeImportedNativePackageFighterDefinition(imported, asset, native, error)) {
             return false;
         }
 

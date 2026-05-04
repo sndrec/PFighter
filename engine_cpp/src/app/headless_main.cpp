@@ -39,9 +39,9 @@ static pf::HsdFighterMesh makeSmokeAuthoredMesh() {
     return mesh;
 }
 
+static bool matchesI32(const std::vector<uint8_t>& bytes, size_t offset, int32_t expected);
+
 static void prepareHeadlessNativePackageFighter(pf::FighterDefinition& def) {
-    def.hasHsdAsset = false;
-    def.hsdAsset.reset();
     def.authoredClips.clear();
     int nextActionIndex = 0;
     for (const pf::FighterState& state : def.states) {
@@ -74,6 +74,27 @@ static void prepareHeadlessNativePackageFighter(pf::FighterDefinition& def) {
         clip.defaultBlendFrames = static_cast<int8_t>(std::clamp(state.defaultAnimationBlendFrames, 0, 127));
         def.authoredClips.push_back(std::move(clip));
     }
+}
+
+static bool markFirstSmokePackageFighterAsLegacyHsdDependent(std::vector<uint8_t>& bytes) {
+    const std::string marker = "SmokeVar";
+    for (size_t i = 17; i + marker.size() <= bytes.size(); ++i) {
+        if (!std::equal(marker.begin(), marker.end(), bytes.begin() + static_cast<std::ptrdiff_t>(i))) {
+            continue;
+        }
+        if (!matchesI32(bytes, i - 4, static_cast<int32_t>(marker.size()))) {
+            continue;
+        }
+        if (!matchesI32(bytes, i - 12, 0) || !matchesI32(bytes, i - 16, -1)) {
+            continue;
+        }
+        if (bytes[i - 17] != 0) {
+            continue;
+        }
+        bytes[i - 17] = 1;
+        return true;
+    }
+    return false;
 }
 
 static bool matchesI32(const std::vector<uint8_t>& bytes, size_t offset, int32_t expected) {
@@ -228,13 +249,6 @@ int main(int argc, char** argv) {
     size_t rosterNativeHurtboxesReady = 0;
     size_t rosterNativePackageReady = 0;
     for (const pf::FighterDefinition& def : world.fighterDefs) {
-        if (def.hasHsdAsset && def.hsdAsset &&
-            !def.hsdAsset->skeleton.empty() &&
-            !def.hsdAsset->clips.empty() &&
-            !def.hsdAsset->hurtboxes.empty())
-        {
-            ++rosterHsdReady;
-        }
         if (!def.hurtboxes.empty() &&
             std::all_of(def.hurtboxes.begin(), def.hurtboxes.end(), [](const pf::HurtboxDefinition& hurtbox) {
                 return hurtbox.radius > 0 && hurtbox.joint >= 0;
@@ -242,15 +256,7 @@ int main(int argc, char** argv) {
         {
             ++rosterNativeHurtboxesReady;
         }
-        if (def.hasHsdAsset && def.hsdAsset && def.hsdAsset->hasAttributes) {
-            ++rosterAttributesReady;
-        }
-        if (def.hasHsdAsset && def.hsdAsset && !def.hsdAsset->actionScripts.empty()) {
-            ++rosterActionScriptsReady;
-        }
         const bool hasNativeAuthoredData =
-            !def.hasHsdAsset &&
-            !def.hsdAsset &&
             !def.authoredSkeleton.empty() &&
             !pf::authoredAnimationClips(def).empty() &&
             !pf::authoredFighterMesh(def).batches.empty() &&
@@ -4685,28 +4691,22 @@ int main(int argc, char** argv) {
               << "\n";
 
     pf::World packageSourceWorld = world;
-    const auto packageHsdSource = std::find_if(
-        packageSourceWorld.fighterDefs.begin(),
-        packageSourceWorld.fighterDefs.end(),
-        [](const pf::FighterDefinition& def) {
-            return def.hasHsdAsset && def.hsdAsset;
-        });
-    if (packageHsdSource != packageSourceWorld.fighterDefs.end()) {
-        packageSourceWorld.fighterDefs[0] = *packageHsdSource;
-    }
     pf::FighterDefinition packageConversionMismatchProbe = packageSourceWorld.fighterDefs[0];
     packageConversionMismatchProbe.authoredSkeleton = {
         {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
     };
-    pf::FighterDefinition packageConversionMismatchOut;
+    packageConversionMismatchProbe.hasShieldPose = true;
+    packageConversionMismatchProbe.shieldPose.joints = {
+        {{}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
+        {{}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
+    };
+    pf::FighterPackage packageConversionMismatchPackage;
+    packageConversionMismatchPackage.name = "conversion_mismatch_probe";
+    packageConversionMismatchPackage.fighters.push_back(std::move(packageConversionMismatchProbe));
     std::string packageConversionMismatchError;
     const bool packageConversionMismatchRejected =
-        !packageConversionMismatchProbe.hsdAsset ||
-        (!pf::makeNativePackageFighterDefinition(
-            packageConversionMismatchProbe,
-            packageConversionMismatchOut,
-            &packageConversionMismatchError) &&
-            packageConversionMismatchError.find("shield pose/skeleton joint count mismatch") != std::string::npos);
+        !pf::validateFighterPackage(packageConversionMismatchPackage, &packageConversionMismatchError) &&
+        packageConversionMismatchError.find("shield pose joint count") != std::string::npos;
     packageSourceWorld.fighterDefs[0].authoredSkeleton = {
         {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
     };
@@ -5613,8 +5613,6 @@ int main(int argc, char** argv) {
     invalidAnimationActionWritePackage.fighters[0].authoredClips = {firstActionClip, duplicateActionClip};
     const bool invalidPackageAnimationActionWriteRejected = pf::writeFighterPackage(invalidAnimationActionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage authoredStateAnimationWritePackage = sourcePackage;
-    authoredStateAnimationWritePackage.fighters[0].hasHsdAsset = false;
-    authoredStateAnimationWritePackage.fighters[0].hsdAsset.reset();
     authoredStateAnimationWritePackage.fighters[0].authoredClips = {firstActionClip};
     pf::FighterState authoredAnimationState;
     authoredAnimationState.name = "Wait";
@@ -6211,9 +6209,7 @@ int main(int argc, char** argv) {
         loadedRuntimePackageHasObject("PackageProjectileObject");
     const bool runtimePackageNativeSelfContainedOk = runtimePackageLoaded &&
         std::all_of(loadedRuntimePackage.fighters.begin(), loadedRuntimePackage.fighters.end(), [](const pf::FighterDefinition& fighter) {
-            return !fighter.hasHsdAsset &&
-                !fighter.hsdAsset &&
-                !fighter.authoredSkeleton.empty() &&
+            return !fighter.authoredSkeleton.empty() &&
                 !fighter.authoredClips.empty() &&
                 !fighter.authoredMesh.batches.empty() &&
                 !fighter.hurtboxes.empty();
@@ -7458,8 +7454,6 @@ int main(int argc, char** argv) {
     const bool missingPackageCacheTestWorldRejected =
         !pf::makeCachedPackageTestWorld(missingPackageCacheTestWorld, packageCache, 0xFFFFFFFFu, nullptr, nullptr, &invalidPackageError);
     const bool packageNativeAssetOk = packageShapeOk &&
-        !loadedPackage.fighters[0].hasHsdAsset &&
-        !loadedPackage.fighters[0].hsdAsset &&
         !loadedPackage.fighters[0].authoredSkeleton.empty() &&
         !loadedPackage.fighters[0].authoredClips.empty() &&
         !loadedPackage.fighters[0].authoredMesh.batches.empty() &&
@@ -7472,8 +7466,6 @@ int main(int argc, char** argv) {
     const bool nativePackageAttackHi3TimelineOk = packageNativeAssetOk &&
         pf::loadFighterEditorSessionPackage(packageBytes, nativePackageEditorSession, &packageError) &&
         nativePackageEditorSession.rootFighter() &&
-        !nativePackageEditorSession.rootFighter()->hasHsdAsset &&
-        !nativePackageEditorSession.rootFighter()->hsdAsset &&
         ([&]() {
             const pf::FighterDefinition& fighter = *nativePackageEditorSession.rootFighter();
             const int attackHi3Index = fighter.stateIndex("AttackHi3");
@@ -7500,12 +7492,14 @@ int main(int argc, char** argv) {
                         marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction;
                 });
         }());
-    pf::FighterPackage hsdDependentPackage = sourcePackage;
-    hsdDependentPackage.fighters[0].hasHsdAsset = true;
-    hsdDependentPackage.fighters[0].hsdAsset = packageSourceWorld.fighterDefs[0].hsdAsset;
+    std::vector<uint8_t> hsdDependentPackageBytes = packageBytes;
+    const bool hsdDependentPackageMutated =
+        markFirstSmokePackageFighterAsLegacyHsdDependent(hsdDependentPackageBytes);
+    pf::FighterPackage hsdDependentPackage;
     const bool hsdDependentPackageRejected =
-        pf::writeFighterPackage(hsdDependentPackage, &invalidPackageError).empty() &&
-        !pf::validateFighterPackage(hsdDependentPackage, &invalidPackageError);
+        hsdDependentPackageMutated &&
+        !pf::readFighterPackage(hsdDependentPackageBytes, hsdDependentPackage, &invalidPackageError) &&
+        invalidPackageError.find("imported HSD fighter asset") != std::string::npos;
     const bool sandbagRosterOk = std::any_of(packageSourceWorld.fighterDefs.begin(), packageSourceWorld.fighterDefs.end(), [](const pf::FighterDefinition& def) {
         return def.name == "Sandbag" &&
             !def.authoredSkeleton.empty() &&
@@ -8058,8 +8052,6 @@ int main(int argc, char** argv) {
     pf::World packageProjectileSubactionWorld = pf::makeTrainingWorld();
     if (packageSubactionProjectileLoaded) {
         packageProjectileSubactionWorld.fighterDefs[0] = loadedSubactionProjectilePackage.fighters[0];
-        packageProjectileSubactionWorld.fighterDefs[0].hasHsdAsset = false;
-        packageProjectileSubactionWorld.fighterDefs[0].hsdAsset.reset();
         packageProjectileSubactionWorld.fighterDefs.push_back(loadedSubactionProjectilePackage.fighters[1]);
         packageProjectileSubactionWorld.objectDefs = loadedSubactionProjectilePackage.objects;
         const int waitIndex = packageProjectileSubactionWorld.fighterDefs[0].stateIndex("Wait");
@@ -8089,8 +8081,6 @@ int main(int argc, char** argv) {
     pf::World packageSubactionScriptWorld = pf::makeTrainingWorld();
     if (packageSubactionScriptLoaded) {
         packageSubactionScriptWorld.fighterDefs[0] = loadedSubactionScriptPackage.fighters[0];
-        packageSubactionScriptWorld.fighterDefs[0].hasHsdAsset = false;
-        packageSubactionScriptWorld.fighterDefs[0].hsdAsset.reset();
         packageSubactionScriptWorld.fighterDefs.push_back(loadedSubactionScriptPackage.fighters[1]);
         const int waitIndex = packageSubactionScriptWorld.fighterDefs[0].stateIndex("Wait");
         if (waitIndex >= 0) {

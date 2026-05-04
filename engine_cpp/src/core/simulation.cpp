@@ -632,9 +632,6 @@ static bool tryLoadNativePackageFighterDefinition(const NativeRosterFighterSpec&
             "native fighter package " + packagePath.string() + " contains fighter '" + out.name +
             "' but roster expected '" + spec.displayName + "'");
     }
-    if (out.hasHsdAsset || out.hsdAsset) {
-        throw std::runtime_error("native fighter package " + packagePath.string() + " depends on imported HSD data");
-    }
     if (!out.authoredClips.empty()) {
         out.authoredClipSource = std::make_shared<const std::vector<AnimationClip>>(std::move(out.authoredClips));
         out.authoredClips.clear();
@@ -1273,13 +1270,6 @@ static void removeOutOfRangeAnimationTracks(std::vector<AnimationClip>& clips, s
     }
 }
 
-static bool failNativeConversion(std::string* error, const std::string& message) {
-    if (error) {
-        *error = message;
-    }
-    return false;
-}
-
 static void appendRuntimePackageFighterDependency(FighterPackage& package, const World& world, const std::string& fighterName) {
     if (fighterName.empty() || runtimePackageHasFighter(package, fighterName)) {
         return;
@@ -1336,11 +1326,6 @@ static void collectRuntimePackageObjectDependencies(FighterPackage& package, con
 
 bool makeNativePackageFighterDefinition(const FighterDefinition& source, FighterDefinition& out, std::string* error) {
     out = source;
-    if (source.hsdAsset || source.hasHsdAsset) {
-        return failNativeConversion(
-            error,
-            "runtime native package export cannot convert imported HSD fighter data; run the fighter package converter first");
-    }
     if (out.authoredClips.empty() && source.authoredClipSource) {
         out.authoredClips = *source.authoredClipSource;
     }

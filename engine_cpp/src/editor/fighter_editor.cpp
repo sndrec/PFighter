@@ -2007,7 +2007,6 @@ void autoWeightEditorAuthoredMesh(HsdFighterMesh& mesh, const std::vector<Animat
 FighterDefinition makeFighterEditorBlankDefinition(const std::string& name, const MeleeCommonData& common) {
     FighterDefinition def;
     def.name = name;
-    def.hasHsdAsset = false;
     def.authoredEcb.enabled = true;
     normalizeFighterEditorAuthoredEcb(def);
     def.properties.common = common;
