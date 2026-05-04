@@ -429,6 +429,7 @@ struct PackageVariableDefinition {
 enum class PackageScriptOp : uint8_t {
     Nop,
     SetVarImmediate,
+    SetVarFromVar,
     AddVarImmediate,
     AddVar,
     ScaleVarFixed,

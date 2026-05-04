@@ -6941,6 +6941,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarImmediate:
                 setVar(instruction.dst, instruction.intValue);
                 break;
+            case PackageScriptOp::SetVarFromVar:
+                setVar(instruction.dst, var(instruction.srcA));
+                break;
             case PackageScriptOp::AddVarImmediate:
                 setVar(instruction.dst, var(instruction.dst) + instruction.intValue);
                 break;

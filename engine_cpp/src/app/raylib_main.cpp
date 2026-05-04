@@ -1070,6 +1070,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     switch (op) {
     case pf::PackageScriptOp::Nop: return "Nop";
     case pf::PackageScriptOp::SetVarImmediate: return "SetVar";
+    case pf::PackageScriptOp::SetVarFromVar: return "CopyVar";
     case pf::PackageScriptOp::AddVarImmediate: return "AddVar";
     case pf::PackageScriptOp::AddVar: return "AddVars";
     case pf::PackageScriptOp::ScaleVarFixed: return "ScaleVar";
@@ -1256,6 +1257,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         instruction.op = pf::PackageScriptOp::SpawnProjectile;
         break;
     case pf::PackageScriptOp::SetVarImmediate:
+    case pf::PackageScriptOp::SetVarFromVar:
     case pf::PackageScriptOp::AddVarImmediate:
     case pf::PackageScriptOp::AddVar:
     case pf::PackageScriptOp::ScaleVarFixed:
@@ -1481,6 +1483,9 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::AddVarImmediate:
         label += " v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
         break;
+    case pf::PackageScriptOp::SetVarFromVar:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarStateFrame:
     case pf::PackageScriptOp::SetVarGrounded:
@@ -1683,7 +1688,8 @@ static pf::InterruptCondition nextCommonInterruptCondition(pf::InterruptConditio
 static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     switch (op) {
     case pf::PackageScriptOp::Nop: return pf::PackageScriptOp::SetVarImmediate;
-    case pf::PackageScriptOp::SetVarImmediate: return pf::PackageScriptOp::AddVarImmediate;
+    case pf::PackageScriptOp::SetVarImmediate: return pf::PackageScriptOp::SetVarFromVar;
+    case pf::PackageScriptOp::SetVarFromVar: return pf::PackageScriptOp::AddVarImmediate;
     case pf::PackageScriptOp::AddVarImmediate: return pf::PackageScriptOp::AddVar;
     case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::ScaleVarFixed;
     case pf::PackageScriptOp::ScaleVarFixed: return pf::PackageScriptOp::SetVarFrame;

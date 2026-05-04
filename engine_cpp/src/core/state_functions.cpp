@@ -2599,6 +2599,9 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarImmediate:
             setPackageVar(fighter, instruction.dst, instruction.intValue);
             break;
+        case PackageScriptOp::SetVarFromVar:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA));
+            break;
         case PackageScriptOp::AddVarImmediate:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.dst) + instruction.intValue);
             break;

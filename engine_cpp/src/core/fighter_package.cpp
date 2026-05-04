@@ -213,6 +213,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     switch (op) {
     case PackageScriptOp::Nop:
     case PackageScriptOp::SetVarImmediate:
+    case PackageScriptOp::SetVarFromVar:
     case PackageScriptOp::AddVarImmediate:
     case PackageScriptOp::AddVar:
     case PackageScriptOp::ScaleVarFixed:
@@ -1669,6 +1670,10 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");
+        break;
+    case PackageScriptOp::SetVarFromVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:

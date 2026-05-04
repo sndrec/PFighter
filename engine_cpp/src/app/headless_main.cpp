@@ -4756,6 +4756,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SkipIfVarEqualVar, -1, 0, 1, 0, 0, {}},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 1000, 0, {}},
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 5, 0, {}},
+            {pf::PackageScriptOp::SetVarFromVar, 1, 0, -1, 0, 0, {}},
         },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
@@ -4780,6 +4781,7 @@ int main(int argc, char** argv) {
         {"ObjectAnimationFrameVar", 0},
         {"ObjectAnimationRateVar", 0},
         {"ObjectOwnedObjectCountVar", 0},
+        {"ObjectCopiedVar", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
@@ -4807,6 +4809,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetAirVelocityX, -1, -1, -1, 0, pf::fxFromFloat(0.5f), {}},
             {pf::PackageScriptOp::SetPositionX, -1, -1, -1, 0, pf::fxFromFloat(1.75f), {}},
             {pf::PackageScriptOp::SetPositionYFromVar, -1, 12, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFromVar, 17, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetAnimationRate, -1, -1, -1, 0, pf::fxFromFloat(0.25f), {}},
             {pf::PackageScriptOp::SetAnimationFrame, -1, -1, -1, 0, pf::fxFromFloat(2.25f), {}},
             {pf::PackageScriptOp::SkipIfVarLessThanImmediate, 0, -1, -1, 10, 0, {}},
@@ -5055,6 +5058,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidEqualityBranchWritePackage = sourcePackage;
     invalidEqualityBranchWritePackage.fighters[0].packageScripts[12].instructions[4].srcB = 999;
     const bool invalidPackageEqualityBranchWriteRejected = pf::writeFighterPackage(invalidEqualityBranchWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidCopyVarWritePackage = sourcePackage;
+    invalidCopyVarWritePackage.fighters[0].packageScripts[12].instructions[7].srcA = 999;
+    const bool invalidPackageCopyVarWriteRejected = pf::writeFighterPackage(invalidCopyVarWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidProjectileSubactionTargetWritePackage = sourcePackage;
     const int invalidProjectileSubactionState = invalidProjectileSubactionTargetWritePackage.fighters[0].stateIndex("Wait");
     if (invalidProjectileSubactionState >= 0) {
@@ -5258,7 +5264,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].packageScripts.size() == 13 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 17 &&
+        loadedPackage.objects[1].packageVariables.size() == 18 &&
         loadedPackage.objects[1].packageScripts.size() == 4;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
@@ -5355,6 +5361,9 @@ int main(int argc, char** argv) {
     const int packageScriptEqualityBranchVar = packageEqualityBranchScriptWorld.fighters[0].packageVars.empty()
         ? -1
         : packageEqualityBranchScriptWorld.fighters[0].packageVars[0];
+    const int packageScriptCopyVar = packageEqualityBranchScriptWorld.fighters[0].packageVars.size() > 1
+        ? packageEqualityBranchScriptWorld.fighters[0].packageVars[1]
+        : -1;
     pf::World packageCallScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageCallScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5693,7 +5702,7 @@ int main(int argc, char** argv) {
     const pf::Fix packageObjectCtxVelX = packageObject && packageObject->packageVars.size() > 12 ? packageObject->packageVars[12] : pf::Fix{-1};
     const pf::Fix packageObjectCtxVelY = packageObject && packageObject->packageVars.size() > 13 ? packageObject->packageVars[13] : pf::Fix{-1};
     const bool packageObjectFactScriptOk = packageObject &&
-        packageObject->packageVars.size() >= 17 &&
+        packageObject->packageVars.size() >= 18 &&
         packageObject->packageVars[1] == 1 &&
         packageObject->packageVars[2] == 1 &&
         packageObject->packageVars[3] == 0 &&
@@ -5710,6 +5719,7 @@ int main(int argc, char** argv) {
         packageObject->packageVars[14] == pf::fxFromFloat(1.0f) &&
         packageObject->packageVars[15] == pf::fxFromFloat(1.0f) &&
         packageObject->packageVars[16] == 1 &&
+        packageObject->packageVars[17] == 7 &&
         packageObject->animationRate == pf::fxFromFloat(0.25f) &&
         packageObject->animationFrame == pf::fxFromFloat(2.25f);
     const bool packageObjectOwnerVarWriteOk =
@@ -5847,6 +5857,7 @@ int main(int argc, char** argv) {
               << " fighter_package_script_restore_var=" << packageScriptRestoreVar
               << " fighter_package_script_branch_var=" << packageScriptBranchVar
               << " fighter_package_script_equality_branch_var=" << packageScriptEqualityBranchVar
+              << " fighter_package_script_copy_var=" << packageScriptCopyVar
               << " fighter_package_script_call_var=" << packageScriptCallVar
               << " fighter_package_script_fact_ok=" << packageFactScriptOk
               << " fighter_package_script_input_ok=" << packageInputScriptOk
@@ -5886,6 +5897,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_script_animation_read_ok=" << (packageObject && packageObject->packageVars.size() > 15 && packageObject->packageVars[14] == pf::fxFromFloat(1.0f) && packageObject->packageVars[15] == pf::fxFromFloat(1.0f))
               << " fighter_package_object_position_write_ok=" << packageObjectPositionWriteOk
               << " fighter_package_object_owned_object_count=" << (packageObject && packageObject->packageVars.size() > 16 ? packageObject->packageVars[16] : -1)
+              << " fighter_package_object_copy_var=" << (packageObject && packageObject->packageVars.size() > 17 ? packageObject->packageVars[17] : -1)
               << " fighter_package_object_owner_var_write_ok=" << packageObjectOwnerVarWriteOk
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
@@ -5917,6 +5929,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_destroy_owned_target_write_rejected=" << invalidPackageDestroyOwnedTargetWriteRejected
               << " fighter_package_invalid_owned_object_count_target_write_rejected=" << invalidPackageOwnedObjectCountTargetWriteRejected
               << " fighter_package_invalid_equality_branch_write_rejected=" << invalidPackageEqualityBranchWriteRejected
+              << " fighter_package_invalid_copy_var_write_rejected=" << invalidPackageCopyVarWriteRejected
               << " fighter_package_invalid_projectile_subaction_target_write_rejected=" << invalidPackageProjectileSubactionTargetWriteRejected
               << " fighter_package_invalid_subaction_write_rejected=" << invalidPackageSubactionWriteRejected
               << " fighter_package_invalid_hurtbox_ref_write_rejected=" << invalidPackageHurtboxRefWriteRejected
