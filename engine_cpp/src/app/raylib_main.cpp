@@ -8395,10 +8395,12 @@ static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marke
         return 1;
     case pf::FighterEditorTimelineMarkerKind::Callback:
         return 3;
+    case pf::FighterEditorTimelineMarkerKind::AnimationKey:
+        return 4;
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
     case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
-        return 4;
+        return 5;
     case pf::FighterEditorTimelineMarkerKind::Subaction:
         break;
     }
@@ -8421,6 +8423,8 @@ static Color editorTimelineMarkerColor(const pf::FighterEditorTimelineMarker& ma
         return PURPLE;
     case pf::FighterEditorTimelineMarkerKind::Callback:
         return VIOLET;
+    case pf::FighterEditorTimelineMarkerKind::AnimationKey:
+        return GOLD;
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
         return LIME;
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
@@ -8449,6 +8453,8 @@ static std::string editorTimelineMarkerLabel(const pf::FighterEditorTimelineMark
         return "throw hitbox";
     case pf::FighterEditorTimelineMarkerKind::Callback:
         return std::string(stateCallbackSlotName(marker.callbackSlot)) + " callback";
+    case pf::FighterEditorTimelineMarkerKind::AnimationKey:
+        return "animation key";
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
         return "interruptible";
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
@@ -8627,7 +8633,7 @@ static void drawEditorTimelineWorkstation(
         DrawText(std::to_string(tick).c_str(), static_cast<int>(x + 3.0f), static_cast<int>(ruler.y + 6.0f), 9, Fade(RAYWHITE, 0.56f));
     }
 
-    const std::array<const char*, 5> lanes{"Subactions", "Hitboxes", "Hurtboxes", "Callbacks", "Interrupts"};
+    const std::array<const char*, 6> lanes{"Subactions", "Hitboxes", "Hurtboxes", "Callbacks", "Anim Keys", "Interrupts"};
     for (int lane = 0; lane < static_cast<int>(lanes.size()); ++lane) {
         const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
         DrawText(lanes[static_cast<size_t>(lane)], static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 5.0f), 11, Fade(RAYWHITE, 0.72f));
@@ -8640,7 +8646,7 @@ static void drawEditorTimelineWorkstation(
             if (subaction.type == pf::SubactionType::CreateHitbox || subaction.type == pf::SubactionType::CreateThrowHitbox) lane = 1;
             else if (subaction.type == pf::SubactionType::SetHurtboxState || subaction.type == pf::SubactionType::SetBodyCollisionState) lane = 2;
             else if (subaction.type == pf::SubactionType::CallScript) lane = 3;
-            else if (subaction.type == pf::SubactionType::SetInterruptible) lane = 4;
+            else if (subaction.type == pf::SubactionType::SetInterruptible) lane = 5;
             const float x = ruler.x + ruler.width * static_cast<float>(frame) / static_cast<float>(frameCount);
             const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
             DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, 14, subactionMarkerColor(subaction));
@@ -8654,7 +8660,7 @@ static void drawEditorTimelineWorkstation(
         const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
         const float x = ruler.x + ruler.width * static_cast<float>(startFrame) / static_cast<float>(frameCount);
         const float w = std::max(3.0f, ruler.width * static_cast<float>(endFrame - startFrame) / static_cast<float>(frameCount));
-        DrawRectangleRec({x, rect.y + 70.0f + 4.0f * 24.0f + 3.0f, w, 12.0f}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
+        DrawRectangleRec({x, rect.y + 70.0f + 5.0f * 24.0f + 3.0f, w, 12.0f}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
     }
     if (state.initialInterruptibleFrame > 0) {
         const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(state.initialInterruptibleFrame, 0, frameCount)) / static_cast<float>(frameCount);
@@ -8686,12 +8692,19 @@ static void drawEditorTimelineWorkstation(
                     marker.callbackSlot == editor.selectedStateCallbackSlot &&
                     marker.sourceIndex == editor.selectedStateCallback;
             }
+            const bool selectedAnimationKey =
+                marker.kind == pf::FighterEditorTimelineMarkerKind::AnimationKey &&
+                editor.selectionKind == pf::FighterEditorSelectionKind::Animation &&
+                marker.animationClipIndex == editor.selectedAnimationClip &&
+                marker.animationTrackIndex == editor.selectedAnimationTrack &&
+                marker.animationKeyIndex == editor.selectedAnimationKey;
             const bool selected =
                 ((marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable ||
                      marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable) &&
                     editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt &&
                     marker.sourceIndex == editor.selectedInterrupt) ||
                 selectedCallbackScript ||
+                selectedAnimationKey ||
                 ((marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction ||
                      marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox ||
                      marker.kind == pf::FighterEditorTimelineMarkerKind::ThrowHitbox ||
@@ -8722,6 +8735,10 @@ static void drawEditorTimelineWorkstation(
             if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(calls.size())) {
                 markerText += " " + calls[static_cast<size_t>(marker.sourceIndex)].name;
             }
+        } else if (marker.kind == pf::FighterEditorTimelineMarkerKind::AnimationKey) {
+            markerText += " clip " + std::to_string(marker.animationClipIndex) +
+                " track " + std::to_string(marker.animationTrackIndex) +
+                " key " + std::to_string(marker.animationKeyIndex);
         }
         DrawText(markerText.c_str(),
             static_cast<int>(ruler.x),
@@ -8803,6 +8820,26 @@ static void drawEditorTimelineWorkstation(
                             editor.status = "Editor: callback marker references non-package callback " + calls[static_cast<size_t>(marker.sourceIndex)].name;
                         }
                     }
+                } else if (marker.kind == pf::FighterEditorTimelineMarkerKind::AnimationKey) {
+                    if (marker.animationClipIndex >= 0 &&
+                        marker.animationClipIndex < static_cast<int>(def.authoredClips.size()))
+                    {
+                        editor.selectedAnimationClip = marker.animationClipIndex;
+                        const pf::AnimationClip& clip = def.authoredClips[static_cast<size_t>(marker.animationClipIndex)];
+                        if (marker.animationTrackIndex >= 0 &&
+                            marker.animationTrackIndex < static_cast<int>(clip.tracks.size()))
+                        {
+                            editor.selectedAnimationTrack = marker.animationTrackIndex;
+                            const pf::AnimationTrack& track = clip.tracks[static_cast<size_t>(marker.animationTrackIndex)];
+                            if (marker.animationKeyIndex >= 0 &&
+                                marker.animationKeyIndex < static_cast<int>(track.keys.size()))
+                            {
+                                editor.selectedAnimationKey = marker.animationKeyIndex;
+                                editor.animationScrubFrame = static_cast<int>(std::round(pf::fxToFloat(track.keys[static_cast<size_t>(marker.animationKeyIndex)].frame)));
+                            }
+                        }
+                        editor.selectionKind = pf::FighterEditorSelectionKind::Animation;
+                    }
                 } else if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(state.action.size())) {
                     editor.selectedSubaction = marker.sourceIndex;
                     session.selectedSubaction = marker.sourceIndex;
@@ -8823,7 +8860,7 @@ static void drawEditorTimelineWorkstation(
                 return;
             }
         }
-        if (clickedLane == 4) {
+        if (clickedLane == 5) {
             int bestInterrupt = -1;
             int bestDistance = 1000000;
             for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {

@@ -29,6 +29,7 @@ enum class FighterEditorTimelineMarkerKind : uint8_t {
     Hitbox,
     ThrowHitbox,
     Callback,
+    AnimationKey,
     Interruptible,
     InterruptEnable,
     InterruptDisable,
@@ -104,6 +105,9 @@ struct FighterEditorTimelineMarker {
     SubactionType subactionType = SubactionType::SyncTimer;
     InterruptCondition interruptCondition = InterruptCondition::JumpPressed;
     FighterEditorStateCallbackSlot callbackSlot = FighterEditorStateCallbackSlot::Frame;
+    int animationClipIndex = -1;
+    int animationTrackIndex = -1;
+    int animationKeyIndex = -1;
 };
 
 struct FighterEditorStateTimeline {

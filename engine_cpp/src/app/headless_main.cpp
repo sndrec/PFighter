@@ -7197,7 +7197,18 @@ int main(int argc, char** argv) {
             blankEditorKeyIndex,
             {pf::fx(6), pf::fxFromFloat(0.25f), 0, pf::AnimationInterpolation::Linear},
             &packageError);
-    const bool blankEditorSessionRemoveKeyOk = blankEditorSessionSetKeyOk &&
+    pf::FighterEditorStateTimeline blankEditorTimeline;
+    const bool blankEditorSessionTimelineAnimationKeyOk = blankEditorSessionSetKeyOk &&
+        pf::setEditorSessionStateAnimation(blankEditorSession, 0, "EditorClipRenamed", 7, 36, &packageError) &&
+        pf::buildEditorSessionStateTimeline(blankEditorSession, 0, blankEditorTimeline, &packageError) &&
+        std::any_of(blankEditorTimeline.markers.begin(), blankEditorTimeline.markers.end(), [&](const pf::FighterEditorTimelineMarker& marker) {
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::AnimationKey &&
+                marker.animationClipIndex == blankEditorClipIndex &&
+                marker.animationTrackIndex == blankEditorTrackIndex &&
+                marker.animationKeyIndex == blankEditorKeyIndex &&
+                marker.frame == 6;
+        });
+    const bool blankEditorSessionRemoveKeyOk = blankEditorSessionTimelineAnimationKeyOk &&
         pf::removeEditorSessionAuthoredKey(blankEditorSession, blankEditorClipIndex, blankEditorTrackIndex, blankEditorKeyIndex, &packageError);
     int blankEditorDuplicateClipIndex = -1;
     const bool blankEditorSessionDuplicateClipOk = blankEditorSessionRemoveKeyOk &&
@@ -8874,6 +8885,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_blank_set_track_ok=" << blankEditorSessionSetTrackOk
               << " fighter_editor_blank_add_key_ok=" << blankEditorSessionAddKeyOk
               << " fighter_editor_blank_set_key_ok=" << blankEditorSessionSetKeyOk
+              << " fighter_editor_blank_timeline_animation_key_ok=" << blankEditorSessionTimelineAnimationKeyOk
               << " fighter_editor_blank_remove_key_ok=" << blankEditorSessionRemoveKeyOk
               << " fighter_editor_blank_duplicate_clip_ok=" << blankEditorSessionDuplicateClipOk
               << " fighter_editor_blank_remove_clip_ok=" << blankEditorSessionRemoveClipOk

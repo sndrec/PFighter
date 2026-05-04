@@ -357,6 +357,23 @@ void appendTimelineMarker(
     timeline.markers.push_back(marker);
 }
 
+void appendAnimationKeyTimelineMarker(
+    FighterEditorStateTimeline& timeline,
+    int frame,
+    int clipIndex,
+    int trackIndex,
+    int keyIndex)
+{
+    FighterEditorTimelineMarker marker;
+    marker.kind = FighterEditorTimelineMarkerKind::AnimationKey;
+    marker.frame = std::max(0, frame);
+    marker.sourceIndex = keyIndex;
+    marker.animationClipIndex = clipIndex;
+    marker.animationTrackIndex = trackIndex;
+    marker.animationKeyIndex = keyIndex;
+    timeline.markers.push_back(marker);
+}
+
 bool packageInstructionCallsScriptName(const PackageScriptInstruction& instruction, const std::string& scriptName) {
     return instruction.text == scriptName &&
         (instruction.op == PackageScriptOp::CallScript ||
@@ -2565,8 +2582,9 @@ bool buildEditorSessionStateTimeline(
     FighterEditorStateTimeline& timeline,
     std::string* error)
 {
+    const FighterDefinition* fighter = nullptr;
     const FighterState* state = nullptr;
-    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+    if (!validSessionState(session, stateIndex, &fighter, &state, error)) {
         return false;
     }
     timeline = {};
@@ -2617,6 +2635,28 @@ bool buildEditorSessionStateTimeline(
     appendCallbackMarkers(state->onFrame, FighterEditorStateCallbackSlot::Frame, 0);
     appendCallbackMarkers(state->onLanding, FighterEditorStateCallbackSlot::Landing, timeline.frameCount);
     appendCallbackMarkers(state->onAirborne, FighterEditorStateCallbackSlot::Airborne, timeline.frameCount);
+    int authoredClipIndex = -1;
+    if (fighter) {
+        for (int i = 0; i < static_cast<int>(fighter->authoredClips.size()); ++i) {
+            const AnimationClip& clip = fighter->authoredClips[static_cast<size_t>(i)];
+            if ((state->animationActionIndex >= 0 && clip.actionIndex == state->animationActionIndex) ||
+                (!state->animation.empty() && clip.name == state->animation))
+            {
+                authoredClipIndex = i;
+                break;
+            }
+        }
+    }
+    if (fighter && authoredClipIndex >= 0) {
+        const AnimationClip& clip = fighter->authoredClips[static_cast<size_t>(authoredClipIndex)];
+        for (int trackIndex = 0; trackIndex < static_cast<int>(clip.tracks.size()); ++trackIndex) {
+            const AnimationTrack& track = clip.tracks[static_cast<size_t>(trackIndex)];
+            for (int keyIndex = 0; keyIndex < static_cast<int>(track.keys.size()); ++keyIndex) {
+                const int keyFrame = static_cast<int>(std::round(fxToFloat(track.keys[static_cast<size_t>(keyIndex)].frame)));
+                appendAnimationKeyTimelineMarker(timeline, keyFrame, authoredClipIndex, trackIndex, keyIndex);
+            }
+        }
+    }
     for (size_t i = 0; i < state->interrupts.size(); ++i) {
         const InterruptRule& interrupt = state->interrupts[i];
         appendTimelineMarker(
