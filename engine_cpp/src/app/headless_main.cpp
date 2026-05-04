@@ -4656,6 +4656,10 @@ int main(int argc, char** argv) {
         {"ObjectDropResult", 0},
         {"ObjectPickUpAgainResult", 0},
         {"ObjectThrowResult", 0},
+        {"ObjectReflectResult", 0},
+        {"ObjectAbsorbResult", 0},
+        {"ObjectShieldBounceResult", 0},
+        {"ObjectInteractResult", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4868,6 +4872,10 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarDropObjectFromVar, 43, 0, -1, pf::fxFromFloat(0.15f), pf::fxFromFloat(0.25f), {}},
             {pf::PackageScriptOp::SetVarPickUpObjectFromVar, 44, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarThrowObjectFromVar, 45, 0, -1, pf::fxFromFloat(0.2f), pf::fxFromFloat(0.75f), {}},
+            {pf::PackageScriptOp::SetVarReflectObjectFromVar, 46, 0, -1, 0, pf::fx(1), {}},
+            {pf::PackageScriptOp::SetVarShieldBounceObjectFromVar, 48, 0, -1, 0, pf::fx(1), {}},
+            {pf::PackageScriptOp::SetVarInteractObjectFromVar, 49, 0, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarAbsorbObjectFromVar, 47, 1, -1, 0, 0, {}},
         },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
@@ -4914,6 +4922,11 @@ int main(int argc, char** argv) {
         {"ObjectGrabVictimFighter", 0},
         {"ObjectHitlag", 0},
         {"ObjectGroundSegment", 0},
+        {"ObjectInteractionFighterIndex", 0},
+        {"ObjectInteractResult", 0},
+        {"ObjectReflectResult", 0},
+        {"ObjectShieldBounceResult", 0},
+        {"ObjectAbsorbResult", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
@@ -5065,6 +5078,34 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetIndexedObjectVarFromVar, 0, 0, 2, 0, 0, {}},
             {pf::PackageScriptOp::SetVarIndexedObjectVar, 3, 0, -1, 0, 0, {}},
             {pf::PackageScriptOp::DestroyObjectFromVar, -1, 0, -1, 0, 0, {}},
+        },
+    }, {
+        "ObjectInteractOpScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 39, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarInteractObjectFromVar, 40, 39, -1, 0, 0, {}},
+        },
+    }, {
+        "ObjectReflectOpScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 39, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarReflectObjectFromVar, 41, 39, -1, 0, pf::fx(1), {}},
+        },
+    }, {
+        "ObjectShieldBounceOpScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 39, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarShieldBounceObjectFromVar, 42, 39, -1, 0, pf::fx(1), {}},
+        },
+    }, {
+        "ObjectAbsorbOpScript",
+        4,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 39, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarAbsorbObjectFromVar, 43, 39, -1, 0, 0, {}},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -5686,12 +5727,12 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 46 &&
+        loadedPackage.fighters[0].packageVariables.size() == 50 &&
         loadedPackage.fighters[0].packageScripts.size() == 20 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 39 &&
-        loadedPackage.objects[1].packageScripts.size() == 13;
+        loadedPackage.objects[1].packageVariables.size() == 44 &&
+        loadedPackage.objects[1].packageScripts.size() == 17;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -6123,6 +6164,18 @@ int main(int argc, char** argv) {
     const int packageThrowResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 45
         ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[45]
         : 0;
+    const int packageReflectResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 46
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[46]
+        : 0;
+    const int packageAbsorbResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 47
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[47]
+        : 0;
+    const int packageShieldBounceResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 48
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[48]
+        : 0;
+    const int packageInteractResult = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 49
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[49]
+        : 0;
     const int packageSpawnObjectTargetVar =
         packageSpawnObjectStoredIndex >= 0 &&
             packageSpawnObjectStoredIndex < static_cast<int>(packageSpawnObjectStoreScriptWorld.objects.size()) &&
@@ -6168,9 +6221,17 @@ int main(int argc, char** argv) {
         packageDropResult == 1 &&
         packagePickUpAgainResult == 1 &&
         packageThrowResult == 1 &&
+        packageReflectResult == 1 &&
+        packageAbsorbResult == 1 &&
+        packageShieldBounceResult == 1 &&
+        packageInteractResult == 1 &&
         packageSpawnObjectStoreScriptWorld.fighters[0].heldObject == -1 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].ownerFighter == 0 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].heldByFighter == -1 &&
+        packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].lastInteractionFighter == 0 &&
+        packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].ownerFighter == 0 &&
+        packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].velocity.x == 0 &&
+        packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].velocity.y == 0 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].velocity.x == pf::fxFromFloat(0.75f) &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].velocity.y == pf::fxFromFloat(0.2f);
     pf::World packageProjectileSubactionWorld = pf::makeTrainingWorld();
@@ -6730,6 +6791,62 @@ int main(int argc, char** argv) {
         packageObjectIndexedTargetVar == 44 &&
         packageObjectIndexedTarget &&
         !packageObjectIndexedTarget->active;
+    auto spawnObjectScriptProbe = [&](const std::string& scriptName, pf::Vec2 velocity) {
+        pf::World probeWorld = pf::makeTrainingWorld();
+        if (packageShapeOk) {
+            probeWorld.objectDefs = loadedPackage.objects;
+            probeWorld.objectDefs[1].onSpawned = {{std::string{"script:" + scriptName}}};
+        }
+        const int objectIndex = pf::spawnGameObject(
+            probeWorld,
+            "TrainingItem",
+            -1,
+            {0, pf::fx(3)},
+            1,
+            velocity);
+        return std::tuple<pf::World, int>{std::move(probeWorld), objectIndex};
+    };
+    auto [packageObjectInteractWorld, packageObjectInteractIndex] =
+        spawnObjectScriptProbe("ObjectInteractOpScript", {pf::fxFromFloat(0.5f), 0});
+    auto [packageObjectReflectWorld, packageObjectReflectIndex] =
+        spawnObjectScriptProbe("ObjectReflectOpScript", {pf::fxFromFloat(0.5f), 0});
+    auto [packageObjectShieldBounceWorld, packageObjectShieldBounceIndex] =
+        spawnObjectScriptProbe("ObjectShieldBounceOpScript", {-pf::fxFromFloat(0.5f), 0});
+    auto [packageObjectAbsorbWorld, packageObjectAbsorbIndex] =
+        spawnObjectScriptProbe("ObjectAbsorbOpScript", {pf::fxFromFloat(0.5f), 0});
+    const pf::GameObjectRuntime* packageObjectInteract = packageObjectInteractIndex >= 0 &&
+            packageObjectInteractIndex < static_cast<int>(packageObjectInteractWorld.objects.size())
+        ? &packageObjectInteractWorld.objects[static_cast<size_t>(packageObjectInteractIndex)]
+        : nullptr;
+    const pf::GameObjectRuntime* packageObjectReflect = packageObjectReflectIndex >= 0 &&
+            packageObjectReflectIndex < static_cast<int>(packageObjectReflectWorld.objects.size())
+        ? &packageObjectReflectWorld.objects[static_cast<size_t>(packageObjectReflectIndex)]
+        : nullptr;
+    const pf::GameObjectRuntime* packageObjectShieldBounce = packageObjectShieldBounceIndex >= 0 &&
+            packageObjectShieldBounceIndex < static_cast<int>(packageObjectShieldBounceWorld.objects.size())
+        ? &packageObjectShieldBounceWorld.objects[static_cast<size_t>(packageObjectShieldBounceIndex)]
+        : nullptr;
+    const pf::GameObjectRuntime* packageObjectAbsorb = packageObjectAbsorbIndex >= 0 &&
+            packageObjectAbsorbIndex < static_cast<int>(packageObjectAbsorbWorld.objects.size())
+        ? &packageObjectAbsorbWorld.objects[static_cast<size_t>(packageObjectAbsorbIndex)]
+        : nullptr;
+    const bool packageObjectInteractionOpsOk =
+        packageObjectInteract && packageObjectInteract->packageVars.size() > 40 &&
+        packageObjectReflect && packageObjectReflect->packageVars.size() > 41 &&
+        packageObjectShieldBounce && packageObjectShieldBounce->packageVars.size() > 42 &&
+        packageObjectAbsorb && packageObjectAbsorb->packageVars.size() > 43 &&
+        packageObjectInteract->packageVars[40] == 1 &&
+        packageObjectReflect->packageVars[41] == 1 &&
+        packageObjectShieldBounce->packageVars[42] == 1 &&
+        packageObjectAbsorb->packageVars[43] == 1 &&
+        packageObjectInteract->lastInteractionFighter == 0 &&
+        packageObjectReflect->ownerFighter == 0 &&
+        packageObjectReflect->velocity.x == -pf::fxFromFloat(0.5f) &&
+        packageObjectShieldBounce->ownerFighter == 0 &&
+        packageObjectShieldBounce->velocity.x == pf::fxFromFloat(0.5f) &&
+        packageObjectAbsorb->ownerFighter == 0 &&
+        packageObjectAbsorb->velocity.x == 0 &&
+        packageObjectAbsorb->velocity.y == 0;
     pf::World packageObjectDestroyScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectDestroyScriptWorld.objectDefs = loadedPackage.objects;
@@ -6942,6 +7059,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_indexed_object_var_read=" << packageObjectIndexedObjectVarRead
               << " fighter_package_object_indexed_object_var_from_var=" << packageObjectIndexedObjectVarReadFromVar
               << " fighter_package_object_indexed_object_target_var=" << packageObjectIndexedTargetVar
+              << " fighter_package_object_interaction_ops_ok=" << packageObjectInteractionOpsOk
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk

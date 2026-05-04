@@ -310,6 +310,10 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarPickUpObjectFromVar:
     case PackageScriptOp::SetVarDropObjectFromVar:
     case PackageScriptOp::SetVarThrowObjectFromVar:
+    case PackageScriptOp::SetVarReflectObjectFromVar:
+    case PackageScriptOp::SetVarAbsorbObjectFromVar:
+    case PackageScriptOp::SetVarShieldBounceObjectFromVar:
+    case PackageScriptOp::SetVarInteractObjectFromVar:
     case PackageScriptOp::DestroyOwnedObjects:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
@@ -2038,6 +2042,10 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarPickUpObjectFromVar:
     case PackageScriptOp::SetVarDropObjectFromVar:
     case PackageScriptOp::SetVarThrowObjectFromVar:
+    case PackageScriptOp::SetVarReflectObjectFromVar:
+    case PackageScriptOp::SetVarAbsorbObjectFromVar:
+    case PackageScriptOp::SetVarShieldBounceObjectFromVar:
+    case PackageScriptOp::SetVarInteractObjectFromVar:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;

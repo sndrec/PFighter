@@ -1171,6 +1171,10 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarPickUpObjectFromVar: return "PickVar";
     case pf::PackageScriptOp::SetVarDropObjectFromVar: return "DropVar";
     case pf::PackageScriptOp::SetVarThrowObjectFromVar: return "ThrowVar";
+    case pf::PackageScriptOp::SetVarReflectObjectFromVar: return "ReflVar";
+    case pf::PackageScriptOp::SetVarAbsorbObjectFromVar: return "AbsVar";
+    case pf::PackageScriptOp::SetVarShieldBounceObjectFromVar: return "BounceV";
+    case pf::PackageScriptOp::SetVarInteractObjectFromVar: return "TouchV";
     case pf::PackageScriptOp::DestroyOwnedObjects: return "KillOwn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
@@ -1347,6 +1351,10 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarPickUpObjectFromVar:
     case pf::PackageScriptOp::SetVarDropObjectFromVar:
     case pf::PackageScriptOp::SetVarThrowObjectFromVar:
+    case pf::PackageScriptOp::SetVarReflectObjectFromVar:
+    case pf::PackageScriptOp::SetVarAbsorbObjectFromVar:
+    case pf::PackageScriptOp::SetVarShieldBounceObjectFromVar:
+    case pf::PackageScriptOp::SetVarInteractObjectFromVar:
         instruction.op = pf::PackageScriptOp::Nop;
         break;
     case pf::PackageScriptOp::SetVarImmediate:
@@ -1779,6 +1787,18 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarThrowObjectFromVar:
         label += " v" + std::to_string(instruction.dst) + " throw v" + std::to_string(instruction.srcA);
         break;
+    case pf::PackageScriptOp::SetVarReflectObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " refl v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::SetVarAbsorbObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " absorb v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::SetVarShieldBounceObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " bounce v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::SetVarInteractObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " touch v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::DestroyOwnedObjects:
         label += " " + instruction.text;
         break;
@@ -1995,7 +2015,11 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::DestroyObjectFromVar: return pf::PackageScriptOp::SetVarPickUpObjectFromVar;
     case pf::PackageScriptOp::SetVarPickUpObjectFromVar: return pf::PackageScriptOp::SetVarDropObjectFromVar;
     case pf::PackageScriptOp::SetVarDropObjectFromVar: return pf::PackageScriptOp::SetVarThrowObjectFromVar;
-    case pf::PackageScriptOp::SetVarThrowObjectFromVar: return pf::PackageScriptOp::DestroyOwnedObjects;
+    case pf::PackageScriptOp::SetVarThrowObjectFromVar: return pf::PackageScriptOp::SetVarReflectObjectFromVar;
+    case pf::PackageScriptOp::SetVarReflectObjectFromVar: return pf::PackageScriptOp::SetVarAbsorbObjectFromVar;
+    case pf::PackageScriptOp::SetVarAbsorbObjectFromVar: return pf::PackageScriptOp::SetVarShieldBounceObjectFromVar;
+    case pf::PackageScriptOp::SetVarShieldBounceObjectFromVar: return pf::PackageScriptOp::SetVarInteractObjectFromVar;
+    case pf::PackageScriptOp::SetVarInteractObjectFromVar: return pf::PackageScriptOp::DestroyOwnedObjects;
     case pf::PackageScriptOp::DestroyOwnedObjects: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::SkipIfVarEqualImmediate;

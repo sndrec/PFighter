@@ -6954,6 +6954,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 target.packageVars[static_cast<size_t>(variableIndex)] = value;
             }
         };
+        auto setCurrentObjectVarAfterEvent = [&](int variableIndex, int32_t value) {
+            if (objectIndex >= world.objects.size() || variableIndex < 0) {
+                return;
+            }
+            GameObjectRuntime& currentObject = world.objects[objectIndex];
+            if (variableIndex < static_cast<int>(currentObject.packageVars.size())) {
+                currentObject.packageVars[static_cast<size_t>(variableIndex)] = value;
+            }
+        };
         auto setOwnerFighterVar = [&](int index, int32_t value) {
             if (!validFighterIndex(world, object.ownerFighter) || index < 0) {
                 return;
@@ -7368,12 +7377,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::DestroyObjectFromVar:
                 destroyGameObjectByIndex(world, var(instruction.srcA));
                 return;
-            case PackageScriptOp::SetVarPickUpObjectFromVar:
-                setVar(instruction.dst, pickUpGameObject(world, objectIndex, var(instruction.srcA)) ? 1 : 0);
+            case PackageScriptOp::SetVarPickUpObjectFromVar: {
+                const bool ok = pickUpGameObject(world, objectIndex, var(instruction.srcA));
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
                 return;
+            }
             case PackageScriptOp::SetVarDropObjectFromVar: {
                 const Vec2 velocity{object.facing * instruction.fixValue, instruction.intValue};
-                setVar(instruction.dst, dropGameObject(world, objectIndex, velocity) ? 1 : 0);
+                const bool ok = dropGameObject(world, objectIndex, velocity);
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
                 return;
             }
             case PackageScriptOp::SetVarThrowObjectFromVar: {
@@ -7382,7 +7394,32 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     ? world.fighters[static_cast<size_t>(fighterIndex)].facing
                     : object.facing;
                 const Vec2 velocity{velocityFacing * instruction.fixValue, instruction.intValue};
-                setVar(instruction.dst, throwGameObject(world, objectIndex, fighterIndex, velocity) ? 1 : 0);
+                const bool ok = throwGameObject(world, objectIndex, fighterIndex, velocity);
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
+                return;
+            }
+            case PackageScriptOp::SetVarReflectObjectFromVar: {
+                const int fighterIndex = var(instruction.srcA);
+                const Vec2 normal{instruction.fixValue, instruction.intValue};
+                const bool ok = reflectGameObject(world, objectIndex, fighterIndex, normal);
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
+                return;
+            }
+            case PackageScriptOp::SetVarAbsorbObjectFromVar: {
+                const bool ok = absorbGameObject(world, objectIndex, var(instruction.srcA));
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
+                return;
+            }
+            case PackageScriptOp::SetVarShieldBounceObjectFromVar: {
+                const int fighterIndex = var(instruction.srcA);
+                const Vec2 normal{instruction.fixValue, instruction.intValue};
+                const bool ok = shieldBounceGameObject(world, objectIndex, fighterIndex, normal);
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
+                return;
+            }
+            case PackageScriptOp::SetVarInteractObjectFromVar: {
+                const bool ok = interactGameObjectWithFighter(world, objectIndex, var(instruction.srcA));
+                setCurrentObjectVarAfterEvent(instruction.dst, ok ? 1 : 0);
                 return;
             }
             case PackageScriptOp::DestroyOwnedObjects:

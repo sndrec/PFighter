@@ -3017,6 +3017,40 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             }
             break;
         }
+        case PackageScriptOp::SetVarReflectObjectFromVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const Vec2 normal{instruction.fixValue, instruction.intValue};
+            const bool ok = reflectGameObject(world, packageVar(fighter, instruction.srcA), fighterIndex, normal);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, ok ? 1 : 0);
+            }
+            break;
+        }
+        case PackageScriptOp::SetVarAbsorbObjectFromVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const bool ok = absorbGameObject(world, packageVar(fighter, instruction.srcA), fighterIndex);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, ok ? 1 : 0);
+            }
+            break;
+        }
+        case PackageScriptOp::SetVarShieldBounceObjectFromVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const Vec2 normal{instruction.fixValue, instruction.intValue};
+            const bool ok = shieldBounceGameObject(world, packageVar(fighter, instruction.srcA), fighterIndex, normal);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, ok ? 1 : 0);
+            }
+            break;
+        }
+        case PackageScriptOp::SetVarInteractObjectFromVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const bool ok = interactGameObjectWithFighter(world, packageVar(fighter, instruction.srcA), fighterIndex);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, ok ? 1 : 0);
+            }
+            break;
+        }
         case PackageScriptOp::DestroyOwnedObjects:
             destroyGameObjectsOwnedBy(world, static_cast<int>(&fighter - world.fighters.data()), instruction.text);
             break;
