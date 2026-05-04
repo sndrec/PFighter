@@ -2780,9 +2780,6 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     if (package.version != kPackageVersion) {
         throw std::runtime_error("fighter package version is invalid");
     }
-    if (!package.hsdAssets.empty()) {
-        throw std::runtime_error("fighter package imported HSD assets are not supported");
-    }
     const std::vector<std::string> packageFighterNames = fighterNames(package);
     requireUniqueNonemptyNames(packageFighterNames, "fighter");
     const std::vector<std::string> packageFighterScriptNames = fighterScriptNames(package.fighters);
@@ -2927,7 +2924,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
     }
 }
 
-void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package, const FighterDefinition& fighter) {
+void writeFighterDefinition(PackageWriter& writer, const FighterDefinition& fighter) {
     validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     validateAuthoredMeshData(fighter.authoredMesh, fighter.authoredSkeleton);
     writer.writeString(fighter.name);
@@ -3203,10 +3200,6 @@ FighterPackageDescriptor makePackageDescriptor(const FighterPackage& package, co
     for (const GameObjectDefinition& object : package.objects) {
         out.objectNames.push_back(object.name);
     }
-    out.assetNames.reserve(package.hsdAssets.size());
-    for (const std::shared_ptr<const HsdFighterAnimationAsset>& asset : package.hsdAssets) {
-        out.assetNames.push_back(asset ? asset->name : std::string{});
-    }
     out.fighterScriptNames = fighterScriptNames(package.fighters);
     out.objectScriptNames = objectScriptNames(package.objects);
     return out;
@@ -3440,7 +3433,7 @@ std::vector<uint8_t> writeFighterPackage(const FighterPackage& package, std::str
         writePackageDescriptorManifest(writer, manifest);
         writer.writeU32(0);
         writeVector(writer, package.fighters, [&](const FighterDefinition& fighter) {
-            writeFighterDefinition(writer, package, fighter);
+            writeFighterDefinition(writer, fighter);
         });
         writeVector(writer, package.objects, [&](const GameObjectDefinition& object) {
             writeGameObjectDefinition(writer, object);

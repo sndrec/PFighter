@@ -5529,7 +5529,7 @@ int main(int argc, char** argv) {
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
         packageDescriptor.fighterNames.size() == sourcePackage.fighters.size() &&
         packageDescriptor.objectNames.size() == sourcePackage.objects.size() &&
-        packageDescriptor.assetNames.size() == sourcePackage.hsdAssets.size() &&
+        packageDescriptor.assetNames.empty() &&
         packageDescriptor.fighterScriptNames.size() >= 24 &&
         packageDescriptor.objectScriptNames.size() >= 20 &&
         std::find(packageDescriptor.fighterScriptNames.begin(), packageDescriptor.fighterScriptNames.end(), "SmokeScript") != packageDescriptor.fighterScriptNames.end() &&
@@ -5560,7 +5560,7 @@ int main(int argc, char** argv) {
         runtimePackageDescriptor.rootFighterName == runtimePackage.fighters[0].name &&
         runtimePackageDescriptor.fighterNames.size() == runtimePackage.fighters.size() &&
         runtimePackageDescriptor.objectNames.size() == runtimePackage.objects.size() &&
-        runtimePackageDescriptor.assetNames.size() == runtimePackage.hsdAssets.size() &&
+        runtimePackageDescriptor.assetNames.empty() &&
         runtimePackageDescriptor.fighterScriptNames.size() >= 24 &&
         runtimePackageDescriptor.objectScriptNames.size() >= 20 &&
         std::find(runtimePackageDescriptor.fighterScriptNames.begin(), runtimePackageDescriptor.fighterScriptNames.end(), "SmokeScript") != runtimePackageDescriptor.fighterScriptNames.end() &&
@@ -6204,14 +6204,12 @@ int main(int argc, char** argv) {
         loadedRuntimePackage.fighters.size() == 2 &&
         loadedRuntimePackage.objects.size() == 3 &&
         loadedRuntimePackage.objects.size() < sourcePackage.objects.size() &&
-        loadedRuntimePackage.hsdAssets.empty() &&
         loadedRuntimePackageHasFighter(packageSourceWorld.fighterDefs[0].name) &&
         loadedRuntimePackageHasFighter("SmokeAlt") &&
         loadedRuntimePackageHasObject("TrainingItem") &&
         loadedRuntimePackageHasObject("PackageVelocityObject") &&
         loadedRuntimePackageHasObject("PackageProjectileObject");
     const bool runtimePackageNativeSelfContainedOk = runtimePackageLoaded &&
-        loadedRuntimePackage.hsdAssets.empty() &&
         std::all_of(loadedRuntimePackage.fighters.begin(), loadedRuntimePackage.fighters.end(), [](const pf::FighterDefinition& fighter) {
             return !fighter.hasHsdAsset &&
                 !fighter.hsdAsset &&
@@ -7460,7 +7458,6 @@ int main(int argc, char** argv) {
     const bool missingPackageCacheTestWorldRejected =
         !pf::makeCachedPackageTestWorld(missingPackageCacheTestWorld, packageCache, 0xFFFFFFFFu, nullptr, nullptr, &invalidPackageError);
     const bool packageNativeAssetOk = packageShapeOk &&
-        loadedPackage.hsdAssets.empty() &&
         !loadedPackage.fighters[0].hasHsdAsset &&
         !loadedPackage.fighters[0].hsdAsset &&
         !loadedPackage.fighters[0].authoredSkeleton.empty() &&
@@ -7474,7 +7471,6 @@ int main(int argc, char** argv) {
     pf::FighterEditorStateTimeline nativePackageAttackHi3Timeline;
     const bool nativePackageAttackHi3TimelineOk = packageNativeAssetOk &&
         pf::loadFighterEditorSessionPackage(packageBytes, nativePackageEditorSession, &packageError) &&
-        nativePackageEditorSession.package.hsdAssets.empty() &&
         nativePackageEditorSession.rootFighter() &&
         !nativePackageEditorSession.rootFighter()->hasHsdAsset &&
         !nativePackageEditorSession.rootFighter()->hsdAsset &&
@@ -7505,7 +7501,6 @@ int main(int argc, char** argv) {
                 });
         }());
     pf::FighterPackage hsdDependentPackage = sourcePackage;
-    hsdDependentPackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
     hsdDependentPackage.fighters[0].hasHsdAsset = true;
     hsdDependentPackage.fighters[0].hsdAsset = packageSourceWorld.fighterDefs[0].hsdAsset;
     const bool hsdDependentPackageRejected =
@@ -8974,7 +8969,7 @@ int main(int argc, char** argv) {
               << " fighter_package_conversion_mismatch_rejected=" << packageConversionMismatchRejected
               << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
-              << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()
+              << " fighter_package_runtime_assets=" << runtimePackageDescriptor.assetNames.size()
               << " fighter_package_install_ok=" << packageInstallOk
               << " fighter_package_bytes_install_ok=" << packageBytesInstallOk
               << " fighter_package_cache_store_ok=" << packageCacheStoreOk

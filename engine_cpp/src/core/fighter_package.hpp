@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -15,7 +14,6 @@ struct FighterPackage {
     uint32_t version = 4;
     std::vector<FighterDefinition> fighters;
     std::vector<GameObjectDefinition> objects;
-    std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets;
 };
 
 struct FighterPackageDescriptor {

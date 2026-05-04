@@ -24,10 +24,10 @@ package load/save should operate on native authored data only.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.
-- `FighterPackage` still has a legacy `hsdAssets` field in memory so old
-  dependent package shapes can be rejected, but package read/write/install
-  paths no longer serialize, deserialize, embed, or externally resolve imported
-  HSD assets.
+- `FighterPackage` no longer has an in-memory imported asset pool. Package
+  read/write/install paths do not serialize, deserialize, embed, or externally
+  resolve imported HSD assets, and the reader still rejects old package bytes
+  with nonzero imported asset counts.
 - `FighterImportProvenance` now preserves source file name, source asset name,
   and importer warnings as debug metadata. Action indices are retained on native
   clips and state animation references, so provenance does not need to be
@@ -87,10 +87,8 @@ package load/save should operate on native authored data only.
 
 ## Package Format Dependencies To Remove
 
-- `FighterPackage` still stores
-  `std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets`, but
-  validation rejects non-empty vectors and the writer emits an asset count of
-  zero.
+- `FighterPackage` no longer stores imported assets. The writer emits an asset
+  count of zero, and the reader rejects any nonzero imported asset count.
 - `readFighterPackage` rejects nonzero imported asset counts and rejects fighter
   records that set `hasHsdAsset`, asset index, or asset name. It no longer
   accepts an external `hsdAssetPool`.
@@ -127,9 +125,9 @@ package load/save should operate on native authored data only.
    importer/converter targets.
 2. Move the explicit converter's `*_hsd.pfighter.bin` import path out of core
    gameplay files and into a converter/tooling boundary.
-3. Retire `FighterDefinition::hsdAsset`, `FighterDefinition::hasHsdAsset`, and
-   `FighterPackage::hsdAssets` after package rejection compatibility tests no
-   longer need to construct legacy dependent shapes in memory.
+3. Retire `FighterDefinition::hsdAsset` and `FighterDefinition::hasHsdAsset`
+   after package rejection compatibility tests no longer need to construct
+   legacy dependent fighter shapes in memory.
 4. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
    rollback state, keeping serialization compatibility in mind.
 5. Expand import provenance for optional original joint/material/source-command

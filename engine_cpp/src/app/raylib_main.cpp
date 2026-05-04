@@ -4778,7 +4778,7 @@ static void updateEditorPackageSummary(
     editor.lastPackageChecksum = pf::fighterPackageChecksum(bytes);
     editor.lastPackageFighters = static_cast<int>(package.fighters.size());
     editor.lastPackageObjects = static_cast<int>(package.objects.size());
-    editor.lastPackageAssets = static_cast<int>(package.hsdAssets.size());
+    editor.lastPackageAssets = 0;
     editor.lastPackageValid = true;
     editor.lastPackageMessage = "OK";
 }

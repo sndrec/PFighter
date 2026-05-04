@@ -81,7 +81,7 @@ std::vector<FighterDefinition> collectEditorPackageFighters(const World& world, 
 
 void collectEditorPackageAssets(const std::vector<FighterDefinition>& fighters, FighterPackage& package) {
     (void)fighters;
-    package.hsdAssets.clear();
+    (void)package;
 }
 
 bool fighterStateAliasLostByRemovingState(const FighterDefinition& def, const std::string& target, const std::string& removedStateName) {
