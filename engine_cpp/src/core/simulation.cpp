@@ -6978,7 +6978,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterAnimationFrame:
             case PackageScriptOp::SetVarFighterAnimationRate:
             case PackageScriptOp::SetVarFighterStateFrame:
-            case PackageScriptOp::SetVarFighterStateIndex: {
+            case PackageScriptOp::SetVarFighterStateIndex:
+            case PackageScriptOp::SetVarFighterGrounded:
+            case PackageScriptOp::SetVarFighterFacing: {
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;
@@ -6990,6 +6992,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     break;
                 case PackageScriptOp::SetVarFighterStateIndex:
                     setVar(instruction.dst, owner.state);
+                    break;
+                case PackageScriptOp::SetVarFighterGrounded:
+                    setVar(instruction.dst, owner.grounded ? 1 : 0);
+                    break;
+                case PackageScriptOp::SetVarFighterFacing:
+                    setVar(instruction.dst, owner.facing);
                     break;
                 case PackageScriptOp::SetVarFighterPercent:
                     setVar(instruction.dst, owner.percent);

@@ -224,6 +224,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFacing:
     case PackageScriptOp::SetVarFighterStateFrame:
     case PackageScriptOp::SetVarFighterStateIndex:
+    case PackageScriptOp::SetVarFighterGrounded:
+    case PackageScriptOp::SetVarFighterFacing:
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:
     case PackageScriptOp::SetVarFighterPositionX:
@@ -1681,6 +1683,8 @@ void validatePackageScriptInstruction(
         break;
     case PackageScriptOp::SetVarFighterStateFrame:
     case PackageScriptOp::SetVarFighterStateIndex:
+    case PackageScriptOp::SetVarFighterGrounded:
+    case PackageScriptOp::SetVarFighterFacing:
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:
     case PackageScriptOp::SetVarFighterPositionX:
