@@ -2741,6 +2741,8 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarObjectVelocityY:
         case PackageScriptOp::SetVarObjectAnimationFrame:
         case PackageScriptOp::SetVarObjectAnimationRate:
+        case PackageScriptOp::SetObjectOwner:
+        case PackageScriptOp::SetObjectOwnerFromVar:
         case PackageScriptOp::SetVarOwnerFighterVar:
         case PackageScriptOp::SetOwnerFighterVarImmediate:
         case PackageScriptOp::SetOwnerFighterVarFromVar:

@@ -487,6 +487,8 @@ enum class PackageScriptOp : uint8_t {
     SetVarObjectVelocityY,
     SetVarObjectAnimationFrame,
     SetVarObjectAnimationRate,
+    SetObjectOwner,
+    SetObjectOwnerFromVar,
     SetVarOwnedObjectCount,
     SetVarOwnerFighterVar,
     SetOwnerFighterVarImmediate,

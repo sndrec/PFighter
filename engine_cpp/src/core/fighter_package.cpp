@@ -271,6 +271,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarObjectVelocityY:
     case PackageScriptOp::SetVarObjectAnimationFrame:
     case PackageScriptOp::SetVarObjectAnimationRate:
+    case PackageScriptOp::SetObjectOwner:
+    case PackageScriptOp::SetObjectOwnerFromVar:
     case PackageScriptOp::SetVarOwnedObjectCount:
     case PackageScriptOp::SetVarOwnerFighterVar:
     case PackageScriptOp::SetOwnerFighterVarImmediate:
@@ -1822,6 +1824,17 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetObjectHitlagFromVar:
         if (!allowObjectContextReads) {
             throw std::runtime_error("fighter package script object hitlag write is invalid");
+        }
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetObjectOwner:
+        if (!allowObjectContextReads || instruction.intValue < -1) {
+            throw std::runtime_error("fighter package script object owner write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetObjectOwnerFromVar:
+        if (!allowObjectContextReads) {
+            throw std::runtime_error("fighter package script object owner write is invalid");
         }
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;

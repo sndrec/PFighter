@@ -4974,6 +4974,16 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetObjectHitlagFromVar, -1, 12, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectHitlag, 38, -1, -1, 0, 0, {}},
         },
+    }, {
+        "ObjectOwnerWriteScript",
+        8,
+        {
+            {pf::PackageScriptOp::SetObjectOwner, -1, -1, -1, 1, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectOwner, 5, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 12, -1, -1, -1, 0, {}},
+            {pf::PackageScriptOp::SetObjectOwnerFromVar, -1, 12, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarObjectOwner, 13, -1, -1, 0, 0, {}},
+        },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
     pf::GameObjectDefinition packageVelocityObject = packageSourceWorld.objectDefs[1];
@@ -5299,6 +5309,17 @@ int main(int argc, char** argv) {
         {},
     });
     const bool invalidPackageFighterObjectContextWriteRejected = pf::writeFighterPackage(invalidFighterObjectContextWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidFighterObjectOwnerWritePackage = sourcePackage;
+    invalidFighterObjectOwnerWritePackage.fighters[0].packageScripts[0].instructions.push_back({
+        pf::PackageScriptOp::SetObjectOwner,
+        -1,
+        -1,
+        -1,
+        1,
+        0,
+        {},
+    });
+    const bool invalidPackageFighterObjectOwnerWriteRejected = pf::writeFighterPackage(invalidFighterObjectOwnerWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidFighterObjectDamageWritePackage = sourcePackage;
     invalidFighterObjectDamageWritePackage.fighters[0].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SetObjectDamage,
@@ -5418,6 +5439,12 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidObjectHitlagWritePackage = sourcePackage;
     invalidObjectHitlagWritePackage.objects[1].packageScripts[6].instructions[3].srcA = 999;
     const bool invalidPackageObjectHitlagWriteRejected = pf::writeFighterPackage(invalidObjectHitlagWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectOwnerWritePackage = sourcePackage;
+    invalidObjectOwnerWritePackage.objects[1].packageScripts[7].instructions[3].srcA = 999;
+    const bool invalidPackageObjectOwnerWriteRejected = pf::writeFighterPackage(invalidObjectOwnerWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectOwnerImmediateWritePackage = sourcePackage;
+    invalidObjectOwnerImmediateWritePackage.objects[1].packageScripts[7].instructions[0].intValue = -2;
+    const bool invalidPackageObjectOwnerImmediateWriteRejected = pf::writeFighterPackage(invalidObjectOwnerImmediateWritePackage, &invalidPackageError).empty();
     pf::FighterPackage validObjectFighterContextWritePackage = sourcePackage;
     validObjectFighterContextWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SetVarFighterPercent,
@@ -5494,7 +5521,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 39 &&
-        loadedPackage.objects[1].packageScripts.size() == 7;
+        loadedPackage.objects[1].packageScripts.size() == 8;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -6224,6 +6251,27 @@ int main(int argc, char** argv) {
         packageObjectHitlagWrite->packageVars.size() > 38 &&
         packageObjectHitlagWrite->packageVars[37] == 4 &&
         packageObjectHitlagWrite->packageVars[38] == 6;
+    pf::World packageObjectOwnerWriteWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectOwnerWriteWorld.objectDefs = loadedPackage.objects;
+        packageObjectOwnerWriteWorld.objectDefs[1].onSpawned = {{std::string{"script:ObjectOwnerWriteScript"}}};
+    }
+    const int packageObjectOwnerWriteIndex = pf::spawnGameObject(
+        packageObjectOwnerWriteWorld,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const pf::GameObjectRuntime* packageObjectOwnerWrite = packageObjectOwnerWriteIndex >= 0 &&
+            packageObjectOwnerWriteIndex < static_cast<int>(packageObjectOwnerWriteWorld.objects.size())
+        ? &packageObjectOwnerWriteWorld.objects[static_cast<size_t>(packageObjectOwnerWriteIndex)]
+        : nullptr;
+    const bool packageObjectOwnerWriteOk = packageObjectOwnerWrite &&
+        packageObjectOwnerWrite->ownerFighter == -1 &&
+        packageObjectOwnerWrite->packageVars.size() > 13 &&
+        packageObjectOwnerWrite->packageVars[5] == 1 &&
+        packageObjectOwnerWrite->packageVars[13] == -1;
     pf::World packageObjectDestroyScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectDestroyScriptWorld.objectDefs = loadedPackage.objects;
@@ -6402,6 +6450,8 @@ int main(int argc, char** argv) {
               << " fighter_package_object_damage_write_now=" << (packageObjectDamageWrite ? pf::fxToFloat(packageObjectDamageWrite->damageTaken) : -1.0f)
               << " fighter_package_object_hitlag_write_ok=" << packageObjectHitlagWriteOk
               << " fighter_package_object_hitlag_write_now=" << (packageObjectHitlagWrite ? packageObjectHitlagWrite->hitlag : -1)
+              << " fighter_package_object_owner_write_ok=" << packageObjectOwnerWriteOk
+              << " fighter_package_object_owner_write_now=" << (packageObjectOwnerWrite ? packageObjectOwnerWrite->ownerFighter : -2)
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
@@ -6449,6 +6499,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_subaction_call_script_write_rejected=" << invalidPackageSubactionCallScriptWriteRejected
               << " fighter_package_invalid_fighter_destroy_write_rejected=" << invalidPackageFighterDestroyWriteRejected
               << " fighter_package_invalid_fighter_object_context_write_rejected=" << invalidPackageFighterObjectContextWriteRejected
+              << " fighter_package_invalid_fighter_object_owner_write_rejected=" << invalidPackageFighterObjectOwnerWriteRejected
               << " fighter_package_invalid_fighter_object_damage_write_rejected=" << invalidPackageFighterObjectDamageWriteRejected
               << " fighter_package_invalid_fighter_object_hitlag_write_rejected=" << invalidPackageFighterObjectHitlagWriteRejected
               << " fighter_package_invalid_fact_write_rejected=" << invalidPackageFactWriteRejected
@@ -6470,6 +6521,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_object_throw_flag_write_rejected=" << invalidPackageObjectThrowFlagWriteRejected
               << " fighter_package_invalid_object_damage_write_rejected=" << invalidPackageObjectDamageWriteRejected
               << " fighter_package_invalid_object_hitlag_write_rejected=" << invalidPackageObjectHitlagWriteRejected
+              << " fighter_package_invalid_object_owner_write_rejected=" << invalidPackageObjectOwnerWriteRejected
+              << " fighter_package_invalid_object_owner_immediate_write_rejected=" << invalidPackageObjectOwnerImmediateWriteRejected
               << " fighter_package_object_fighter_context_write_ok=" << packageObjectFighterContextWriteAccepted
               << " fighter_package_invalid_object_context_write_rejected=" << invalidPackageObjectContextWriteRejected
               << " fighter_package_invalid_object_owner_var_write_rejected=" << invalidPackageObjectOwnerVarWriteRejected

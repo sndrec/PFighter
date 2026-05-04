@@ -1128,6 +1128,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityY: return "ObjVelY";
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return "ObjAnimF";
     case pf::PackageScriptOp::SetVarObjectAnimationRate: return "ObjAnimR";
+    case pf::PackageScriptOp::SetObjectOwner: return "ObjOwnSet";
+    case pf::PackageScriptOp::SetObjectOwnerFromVar: return "ObjOwnVar";
     case pf::PackageScriptOp::SetVarOwnedObjectCount: return "OwnCnt";
     case pf::PackageScriptOp::SetVarOwnerFighterVar: return "OwnRead";
     case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return "OwnSet";
@@ -1295,6 +1297,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetObjectHitlagFromVar:
         instruction.op = pf::PackageScriptOp::SetObjectHitlag;
+        break;
+    case pf::PackageScriptOp::SetObjectOwnerFromVar:
+        instruction.op = pf::PackageScriptOp::SetObjectOwner;
         break;
     case pf::PackageScriptOp::SpawnObjectFromVars:
         instruction.op = pf::PackageScriptOp::SpawnObject;
@@ -1632,6 +1637,12 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetObjectHitlagFromVar:
         label += " = v" + std::to_string(instruction.srcA);
         break;
+    case pf::PackageScriptOp::SetObjectOwner:
+        label += " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetObjectOwnerFromVar:
+        label += " = v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::SetVarOwnedObjectCount:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
@@ -1920,7 +1931,9 @@ static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
 
 static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     switch (op) {
-    case pf::PackageScriptOp::SetVarObjectOwner: return pf::PackageScriptOp::SetVarObjectHeldBy;
+    case pf::PackageScriptOp::SetVarObjectOwner: return pf::PackageScriptOp::SetObjectOwner;
+    case pf::PackageScriptOp::SetObjectOwner: return pf::PackageScriptOp::SetObjectOwnerFromVar;
+    case pf::PackageScriptOp::SetObjectOwnerFromVar: return pf::PackageScriptOp::SetVarObjectHeldBy;
     case pf::PackageScriptOp::SetVarObjectHeldBy: return pf::PackageScriptOp::SetVarObjectGrabVictim;
     case pf::PackageScriptOp::SetVarObjectGrabVictim: return pf::PackageScriptOp::SetVarObjectLastFighter;
     case pf::PackageScriptOp::SetVarObjectLastFighter: return pf::PackageScriptOp::SetVarObjectLastObject;

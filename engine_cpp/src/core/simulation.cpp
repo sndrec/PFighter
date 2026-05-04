@@ -6905,6 +6905,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             }
             object.packageVars[static_cast<size_t>(index)] = value;
         };
+        auto setObjectOwner = [&](int32_t value) {
+            object.ownerFighter = value < -1 ? -1 : static_cast<int>(value);
+        };
         auto setOwnerFighterVar = [&](int index, int32_t value) {
             if (!validFighterIndex(world, object.ownerFighter) || index < 0) {
                 return;
@@ -7150,6 +7153,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetObjectHitlagFromVar:
                 setGameObjectHitlag(world, objectIndex, var(instruction.srcA));
+                break;
+            case PackageScriptOp::SetObjectOwner:
+                setObjectOwner(instruction.intValue);
+                break;
+            case PackageScriptOp::SetObjectOwnerFromVar:
+                setObjectOwner(var(instruction.srcA));
                 break;
             case PackageScriptOp::SetVarObjectGroundSegment:
                 setVar(instruction.dst, object.groundSegment);
