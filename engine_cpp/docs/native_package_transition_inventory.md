@@ -35,17 +35,18 @@ package load/save should operate on native authored data only.
   native joint/type/capsule data and runtime collision/grab/damage-region logic
   reads those native hurtbox definitions. The live capsule cache is still named
   `hsdHurtboxCapsules` and should be renamed later.
-- Environment collision/ledge values are imported from
-  `def.hsdAsset->environmentCollision` during fighter construction, but the
-  debug ECB overlay still reads the imported collision bones directly.
-- Common-bone lookup and special bones still come from
-  `def.hsdAsset->commonBoneLookup` and `def.hsdAsset->fighterBones` for
-  hitbox/subaction bone mapping, shield bone lookup, head/shield debug drawing,
-  item hand references, and subtree checks.
+- Environment collision/ledge values and imported ECB source bones are copied
+  into native fighter fields during conversion; the debug ECB overlay reads the
+  native metadata.
+- Common-bone lookup and special fighter bones are copied into native fighter
+  metadata and runtime shield centers, common-part lookup, capture anchors, and
+  debug head/shield drawing read those native fields.
 - Model visibility and model-part animation state still size and resolve against
   `def.hsdAsset->modelPartAnimations`.
-- Shield pose still reads `def.hsdAsset->shieldPose` and guard clip action 38
-  directly.
+- Shield pose base data is copied into native fighter metadata and serialized in
+  packages. Guard-stick blending still looks up action 38 through imported
+  animation clips until the animation payload migration is solved without
+  duplicating roster memory.
 - Some runtime fields and function names still use `hsd*` naming even when the
   value is now rollback-owned native pose state.
 
@@ -80,9 +81,9 @@ package load/save should operate on native authored data only.
   hurtboxes have storage and serialization.
 - Native mesh storage is still named `HsdFighterMesh`/`HsdMesh*`; that should be
   renamed or wrapped as PFighter mesh data after behavior is migrated.
-- Native metadata is missing for imported fighter bone roles, common-bone lookup,
-  model-part visibility tables/animation sets, shield pose, and import
-  provenance.
+- Native metadata now exists for imported fighter bone roles, common-bone
+  lookup, ECB source bones, and shield pose. Native metadata is still missing
+  for model-part visibility tables/animation sets and import provenance.
 - Native action subactions exist, and HSD action scripts can be decoded into
   `FighterState::action`, but the decoded result is not yet the package truth.
 
@@ -95,7 +96,7 @@ package load/save should operate on native authored data only.
 3. Continue moving imported roster construction behind an explicit conversion
    boundary without duplicating the full Melee animation payload in runtime
    memory.
-4. Switch runtime animation, bone lookup, shield pose, and render paths to read
+4. Switch runtime animation, model-part visibility, and render paths to read
    native fields only.
 5. Keep `HSDRaw` and `HsdFighterAnimationAsset` parsing isolated to exporter or
    explicit conversion utilities until the names can be retired.

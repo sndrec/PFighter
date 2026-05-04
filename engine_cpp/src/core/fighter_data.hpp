@@ -807,6 +807,15 @@ struct FighterDefinition {
     std::shared_ptr<const HsdFighterAnimationAsset> hsdAsset;
     bool hasHsdAsset = false;
     FighterEcbDefinition authoredEcb;
+    HsdFighterBoneTable fighterBones;
+    std::array<int, 54> commonBoneLookup = [] {
+        std::array<int, 54> lookup{};
+        lookup.fill(-1);
+        return lookup;
+    }();
+    std::array<int, 6> environmentCollisionBones{-1, -1, -1, -1, -1, -1};
+    bool hasShieldPose = false;
+    AnimationPose shieldPose;
     std::vector<AnimationJoint> authoredSkeleton;
     std::vector<AnimationClip> authoredClips;
     HsdFighterMesh authoredMesh;

@@ -1375,6 +1375,98 @@ AnimationJoint readAnimationJoint(PackageReader& reader) {
     return joint;
 }
 
+void writeQuaternion(PackageWriter& writer, Quaternion value) {
+    writer.writeI32(value.x);
+    writer.writeI32(value.y);
+    writer.writeI32(value.z);
+    writer.writeI32(value.w);
+}
+
+Quaternion readQuaternion(PackageReader& reader) {
+    Quaternion value;
+    value.x = reader.readI32();
+    value.y = reader.readI32();
+    value.z = reader.readI32();
+    value.w = reader.readI32();
+    return value;
+}
+
+void writeJointPose(PackageWriter& writer, const JointPose& pose) {
+    writeVec3(writer, pose.translation);
+    writeVec3(writer, pose.rotation);
+    writeVec3(writer, pose.scale);
+    writeQuaternion(writer, pose.quaternion);
+    writer.writeBool(pose.useQuaternion);
+}
+
+JointPose readJointPose(PackageReader& reader) {
+    JointPose pose;
+    pose.translation = readVec3(reader);
+    pose.rotation = readVec3(reader);
+    pose.scale = readVec3(reader);
+    pose.quaternion = readQuaternion(reader);
+    pose.useQuaternion = reader.readBool();
+    return pose;
+}
+
+void writeAnimationPose(PackageWriter& writer, const AnimationPose& pose) {
+    writeVector(writer, pose.joints, [&](const JointPose& joint) {
+        writeJointPose(writer, joint);
+    });
+}
+
+AnimationPose readAnimationPose(PackageReader& reader) {
+    AnimationPose pose;
+    pose.joints = readVector<JointPose>(reader, kMaxAnimationJoints, "animation pose joint", [&]() {
+        return readJointPose(reader);
+    });
+    return pose;
+}
+
+void writeFighterBoneTable(PackageWriter& writer, const HsdFighterBoneTable& bones) {
+    writer.writeI32(bones.head);
+    writer.writeI32(bones.rightArm);
+    writer.writeI32(bones.leftLeg);
+    writer.writeI32(bones.rightLeg);
+    writer.writeI32(bones.leftArm);
+    writer.writeI32(bones.itemHold);
+    writer.writeI32(bones.shield);
+    writer.writeI32(bones.topOfHead);
+    writer.writeI32(bones.leftFoot);
+    writer.writeI32(bones.rightFoot);
+}
+
+HsdFighterBoneTable readFighterBoneTable(PackageReader& reader) {
+    HsdFighterBoneTable bones;
+    bones.head = reader.readI32();
+    bones.rightArm = reader.readI32();
+    bones.leftLeg = reader.readI32();
+    bones.rightLeg = reader.readI32();
+    bones.leftArm = reader.readI32();
+    bones.itemHold = reader.readI32();
+    bones.shield = reader.readI32();
+    bones.topOfHead = reader.readI32();
+    bones.leftFoot = reader.readI32();
+    bones.rightFoot = reader.readI32();
+    return bones;
+}
+
+template <size_t N>
+void writeI32Array(PackageWriter& writer, const std::array<int, N>& values) {
+    for (int value : values) {
+        writer.writeI32(value);
+    }
+}
+
+template <size_t N>
+std::array<int, N> readI32Array(PackageReader& reader) {
+    std::array<int, N> values{};
+    for (int& value : values) {
+        value = reader.readI32();
+    }
+    return values;
+}
+
 void writeAnimationKey(PackageWriter& writer, const AnimationKey& key) {
     writer.writeI32(key.frame);
     writer.writeI32(key.value);
@@ -2497,6 +2589,48 @@ void validateFighterEcbGeometry(const FighterEcbDefinition& ecb) {
     }
 }
 
+void validateFighterMetadata(const FighterDefinition& fighter) {
+    const auto validJoint = [](int joint) {
+        return joint >= -1;
+    };
+    const int boneValues[] = {
+        fighter.fighterBones.head,
+        fighter.fighterBones.rightArm,
+        fighter.fighterBones.leftLeg,
+        fighter.fighterBones.rightLeg,
+        fighter.fighterBones.leftArm,
+        fighter.fighterBones.itemHold,
+        fighter.fighterBones.shield,
+        fighter.fighterBones.topOfHead,
+        fighter.fighterBones.leftFoot,
+        fighter.fighterBones.rightFoot,
+    };
+    for (const int joint : boneValues) {
+        if (!validJoint(joint)) {
+            throw std::runtime_error("fighter package fighter bone metadata is invalid");
+        }
+    }
+    for (const int joint : fighter.commonBoneLookup) {
+        if (!validJoint(joint)) {
+            throw std::runtime_error("fighter package common bone metadata is invalid");
+        }
+    }
+    for (const int joint : fighter.environmentCollisionBones) {
+        if (!validJoint(joint)) {
+            throw std::runtime_error("fighter package ECB bone metadata is invalid");
+        }
+    }
+    if (!fighter.hasShieldPose && !fighter.shieldPose.joints.empty()) {
+        throw std::runtime_error("fighter package shield pose flag is invalid");
+    }
+    if (fighter.hasShieldPose &&
+        !fighter.authoredSkeleton.empty() &&
+        fighter.shieldPose.joints.size() != fighter.authoredSkeleton.size())
+    {
+        throw std::runtime_error("fighter package shield pose joint count is invalid");
+    }
+}
+
 void validateObjectProperties(const GameObjectDefinition& object) {
     if (object.lifetimeFrames < 0 || object.terminalVelocity < 0 || object.maxDamage < 0) {
         throw std::runtime_error("fighter package object property is invalid");
@@ -2623,6 +2757,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
         requireUniqueNonemptyNames(states, "fighter state");
         requireUniqueNonemptyNames(variableNames(fighter.packageVariables), "fighter variable");
         validateFighterEcbGeometry(fighter.authoredEcb);
+        validateFighterMetadata(fighter);
         validatePackageScripts(
             fighter.packageScripts,
             static_cast<int>(fighter.packageVariables.size()),
@@ -2755,6 +2890,11 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
     writeFighterProperties(writer, fighter.properties);
     writeShieldDefinition(writer, fighter.shield);
     writeFighterEcbDefinition(writer, fighter.authoredEcb);
+    writeFighterBoneTable(writer, fighter.fighterBones);
+    writeI32Array(writer, fighter.commonBoneLookup);
+    writeI32Array(writer, fighter.environmentCollisionBones);
+    writer.writeBool(fighter.hasShieldPose);
+    writeAnimationPose(writer, fighter.shieldPose);
     writeVector(writer, fighter.authoredSkeleton, [&](const AnimationJoint& joint) {
         writeAnimationJoint(writer, joint);
     });
@@ -2785,6 +2925,11 @@ FighterDefinition readFighterDefinition(PackageReader& reader) {
     fighter.properties = readFighterProperties(reader);
     fighter.shield = readShieldDefinition(reader);
     fighter.authoredEcb = readFighterEcbDefinition(reader);
+    fighter.fighterBones = readFighterBoneTable(reader);
+    fighter.commonBoneLookup = readI32Array<54>(reader);
+    fighter.environmentCollisionBones = readI32Array<6>(reader);
+    fighter.hasShieldPose = reader.readBool();
+    fighter.shieldPose = readAnimationPose(reader);
     fighter.authoredSkeleton = readVector<AnimationJoint>(reader, kMaxAnimationJoints, "authored skeleton joint", [&]() {
         return readAnimationJoint(reader);
     });

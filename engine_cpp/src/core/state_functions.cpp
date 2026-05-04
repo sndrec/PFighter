@@ -1995,12 +1995,12 @@ static bool recentTechInput(const FighterRuntime& fighter, const MeleeCommonData
 
 static int currentActionCommonBone(const World& world, const FighterRuntime& fighter, int commonPart) {
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    if (!def.hasHsdAsset || !def.hsdAsset || commonPart < 0) {
+    if (commonPart < 0) {
         return -1;
     }
 
-    if (commonPart < static_cast<int>(def.hsdAsset->commonBoneLookup.size())) {
-        return def.hsdAsset->commonBoneLookup[static_cast<size_t>(commonPart)];
+    if (commonPart < static_cast<int>(def.commonBoneLookup.size())) {
+        return def.commonBoneLookup[static_cast<size_t>(commonPart)];
     }
     return -1;
 }

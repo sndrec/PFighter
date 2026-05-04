@@ -210,7 +210,7 @@ static pf::Vec2 hsdEcbProjection(const pf::FighterRuntime& fighter, pf::Vec3 joi
 }
 
 static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    if (!def.hsdAsset || !def.hsdAsset->hasEnvironmentCollision || fighter.hsdJointWorldPositions.empty()) {
+    if (fighter.hsdJointWorldPositions.empty()) {
         return;
     }
 
@@ -222,7 +222,7 @@ static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::F
         DrawSphere(toRayGround(topN), 0.08f, MAGENTA);
     }
 
-    for (int bone : def.hsdAsset->environmentCollision.bones) {
+    for (int bone : def.environmentCollisionBones) {
         if (bone < 0 || static_cast<size_t>(bone) >= fighter.hsdJointWorldPositions.size()) {
             continue;
         }
@@ -240,12 +240,11 @@ static void drawImportedEcbSources(const pf::FighterDefinition& def, const pf::F
     }
 
     if (haveExtents && fighter.hsdJointWorldPositions.size() > 1) {
-        const pf::HsdEnvironmentCollision& source = def.hsdAsset->environmentCollision;
         const pf::Vec2 topN = hsdEcbProjection(fighter, fighter.hsdJointWorldPositions[1]);
         const pf::Fix halfWidth = pf::fxMul(pf::fxAbs(maxHorizontal - minHorizontal), pf::fxFromFloat(0.5f));
-        const pf::Fix boxReach = halfWidth + source.ledgeGrabWidth;
-        const pf::Fix boxBottom = topN.y + source.ledgeGrabYOffset - pf::fxMul(source.ledgeGrabHeight, pf::fxFromFloat(0.5f));
-        const pf::Fix boxTop = topN.y + source.ledgeGrabYOffset + pf::fxMul(source.ledgeGrabHeight, pf::fxFromFloat(0.5f));
+        const pf::Fix boxReach = halfWidth + def.properties.ledgeSnapX;
+        const pf::Fix boxBottom = topN.y + def.properties.ledgeSnapY - pf::fxMul(def.properties.ledgeSnapHeight, pf::fxFromFloat(0.5f));
+        const pf::Fix boxTop = topN.y + def.properties.ledgeSnapY + pf::fxMul(def.properties.ledgeSnapHeight, pf::fxFromFloat(0.5f));
         drawGroundRect(topN.x - boxReach, boxBottom, topN.x, boxTop, Fade(RED, 0.45f));
         drawGroundRect(topN.x, boxBottom, topN.x + boxReach, boxTop, Fade(BLUE, 0.45f));
     }
@@ -302,11 +301,11 @@ static void drawAnimationSkeleton(const pf::FighterDefinition& def, const pf::Fi
         DrawSphere(toRay(joint), 0.04f, color);
     }
 
-    const int head = def.hsdAsset ? def.hsdAsset->fighterBones.head : -1;
+    const int head = def.fighterBones.head;
     if (head >= 0 && static_cast<size_t>(head) < fighter.hsdJointWorldPositions.size()) {
         pf::Vec3 headJoint = fighter.hsdJointWorldPositions[static_cast<size_t>(head)];
         DrawSphereWires(toRay(headJoint), 0.18f, 10, 6, color);
-    } else if (!def.hsdAsset && fighter.hsdJointWorldPositions.size() > 1) {
+    } else if (fighter.hsdJointWorldPositions.size() > 1) {
         pf::Vec3 tipJoint = fighter.hsdJointWorldPositions.back();
         DrawSphereWires(toRay(tipJoint), 0.12f, 8, 4, color);
     }
@@ -4160,11 +4159,9 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         pf::Vec3 center = fighter.bones[static_cast<size_t>(pf::BoneId::Hip)].position;
         center.x += fighter.position.x;
         center.y += fighter.position.y + pf::fxFromFloat(0.2f);
-        if (def.hasHsdAsset && def.hsdAsset) {
-            const int shieldBone = def.hsdAsset->fighterBones.shield;
-            if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.hsdJointWorldTransforms.size()) {
-                center = pf::transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(shieldBone)], {});
-            }
+        const int shieldBone = def.fighterBones.shield;
+        if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.hsdJointWorldTransforms.size()) {
+            center = pf::transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(shieldBone)], {});
         }
         DrawSphereWires(toRay(center), pf::fxToFloat(shieldRadius(def, fighter)), 18, 10, VIOLET);
     }

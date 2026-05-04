@@ -769,6 +769,10 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     def.hsdAsset = cachedHsdFighterAsset(spec.fileName);
     def.hasHsdAsset = true;
     def.authoredSkeleton = def.hsdAsset->skeleton;
+    def.fighterBones = def.hsdAsset->fighterBones;
+    def.commonBoneLookup = def.hsdAsset->commonBoneLookup;
+    def.hasShieldPose = def.hsdAsset->hasShieldPose;
+    def.shieldPose = def.hsdAsset->shieldPose;
     def.hurtboxes.clear();
     def.hurtboxes.reserve(def.hsdAsset->hurtboxes.size());
     for (const HsdHurtbox& hurtbox : def.hsdAsset->hurtboxes) {
@@ -779,6 +783,7 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     }
     def.properties.shieldSizeScalesWithHealth = spec.shieldSizeScalesWithHealth;
     if (def.hsdAsset->hasEnvironmentCollision) {
+        def.environmentCollisionBones = def.hsdAsset->environmentCollision.bones;
         def.properties.ledgeSnapX = def.hsdAsset->environmentCollision.ledgeGrabWidth;
         def.properties.ledgeSnapY = def.hsdAsset->environmentCollision.ledgeGrabYOffset;
         def.properties.ledgeSnapHeight = def.hsdAsset->environmentCollision.ledgeGrabHeight;
@@ -1507,6 +1512,10 @@ FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& so
     if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty()) {
         out.authoredMesh = source.hsdAsset->mesh;
     }
+    out.fighterBones = source.hsdAsset->fighterBones;
+    out.commonBoneLookup = source.hsdAsset->commonBoneLookup;
+    out.hasShieldPose = source.hsdAsset->hasShieldPose;
+    out.shieldPose = source.hsdAsset->shieldPose;
     if (out.hurtboxes.empty()) {
         out.hurtboxes.reserve(source.hsdAsset->hurtboxes.size());
         for (const HsdHurtbox& hurtbox : source.hsdAsset->hurtboxes) {
@@ -1514,6 +1523,7 @@ FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& so
         }
     }
     if (source.hsdAsset->hasEnvironmentCollision) {
+        out.environmentCollisionBones = source.hsdAsset->environmentCollision.bones;
         out.authoredEcb.enabled = true;
     }
     for (FighterState& state : out.states) {
@@ -3230,13 +3240,13 @@ static bool usesShieldPose(const FighterState& state) {
 static void extractTransNForModelPose(AnimationPose& pose);
 
 static void applyShieldPose(const FighterDefinition& def, const FighterState& state, FighterRuntime& fighter) {
-    if (!usesShieldPose(state) || !def.hsdAsset || !def.hsdAsset->hasShieldPose ||
-        def.hsdAsset->shieldPose.joints.size() != fighter.hsdPose.joints.size())
+    if (!usesShieldPose(state) || !def.hasShieldPose ||
+        def.shieldPose.joints.size() != fighter.hsdPose.joints.size())
     {
         return;
     }
 
-    AnimationPose target = def.hsdAsset->shieldPose;
+    AnimationPose target = def.shieldPose;
     if (const AnimationClip* guardClip = findClipByActionIndex(*def.hsdAsset, 38)) {
         const Fix stickBlend = std::clamp(fighter.guardPoseBlend, Fix{0}, fx(1));
         if (stickBlend > 0) {
@@ -3385,7 +3395,7 @@ static bool hsdRelativeBonePosition(const FighterRuntime& fighter, int joint, Ve
 }
 
 static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (!def.hasHsdAsset || !def.hsdAsset || fighter.hsdJointWorldPositions.empty()) {
+    if (fighter.hsdJointWorldPositions.empty()) {
         return;
     }
 
@@ -3393,7 +3403,7 @@ static void applyImportedBoneAliases(const FighterDefinition& def, FighterRuntim
     // from Pl*.dat. The decomp resolves common parts through ftParts_GetBoneIndex
     // before touching fp->parts[].joint; keep this as data-table plumbing, not
     // a hand-authored anatomy guess.
-    const HsdFighterBoneTable& bones = def.hsdAsset->fighterBones;
+    const HsdFighterBoneTable& bones = def.fighterBones;
     Vec3 position{};
     if (hsdRelativeBonePosition(fighter, 0, position)) {
         fighter.bones[static_cast<size_t>(BoneId::Hip)].position = position;
@@ -5246,22 +5256,20 @@ static Capsule objectTouchboxWorld(const GameObjectRuntime& object, const GameOb
 }
 
 static Vec3 shieldCenterWorld(const FighterDefinition& def, const FighterRuntime& fighter) {
-    if (def.hasHsdAsset && def.hsdAsset) {
-        const int shieldBone = def.hsdAsset->fighterBones.shield;
-        if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.hsdJointWorldTransforms.size()) {
-            return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(shieldBone)], {});
-        }
+    const int shieldBone = def.fighterBones.shield;
+    if (shieldBone >= 0 && static_cast<size_t>(shieldBone) < fighter.hsdJointWorldTransforms.size()) {
+        return transformPoint(fighter.hsdJointWorldTransforms[static_cast<size_t>(shieldBone)], {});
     }
     return boneWorld(fighter, BoneId::Hip, {0, fxFromFloat(0.2f), 0});
 }
 
 static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart) {
-    if (!def.hasHsdAsset || !def.hsdAsset || commonPart < 0) {
+    if (commonPart < 0) {
         return -1;
     }
     (void)fighter;
-    if (commonPart < static_cast<int>(def.hsdAsset->commonBoneLookup.size())) {
-        const int mapped = def.hsdAsset->commonBoneLookup[static_cast<size_t>(commonPart)];
+    if (commonPart < static_cast<int>(def.commonBoneLookup.size())) {
+        const int mapped = def.commonBoneLookup[static_cast<size_t>(commonPart)];
         if (mapped >= 0) {
             return mapped;
         }
@@ -6866,11 +6874,9 @@ static Vec3 meleeCaptureAnchorWorld(const FighterDefinition& grabberDef, const F
             return boneWorldByIndex(grabber, bone);
         }
     }
-    if (grabberDef.hasHsdAsset && grabberDef.hsdAsset) {
-        const int shieldBone = grabberDef.hsdAsset->fighterBones.shield;
-        if (shieldBone >= 0) {
-            return boneWorldByIndex(grabber, shieldBone);
-        }
+    const int shieldBone = grabberDef.fighterBones.shield;
+    if (shieldBone >= 0) {
+        return boneWorldByIndex(grabber, shieldBone);
     }
     return commonPartWorld(grabberDef, grabber, 52);
 }
