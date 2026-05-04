@@ -1525,6 +1525,28 @@ AnimationClip readAnimationClip(PackageReader& reader) {
     return clip;
 }
 
+void writeModelPartAnimationSet(PackageWriter& writer, const HsdModelPartAnimationSet& set) {
+    writer.writeI32(set.startingBone);
+    writeVector(writer, set.entries, [&](int entry) {
+        writer.writeI32(entry);
+    });
+    writeVector(writer, set.animations, [&](const AnimationClip& clip) {
+        writeAnimationClip(writer, clip);
+    });
+}
+
+HsdModelPartAnimationSet readModelPartAnimationSet(PackageReader& reader) {
+    HsdModelPartAnimationSet set;
+    set.startingBone = reader.readI32();
+    set.entries = readVector<int>(reader, kMaxMeshBatches, "model part entry", [&]() {
+        return reader.readI32();
+    });
+    set.animations = readVector<AnimationClip>(reader, kMaxAnimationClips, "model part animation", [&]() {
+        return readAnimationClip(reader);
+    });
+    return set;
+}
+
 void writeFloatArray16(PackageWriter& writer, const std::array<float, 16>& values) {
     for (float value : values) {
         writer.writePod(value);
@@ -2901,6 +2923,9 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
     writeVector(writer, fighter.authoredClips, [&](const AnimationClip& clip) {
         writeAnimationClip(writer, clip);
     });
+    writeVector(writer, fighter.modelPartAnimations, [&](const HsdModelPartAnimationSet& set) {
+        writeModelPartAnimationSet(writer, set);
+    });
     writeFighterMesh(writer, fighter.authoredMesh);
     writer.writeBool(false);
     writer.writeI32(-1);
@@ -2935,6 +2960,9 @@ FighterDefinition readFighterDefinition(PackageReader& reader) {
     });
     fighter.authoredClips = readVector<AnimationClip>(reader, kMaxAnimationClips, "authored animation clip", [&]() {
         return readAnimationClip(reader);
+    });
+    fighter.modelPartAnimations = readVector<HsdModelPartAnimationSet>(reader, kMaxAnimationClips, "model part animation set", [&]() {
+        return readModelPartAnimationSet(reader);
     });
     validateAuthoredAnimationData(fighter.authoredSkeleton, fighter.authoredClips);
     fighter.authoredMesh = readFighterMesh(reader);

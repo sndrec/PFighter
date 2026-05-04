@@ -818,6 +818,7 @@ struct FighterDefinition {
     AnimationPose shieldPose;
     std::vector<AnimationJoint> authoredSkeleton;
     std::vector<AnimationClip> authoredClips;
+    std::vector<HsdModelPartAnimationSet> modelPartAnimations;
     HsdFighterMesh authoredMesh;
     std::vector<PackageVariableDefinition> packageVariables;
     std::vector<PackageScript> packageScripts;

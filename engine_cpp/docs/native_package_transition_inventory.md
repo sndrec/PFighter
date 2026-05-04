@@ -40,8 +40,8 @@ package load/save should operate on native authored data only.
 - Common-bone lookup and special fighter bones are copied into native fighter
   metadata and runtime shield centers, common-part lookup, capture anchors, and
   debug head/shield drawing read those native fields.
-- Model visibility and model-part animation state still size and resolve against
-  `def.hsdAsset->modelPartAnimations`.
+- Model visibility defaults now size from native `authoredMesh`, and model-part
+  animation state resolves against native serialized model-part animation sets.
 - Shield pose base data is copied into native fighter metadata and serialized in
   packages. Guard-stick blending still looks up action 38 through imported
   animation clips until the animation payload migration is solved without
@@ -81,8 +81,8 @@ package load/save should operate on native authored data only.
 - Native mesh storage is still named `HsdFighterMesh`/`HsdMesh*`, but package
   rendering now reads it from `FighterDefinition::authoredMesh`.
 - Native metadata now exists for imported fighter bone roles, common-bone
-  lookup, ECB source bones, and shield pose. Native metadata is still missing
-  for model-part visibility tables/animation sets and import provenance.
+  lookup, ECB source bones, shield pose, and model-part animation sets. Native
+  metadata is still missing for import provenance.
 - Native action subactions exist, and HSD action scripts can be decoded into
   `FighterState::action`, but the decoded result is not yet the package truth.
 
@@ -95,7 +95,6 @@ package load/save should operate on native authored data only.
 3. Continue moving imported roster construction behind an explicit conversion
    boundary without duplicating the full Melee animation payload in runtime
    memory.
-4. Switch runtime animation clips and model-part visibility to read native
-   fields only.
+4. Switch runtime animation clips to read native fields only.
 5. Keep `HSDRaw` and `HsdFighterAnimationAsset` parsing isolated to exporter or
    explicit conversion utilities until the names can be retired.

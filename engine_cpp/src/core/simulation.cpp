@@ -769,6 +769,7 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     def.hsdAsset = cachedHsdFighterAsset(spec.fileName);
     def.hasHsdAsset = true;
     def.authoredSkeleton = def.hsdAsset->skeleton;
+    def.modelPartAnimations = def.hsdAsset->modelPartAnimations;
     def.fighterBones = def.hsdAsset->fighterBones;
     def.commonBoneLookup = def.hsdAsset->commonBoneLookup;
     def.hasShieldPose = def.hsdAsset->hasShieldPose;
@@ -914,9 +915,9 @@ StageDefinition makeBattlefieldTrainingStage() {
     throw std::runtime_error("missing or invalid binary Battlefield stage asset: engine_cpp/data/stages/battlefield_melee.pstage.bin");
 }
 
-static size_t modelVisibilityStateCount(const HsdFighterAnimationAsset& asset) {
+static size_t modelVisibilityStateCount(const HsdFighterMesh& mesh) {
     int maxIndex = -1;
-    for (const HsdMeshBatch& batch : asset.mesh.batches) {
+    for (const HsdMeshBatch& batch : mesh.batches) {
         if (batch.hiddenByVisibilityTable && batch.modelPartIndex >= 0) {
             maxIndex = std::max(maxIndex, batch.modelPartIndex);
         }
@@ -925,12 +926,12 @@ static size_t modelVisibilityStateCount(const HsdFighterAnimationAsset& asset) {
 }
 
 static void ensureModelVisibilityDefaults(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (!def.hsdAsset) {
+    if (def.authoredMesh.batches.empty()) {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
         return;
     }
-    const size_t count = modelVisibilityStateCount(*def.hsdAsset);
+    const size_t count = modelVisibilityStateCount(def.authoredMesh);
     if (fighter.hsdModelVisibilityDefaultStates.size() != count) {
         // HSDLib's renderer resets high-poly visibility groups to state 0.
         // Character-specific ftParts_80074A4C default overrides are ported separately.
@@ -971,9 +972,9 @@ static FighterRuntime makeTrainingFighter(World& world, int fighterDefIndex, Vec
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighterDefIndex)];
     p1.shieldHealth = def.shield.maxHealth;
     initializePackageVars(def, p1);
-    if (def.hsdAsset) {
+    if (!def.authoredMesh.batches.empty()) {
         ensureModelVisibilityDefaults(def, p1);
-        p1.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
+        p1.hsdModelPartAnimations.assign(def.modelPartAnimations.size(), -1);
     }
     return p1;
 }
@@ -1229,10 +1230,10 @@ bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::s
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
     initializePackageVars(*found, fighter);
-    if (found->hsdAsset) {
+    if (!found->authoredMesh.batches.empty()) {
         ensureModelVisibilityDefaults(*found, fighter);
         fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelPartAnimations.assign(found->hsdAsset->modelPartAnimations.size(), -1);
+        fighter.hsdModelPartAnimations.assign(found->modelPartAnimations.size(), -1);
     } else {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
@@ -1506,6 +1507,9 @@ FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& so
         out.authoredClips = source.hsdAsset->clips;
     }
     removeOutOfRangeAnimationTracks(out.authoredClips, out.authoredSkeleton.size());
+    if (out.modelPartAnimations.empty()) {
+        out.modelPartAnimations = source.hsdAsset->modelPartAnimations;
+    }
     if (out.authoredMesh.batches.empty() && out.authoredMesh.textures.empty()) {
         out.authoredMesh = source.hsdAsset->mesh;
     }
@@ -2374,10 +2378,10 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
     fighter.stateAnimationLengthOverride = lagFrames > 0 ? lagFrames : 0;
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
-    if (def.hsdAsset) {
+    if (!def.authoredMesh.batches.empty()) {
         ensureModelVisibilityDefaults(def, fighter);
         fighter.hsdModelVisibilityStates = fighter.hsdModelVisibilityDefaultStates;
-        fighter.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
+        fighter.hsdModelPartAnimations.assign(def.modelPartAnimations.size(), -1);
     } else {
         fighter.hsdModelVisibilityDefaultStates.clear();
         fighter.hsdModelVisibilityStates.clear();
@@ -3277,10 +3281,10 @@ static void applyAnimationChannel(JointPose& pose, AnimationChannel channel, Fix
 }
 
 static void applyModelPartAnimations(const FighterDefinition& def, FighterRuntime& fighter) {
-    if (!def.hsdAsset || fighter.hsdModelPartAnimations.empty()) {
+    if (fighter.hsdModelPartAnimations.empty()) {
         return;
     }
-    const std::vector<HsdModelPartAnimationSet>& sets = def.hsdAsset->modelPartAnimations;
+    const std::vector<HsdModelPartAnimationSet>& sets = def.modelPartAnimations;
     for (size_t partIndex = 0; partIndex < sets.size() && partIndex < fighter.hsdModelPartAnimations.size(); ++partIndex) {
         const int animIndex = fighter.hsdModelPartAnimations[partIndex];
         if (animIndex < 0 || static_cast<size_t>(animIndex) >= sets[partIndex].animations.size()) {
@@ -5502,8 +5506,8 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
     }
     if (sub.type == SubactionType::SetModelPartAnimation) {
         if (sub.modelPartIndex >= 0) {
-            if (def.hsdAsset && fighter.hsdModelPartAnimations.size() != def.hsdAsset->modelPartAnimations.size()) {
-                fighter.hsdModelPartAnimations.assign(def.hsdAsset->modelPartAnimations.size(), -1);
+            if (fighter.hsdModelPartAnimations.size() != def.modelPartAnimations.size()) {
+                fighter.hsdModelPartAnimations.assign(def.modelPartAnimations.size(), -1);
             }
             if (sub.modelPartIndex < static_cast<int>(fighter.hsdModelPartAnimations.size())) {
                 fighter.hsdModelPartAnimations[static_cast<size_t>(sub.modelPartIndex)] = sub.modelPartAnimation;
