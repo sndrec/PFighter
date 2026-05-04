@@ -25,6 +25,9 @@ package load/save should operate on native authored data only.
   and importer warnings as debug metadata. Action indices are retained on native
   clips and state animation references, so provenance does not need to be
   gameplay truth.
+- `engine_cpp/data/packages/` contains generated native packages for the full
+  current Melee training roster. Runtime roster construction prefers these
+  packages by filename before using the imported `PFHA` fallback.
 
 ## Runtime Gameplay Dependencies To Remove Or Convert
 
@@ -35,6 +38,8 @@ package load/save should operate on native authored data only.
   attributes, ledge snap values, animation lengths, hurtboxes, action scripts,
   skeleton, clips, mesh, model visibility, common bones, ECB source bones, and
   shield pose into native fields. This fallback is still runtime importer debt.
+- With the installed generated packages present, the headless roster smoke sees
+  zero HSD-backed roster assets and native data for all 27 fighters.
 - Normal animation clip lookup now goes through native authored clip accessors.
   Package-first roster loads may store large native clip, mesh, and model-part
   vectors behind shared `authored*Source` pointers for memory, but runtime reads
@@ -110,7 +115,9 @@ package load/save should operate on native authored data only.
    behind explicit importer/converter entry points.
 2. Make native `.pfpkg` files the installed roster default for every converted
    Melee fighter, then remove the automatic runtime `*_hsd.pfighter.bin`
-   fallback for normal gameplay.
+   fallback for normal gameplay. The files are now generated and installed; the
+   fallback remains for importer/debug coverage and should be removed from the
+   normal gameplay path once replacement tests no longer depend on it.
 3. Retire `FighterDefinition::hsdAsset`, `FighterDefinition::hasHsdAsset`, and
    `FighterPackage::hsdAssets` after package rejection compatibility tests no
    longer need to construct legacy dependent shapes in memory.

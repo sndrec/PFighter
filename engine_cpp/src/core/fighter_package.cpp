@@ -1817,7 +1817,12 @@ void validateAuthoredMeshData(const HsdFighterMesh& mesh, const std::vector<Anim
                 }
                 weightSum += influence.weight;
             }
-            if (weightSum <= 0.0f || weightSum > 1.0001f) {
+            if (weightSum <= 0.0f) {
+                const int fallbackBone = batch.singleBindBone >= 0 ? batch.singleBindBone : batch.parentBone;
+                if (!validAuthoredMeshBone(fallbackBone, skeleton.size()) || fallbackBone < 0) {
+                    throw std::runtime_error("fighter package authored mesh vertex influence weights are invalid");
+                }
+            } else if (weightSum > 1.0001f) {
                 throw std::runtime_error("fighter package authored mesh vertex influence weights are invalid");
             }
         }
@@ -2574,8 +2579,8 @@ void validatePackageScripts(
     }
 }
 
-void validateHitboxGeometry(const HitboxDefinition& hitbox) {
-    if (hitbox.radius <= 0) {
+void validateHitboxGeometry(const HitboxDefinition& hitbox, bool allowZeroRadius = false) {
+    if (hitbox.radius < 0 || (!allowZeroRadius && hitbox.radius == 0)) {
         throw std::runtime_error("fighter package hitbox radius is invalid");
     }
     if (hitbox.damage < 0 || hitbox.damageShield < 0 || hitbox.knockbackBase < 0 ||
@@ -2849,7 +2854,7 @@ void validateFighterPackageReferences(const FighterPackage& package) {
                 if (subaction.type == SubactionType::CreateHitbox ||
                     subaction.type == SubactionType::CreateThrowHitbox)
                 {
-                    validateHitboxGeometry(subaction.hitbox);
+                    validateHitboxGeometry(subaction.hitbox, true);
                 }
             }
         }

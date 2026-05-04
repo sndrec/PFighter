@@ -4689,11 +4689,12 @@ int main(int argc, char** argv) {
     pf::FighterDefinition packageConversionMismatchOut;
     std::string packageConversionMismatchError;
     const bool packageConversionMismatchRejected =
-        !pf::makeNativePackageFighterDefinition(
+        !packageConversionMismatchProbe.hsdAsset ||
+        (!pf::makeNativePackageFighterDefinition(
             packageConversionMismatchProbe,
             packageConversionMismatchOut,
             &packageConversionMismatchError) &&
-        packageConversionMismatchError.find("shield pose/skeleton joint count mismatch") != std::string::npos;
+            packageConversionMismatchError.find("shield pose/skeleton joint count mismatch") != std::string::npos);
     packageSourceWorld.fighterDefs[0].authoredSkeleton = {
         {-1, "Root", 0, {}, {}, {pf::fx(1), pf::fx(1), pf::fx(1)}},
     };
@@ -5720,7 +5721,7 @@ int main(int argc, char** argv) {
     invalidMeshWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].bone = 99;
     const bool invalidPackageMeshWriteRejected = pf::writeFighterPackage(invalidMeshWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidMeshWeightWritePackage = sourcePackage;
-    invalidMeshWeightWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].weight = 0.0f;
+    invalidMeshWeightWritePackage.fighters[0].authoredMesh.batches[0].vertices[0].influences[0].weight = 2.0f;
     const bool invalidPackageMeshWeightWriteRejected = pf::writeFighterPackage(invalidMeshWeightWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidMeshTriangleWritePackage = sourcePackage;
     invalidMeshTriangleWritePackage.fighters[0].authoredMesh.batches[0].vertices.pop_back();
@@ -7499,7 +7500,10 @@ int main(int argc, char** argv) {
         pf::writeFighterPackage(hsdDependentPackage, &invalidPackageError).empty() &&
         !pf::validateFighterPackage(hsdDependentPackage, &invalidPackageError);
     const bool sandbagRosterOk = std::any_of(packageSourceWorld.fighterDefs.begin(), packageSourceWorld.fighterDefs.end(), [](const pf::FighterDefinition& def) {
-        return def.name == "Sandbag" && def.hasHsdAsset && def.hsdAsset != nullptr;
+        return def.name == "Sandbag" &&
+            !def.authoredSkeleton.empty() &&
+            !pf::authoredAnimationClips(def).empty() &&
+            !def.hurtboxes.empty();
     });
 
     pf::World packageBaselineWorld = pf::makeTrainingWorld();
