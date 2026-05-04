@@ -2641,6 +2641,12 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarFighterAirVelocityY:
             setPackageVar(fighter, instruction.dst, fighter.fighterVelocity.y);
             break;
+        case PackageScriptOp::SetVarFighterAnimationFrame:
+            setPackageVar(fighter, instruction.dst, fighter.animationFrame);
+            break;
+        case PackageScriptOp::SetVarFighterAnimationRate:
+            setPackageVar(fighter, instruction.dst, fighter.animationRate);
+            break;
         case PackageScriptOp::SetVarObjectOwner:
         case PackageScriptOp::SetVarObjectHeldBy:
         case PackageScriptOp::SetVarObjectLastFighter:
@@ -2650,6 +2656,8 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarObjectPositionY:
         case PackageScriptOp::SetVarObjectVelocityX:
         case PackageScriptOp::SetVarObjectVelocityY:
+        case PackageScriptOp::SetVarObjectAnimationFrame:
+        case PackageScriptOp::SetVarObjectAnimationRate:
             break;
         case PackageScriptOp::SetVarButtonDown:
             setPackageVar(fighter, instruction.dst, (fighter.input.frames[0].buttons & instruction.intValue) != 0 ? 1 : 0);

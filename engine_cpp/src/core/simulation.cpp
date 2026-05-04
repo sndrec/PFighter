@@ -6908,7 +6908,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterPositionY:
             case PackageScriptOp::SetVarFighterGroundVelocity:
             case PackageScriptOp::SetVarFighterAirVelocityX:
-            case PackageScriptOp::SetVarFighterAirVelocityY: {
+            case PackageScriptOp::SetVarFighterAirVelocityY:
+            case PackageScriptOp::SetVarFighterAnimationFrame:
+            case PackageScriptOp::SetVarFighterAnimationRate: {
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;
@@ -6935,6 +6937,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     break;
                 case PackageScriptOp::SetVarFighterAirVelocityY:
                     setVar(instruction.dst, owner.fighterVelocity.y);
+                    break;
+                case PackageScriptOp::SetVarFighterAnimationFrame:
+                    setVar(instruction.dst, owner.animationFrame);
+                    break;
+                case PackageScriptOp::SetVarFighterAnimationRate:
+                    setVar(instruction.dst, owner.animationRate);
                     break;
                 default:
                     break;
@@ -6967,6 +6975,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetVarObjectVelocityY:
                 setVar(instruction.dst, object.velocity.y);
+                break;
+            case PackageScriptOp::SetVarObjectAnimationFrame:
+                setVar(instruction.dst, object.animationFrame);
+                break;
+            case PackageScriptOp::SetVarObjectAnimationRate:
+                setVar(instruction.dst, object.animationRate);
                 break;
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:

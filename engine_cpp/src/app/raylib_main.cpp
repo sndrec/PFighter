@@ -1084,6 +1084,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterGroundVelocity: return "GVel";
     case pf::PackageScriptOp::SetVarFighterAirVelocityX: return "AirVX";
     case pf::PackageScriptOp::SetVarFighterAirVelocityY: return "AirVY";
+    case pf::PackageScriptOp::SetVarFighterAnimationFrame: return "AnimF";
+    case pf::PackageScriptOp::SetVarFighterAnimationRate: return "AnimR";
     case pf::PackageScriptOp::SetVarObjectOwner: return "ObjOwner";
     case pf::PackageScriptOp::SetVarObjectHeldBy: return "ObjHeld";
     case pf::PackageScriptOp::SetVarObjectLastFighter: return "ObjLastF";
@@ -1093,6 +1095,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectPositionY: return "ObjPosY";
     case pf::PackageScriptOp::SetVarObjectVelocityX: return "ObjVelX";
     case pf::PackageScriptOp::SetVarObjectVelocityY: return "ObjVelY";
+    case pf::PackageScriptOp::SetVarObjectAnimationFrame: return "ObjAnimF";
+    case pf::PackageScriptOp::SetVarObjectAnimationRate: return "ObjAnimR";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
     case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
     case pf::PackageScriptOp::SetVarStickX: return "StickX";
@@ -1245,6 +1249,8 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarFighterGroundVelocity:
     case pf::PackageScriptOp::SetVarFighterAirVelocityX:
     case pf::PackageScriptOp::SetVarFighterAirVelocityY:
+    case pf::PackageScriptOp::SetVarFighterAnimationFrame:
+    case pf::PackageScriptOp::SetVarFighterAnimationRate:
     case pf::PackageScriptOp::SetVarObjectOwner:
     case pf::PackageScriptOp::SetVarObjectHeldBy:
     case pf::PackageScriptOp::SetVarObjectLastFighter:
@@ -1254,6 +1260,8 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarObjectPositionY:
     case pf::PackageScriptOp::SetVarObjectVelocityX:
     case pf::PackageScriptOp::SetVarObjectVelocityY:
+    case pf::PackageScriptOp::SetVarObjectAnimationFrame:
+    case pf::PackageScriptOp::SetVarObjectAnimationRate:
     case pf::PackageScriptOp::SetVarButtonDown:
     case pf::PackageScriptOp::SetVarButtonPressed:
     case pf::PackageScriptOp::SetVarStickX:
@@ -1618,7 +1626,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterPositionY: return pf::PackageScriptOp::SetVarFighterGroundVelocity;
     case pf::PackageScriptOp::SetVarFighterGroundVelocity: return pf::PackageScriptOp::SetVarFighterAirVelocityX;
     case pf::PackageScriptOp::SetVarFighterAirVelocityX: return pf::PackageScriptOp::SetVarFighterAirVelocityY;
-    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarButtonDown;
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarFighterAnimationFrame;
+    case pf::PackageScriptOp::SetVarFighterAnimationFrame: return pf::PackageScriptOp::SetVarFighterAnimationRate;
+    case pf::PackageScriptOp::SetVarFighterAnimationRate: return pf::PackageScriptOp::SetVarButtonDown;
     case pf::PackageScriptOp::SetVarButtonDown: return pf::PackageScriptOp::SetVarButtonPressed;
     case pf::PackageScriptOp::SetVarButtonPressed: return pf::PackageScriptOp::SetVarStickX;
     case pf::PackageScriptOp::SetVarStickX: return pf::PackageScriptOp::SetVarStickY;
@@ -1684,7 +1694,9 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectPositionX: return pf::PackageScriptOp::SetVarObjectPositionY;
     case pf::PackageScriptOp::SetVarObjectPositionY: return pf::PackageScriptOp::SetVarObjectVelocityX;
     case pf::PackageScriptOp::SetVarObjectVelocityX: return pf::PackageScriptOp::SetVarObjectVelocityY;
-    case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectOwner;
+    case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectAnimationFrame;
+    case pf::PackageScriptOp::SetVarObjectAnimationFrame: return pf::PackageScriptOp::SetVarObjectAnimationRate;
+    case pf::PackageScriptOp::SetVarObjectAnimationRate: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
     }
 }
@@ -1698,6 +1710,8 @@ static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterGroundVelocity:
     case pf::PackageScriptOp::SetVarFighterAirVelocityX:
     case pf::PackageScriptOp::SetVarFighterAirVelocityY:
+    case pf::PackageScriptOp::SetVarFighterAnimationFrame:
+    case pf::PackageScriptOp::SetVarFighterAnimationRate:
         return true;
     default:
         return false;
@@ -1712,7 +1726,9 @@ static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterPositionY: return pf::PackageScriptOp::SetVarFighterGroundVelocity;
     case pf::PackageScriptOp::SetVarFighterGroundVelocity: return pf::PackageScriptOp::SetVarFighterAirVelocityX;
     case pf::PackageScriptOp::SetVarFighterAirVelocityX: return pf::PackageScriptOp::SetVarFighterAirVelocityY;
-    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterAirVelocityY: return pf::PackageScriptOp::SetVarFighterAnimationFrame;
+    case pf::PackageScriptOp::SetVarFighterAnimationFrame: return pf::PackageScriptOp::SetVarFighterAnimationRate;
+    case pf::PackageScriptOp::SetVarFighterAnimationRate: return pf::PackageScriptOp::SetVarFighterPercent;
     default: return pf::PackageScriptOp::SetVarFighterPercent;
     }
 }
