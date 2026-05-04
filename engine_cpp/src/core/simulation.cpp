@@ -1271,6 +1271,28 @@ int spawnGameObjectOfKind(
     return spawnGameObject(world, objectName, ownerFighter, position, facing, velocity);
 }
 
+int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {
+    if (ownerFighter < 0 || objectName.empty()) {
+        return 0;
+    }
+    int destroyed = 0;
+    const size_t initialCount = world.objects.size();
+    for (size_t objectIndex = 0; objectIndex < initialCount && objectIndex < world.objects.size(); ++objectIndex) {
+        const GameObjectRuntime& object = world.objects[objectIndex];
+        if (!object.active || object.ownerFighter != ownerFighter ||
+            object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size()))
+        {
+            continue;
+        }
+        if (world.objectDefs[static_cast<size_t>(object.objectDef)].name != objectName) {
+            continue;
+        }
+        deactivateGameObject(world, objectIndex);
+        ++destroyed;
+    }
+    return destroyed;
+}
+
 static bool validGameObjectIndex(const World& world, int objectIndex) {
     return objectIndex >= 0 && objectIndex < static_cast<int>(world.objects.size()) &&
         world.objects[static_cast<size_t>(objectIndex)].active;
@@ -7075,6 +7097,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::DestroyObject:
                 deactivateGameObject(world, objectIndex);
                 return;
+            case PackageScriptOp::DestroyOwnedObjects:
+                destroyGameObjectsOwnedBy(world, object.ownerFighter, instruction.text);
+                if (!object.active) {
+                    return;
+                }
+                break;
             case PackageScriptOp::SkipIfVarLessThanImmediate:
                 frame.instructionIndex += var(instruction.dst) < instruction.intValue ? 2 : 1;
                 continue;

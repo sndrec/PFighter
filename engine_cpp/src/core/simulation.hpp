@@ -488,6 +488,7 @@ bool switchFighterDefinition(World& world, FighterRuntime& fighter, const std::s
 int spawnFighter(World& world, const std::string& fighterName, Vec2 position, int facing);
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 int spawnGameObjectOfKind(World& world, const std::string& objectName, GameObjectKind requiredKind, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
+int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName);
 bool pickUpGameObject(World& world, int objectIndex, int fighterIndex);
 bool dropGameObject(World& world, int objectIndex, Vec2 velocity = {});
 bool throwGameObject(World& world, int objectIndex, int fighterIndex, Vec2 velocity);

@@ -263,6 +263,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SpawnProjectile:
     case PackageScriptOp::SpawnProjectileFromVars:
     case PackageScriptOp::DestroyObject:
+    case PackageScriptOp::DestroyOwnedObjects:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
     case PackageScriptOp::JumpRelative:
@@ -1779,6 +1780,11 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::DestroyObject:
         if (!allowObjectLifecycleOps) {
             throw std::runtime_error("fighter package script object lifecycle op is invalid");
+        }
+        break;
+    case PackageScriptOp::DestroyOwnedObjects:
+        if (!hasName(packageObjectNames, instruction.text)) {
+            throw std::runtime_error("fighter package script object target is invalid");
         }
         break;
     case PackageScriptOp::SkipIfVarLessThanImmediate:
