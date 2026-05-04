@@ -6093,8 +6093,24 @@ int main(int argc, char** argv) {
     pf::FighterEditorSession editorSession;
     const bool editorSessionBeginOk =
         pf::beginFighterEditorSessionFromWorld(packageSourceWorld, 0, editorSession, &packageError, "headless_editor_session");
+    pf::FighterPackage graphlessLoadPackage = sourcePackage;
+    graphlessLoadPackage.fighters[0].packageScripts[1].graph = {};
+    const std::vector<uint8_t> graphlessLoadBytes = pf::writeFighterPackage(graphlessLoadPackage, &packageError);
+    pf::FighterEditorSession graphlessLoadSession;
+    const bool editorSessionLoadBuildsGraphOk = editorSessionBeginOk &&
+        !graphlessLoadBytes.empty() &&
+        pf::loadFighterEditorSessionPackage(graphlessLoadBytes, graphlessLoadSession, &packageError) &&
+        !graphlessLoadSession.package.fighters.empty() &&
+        graphlessLoadSession.package.fighters[0].packageScripts.size() > 1 &&
+        !graphlessLoadSession.package.fighters[0].packageScripts[1].graph.nodes.empty() &&
+        std::any_of(
+            graphlessLoadSession.package.fighters[0].packageScripts[1].graph.links.begin(),
+            graphlessLoadSession.package.fighters[0].packageScripts[1].graph.links.end(),
+            [](const pf::PackageScriptGraphLink& link) {
+                return link.fromSocket == 1;
+            });
     int editorCreatedState = -1;
-    const bool editorSessionCreateStateOk = editorSessionBeginOk &&
+    const bool editorSessionCreateStateOk = editorSessionLoadBuildsGraphOk &&
         pf::createEditorSessionState(editorSession, "EditorSmokeState", 0, &editorCreatedState, &packageError) &&
         editorCreatedState >= 0;
     const bool editorSessionRenameStateOk = editorSessionCreateStateOk &&
@@ -8346,6 +8362,7 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_install_ok=" << runtimePackageInstallOk
               << " fighter_package_runtime_bytes_install_ok=" << runtimePackageBytesInstallOk
               << " fighter_editor_session_begin_ok=" << editorSessionBeginOk
+              << " fighter_editor_session_load_builds_graph_ok=" << editorSessionLoadBuildsGraphOk
               << " fighter_editor_session_create_state_ok=" << editorSessionCreateStateOk
               << " fighter_editor_session_rename_state_ok=" << editorSessionRenameStateOk
               << " fighter_editor_session_remove_state_ok=" << editorSessionRemoveStateOk

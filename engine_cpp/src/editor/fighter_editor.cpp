@@ -171,6 +171,23 @@ bool validateEditorSessionAfterMutation(
     return true;
 }
 
+void ensurePackageScriptGraphs(FighterPackage& package) {
+    for (FighterDefinition& fighter : package.fighters) {
+        for (PackageScript& script : fighter.packageScripts) {
+            if (script.graph.nodes.empty()) {
+                script.graph = makePackageScriptControlFlowGraph(script);
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            if (script.graph.nodes.empty()) {
+                script.graph = makePackageScriptControlFlowGraph(script);
+            }
+        }
+    }
+}
+
 std::vector<FunctionCall>* stateCallbacks(FighterState& state, FighterEditorStateCallbackSlot slot) {
     switch (slot) {
     case FighterEditorStateCallbackSlot::Enter:
@@ -1880,20 +1897,7 @@ FighterPackage makeEditorFighterPackage(const World& world, int rootFighterDef, 
     package.fighters = collectEditorPackageFighters(world, root);
     collectEditorPackageAssets(package.fighters, package);
     package.objects = world.objectDefs;
-    for (FighterDefinition& fighter : package.fighters) {
-        for (PackageScript& script : fighter.packageScripts) {
-            if (script.graph.nodes.empty()) {
-                script.graph = makePackageScriptControlFlowGraph(script);
-            }
-        }
-    }
-    for (GameObjectDefinition& object : package.objects) {
-        for (PackageScript& script : object.packageScripts) {
-            if (script.graph.nodes.empty()) {
-                script.graph = makePackageScriptControlFlowGraph(script);
-            }
-        }
-    }
+    ensurePackageScriptGraphs(package);
     return package;
 }
 
@@ -1954,6 +1958,7 @@ bool loadFighterEditorSessionPackage(
         setEditorError(error, "editor package has no fighters");
         return false;
     }
+    ensurePackageScriptGraphs(package);
     session = {};
     session.package = std::move(package);
     session.lastBytes = bytes;
