@@ -331,6 +331,12 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetAnimationFrame:
     case PackageScriptOp::SetAnimationFrameFromVar:
     case PackageScriptOp::SpawnFighterSetVar:
+    case PackageScriptOp::SetVarIndexedFighterStateIndex:
+    case PackageScriptOp::SetVarIndexedFighterPositionX:
+    case PackageScriptOp::SetVarIndexedFighterPositionY:
+    case PackageScriptOp::SetIndexedFighterStateFromVar:
+    case PackageScriptOp::SetIndexedFighterPositionFromVars:
+    case PackageScriptOp::SetIndexedFighterFacingFromVar:
     case PackageScriptOp::SetVarIndexedFighterVar:
     case PackageScriptOp::SetIndexedFighterVarImmediate:
     case PackageScriptOp::SetIndexedFighterVarFromVar:
@@ -1896,10 +1902,37 @@ void validatePackageScriptInstruction(
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
     case PackageScriptOp::SetVarIndexedFighterVar:
+    case PackageScriptOp::SetVarIndexedFighterStateIndex:
+    case PackageScriptOp::SetVarIndexedFighterPositionX:
+    case PackageScriptOp::SetVarIndexedFighterPositionY:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "fighter index source");
-        if (!allowFighterContextReads || allowObjectContextReads || instruction.intValue < 0) {
+        if (!allowFighterContextReads || allowObjectContextReads ||
+            (instruction.op == PackageScriptOp::SetVarIndexedFighterVar && instruction.intValue < 0))
+        {
             throw std::runtime_error("fighter package script indexed fighter variable read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedFighterStateFromVar:
+        requireVariableIndex(instruction.dst, variableCount, "fighter index source");
+        requireVariableIndex(instruction.srcA, variableCount, "state index source");
+        if (!allowFighterContextReads || allowObjectContextReads) {
+            throw std::runtime_error("fighter package script indexed fighter state write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedFighterPositionFromVars:
+        requireVariableIndex(instruction.dst, variableCount, "fighter index source");
+        requireVariableIndex(instruction.srcA, variableCount, "x source");
+        requireVariableIndex(instruction.srcB, variableCount, "y source");
+        if (!allowFighterContextReads || allowObjectContextReads) {
+            throw std::runtime_error("fighter package script indexed fighter position write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedFighterFacingFromVar:
+        requireVariableIndex(instruction.dst, variableCount, "fighter index source");
+        requireVariableIndex(instruction.srcA, variableCount, "facing source");
+        if (!allowFighterContextReads || allowObjectContextReads) {
+            throw std::runtime_error("fighter package script indexed fighter facing write is invalid");
         }
         break;
     case PackageScriptOp::SetIndexedFighterVarImmediate:
