@@ -1971,19 +1971,25 @@ bool exportFighterEditorSessionPackage(
     if (!validRootFighter(session, error)) {
         return false;
     }
-    std::vector<uint8_t> bytes = writeFighterPackage(session.package, error);
+    FighterPackage compiledPackage = session.package;
+    if (!compileFighterPackageScriptGraphs(compiledPackage, error)) {
+        session.lastMessage = error ? *error : "editor package graph compile failed";
+        return false;
+    }
+    std::vector<uint8_t> bytes = writeFighterPackage(compiledPackage, error);
     if (bytes.empty()) {
         session.lastMessage = error ? *error : "editor package export failed";
         return false;
     }
     FighterPackageDescriptor descriptor;
-    if (!describeFighterPackage(session.package, descriptor, bytes, error)) {
+    if (!describeFighterPackage(compiledPackage, descriptor, bytes, error)) {
         session.lastMessage = error ? *error : "editor package describe failed";
         return false;
     }
-    snapshot.package = session.package;
+    snapshot.package = compiledPackage;
     snapshot.bytes = bytes;
     snapshot.descriptor = descriptor;
+    session.package = std::move(compiledPackage);
     session.lastBytes = bytes;
     session.lastDescriptor = descriptor;
     session.lastMessage = "OK";
@@ -2892,6 +2898,24 @@ bool compilePackageScriptGraph(PackageScript& script, std::string* error) {
         PackageScriptGraphNode* node = graphNodeById(graph, compiledNodeIds[static_cast<size_t>(compiledIndex)]);
         if (node) {
             node->instructionIndex = compiledIndex;
+        }
+    }
+    return true;
+}
+
+bool compileFighterPackageScriptGraphs(FighterPackage& package, std::string* error) {
+    for (FighterDefinition& fighter : package.fighters) {
+        for (PackageScript& script : fighter.packageScripts) {
+            if (!script.graph.nodes.empty() && !compilePackageScriptGraph(script, error)) {
+                return false;
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            if (!script.graph.nodes.empty() && !compilePackageScriptGraph(script, error)) {
+                return false;
+            }
         }
     }
     return true;

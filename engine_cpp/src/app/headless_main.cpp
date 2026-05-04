@@ -6287,7 +6287,16 @@ int main(int argc, char** argv) {
         editorGraphCompileProbe.graph.links[1].fromNode = 2;
         editorGraphCompileProbe.graph.links[1].toNode = 1;
     }
-    const bool editorSessionCompileStandaloneGraphOk = editorSessionScriptGraphOk &&
+    pf::FighterEditorSession editorGraphExportSession = editorSession;
+    pf::FighterEditorPackageSnapshot editorGraphExportSnapshot;
+    const bool editorSessionExportCompilesGraphOk = editorSessionScriptGraphOk &&
+        pf::setEditorSessionPackageScriptGraph(editorGraphExportSession, editorLogicScriptIndex, editorGraphCompileProbe.graph, &packageError) &&
+        pf::exportFighterEditorSessionPackage(editorGraphExportSession, editorGraphExportSnapshot, &packageError) &&
+        !editorGraphExportSnapshot.package.fighters.empty() &&
+        editorGraphExportSnapshot.package.fighters[0].packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions.size() == 2 &&
+        editorGraphExportSnapshot.package.fighters[0].packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions[0].op == pf::PackageScriptOp::Nop &&
+        editorGraphExportSnapshot.package.fighters[0].packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions[1].op == pf::PackageScriptOp::SetVarImmediate;
+    const bool editorSessionCompileStandaloneGraphOk = editorSessionExportCompilesGraphOk &&
         pf::compilePackageScriptGraph(editorGraphCompileProbe, &packageError) &&
         editorGraphCompileProbe.instructions.size() == 2 &&
         editorGraphCompileProbe.instructions[0].op == pf::PackageScriptOp::Nop &&
@@ -8360,6 +8369,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_instruction_ok=" << editorSessionAddInstructionOk
               << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
               << " fighter_editor_session_script_graph_ok=" << editorSessionScriptGraphOk
+              << " fighter_editor_session_export_compiles_graph_ok=" << editorSessionExportCompilesGraphOk
               << " fighter_editor_session_compile_standalone_graph_ok=" << editorSessionCompileStandaloneGraphOk
               << " fighter_editor_session_compile_branch_graph_ok=" << editorSessionCompileBranchGraphOk
               << " fighter_editor_session_control_flow_graph_ok=" << editorSessionControlFlowGraphOk
