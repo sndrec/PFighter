@@ -1999,16 +1999,6 @@ static int currentActionCommonBone(const World& world, const FighterRuntime& fig
         return -1;
     }
 
-    const FighterState& state = currentState(world, fighter);
-    if (const HsdActionScript* script = findActionScriptByActionIndex(*def.hsdAsset, state.animationActionIndex)) {
-        if (commonPart < static_cast<int>(script->commonBoneLookup.size())) {
-            const int mapped = script->commonBoneLookup[static_cast<size_t>(commonPart)];
-            if (mapped >= 0) {
-                return mapped;
-            }
-        }
-    }
-
     if (commonPart < static_cast<int>(def.hsdAsset->commonBoneLookup.size())) {
         return def.hsdAsset->commonBoneLookup[static_cast<size_t>(commonPart)];
     }

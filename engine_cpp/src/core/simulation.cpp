@@ -689,6 +689,41 @@ static void applyHsdAnimationLengths(FighterDefinition& def) {
     }
 }
 
+static const HsdActionScript* hsdActionScriptForNativeImport(const HsdFighterAnimationAsset& asset, const FighterState& state) {
+    const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
+    if (actionIndex >= 0) {
+        if (const HsdActionScript* script = findActionScriptByActionIndex(asset, actionIndex)) {
+            return script;
+        }
+    }
+    const std::string suffix = "_ACTION_" + state.animation + "_figatree";
+    for (const HsdActionScript& script : asset.actionScripts) {
+        if (!state.animation.empty() &&
+            script.name.size() >= suffix.size() &&
+            script.name.compare(script.name.size() - suffix.size(), suffix.size(), suffix) == 0)
+        {
+            return &script;
+        }
+    }
+    return nullptr;
+}
+
+static void importHsdActionScriptsAsNativeSubactions(FighterDefinition& def) {
+    if (!def.hasHsdAsset || !def.hsdAsset) {
+        return;
+    }
+    for (FighterState& state : def.states) {
+        const HsdActionScript* script = hsdActionScriptForNativeImport(*def.hsdAsset, state);
+        if (!script) {
+            continue;
+        }
+        state.action = decodeHsdActionScript(*def.hsdAsset, *script);
+        if (state.animationActionIndex < 0) {
+            state.animationActionIndex = script->actionIndex;
+        }
+    }
+}
+
 static void applyCommonStateTimings(FighterDefinition& def) {
     const int buryJumpIndex = def.stateIndex("BuryJump");
     if (buryJumpIndex >= 0) {
@@ -731,6 +766,7 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
         def.properties.ledgeSnapHeight = def.hsdAsset->environmentCollision.ledgeGrabHeight;
     }
     applyHsdAnimationLengths(def);
+    importHsdActionScriptsAsNativeSubactions(def);
     return def;
 }
 
@@ -5104,18 +5140,6 @@ static Vec3 shieldCenterWorld(const FighterDefinition& def, const FighterRuntime
     return boneWorld(fighter, BoneId::Hip, {0, fxFromFloat(0.2f), 0});
 }
 
-static int commonPartBoneFromScript(const HsdFighterAnimationAsset& asset, int actionIndex, int commonPart) {
-    if (commonPart < 0) {
-        return -1;
-    }
-    if (const HsdActionScript* script = findActionScriptByActionIndex(asset, actionIndex)) {
-        if (commonPart < static_cast<int>(script->commonBoneLookup.size())) {
-            return script->commonBoneLookup[static_cast<size_t>(commonPart)];
-        }
-    }
-    return -1;
-}
-
 static int commonPartBone(const FighterDefinition& def, const FighterRuntime& fighter, int commonPart) {
     if (!def.hasHsdAsset || !def.hsdAsset || commonPart < 0) {
         return -1;
@@ -5182,24 +5206,6 @@ static void processSmashCharge(FighterRuntime& fighter) {
         fighter.smashChargeFrames = fighter.smashChargeHoldFrames;
         releaseSmashCharge(fighter);
     }
-}
-
-static const HsdActionScript* actionScriptForState(const HsdFighterAnimationAsset& asset, const FighterState& state) {
-    const int actionIndex = state.animationActionIndex >= 0 ? state.animationActionIndex : fallbackActionIndex(state.animation);
-    if (actionIndex >= 0) {
-        if (const HsdActionScript* script = findActionScriptByActionIndex(asset, actionIndex)) {
-            return script;
-        }
-    }
-    const std::string suffix = "_ACTION_" + state.animation + "_figatree";
-    for (const HsdActionScript& script : asset.actionScripts) {
-        if (script.name.size() >= suffix.size() &&
-            script.name.compare(script.name.size() - suffix.size(), suffix.size(), suffix) == 0)
-        {
-            return &script;
-        }
-    }
-    return nullptr;
 }
 
 static void applySetJumpStateSubaction(const FighterDefinition& def, FighterRuntime& fighter, uint32_t state) {
@@ -5449,13 +5455,7 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
 }
 
 static void executeActionFrame(World& world, size_t fighterIndex, const FighterDefinition& def, const FighterState& state, int actionFrame) {
-    std::vector<Subaction> actionSource = state.action;
-    if (def.hasHsdAsset && def.hsdAsset) {
-        if (const HsdActionScript* script = actionScriptForState(*def.hsdAsset, state)) {
-            actionSource = decodeHsdActionScript(*def.hsdAsset, *script);
-        }
-    }
-    const UnfoldedAction action = unfoldAction(actionSource);
+    const UnfoldedAction action = unfoldAction(state.action);
     if (actionFrame < 0 || actionFrame >= static_cast<int>(action.size())) {
         return;
     }

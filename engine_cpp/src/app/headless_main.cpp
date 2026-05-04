@@ -187,6 +187,7 @@ int main(int argc, char** argv) {
     size_t rosterHsdReady = 0;
     size_t rosterAttributesReady = 0;
     size_t rosterActionScriptsReady = 0;
+    size_t rosterNativeAttackEventsReady = 0;
     for (const pf::FighterDefinition& def : world.fighterDefs) {
         if (def.hasHsdAsset && def.hsdAsset &&
             !def.hsdAsset->skeleton.empty() &&
@@ -201,10 +202,22 @@ int main(int argc, char** argv) {
         if (def.hasHsdAsset && def.hsdAsset && !def.hsdAsset->actionScripts.empty()) {
             ++rosterActionScriptsReady;
         }
+        const int attackHi3Index = def.stateIndex("AttackHi3");
+        if (attackHi3Index >= 0) {
+            const pf::FighterState& attackHi3 = def.states[static_cast<size_t>(attackHi3Index)];
+            const bool hasNativeHitboxEvent = std::any_of(attackHi3.action.begin(), attackHi3.action.end(), [](const pf::Subaction& subaction) {
+                return subaction.type == pf::SubactionType::CreateHitbox ||
+                    subaction.type == pf::SubactionType::CreateThrowHitbox;
+            });
+            if (hasNativeHitboxEvent) {
+                ++rosterNativeAttackEventsReady;
+            }
+        }
     }
     std::cout << "fighter_roster_assets_ready=" << rosterHsdReady
               << " fighter_roster_attrs_ready=" << rosterAttributesReady
               << " fighter_roster_scripts_ready=" << rosterActionScriptsReady
+              << " fighter_roster_native_attack_events_ready=" << rosterNativeAttackEventsReady
               << "\n";
 
     pf::WorldSnapshot rewindPoint;
@@ -5379,6 +5392,7 @@ int main(int argc, char** argv) {
     pf::FighterPackage subactionProjectilePackage = sourcePackage;
     const int subactionProjectileStateIndex = subactionProjectilePackage.fighters[0].stateIndex("Wait");
     if (subactionProjectileStateIndex >= 0) {
+        subactionProjectilePackage.fighters[0].states[static_cast<size_t>(subactionProjectileStateIndex)].action.clear();
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::SpawnProjectile;
         subaction.frames = 1;
@@ -5396,6 +5410,7 @@ int main(int argc, char** argv) {
     pf::FighterPackage subactionScriptPackage = sourcePackage;
     const int subactionScriptStateIndex = subactionScriptPackage.fighters[0].stateIndex("Wait");
     if (subactionScriptStateIndex >= 0) {
+        subactionScriptPackage.fighters[0].states[static_cast<size_t>(subactionScriptStateIndex)].action.clear();
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::CallScript;
         subaction.frames = 1;
@@ -5611,8 +5626,13 @@ int main(int argc, char** argv) {
         pf::writeFighterPackage(invalidSubactionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidHurtboxRefWritePackage = sourcePackage;
     const int invalidHurtboxState = invalidHurtboxRefWritePackage.fighters[0].stateIndex("EscapeN");
-    if (invalidHurtboxState >= 0 && invalidHurtboxRefWritePackage.fighters[0].states[static_cast<size_t>(invalidHurtboxState)].action.size() > 1) {
-        invalidHurtboxRefWritePackage.fighters[0].states[static_cast<size_t>(invalidHurtboxState)].action[1].hurtboxIndex = 999;
+    if (invalidHurtboxState >= 0) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SetHurtboxState;
+        subaction.frames = 1;
+        subaction.hurtboxIndex = 999;
+        subaction.hurtboxState = pf::HurtboxState::Invincible;
+        invalidHurtboxRefWritePackage.fighters[0].states[static_cast<size_t>(invalidHurtboxState)].action.push_back(subaction);
     }
     const bool invalidPackageHurtboxRefWriteRejected = invalidHurtboxState >= 0 &&
         pf::writeFighterPackage(invalidHurtboxRefWritePackage, &invalidPackageError).empty();
@@ -6402,6 +6422,9 @@ int main(int argc, char** argv) {
             &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->states[0].onEnter.size() == 1;
+    if (editorSessionCallbacksOk) {
+        editorSession.rootFighter()->states[0].action.clear();
+    }
     pf::Subaction editorTempSubaction;
     editorTempSubaction.type = pf::SubactionType::SyncTimer;
     editorTempSubaction.frames = 3;
