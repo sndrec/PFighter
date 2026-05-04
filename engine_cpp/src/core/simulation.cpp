@@ -1,5 +1,6 @@
 #include "core/simulation.hpp"
 
+#include "core/fighter_package.hpp"
 #include "core/state_functions.hpp"
 
 #include <algorithm>
@@ -1287,6 +1288,144 @@ int countGameObjectsOwnedBy(const World& world, int ownerFighter, const std::str
         }
     }
     return count;
+}
+
+static bool runtimePackageInstructionTargetsFighter(const PackageScriptInstruction& instruction) {
+    return instruction.op == PackageScriptOp::SwitchFighterDefinition ||
+        instruction.op == PackageScriptOp::SpawnFighter ||
+        instruction.op == PackageScriptOp::SpawnFighterSetVar;
+}
+
+static bool runtimePackageInstructionTargetsObject(const PackageScriptInstruction& instruction) {
+    return instruction.op == PackageScriptOp::SpawnObject ||
+        instruction.op == PackageScriptOp::SpawnObjectFromVars ||
+        instruction.op == PackageScriptOp::SpawnProjectile ||
+        instruction.op == PackageScriptOp::SpawnProjectileFromVars ||
+        instruction.op == PackageScriptOp::SpawnObjectSetVar ||
+        instruction.op == PackageScriptOp::SpawnProjectileSetVar ||
+        instruction.op == PackageScriptOp::SpawnObjectFromVarsSetVar ||
+        instruction.op == PackageScriptOp::SpawnProjectileFromVarsSetVar ||
+        instruction.op == PackageScriptOp::DestroyOwnedObjects ||
+        instruction.op == PackageScriptOp::SetVarOwnedObjectCount;
+}
+
+static const FighterDefinition* runtimePackageFighterByName(const World& world, const std::string& name) {
+    const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const FighterDefinition& candidate) {
+        return candidate.name == name;
+    });
+    return found == world.fighterDefs.end() ? nullptr : &*found;
+}
+
+static const GameObjectDefinition* runtimePackageObjectByName(const World& world, const std::string& name) {
+    const auto found = std::find_if(world.objectDefs.begin(), world.objectDefs.end(), [&](const GameObjectDefinition& candidate) {
+        return candidate.name == name;
+    });
+    return found == world.objectDefs.end() ? nullptr : &*found;
+}
+
+static bool runtimePackageHasFighter(const FighterPackage& package, const std::string& name) {
+    return std::any_of(package.fighters.begin(), package.fighters.end(), [&](const FighterDefinition& fighter) {
+        return fighter.name == name;
+    });
+}
+
+static bool runtimePackageHasObject(const FighterPackage& package, const std::string& name) {
+    return std::any_of(package.objects.begin(), package.objects.end(), [&](const GameObjectDefinition& object) {
+        return object.name == name;
+    });
+}
+
+static void appendRuntimePackageFighterDependency(FighterPackage& package, const World& world, const std::string& fighterName) {
+    if (fighterName.empty() || runtimePackageHasFighter(package, fighterName)) {
+        return;
+    }
+    if (const FighterDefinition* dependency = runtimePackageFighterByName(world, fighterName)) {
+        package.fighters.push_back(*dependency);
+    }
+}
+
+static void appendRuntimePackageObjectDependency(FighterPackage& package, const World& world, const std::string& objectName) {
+    if (objectName.empty() || runtimePackageHasObject(package, objectName)) {
+        return;
+    }
+    if (const GameObjectDefinition* dependency = runtimePackageObjectByName(world, objectName)) {
+        package.objects.push_back(*dependency);
+    }
+}
+
+static void collectRuntimePackageInstructionDependencies(
+    FighterPackage& package,
+    const World& world,
+    const PackageScriptInstruction& instruction)
+{
+    if (runtimePackageInstructionTargetsFighter(instruction)) {
+        appendRuntimePackageFighterDependency(package, world, instruction.text);
+    }
+    if (runtimePackageInstructionTargetsObject(instruction)) {
+        appendRuntimePackageObjectDependency(package, world, instruction.text);
+    }
+}
+
+static void collectRuntimePackageFighterDependencies(FighterPackage& package, const World& world, const FighterDefinition& fighter) {
+    for (const PackageScript& script : fighter.packageScripts) {
+        for (const PackageScriptInstruction& instruction : script.instructions) {
+            collectRuntimePackageInstructionDependencies(package, world, instruction);
+        }
+    }
+    for (const FighterState& state : fighter.states) {
+        for (const Subaction& subaction : state.action) {
+            if (subaction.type == SubactionType::SpawnObject || subaction.type == SubactionType::SpawnProjectile) {
+                appendRuntimePackageObjectDependency(package, world, subaction.objectName);
+            }
+        }
+    }
+}
+
+static void collectRuntimePackageObjectDependencies(FighterPackage& package, const World& world, const GameObjectDefinition& object) {
+    for (const PackageScript& script : object.packageScripts) {
+        for (const PackageScriptInstruction& instruction : script.instructions) {
+            collectRuntimePackageInstructionDependencies(package, world, instruction);
+        }
+    }
+}
+
+static void collectRuntimePackageAssets(FighterPackage& package) {
+    for (const FighterDefinition& fighter : package.fighters) {
+        if (!fighter.hsdAsset) {
+            continue;
+        }
+        if (std::find(package.hsdAssets.begin(), package.hsdAssets.end(), fighter.hsdAsset) == package.hsdAssets.end()) {
+            package.hsdAssets.push_back(fighter.hsdAsset);
+        }
+    }
+}
+
+FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef, const std::string& packageName) {
+    FighterPackage package;
+    if (rootFighterDef < 0 || rootFighterDef >= static_cast<int>(world.fighterDefs.size())) {
+        package.name = packageName.empty() ? "runtime" : packageName;
+        return package;
+    }
+
+    const FighterDefinition& root = world.fighterDefs[static_cast<size_t>(rootFighterDef)];
+    package.name = packageName.empty() ? root.name + "_runtime" : packageName;
+    package.fighters.push_back(root);
+
+    for (size_t fighterScan = 0, objectScan = 0; fighterScan < package.fighters.size() || objectScan < package.objects.size();) {
+        if (fighterScan < package.fighters.size()) {
+            const FighterDefinition fighter = package.fighters[fighterScan];
+            collectRuntimePackageFighterDependencies(package, world, fighter);
+            ++fighterScan;
+        }
+        if (objectScan < package.objects.size()) {
+            const GameObjectDefinition object = package.objects[objectScan];
+            collectRuntimePackageObjectDependencies(package, world, object);
+            ++objectScan;
+        }
+    }
+
+    collectRuntimePackageAssets(package);
+    return package;
 }
 
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {

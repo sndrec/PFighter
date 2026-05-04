@@ -4929,6 +4929,7 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::AddVarImmediate, 0, -1, -1, 31, 0, {}},
         },
     }};
+    packageSourceWorld.fighterDefs.push_back(packageAltFighter);
     packageSourceWorld.objectDefs[1].packageVariables = {
         {"ObjectSmokeVar", 2},
         {"ObjectFrameVar", 0},
@@ -5241,7 +5242,7 @@ int main(int argc, char** argv) {
     pf::FighterPackage sourcePackage;
     sourcePackage.name = "headless_smoke_package";
     sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
-    sourcePackage.fighters = {packageSourceWorld.fighterDefs[0], packageAltFighter};
+    sourcePackage.fighters = {packageSourceWorld.fighterDefs[0], packageSourceWorld.fighterDefs.back()};
     sourcePackage.objects = packageSourceWorld.objectDefs;
     std::string packageError;
     pf::FighterPackage subactionProjectilePackage = sourcePackage;
@@ -5279,6 +5280,11 @@ int main(int argc, char** argv) {
     const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
     pf::FighterPackage loadedPackage;
     const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
+    const pf::FighterPackage runtimePackage = pf::makeRuntimeFighterPackage(packageSourceWorld, 0, "headless_smoke_runtime");
+    const std::vector<uint8_t> runtimePackageBytes = pf::writeFighterPackage(runtimePackage, &packageError);
+    pf::FighterPackage loadedRuntimePackage;
+    const bool runtimePackageLoaded = !runtimePackageBytes.empty() &&
+        pf::readFighterPackage(runtimePackageBytes, loadedRuntimePackage, &packageError);
     pf::FighterPackage invalidReadPackage;
     std::string invalidPackageError;
     std::vector<uint8_t> invalidPackageBytes = packageBytes;
@@ -5833,6 +5839,26 @@ int main(int argc, char** argv) {
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 45 &&
         loadedPackage.objects[1].packageScripts.size() == 20;
+    const auto loadedRuntimePackageHasFighter = [&](const std::string& name) {
+        return std::any_of(loadedRuntimePackage.fighters.begin(), loadedRuntimePackage.fighters.end(), [&](const pf::FighterDefinition& fighter) {
+            return fighter.name == name;
+        });
+    };
+    const auto loadedRuntimePackageHasObject = [&](const std::string& name) {
+        return std::any_of(loadedRuntimePackage.objects.begin(), loadedRuntimePackage.objects.end(), [&](const pf::GameObjectDefinition& object) {
+            return object.name == name;
+        });
+    };
+    const bool runtimePackageClosureOk = runtimePackageLoaded &&
+        loadedRuntimePackage.fighters.size() == 2 &&
+        loadedRuntimePackage.objects.size() == 3 &&
+        loadedRuntimePackage.objects.size() < sourcePackage.objects.size() &&
+        loadedRuntimePackage.hsdAssets.size() == 1 &&
+        loadedRuntimePackageHasFighter(packageSourceWorld.fighterDefs[0].name) &&
+        loadedRuntimePackageHasFighter("SmokeAlt") &&
+        loadedRuntimePackageHasObject("TrainingItem") &&
+        loadedRuntimePackageHasObject("PackageVelocityObject") &&
+        loadedRuntimePackageHasObject("PackageProjectileObject");
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -7155,6 +7181,13 @@ int main(int argc, char** argv) {
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
               << " fighter_package_shape_ok=" << packageShapeOk
+              << " fighter_package_runtime_bytes=" << runtimePackageBytes.size()
+              << " fighter_package_runtime_checksum=" << pf::fighterPackageChecksum(runtimePackageBytes)
+              << " fighter_package_runtime_loaded=" << runtimePackageLoaded
+              << " fighter_package_runtime_closure_ok=" << runtimePackageClosureOk
+              << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
+              << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
+              << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()
               << " fighter_package_asset_ok=" << packageAssetOk
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
