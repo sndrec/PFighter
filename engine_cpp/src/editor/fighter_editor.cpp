@@ -1880,6 +1880,20 @@ FighterPackage makeEditorFighterPackage(const World& world, int rootFighterDef, 
     package.fighters = collectEditorPackageFighters(world, root);
     collectEditorPackageAssets(package.fighters, package);
     package.objects = world.objectDefs;
+    for (FighterDefinition& fighter : package.fighters) {
+        for (PackageScript& script : fighter.packageScripts) {
+            if (script.graph.nodes.empty()) {
+                script.graph = makePackageScriptControlFlowGraph(script);
+            }
+        }
+    }
+    for (GameObjectDefinition& object : package.objects) {
+        for (PackageScript& script : object.packageScripts) {
+            if (script.graph.nodes.empty()) {
+                script.graph = makePackageScriptControlFlowGraph(script);
+            }
+        }
+    }
     return package;
 }
 
@@ -2691,6 +2705,54 @@ PackageScriptGraph makePackageScriptLinearGraph(const PackageScript& script) {
             0,
         });
     }
+    return graph;
+}
+
+PackageScriptGraph makePackageScriptControlFlowGraph(const PackageScript& script) {
+    PackageScriptGraph graph = makePackageScriptLinearGraph(script);
+    int endNode = -1;
+    auto targetNodeForInstruction = [&](int targetIndex) -> int {
+        if (targetIndex >= 0 && targetIndex < static_cast<int>(script.instructions.size())) {
+            return targetIndex + 1;
+        }
+        if (targetIndex == static_cast<int>(script.instructions.size())) {
+            if (endNode < 0) {
+                endNode = static_cast<int>(graph.nodes.size());
+                graph.nodes.push_back({
+                    endNode,
+                    PackageScriptGraphNodeKind::Comment,
+                    -1,
+                    {fx(6), fx(static_cast<int>(script.instructions.size()) * 2)},
+                    "End",
+                });
+            }
+            return endNode;
+        }
+        return -1;
+    };
+
+    for (int instructionIndex = 0; instructionIndex < static_cast<int>(script.instructions.size()); ++instructionIndex) {
+        const PackageScriptInstruction& instruction = script.instructions[static_cast<size_t>(instructionIndex)];
+        int targetIndex = -1;
+        if (packageInstructionIsSkipBranch(instruction.op)) {
+            targetIndex = instructionIndex + 2;
+        } else if (instruction.op == PackageScriptOp::JumpRelative) {
+            targetIndex = instructionIndex + instruction.intValue;
+        } else {
+            continue;
+        }
+
+        const int targetNode = targetNodeForInstruction(targetIndex);
+        if (targetNode >= 0) {
+            graph.links.push_back({
+                instructionIndex + 1,
+                1,
+                targetNode,
+                0,
+            });
+        }
+    }
+
     return graph;
 }
 

@@ -6321,7 +6321,21 @@ int main(int argc, char** argv) {
         editorBranchGraphCompileProbe.instructions[1].intValue == 2 &&
         editorBranchGraphCompileProbe.instructions[2].op == pf::PackageScriptOp::SetVarImmediate &&
         editorBranchGraphCompileProbe.instructions[3].op == pf::PackageScriptOp::Nop;
-    const bool editorSessionCompileScriptGraphOk = editorSessionCompileBranchGraphOk &&
+    pf::PackageScript editorControlFlowGraphProbe = editorBranchGraphCompileProbe;
+    editorControlFlowGraphProbe.graph = pf::makePackageScriptControlFlowGraph(editorControlFlowGraphProbe);
+    const bool editorSessionControlFlowGraphOk = editorSessionCompileBranchGraphOk &&
+        editorControlFlowGraphProbe.graph.nodes.size() == 5 &&
+        editorControlFlowGraphProbe.graph.links.size() == 6 &&
+        std::any_of(editorControlFlowGraphProbe.graph.links.begin(), editorControlFlowGraphProbe.graph.links.end(), [](const pf::PackageScriptGraphLink& link) {
+            return link.fromNode == 1 && link.fromSocket == 1 && link.toNode == 3;
+        }) &&
+        std::any_of(editorControlFlowGraphProbe.graph.links.begin(), editorControlFlowGraphProbe.graph.links.end(), [](const pf::PackageScriptGraphLink& link) {
+            return link.fromNode == 2 && link.fromSocket == 1 && link.toNode == 4;
+        }) &&
+        pf::compilePackageScriptGraph(editorControlFlowGraphProbe, &packageError) &&
+        editorControlFlowGraphProbe.instructions[1].op == pf::PackageScriptOp::JumpRelative &&
+        editorControlFlowGraphProbe.instructions[1].intValue == 2;
+    const bool editorSessionCompileScriptGraphOk = editorSessionControlFlowGraphOk &&
         pf::compileEditorSessionPackageScriptGraph(editorSession, editorLogicScriptIndex, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions.size() == 2;
@@ -8348,6 +8362,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_script_graph_ok=" << editorSessionScriptGraphOk
               << " fighter_editor_session_compile_standalone_graph_ok=" << editorSessionCompileStandaloneGraphOk
               << " fighter_editor_session_compile_branch_graph_ok=" << editorSessionCompileBranchGraphOk
+              << " fighter_editor_session_control_flow_graph_ok=" << editorSessionControlFlowGraphOk
               << " fighter_editor_session_compile_script_graph_ok=" << editorSessionCompileScriptGraphOk
               << " fighter_editor_session_move_instruction_ok=" << editorSessionMoveInstructionOk
               << " fighter_editor_session_invalid_instruction_rejected=" << editorSessionInvalidInstructionRejected

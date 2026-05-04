@@ -331,6 +331,7 @@ bool setEditorSessionPackageScriptBudget(
     int instructionBudget,
     std::string* error = nullptr);
 PackageScriptGraph makePackageScriptLinearGraph(const PackageScript& script);
+PackageScriptGraph makePackageScriptControlFlowGraph(const PackageScript& script);
 bool compilePackageScriptGraph(PackageScript& script, std::string* error = nullptr);
 bool setEditorSessionPackageScriptGraph(
     FighterEditorSession& session,
