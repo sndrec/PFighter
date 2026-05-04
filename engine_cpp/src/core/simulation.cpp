@@ -6908,6 +6908,41 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
         auto setObjectOwner = [&](int32_t value) {
             object.ownerFighter = value < -1 ? -1 : static_cast<int>(value);
         };
+        auto ensureObjectPackageVars = [&](GameObjectRuntime& target) {
+            if (target.objectDef < 0 || target.objectDef >= static_cast<int>(world.objectDefs.size())) {
+                return;
+            }
+            const GameObjectDefinition& targetDef = world.objectDefs[static_cast<size_t>(target.objectDef)];
+            if (target.packageVars.size() == targetDef.packageVariables.size()) {
+                return;
+            }
+            const size_t oldSize = target.packageVars.size();
+            target.packageVars.resize(targetDef.packageVariables.size());
+            for (size_t i = oldSize; i < targetDef.packageVariables.size(); ++i) {
+                target.packageVars[i] = targetDef.packageVariables[i].initialValue;
+            }
+        };
+        auto indexedObjectVar = [&](int objectIndex, int variableIndex) -> int32_t {
+            if (objectIndex < 0 || objectIndex >= static_cast<int>(world.objects.size()) || variableIndex < 0) {
+                return 0;
+            }
+            GameObjectRuntime& target = world.objects[static_cast<size_t>(objectIndex)];
+            ensureObjectPackageVars(target);
+            if (variableIndex >= static_cast<int>(target.packageVars.size())) {
+                return 0;
+            }
+            return target.packageVars[static_cast<size_t>(variableIndex)];
+        };
+        auto setIndexedObjectVar = [&](int objectIndex, int variableIndex, int32_t value) {
+            if (objectIndex < 0 || objectIndex >= static_cast<int>(world.objects.size()) || variableIndex < 0) {
+                return;
+            }
+            GameObjectRuntime& target = world.objects[static_cast<size_t>(objectIndex)];
+            ensureObjectPackageVars(target);
+            if (variableIndex < static_cast<int>(target.packageVars.size())) {
+                target.packageVars[static_cast<size_t>(variableIndex)] = value;
+            }
+        };
         auto setOwnerFighterVar = [&](int index, int32_t value) {
             if (!validFighterIndex(world, object.ownerFighter) || index < 0) {
                 return;
@@ -7192,6 +7227,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetOwnerFighterVarFromVar:
                 setOwnerFighterVar(instruction.dst, var(instruction.srcA));
+                break;
+            case PackageScriptOp::SetVarIndexedObjectVar:
+                setVar(instruction.dst, indexedObjectVar(var(instruction.srcA), instruction.intValue));
+                break;
+            case PackageScriptOp::SetIndexedObjectVarImmediate:
+                setIndexedObjectVar(var(instruction.srcA), instruction.dst, instruction.intValue);
+                break;
+            case PackageScriptOp::SetIndexedObjectVarFromVar:
+                setIndexedObjectVar(var(instruction.srcA), instruction.dst, var(instruction.srcB));
                 break;
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:

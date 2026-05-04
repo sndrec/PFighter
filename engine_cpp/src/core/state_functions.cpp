@@ -2610,6 +2610,41 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             target.packageVars[static_cast<size_t>(variableIndex)] = value;
         }
     };
+    auto ensureObjectPackageVars = [&](GameObjectRuntime& object) {
+        if (object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
+            return;
+        }
+        const GameObjectDefinition& objectDef = world.objectDefs[static_cast<size_t>(object.objectDef)];
+        if (object.packageVars.size() == objectDef.packageVariables.size()) {
+            return;
+        }
+        const size_t oldSize = object.packageVars.size();
+        object.packageVars.resize(objectDef.packageVariables.size());
+        for (size_t i = oldSize; i < objectDef.packageVariables.size(); ++i) {
+            object.packageVars[i] = objectDef.packageVariables[i].initialValue;
+        }
+    };
+    auto indexedObjectPackageVar = [&](int objectIndex, int variableIndex) -> int32_t {
+        if (objectIndex < 0 || objectIndex >= static_cast<int>(world.objects.size()) || variableIndex < 0) {
+            return 0;
+        }
+        GameObjectRuntime& target = world.objects[static_cast<size_t>(objectIndex)];
+        ensureObjectPackageVars(target);
+        if (variableIndex >= static_cast<int>(target.packageVars.size())) {
+            return 0;
+        }
+        return target.packageVars[static_cast<size_t>(variableIndex)];
+    };
+    auto setIndexedObjectPackageVar = [&](int objectIndex, int variableIndex, int32_t value) {
+        if (objectIndex < 0 || objectIndex >= static_cast<int>(world.objects.size()) || variableIndex < 0) {
+            return;
+        }
+        GameObjectRuntime& target = world.objects[static_cast<size_t>(objectIndex)];
+        ensureObjectPackageVars(target);
+        if (variableIndex < static_cast<int>(target.packageVars.size())) {
+            target.packageVars[static_cast<size_t>(variableIndex)] = value;
+        }
+    };
     struct ScriptFrame {
         const PackageScript* script = nullptr;
         size_t instructionIndex = 0;
@@ -2717,6 +2752,23 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
             break;
         case PackageScriptOp::SetIndexedFighterVarFromVar:
             setIndexedFighterPackageVar(
+                packageVar(fighter, instruction.srcA),
+                instruction.dst,
+                packageVar(fighter, instruction.srcB));
+            break;
+        case PackageScriptOp::SetVarIndexedObjectVar:
+            setPackageVar(fighter, instruction.dst, indexedObjectPackageVar(
+                packageVar(fighter, instruction.srcA),
+                instruction.intValue));
+            break;
+        case PackageScriptOp::SetIndexedObjectVarImmediate:
+            setIndexedObjectPackageVar(
+                packageVar(fighter, instruction.srcA),
+                instruction.dst,
+                instruction.intValue);
+            break;
+        case PackageScriptOp::SetIndexedObjectVarFromVar:
+            setIndexedObjectPackageVar(
                 packageVar(fighter, instruction.srcA),
                 instruction.dst,
                 packageVar(fighter, instruction.srcB));

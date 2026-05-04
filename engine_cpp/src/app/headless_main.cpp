@@ -4850,6 +4850,11 @@ int main(int argc, char** argv) {
         {
             {pf::PackageScriptOp::SpawnObjectSetVar, 0, -1, -1, 0, pf::fxFromFloat(0.25f), "TrainingItem"},
             {pf::PackageScriptOp::SpawnProjectileSetVar, 1, -1, -1, 0, pf::fxFromFloat(1.0f), "PackageProjectileObject"},
+            {pf::PackageScriptOp::SetIndexedObjectVarImmediate, 0, 0, -1, 55, 0, {}},
+            {pf::PackageScriptOp::SetVarIndexedObjectVar, 2, 0, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 3, -1, -1, 66, 0, {}},
+            {pf::PackageScriptOp::SetIndexedObjectVarFromVar, 0, 1, 3, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarIndexedObjectVar, 4, 1, -1, 0, 0, {}},
         },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
@@ -5019,6 +5024,17 @@ int main(int argc, char** argv) {
         8,
         {
             {pf::PackageScriptOp::SpawnProjectileSetVar, 0, -1, -1, 0, pf::fxFromFloat(0.8f), "PackageProjectileObject"},
+        },
+    }, {
+        "ObjectIndexedObjectVarScript",
+        8,
+        {
+            {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetIndexedObjectVarImmediate, 0, 0, -1, 33, 0, {}},
+            {pf::PackageScriptOp::SetVarIndexedObjectVar, 1, 0, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarImmediate, 2, -1, -1, 44, 0, {}},
+            {pf::PackageScriptOp::SetIndexedObjectVarFromVar, 0, 0, 2, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarIndexedObjectVar, 3, 0, -1, 0, 0, {}},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -5333,6 +5349,15 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidSpawnProjectileStoreKindWritePackage = sourcePackage;
     invalidSpawnProjectileStoreKindWritePackage.fighters[0].packageScripts[19].instructions[1].text = "TrainingItem";
     const bool invalidPackageSpawnProjectileStoreKindWriteRejected = pf::writeFighterPackage(invalidSpawnProjectileStoreKindWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidIndexedObjectVarReadPackage = sourcePackage;
+    invalidIndexedObjectVarReadPackage.fighters[0].packageScripts[19].instructions[3].srcA = 999;
+    const bool invalidPackageIndexedObjectVarReadRejected = pf::writeFighterPackage(invalidIndexedObjectVarReadPackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidIndexedObjectVarWritePackage = sourcePackage;
+    invalidIndexedObjectVarWritePackage.fighters[0].packageScripts[19].instructions[2].srcA = 999;
+    const bool invalidPackageIndexedObjectVarWriteRejected = pf::writeFighterPackage(invalidIndexedObjectVarWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidIndexedObjectVarFromVarWritePackage = sourcePackage;
+    invalidIndexedObjectVarFromVarWritePackage.fighters[0].packageScripts[19].instructions[5].srcB = 999;
+    const bool invalidPackageIndexedObjectVarFromVarWriteRejected = pf::writeFighterPackage(invalidIndexedObjectVarFromVarWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidCallScriptWritePackage = sourcePackage;
     invalidCallScriptWritePackage.fighters[0].packageScripts[9].instructions[0].text = "MissingScript";
     const bool invalidPackageCallScriptWriteRejected = pf::writeFighterPackage(invalidCallScriptWritePackage, &invalidPackageError).empty();
@@ -5533,6 +5558,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidObjectProjectileStoreKindWritePackage = sourcePackage;
     invalidObjectProjectileStoreKindWritePackage.objects[1].packageScripts[9].instructions[0].text = "TrainingItem";
     const bool invalidPackageObjectProjectileStoreKindWriteRejected = pf::writeFighterPackage(invalidObjectProjectileStoreKindWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidObjectIndexedObjectVarWritePackage = sourcePackage;
+    invalidObjectIndexedObjectVarWritePackage.objects[1].packageScripts[10].instructions[1].srcA = 999;
+    const bool invalidPackageObjectIndexedObjectVarWriteRejected = pf::writeFighterPackage(invalidObjectIndexedObjectVarWritePackage, &invalidPackageError).empty();
     pf::FighterPackage validObjectFighterContextWritePackage = sourcePackage;
     validObjectFighterContextWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SetVarFighterPercent,
@@ -5609,7 +5637,7 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 39 &&
-        loadedPackage.objects[1].packageScripts.size() == 10;
+        loadedPackage.objects[1].packageScripts.size() == 11;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -6017,11 +6045,33 @@ int main(int argc, char** argv) {
     const int packageSpawnProjectileStoredIndex = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 1
         ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[1]
         : -1;
+    const int packageSpawnObjectIndexedRead = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 2
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[2]
+        : -1;
+    const int packageSpawnProjectileIndexedRead = packageSpawnObjectStoreScriptWorld.fighters[0].packageVars.size() > 4
+        ? packageSpawnObjectStoreScriptWorld.fighters[0].packageVars[4]
+        : -1;
+    const int packageSpawnObjectTargetVar =
+        packageSpawnObjectStoredIndex >= 0 &&
+            packageSpawnObjectStoredIndex < static_cast<int>(packageSpawnObjectStoreScriptWorld.objects.size()) &&
+            !packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].packageVars.empty()
+        ? packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].packageVars[0]
+        : -1;
+    const int packageSpawnProjectileTargetVar =
+        packageSpawnProjectileStoredIndex >= 0 &&
+            packageSpawnProjectileStoredIndex < static_cast<int>(packageSpawnObjectStoreScriptWorld.objects.size()) &&
+            !packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].packageVars.empty()
+        ? packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnProjectileStoredIndex)].packageVars[0]
+        : -1;
     const bool packageSpawnObjectStoreScriptOk = packageShapeOk &&
         packageSpawnObjectStoredIndex >= 0 &&
         packageSpawnObjectStoredIndex < static_cast<int>(packageSpawnObjectStoreScriptWorld.objects.size()) &&
         packageSpawnProjectileStoredIndex >= 0 &&
         packageSpawnProjectileStoredIndex < static_cast<int>(packageSpawnObjectStoreScriptWorld.objects.size()) &&
+        packageSpawnObjectIndexedRead == 55 &&
+        packageSpawnObjectTargetVar == 55 &&
+        packageSpawnProjectileIndexedRead == 66 &&
+        packageSpawnProjectileTargetVar == 66 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].objectDef >= 0 &&
         packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].objectDef < static_cast<int>(packageSpawnObjectStoreScriptWorld.objectDefs.size()) &&
         packageSpawnObjectStoreScriptWorld.objectDefs[static_cast<size_t>(packageSpawnObjectStoreScriptWorld.objects[static_cast<size_t>(packageSpawnObjectStoredIndex)].objectDef)].name == "TrainingItem" &&
@@ -6487,6 +6537,47 @@ int main(int argc, char** argv) {
         packageObjectProjectileStoreWorld.objects[static_cast<size_t>(packageObjectProjectileStoredIndex)].objectDef < static_cast<int>(packageObjectProjectileStoreWorld.objectDefs.size()) &&
         packageObjectProjectileStoreWorld.objectDefs[static_cast<size_t>(packageObjectProjectileStoreWorld.objects[static_cast<size_t>(packageObjectProjectileStoredIndex)].objectDef)].name == "PackageProjectileObject" &&
         packageObjectProjectileStoreWorld.objectDefs[static_cast<size_t>(packageObjectProjectileStoreWorld.objects[static_cast<size_t>(packageObjectProjectileStoredIndex)].objectDef)].kind == pf::GameObjectKind::Projectile;
+    pf::World packageObjectIndexedObjectVarWorld = pf::makeTrainingWorld();
+    if (packageShapeOk) {
+        packageObjectIndexedObjectVarWorld.objectDefs = loadedPackage.objects;
+        packageObjectIndexedObjectVarWorld.objectDefs[1].onSpawned = {{std::string{"script:ObjectIndexedObjectVarScript"}}};
+    }
+    const int packageObjectIndexedTargetIndex = pf::spawnGameObject(
+        packageObjectIndexedObjectVarWorld,
+        "PackageVelocityObject",
+        -1,
+        {pf::fx(1), pf::fx(3)},
+        1,
+        {});
+    const int packageObjectIndexedScriptIndex = pf::spawnGameObject(
+        packageObjectIndexedObjectVarWorld,
+        "TrainingItem",
+        -1,
+        {0, pf::fx(3)},
+        1,
+        {});
+    const pf::GameObjectRuntime* packageObjectIndexedScript = packageObjectIndexedScriptIndex >= 0 &&
+            packageObjectIndexedScriptIndex < static_cast<int>(packageObjectIndexedObjectVarWorld.objects.size())
+        ? &packageObjectIndexedObjectVarWorld.objects[static_cast<size_t>(packageObjectIndexedScriptIndex)]
+        : nullptr;
+    const pf::GameObjectRuntime* packageObjectIndexedTarget = packageObjectIndexedTargetIndex >= 0 &&
+            packageObjectIndexedTargetIndex < static_cast<int>(packageObjectIndexedObjectVarWorld.objects.size())
+        ? &packageObjectIndexedObjectVarWorld.objects[static_cast<size_t>(packageObjectIndexedTargetIndex)]
+        : nullptr;
+    const int packageObjectIndexedObjectVarRead = packageObjectIndexedScript && packageObjectIndexedScript->packageVars.size() > 1
+        ? packageObjectIndexedScript->packageVars[1]
+        : -1;
+    const int packageObjectIndexedObjectVarReadFromVar = packageObjectIndexedScript && packageObjectIndexedScript->packageVars.size() > 3
+        ? packageObjectIndexedScript->packageVars[3]
+        : -1;
+    const int packageObjectIndexedTargetVar = packageObjectIndexedTarget && !packageObjectIndexedTarget->packageVars.empty()
+        ? packageObjectIndexedTarget->packageVars[0]
+        : -1;
+    const bool packageObjectIndexedObjectVarOk =
+        packageObjectIndexedTargetIndex == 0 &&
+        packageObjectIndexedObjectVarRead == 33 &&
+        packageObjectIndexedObjectVarReadFromVar == 44 &&
+        packageObjectIndexedTargetVar == 44;
     pf::World packageObjectDestroyScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectDestroyScriptWorld.objectDefs = loadedPackage.objects;
@@ -6590,6 +6681,11 @@ int main(int argc, char** argv) {
               << " fighter_package_script_spawn_object_store_ok=" << packageSpawnObjectStoreScriptOk
               << " fighter_package_script_spawn_object_store_var=" << packageSpawnObjectStoredIndex
               << " fighter_package_script_spawn_projectile_store_var=" << packageSpawnProjectileStoredIndex
+              << " fighter_package_script_indexed_object_var_ok=" << packageSpawnObjectStoreScriptOk
+              << " fighter_package_script_indexed_object_var_read=" << packageSpawnObjectIndexedRead
+              << " fighter_package_script_indexed_object_var_from_var=" << packageSpawnProjectileIndexedRead
+              << " fighter_package_script_indexed_object_target_var=" << packageSpawnObjectTargetVar
+              << " fighter_package_script_indexed_projectile_target_var=" << packageSpawnProjectileTargetVar
               << " fighter_package_subaction_projectile_ok=" << packageProjectileSubactionOk
               << " fighter_package_subaction_projectile_count=" << packageProjectileSubactionCount
               << " fighter_package_subaction_script_var=" << packageSubactionScriptVar
@@ -6680,6 +6776,10 @@ int main(int argc, char** argv) {
               << " fighter_package_object_spawn_store_var=" << packageObjectSpawnStoredIndex
               << " fighter_package_object_projectile_store_ok=" << packageObjectProjectileStoreOk
               << " fighter_package_object_projectile_store_var=" << packageObjectProjectileStoredIndex
+              << " fighter_package_object_indexed_object_var_ok=" << packageObjectIndexedObjectVarOk
+              << " fighter_package_object_indexed_object_var_read=" << packageObjectIndexedObjectVarRead
+              << " fighter_package_object_indexed_object_var_from_var=" << packageObjectIndexedObjectVarReadFromVar
+              << " fighter_package_object_indexed_object_target_var=" << packageObjectIndexedTargetVar
               << " fighter_package_object_destroy_script_ok=" << packageObjectDestroyScriptOk
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
@@ -6728,6 +6828,9 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_indexed_fighter_var_read_rejected=" << invalidPackageIndexedFighterVarReadRejected
               << " fighter_package_invalid_indexed_fighter_var_write_rejected=" << invalidPackageIndexedFighterVarWriteRejected
               << " fighter_package_invalid_indexed_fighter_var_from_var_write_rejected=" << invalidPackageIndexedFighterVarFromVarWriteRejected
+              << " fighter_package_invalid_indexed_object_var_read_rejected=" << invalidPackageIndexedObjectVarReadRejected
+              << " fighter_package_invalid_indexed_object_var_write_rejected=" << invalidPackageIndexedObjectVarWriteRejected
+              << " fighter_package_invalid_indexed_object_var_from_var_write_rejected=" << invalidPackageIndexedObjectVarFromVarWriteRejected
               << " fighter_package_invalid_spawn_object_store_target_write_rejected=" << invalidPackageSpawnObjectStoreTargetWriteRejected
               << " fighter_package_invalid_spawn_object_store_var_write_rejected=" << invalidPackageSpawnObjectStoreVarWriteRejected
               << " fighter_package_invalid_spawn_projectile_store_kind_write_rejected=" << invalidPackageSpawnProjectileStoreKindWriteRejected
@@ -6763,6 +6866,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_object_owner_immediate_write_rejected=" << invalidPackageObjectOwnerImmediateWriteRejected
               << " fighter_package_invalid_object_spawn_store_var_write_rejected=" << invalidPackageObjectSpawnStoreVarWriteRejected
               << " fighter_package_invalid_object_projectile_store_kind_write_rejected=" << invalidPackageObjectProjectileStoreKindWriteRejected
+              << " fighter_package_invalid_object_indexed_object_var_write_rejected=" << invalidPackageObjectIndexedObjectVarWriteRejected
               << " fighter_package_object_fighter_context_write_ok=" << packageObjectFighterContextWriteAccepted
               << " fighter_package_invalid_object_context_write_rejected=" << invalidPackageObjectContextWriteRejected
               << " fighter_package_invalid_object_owner_var_write_rejected=" << invalidPackageObjectOwnerVarWriteRejected

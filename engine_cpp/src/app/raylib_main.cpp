@@ -1178,6 +1178,9 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarIndexedFighterVar: return "IdxFRead";
     case pf::PackageScriptOp::SetIndexedFighterVarImmediate: return "IdxFSet";
     case pf::PackageScriptOp::SetIndexedFighterVarFromVar: return "IdxFVar";
+    case pf::PackageScriptOp::SetVarIndexedObjectVar: return "IdxORead";
+    case pf::PackageScriptOp::SetIndexedObjectVarImmediate: return "IdxOSet";
+    case pf::PackageScriptOp::SetIndexedObjectVarFromVar: return "IdxOVar";
     }
     return "Op";
 }
@@ -1379,6 +1382,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarIndexedFighterVar:
     case pf::PackageScriptOp::SetIndexedFighterVarImmediate:
     case pf::PackageScriptOp::SetIndexedFighterVarFromVar:
+    case pf::PackageScriptOp::SetVarIndexedObjectVar:
+    case pf::PackageScriptOp::SetIndexedObjectVarImmediate:
+    case pf::PackageScriptOp::SetIndexedObjectVarFromVar:
     case pf::PackageScriptOp::SetVarButtonDown:
     case pf::PackageScriptOp::SetVarButtonPressed:
     case pf::PackageScriptOp::SetVarStickX:
@@ -1768,6 +1774,15 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetIndexedFighterVarFromVar:
         label += " fighter[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcB);
         break;
+    case pf::PackageScriptOp::SetVarIndexedObjectVar:
+        label += " v" + std::to_string(instruction.dst) + " = object[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetIndexedObjectVarImmediate:
+        label += " object[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetIndexedObjectVarFromVar:
+        label += " object[v" + std::to_string(instruction.srcA) + "].v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcB);
+        break;
     case pf::PackageScriptOp::Nop:
         break;
     }
@@ -1943,7 +1958,10 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnFighterSetVar: return pf::PackageScriptOp::SetVarIndexedFighterVar;
     case pf::PackageScriptOp::SetVarIndexedFighterVar: return pf::PackageScriptOp::SetIndexedFighterVarImmediate;
     case pf::PackageScriptOp::SetIndexedFighterVarImmediate: return pf::PackageScriptOp::SetIndexedFighterVarFromVar;
-    case pf::PackageScriptOp::SetIndexedFighterVarFromVar: return pf::PackageScriptOp::Nop;
+    case pf::PackageScriptOp::SetIndexedFighterVarFromVar: return pf::PackageScriptOp::SetVarIndexedObjectVar;
+    case pf::PackageScriptOp::SetVarIndexedObjectVar: return pf::PackageScriptOp::SetIndexedObjectVarImmediate;
+    case pf::PackageScriptOp::SetIndexedObjectVarImmediate: return pf::PackageScriptOp::SetIndexedObjectVarFromVar;
+    case pf::PackageScriptOp::SetIndexedObjectVarFromVar: return pf::PackageScriptOp::Nop;
     }
     return pf::PackageScriptOp::Nop;
 }

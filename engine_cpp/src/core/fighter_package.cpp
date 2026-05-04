@@ -321,6 +321,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarIndexedFighterVar:
     case PackageScriptOp::SetIndexedFighterVarImmediate:
     case PackageScriptOp::SetIndexedFighterVarFromVar:
+    case PackageScriptOp::SetVarIndexedObjectVar:
+    case PackageScriptOp::SetIndexedObjectVarImmediate:
+    case PackageScriptOp::SetIndexedObjectVarFromVar:
         return true;
     }
     return false;
@@ -1885,6 +1888,26 @@ void validatePackageScriptInstruction(
         requireVariableIndex(instruction.srcB, variableCount, "source");
         if (!allowFighterContextReads || allowObjectContextReads || instruction.dst < 0) {
             throw std::runtime_error("fighter package script indexed fighter variable write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetVarIndexedObjectVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        requireVariableIndex(instruction.srcA, variableCount, "object index source");
+        if ((!allowFighterContextReads && !allowObjectContextReads) || instruction.intValue < 0) {
+            throw std::runtime_error("fighter package script indexed object variable read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedObjectVarImmediate:
+        requireVariableIndex(instruction.srcA, variableCount, "object index source");
+        if ((!allowFighterContextReads && !allowObjectContextReads) || instruction.dst < 0) {
+            throw std::runtime_error("fighter package script indexed object variable write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetIndexedObjectVarFromVar:
+        requireVariableIndex(instruction.srcA, variableCount, "object index source");
+        requireVariableIndex(instruction.srcB, variableCount, "source");
+        if ((!allowFighterContextReads && !allowObjectContextReads) || instruction.dst < 0) {
+            throw std::runtime_error("fighter package script indexed object variable write is invalid");
         }
         break;
     case PackageScriptOp::SetVarButtonDown:

@@ -537,6 +537,9 @@ enum class PackageScriptOp : uint8_t {
     SetVarIndexedFighterVar,
     SetIndexedFighterVarImmediate,
     SetIndexedFighterVarFromVar,
+    SetVarIndexedObjectVar,
+    SetIndexedObjectVarImmediate,
+    SetIndexedObjectVarFromVar,
 };
 
 struct PackageScriptInstruction {
