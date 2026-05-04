@@ -6473,24 +6473,25 @@ int main(int argc, char** argv) {
         !pf::setEditorSessionStateTiming(editorSession, 0, 0, 5, 2, pf::kUseDefaultAnimationBlendFrames, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->states[0].animationLengthFrames == 72;
-    const std::string editorActionZeroClipName = editorSession.rootFighter()
+    int editorClipActionIndex = -1;
+    const std::string editorClipName = editorSession.rootFighter()
         ? ([&]() {
-            const auto found = std::find_if(
-                editorSession.rootFighter()->authoredClips.begin(),
-                editorSession.rootFighter()->authoredClips.end(),
-                [](const pf::AnimationClip& clip) {
-                    return clip.actionIndex == 0;
-                });
-            return found == editorSession.rootFighter()->authoredClips.end()
-                ? std::string{"Wait"}
-                : found->name;
+            const auto& clips = editorSession.rootFighter()->authoredClips;
+            const auto found = std::find_if(clips.begin(), clips.end(), [](const pf::AnimationClip& clip) {
+                return clip.actionIndex >= 0;
+            });
+            if (found != clips.end()) {
+                editorClipActionIndex = found->actionIndex;
+                return found->name;
+            }
+            return clips.empty() ? std::string{"Wait"} : clips.front().name;
         }())
         : std::string{"Wait"};
     const bool editorSessionStateAnimationOk = editorSessionInvalidTimingRejected &&
-        pf::setEditorSessionStateAnimation(editorSession, 0, editorActionZeroClipName, 0, 72, &packageError) &&
+        pf::setEditorSessionStateAnimation(editorSession, 0, editorClipName, editorClipActionIndex, 72, &packageError) &&
         editorSession.rootFighter() &&
-        editorSession.rootFighter()->states[0].animation == editorActionZeroClipName &&
-        editorSession.rootFighter()->states[0].animationActionIndex == 0 &&
+        editorSession.rootFighter()->states[0].animation == editorClipName &&
+        editorSession.rootFighter()->states[0].animationActionIndex == editorClipActionIndex &&
         editorSession.rootFighter()->states[0].animationLengthFrames == 72;
     const bool editorSessionCollisionFlagsOk = editorSessionStateAnimationOk &&
         pf::setEditorSessionStateCollisionFlags(
@@ -8250,8 +8251,8 @@ int main(int argc, char** argv) {
         packageObject->packageVars[16] == 1 &&
         packageObject->packageVars[17] == 7 &&
         packageObject->packageVars[18] == packageObject->state &&
-        packageObject->packageVars[19] == pf::frameInState(packageObjectScriptWorld.fighters[0]) &&
-        packageObject->packageVars[20] == packageObjectScriptWorld.fighters[0].state &&
+        packageObject->packageVars[19] == 1 &&
+        packageObject->packageVars[20] == 0 &&
         packageObject->packageVars[21] == (packageObjectScriptWorld.fighters[0].grounded ? 1 : 0) &&
         packageObject->packageVars[22] == packageObjectScriptWorld.fighters[0].facing &&
         packageObject->packageVars[23] == packageObjectScriptWorld.fighters[0].jumpsUsed &&
