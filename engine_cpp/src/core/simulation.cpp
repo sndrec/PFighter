@@ -6858,6 +6858,26 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             }
             object.packageVars[static_cast<size_t>(index)] = value;
         };
+        auto setOwnerFighterVar = [&](int index, int32_t value) {
+            if (!validFighterIndex(world, object.ownerFighter) || index < 0) {
+                return;
+            }
+            FighterRuntime& owner = world.fighters[static_cast<size_t>(object.ownerFighter)];
+            if (owner.fighterDef < 0 || owner.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
+                return;
+            }
+            const FighterDefinition& ownerDef = world.fighterDefs[static_cast<size_t>(owner.fighterDef)];
+            if (owner.packageVars.size() != ownerDef.packageVariables.size()) {
+                const size_t oldSize = owner.packageVars.size();
+                owner.packageVars.resize(ownerDef.packageVariables.size());
+                for (size_t i = oldSize; i < ownerDef.packageVariables.size(); ++i) {
+                    owner.packageVars[i] = ownerDef.packageVariables[i].initialValue;
+                }
+            }
+            if (index < static_cast<int>(owner.packageVars.size())) {
+                owner.packageVars[static_cast<size_t>(index)] = value;
+            }
+        };
         int budget = std::clamp(found->instructionBudget, 0, 1024);
         struct ScriptFrame {
             const PackageScript* script = nullptr;
@@ -6981,6 +7001,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                 break;
             case PackageScriptOp::SetVarObjectAnimationRate:
                 setVar(instruction.dst, object.animationRate);
+                break;
+            case PackageScriptOp::SetOwnerFighterVarImmediate:
+                setOwnerFighterVar(instruction.dst, instruction.intValue);
+                break;
+            case PackageScriptOp::SetOwnerFighterVarFromVar:
+                setOwnerFighterVar(instruction.dst, var(instruction.srcA));
                 break;
             case PackageScriptOp::SetVarButtonDown:
             case PackageScriptOp::SetVarButtonPressed:

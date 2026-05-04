@@ -1097,6 +1097,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityY: return "ObjVelY";
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return "ObjAnimF";
     case pf::PackageScriptOp::SetVarObjectAnimationRate: return "ObjAnimR";
+    case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return "OwnSet";
+    case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return "OwnVar";
     case pf::PackageScriptOp::SetVarButtonDown: return "BtnDown";
     case pf::PackageScriptOp::SetVarButtonPressed: return "BtnPress";
     case pf::PackageScriptOp::SetVarStickX: return "StickX";
@@ -1262,6 +1264,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarObjectVelocityY:
     case pf::PackageScriptOp::SetVarObjectAnimationFrame:
     case pf::PackageScriptOp::SetVarObjectAnimationRate:
+    case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
     case pf::PackageScriptOp::SetVarButtonDown:
     case pf::PackageScriptOp::SetVarButtonPressed:
     case pf::PackageScriptOp::SetVarStickX:
@@ -1447,6 +1450,8 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarFighterGroundVelocity:
     case pf::PackageScriptOp::SetVarFighterAirVelocityX:
     case pf::PackageScriptOp::SetVarFighterAirVelocityY:
+    case pf::PackageScriptOp::SetVarFighterAnimationFrame:
+    case pf::PackageScriptOp::SetVarFighterAnimationRate:
     case pf::PackageScriptOp::SetVarStickX:
     case pf::PackageScriptOp::SetVarStickY:
     case pf::PackageScriptOp::SetVarCStickX:
@@ -1461,7 +1466,15 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarObjectPositionY:
     case pf::PackageScriptOp::SetVarObjectVelocityX:
     case pf::PackageScriptOp::SetVarObjectVelocityY:
+    case pf::PackageScriptOp::SetVarObjectAnimationFrame:
+    case pf::PackageScriptOp::SetVarObjectAnimationRate:
         label += " v" + std::to_string(instruction.dst);
+        break;
+    case pf::PackageScriptOp::SetOwnerFighterVarImmediate:
+        label += " owner v" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetOwnerFighterVarFromVar:
+        label += " owner v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA);
         break;
     case pf::PackageScriptOp::SetVarButtonDown:
     case pf::PackageScriptOp::SetVarButtonPressed:
@@ -1696,7 +1709,9 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectVelocityX: return pf::PackageScriptOp::SetVarObjectVelocityY;
     case pf::PackageScriptOp::SetVarObjectVelocityY: return pf::PackageScriptOp::SetVarObjectAnimationFrame;
     case pf::PackageScriptOp::SetVarObjectAnimationFrame: return pf::PackageScriptOp::SetVarObjectAnimationRate;
-    case pf::PackageScriptOp::SetVarObjectAnimationRate: return pf::PackageScriptOp::SetVarObjectOwner;
+    case pf::PackageScriptOp::SetVarObjectAnimationRate: return pf::PackageScriptOp::SetOwnerFighterVarImmediate;
+    case pf::PackageScriptOp::SetOwnerFighterVarImmediate: return pf::PackageScriptOp::SetOwnerFighterVarFromVar;
+    case pf::PackageScriptOp::SetOwnerFighterVarFromVar: return pf::PackageScriptOp::SetVarObjectOwner;
     default: return pf::PackageScriptOp::SetVarObjectOwner;
     }
 }
