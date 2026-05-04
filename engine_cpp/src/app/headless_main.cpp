@@ -6181,6 +6181,7 @@ int main(int argc, char** argv) {
     int editorImportedFighterIndex = -1;
     int editorPackageFighterStateIndex = -1;
     int editorPackageFighterDuplicatedStateIndex = -1;
+    int editorPackageFighterVariableIndex = -1;
     int editorFighterTargetScriptIndex = -1;
     int editorFighterTargetInstructionIndex = -1;
     pf::PackageScriptInstruction editorFighterTargetInstruction;
@@ -6231,6 +6232,27 @@ int main(int argc, char** argv) {
             &packageError) &&
         editorFighterManagerSession.package.fighters[static_cast<size_t>(editorDuplicatedFighterIndex)]
             .states[0].onAnimationFinishedState == "Wait" &&
+        ([&]() {
+            editorFighterManagerSession.selectedFighter = editorDuplicatedFighterIndex;
+            editorFighterManagerSession.selectedState = 0;
+            editorFighterManagerSession.clamp();
+            return true;
+        }()) &&
+        pf::addEditorSessionPackageVariable(
+            editorFighterManagerSession,
+            "AltEditorVar",
+            12,
+            &editorPackageFighterVariableIndex,
+            &packageError) &&
+        editorPackageFighterVariableIndex >= 0 &&
+        editorFighterManagerSession.package.fighters[static_cast<size_t>(editorDuplicatedFighterIndex)]
+            .packageVariables[static_cast<size_t>(editorPackageFighterVariableIndex)]
+            .name == "AltEditorVar" &&
+        ([&]() {
+            editorFighterManagerSession.selectedFighter = 0;
+            editorFighterManagerSession.clamp();
+            return true;
+        }()) &&
         pf::addEditorSessionPackageScript(
             editorFighterManagerSession,
             "EditorFighterTargetScript",

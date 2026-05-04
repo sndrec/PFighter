@@ -125,6 +125,34 @@ bool validRootFighter(const FighterEditorSession& session, std::string* error) {
     return true;
 }
 
+const FighterDefinition* selectedSessionPackageFighter(
+    const FighterEditorSession& session,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return nullptr;
+    }
+    const int fighterIndex = std::clamp(
+        session.selectedFighter,
+        0,
+        static_cast<int>(session.package.fighters.size()) - 1);
+    return &session.package.fighters[static_cast<size_t>(fighterIndex)];
+}
+
+FighterDefinition* selectedSessionPackageFighter(
+    FighterEditorSession& session,
+    std::string* error)
+{
+    if (!validRootFighter(session, error)) {
+        return nullptr;
+    }
+    session.selectedFighter = std::clamp(
+        session.selectedFighter,
+        0,
+        static_cast<int>(session.package.fighters.size()) - 1);
+    return &session.package.fighters[static_cast<size_t>(session.selectedFighter)];
+}
+
 bool validSessionState(
     const FighterEditorSession& session,
     int stateIndex,
@@ -132,19 +160,19 @@ bool validSessionState(
     const FighterState** state,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    const FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    const FighterDefinition& root = session.package.fighters.front();
-    if (stateIndex < 0 || stateIndex >= static_cast<int>(root.states.size())) {
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(selected->states.size())) {
         setEditorError(error, "editor state index is invalid");
         return false;
     }
     if (fighter) {
-        *fighter = &root;
+        *fighter = selected;
     }
     if (state) {
-        *state = &root.states[static_cast<size_t>(stateIndex)];
+        *state = &selected->states[static_cast<size_t>(stateIndex)];
     }
     return true;
 }
@@ -156,19 +184,19 @@ bool validSessionState(
     FighterState** state,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& root = session.package.fighters.front();
-    if (stateIndex < 0 || stateIndex >= static_cast<int>(root.states.size())) {
+    if (stateIndex < 0 || stateIndex >= static_cast<int>(selected->states.size())) {
         setEditorError(error, "editor state index is invalid");
         return false;
     }
     if (fighter) {
-        *fighter = &root;
+        *fighter = selected;
     }
     if (state) {
-        *state = &root.states[static_cast<size_t>(stateIndex)];
+        *state = &selected->states[static_cast<size_t>(stateIndex)];
     }
     return true;
 }
@@ -751,19 +779,19 @@ bool validSessionScript(
     PackageScript** script,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& root = session.package.fighters.front();
-    if (scriptIndex < 0 || scriptIndex >= static_cast<int>(root.packageScripts.size())) {
+    if (scriptIndex < 0 || scriptIndex >= static_cast<int>(selected->packageScripts.size())) {
         setEditorError(error, "editor package script index is invalid");
         return false;
     }
     if (fighter) {
-        *fighter = &root;
+        *fighter = selected;
     }
     if (script) {
-        *script = &root.packageScripts[static_cast<size_t>(scriptIndex)];
+        *script = &selected->packageScripts[static_cast<size_t>(scriptIndex)];
     }
     return true;
 }
@@ -1706,10 +1734,11 @@ bool validEditorAuthoredClip(
     AnimationClip** clip,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (clipIndex < 0 || clipIndex >= static_cast<int>(def.authoredClips.size())) {
         setEditorError(error, "editor authored clip index is invalid");
         return false;
@@ -2323,7 +2352,8 @@ bool createEditorSessionState(
     int* createdStateIndex,
     std::string* error)
 {
-    return createEditorSessionPackageFighterState(session, 0, requestedName, sourceStateIndex, createdStateIndex, error);
+    session.clamp();
+    return createEditorSessionPackageFighterState(session, session.selectedFighter, requestedName, sourceStateIndex, createdStateIndex, error);
 }
 
 bool createEditorSessionPackageFighterState(
@@ -2372,7 +2402,8 @@ bool duplicateEditorSessionState(
     int* createdStateIndex,
     std::string* error)
 {
-    return duplicateEditorSessionPackageFighterState(session, 0, sourceStateIndex, createdStateIndex, error);
+    session.clamp();
+    return duplicateEditorSessionPackageFighterState(session, session.selectedFighter, sourceStateIndex, createdStateIndex, error);
 }
 
 bool duplicateEditorSessionPackageFighterState(
@@ -2422,7 +2453,8 @@ bool renameEditorSessionState(
     const std::string& newName,
     std::string* error)
 {
-    return renameEditorSessionPackageFighterState(session, 0, stateIndex, newName, error);
+    session.clamp();
+    return renameEditorSessionPackageFighterState(session, session.selectedFighter, stateIndex, newName, error);
 }
 
 bool renameEditorSessionPackageFighterState(
@@ -2461,7 +2493,8 @@ bool removeEditorSessionState(
     const std::string& replacementStateName,
     std::string* error)
 {
-    return removeEditorSessionPackageFighterState(session, 0, stateIndex, replacementStateName, error);
+    session.clamp();
+    return removeEditorSessionPackageFighterState(session, session.selectedFighter, stateIndex, replacementStateName, error);
 }
 
 bool removeEditorSessionPackageFighterState(
@@ -2925,10 +2958,11 @@ bool addEditorSessionPackageVariable(
     int* addedVariableIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     const std::string name = requestedName.empty() ? uniqueEditorPackageVariableName(def) : requestedName;
     if (!editorPackageVariableNameAvailable(def, name)) {
         setEditorError(error, "editor package variable name is empty or already used");
@@ -2936,7 +2970,6 @@ bool addEditorSessionPackageVariable(
     }
     FighterPackage previous = session.package;
     def.packageVariables.push_back({name, initialValue});
-    session.selectedFighter = 0;
     if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
         return false;
     }
@@ -2952,10 +2985,11 @@ bool renameEditorSessionPackageVariable(
     const std::string& newName,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (variableIndex < 0 || variableIndex >= static_cast<int>(def.packageVariables.size())) {
         setEditorError(error, "editor package variable index is invalid");
         return false;
@@ -2975,17 +3009,17 @@ bool setEditorSessionPackageVariableInitialValue(
     int32_t initialValue,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (variableIndex < 0 || variableIndex >= static_cast<int>(def.packageVariables.size())) {
         setEditorError(error, "editor package variable index is invalid");
         return false;
     }
     FighterPackage previous = session.package;
     def.packageVariables[static_cast<size_t>(variableIndex)].initialValue = initialValue;
-    session.selectedFighter = 0;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
@@ -2994,10 +3028,11 @@ bool removeEditorSessionPackageVariable(
     int variableIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (variableIndex < 0 || variableIndex >= static_cast<int>(def.packageVariables.size())) {
         setEditorError(error, "editor package variable index is invalid");
         return false;
@@ -3017,10 +3052,11 @@ bool addEditorSessionPackageScript(
     int* addedScriptIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     const std::string name = requestedName.empty() ? uniqueEditorPackageScriptName(def) : requestedName;
     if (!editorPackageScriptNameAvailable(def, name)) {
         setEditorError(error, "editor package script name is empty or already used");
@@ -3736,11 +3772,12 @@ bool setEditorSessionAuthoredEcb(
     bool normalize,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
     FighterPackage previous = session.package;
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     def.authoredEcb = ecb;
     if (normalize) {
         normalizeFighterEditorAuthoredEcb(def);
@@ -3755,11 +3792,12 @@ bool addEditorSessionHurtbox(
     int* addedHurtboxIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
     FighterPackage previous = session.package;
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     const int index = insertIndex < 0
         ? static_cast<int>(def.hurtboxes.size())
         : std::clamp(insertIndex, 0, static_cast<int>(def.hurtboxes.size()));
@@ -3779,10 +3817,11 @@ bool setEditorSessionHurtbox(
     const HurtboxDefinition& hurtbox,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (hurtboxIndex < 0 || hurtboxIndex >= static_cast<int>(def.hurtboxes.size())) {
         setEditorError(error, "editor hurtbox index is invalid");
         return false;
@@ -3797,10 +3836,11 @@ bool removeEditorSessionHurtbox(
     int hurtboxIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (hurtboxIndex < 0 || hurtboxIndex >= static_cast<int>(def.hurtboxes.size())) {
         setEditorError(error, "editor hurtbox index is invalid");
         return false;
@@ -3817,11 +3857,12 @@ bool addEditorSessionAuthoredJoint(
     int* addedJointIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
     FighterPackage previous = session.package;
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     AnimationJoint added = joint;
     if (added.name.empty()) {
         added.name = uniqueEditorAuthoredJointName(def);
@@ -3872,10 +3913,11 @@ bool setEditorSessionAuthoredJoint(
     const AnimationJoint& joint,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
         setEditorError(error, "editor authored joint index is invalid");
         return false;
@@ -3898,10 +3940,11 @@ bool removeEditorSessionAuthoredJoint(
     int jointIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
         setEditorError(error, "editor authored joint index is invalid");
         return false;
@@ -3947,10 +3990,11 @@ bool createEditorSessionAuthoredClip(
     int* createdClipIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     const std::string name = requestedName.empty() ? uniqueEditorAuthoredClipName(def) : requestedName;
     if (!editorAuthoredClipNameAvailable(def, name)) {
         setEditorError(error, "editor authored clip name is empty or already used");
@@ -3972,7 +4016,7 @@ bool createEditorSessionAuthoredClip(
         return false;
     }
     if (createdClipIndex) {
-        *createdClipIndex = static_cast<int>(session.package.fighters.front().authoredClips.size()) - 1;
+        *createdClipIndex = static_cast<int>(def.authoredClips.size()) - 1;
     }
     return true;
 }
@@ -4126,7 +4170,11 @@ bool setEditorSessionAuthoredTrack(
     }
     FighterPackage previous = session.package;
     *target = track;
-    sanitizeEditorAnimationTrackKeys(*target, session.package.fighters.front().authoredClips[static_cast<size_t>(clipIndex)].frameCount);
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, nullptr, &clip, error)) {
+        return false;
+    }
+    sanitizeEditorAnimationTrackKeys(*target, clip->frameCount);
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
@@ -4157,8 +4205,11 @@ bool addEditorSessionAuthoredKey(
     if (!validEditorAuthoredTrack(session, clipIndex, trackIndex, nullptr, nullptr, &track, error)) {
         return false;
     }
-    const AnimationClip& clip = session.package.fighters.front().authoredClips[static_cast<size_t>(clipIndex)];
-    if (key.frame < 0 || (clip.frameCount > 0 && key.frame > clip.frameCount)) {
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, nullptr, &clip, error)) {
+        return false;
+    }
+    if (key.frame < 0 || (clip->frameCount > 0 && key.frame > clip->frameCount)) {
         setEditorError(error, "editor authored key frame is invalid");
         return false;
     }
@@ -4201,8 +4252,11 @@ bool setEditorSessionAuthoredKey(
         setEditorError(error, "editor authored key index is invalid");
         return false;
     }
-    const AnimationClip& clip = session.package.fighters.front().authoredClips[static_cast<size_t>(clipIndex)];
-    if (key.frame < 0 || (clip.frameCount > 0 && key.frame > clip.frameCount)) {
+    AnimationClip* clip = nullptr;
+    if (!validEditorAuthoredClip(session, clipIndex, nullptr, &clip, error)) {
+        return false;
+    }
+    if (key.frame < 0 || (clip->frameCount > 0 && key.frame > clip->frameCount)) {
         setEditorError(error, "editor authored key frame is invalid");
         return false;
     }
@@ -4241,11 +4295,12 @@ bool setEditorSessionAuthoredMesh(
     const HsdFighterMesh& mesh,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
     FighterPackage previous = session.package;
-    session.package.fighters.front().authoredMesh = mesh;
+    selected->authoredMesh = mesh;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
@@ -4255,11 +4310,12 @@ bool scaleEditorSessionAuthoredMesh(
     Fix scaleY,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
     FighterPackage previous = session.package;
-    for (HsdMeshBatch& batch : session.package.fighters.front().authoredMesh.batches) {
+    for (HsdMeshBatch& batch : selected->authoredMesh.batches) {
         for (HsdMeshVertex& vertex : batch.vertices) {
             vertex.position.x = fxMul(vertex.position.x, scaleX);
             vertex.position.y = fxMul(vertex.position.y, scaleY);
@@ -4274,10 +4330,11 @@ bool nudgeEditorSessionAuthoredMeshVertex(
     Vec3 delta,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(session.package.fighters.front().authoredMesh, vertexIndex);
+    HsdMeshVertex* vertex = editorAuthoredMeshVertexAt(selected->authoredMesh, vertexIndex);
     if (!vertex) {
         setEditorError(error, "editor authored mesh vertex index is invalid");
         return false;
@@ -4294,10 +4351,11 @@ bool bindEditorSessionAuthoredMeshToJoint(
     int jointIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
         setEditorError(error, "editor authored mesh joint index is invalid");
         return false;
@@ -4321,10 +4379,11 @@ bool bindEditorSessionAuthoredMeshVertexToJoint(
     int jointIndex,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
         setEditorError(error, "editor authored mesh joint index is invalid");
         return false;
@@ -4345,10 +4404,11 @@ bool blendEditorSessionAuthoredMeshVertexTowardJoint(
     float amount,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (jointIndex < 0 || jointIndex >= static_cast<int>(def.authoredSkeleton.size())) {
         setEditorError(error, "editor authored mesh joint index is invalid");
         return false;
@@ -4371,10 +4431,11 @@ bool autoWeightEditorSessionAuthoredMeshToSkeleton(
     FighterEditorSession& session,
     std::string* error)
 {
-    if (!validRootFighter(session, error)) {
+    FighterDefinition* selected = selectedSessionPackageFighter(session, error);
+    if (!selected) {
         return false;
     }
-    FighterDefinition& def = session.package.fighters.front();
+    FighterDefinition& def = *selected;
     if (def.authoredSkeleton.empty()) {
         setEditorError(error, "editor authored skeleton is empty");
         return false;

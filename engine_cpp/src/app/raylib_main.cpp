@@ -7781,6 +7781,25 @@ static void syncEditorSelectionFromSession(pf::FighterEditor& editor, const pf::
     editor.selectedPackageInstruction = session.selectedPackageInstruction;
 }
 
+static pf::FighterDefinition* selectedEditorSessionFighter(pf::FighterEditorSession& session) {
+    session.clamp();
+    if (session.package.fighters.empty()) {
+        return nullptr;
+    }
+    return &session.package.fighters[static_cast<size_t>(session.selectedFighter)];
+}
+
+static const pf::FighterDefinition* selectedEditorSessionFighter(const pf::FighterEditorSession& session) {
+    if (session.package.fighters.empty()) {
+        return nullptr;
+    }
+    const int fighterIndex = std::clamp(
+        session.selectedFighter,
+        0,
+        static_cast<int>(session.package.fighters.size()) - 1);
+    return &session.package.fighters[static_cast<size_t>(fighterIndex)];
+}
+
 static bool ensureEditorSessionFromWorld(
     const pf::World& world,
     pf::FighterEditor& editor,
@@ -7836,13 +7855,25 @@ static bool syncEditorSessionToWorld(
         return false;
     }
 
+    const pf::FighterDefinition* selectedSessionDef = selectedEditorSessionFighter(session);
+    const std::string previewFighterName = selectedSessionDef ? selectedSessionDef->name : std::string{};
+    int previewFighterDef = installedRoot;
+    if (!previewFighterName.empty()) {
+        for (int defIndex = 0; defIndex < static_cast<int>(world.fighterDefs.size()); ++defIndex) {
+            if (world.fighterDefs[static_cast<size_t>(defIndex)].name == previewFighterName) {
+                previewFighterDef = defIndex;
+                break;
+            }
+        }
+    }
+
     selectedFighterDef = installedRoot;
     editor.selectedFighter = std::clamp(editor.selectedFighter, 0, std::max(0, static_cast<int>(world.fighters.size()) - 1));
     if (!world.fighters.empty()) {
         pf::FighterRuntime& preview = world.fighters[static_cast<size_t>(editor.selectedFighter)];
         const pf::Vec2 position = preview.position;
         const int facing = preview.facing;
-        pf::resetTrainingFighter(world, static_cast<size_t>(editor.selectedFighter), installedRoot, position, facing);
+        pf::resetTrainingFighter(world, static_cast<size_t>(editor.selectedFighter), previewFighterDef, position, facing);
     }
     updateEditorPackageSummary(editor, descriptor);
     session.lastDescriptor = descriptor;
@@ -7977,7 +8008,11 @@ static void drawEditorToolStrip(
         std::string error;
         int created = -1;
         if (pf::createEditorSessionState(session, {}, session.selectedState, &created, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: created session state " + session.rootFighter()->states[static_cast<size_t>(created)].name);
+            const pf::FighterDefinition* edited = selectedEditorSessionFighter(session);
+            const std::string stateName = edited && created >= 0 && created < static_cast<int>(edited->states.size())
+                ? edited->states[static_cast<size_t>(created)].name
+                : std::string{"state"};
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: created session state " + stateName);
         } else {
             editor.status = "Editor: create state failed: " + error;
         }
@@ -7986,15 +8021,20 @@ static void drawEditorToolStrip(
         std::string error;
         int created = -1;
         if (pf::duplicateEditorSessionState(session, session.selectedState, &created, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned session state " + session.rootFighter()->states[static_cast<size_t>(created)].name);
+            const pf::FighterDefinition* edited = selectedEditorSessionFighter(session);
+            const std::string stateName = edited && created >= 0 && created < static_cast<int>(edited->states.size())
+                ? edited->states[static_cast<size_t>(created)].name
+                : std::string{"state"};
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned session state " + stateName);
         } else {
             editor.status = "Editor: clone state failed: " + error;
         }
     }
     if (uiButton(actions.deleteState, "Delete")) {
         std::string error;
-        const std::string removed = session.rootFighter() && session.selectedState >= 0 && session.selectedState < static_cast<int>(session.rootFighter()->states.size())
-            ? session.rootFighter()->states[static_cast<size_t>(session.selectedState)].name
+        const pf::FighterDefinition* edited = selectedEditorSessionFighter(session);
+        const std::string removed = edited && session.selectedState >= 0 && session.selectedState < static_cast<int>(edited->states.size())
+            ? edited->states[static_cast<size_t>(session.selectedState)].name
             : std::string{"state"};
         if (pf::removeEditorSessionState(session, session.selectedState, {}, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed session state " + removed);
@@ -8047,17 +8087,106 @@ static void drawEditorStateBrowserWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
     pf::FighterEditorSession& session,
+    int& selectedFighterDef,
     const pf::FighterDefinition& def,
     Rectangle rect)
 {
     drawPanelChrome(rect, "States");
-    DrawText(clippedText(def.name, 14, rect.width - 22.0f).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 14, RAYWHITE);
+    const int packageFighterCount = static_cast<int>(session.package.fighters.size());
+    const int packageFighterIndex = packageFighterCount <= 0
+        ? 0
+        : std::clamp(session.selectedFighter, 0, packageFighterCount - 1);
+    DrawText(("Fighter " + std::to_string(packageFighterIndex + 1) + "/" + std::to_string(std::max(1, packageFighterCount))).c_str(),
+        static_cast<int>(rect.x + 10.0f),
+        static_cast<int>(rect.y + 34.0f),
+        11,
+        Fade(RAYWHITE, 0.68f));
+    auto selectPackageFighter = [&](int fighterIndex) -> bool {
+        if (session.package.fighters.empty()) {
+            return false;
+        }
+        session.selectedFighter = wrappedIndex(fighterIndex, static_cast<int>(session.package.fighters.size()));
+        session.selectedState = 0;
+        session.selectedSubaction = 0;
+        session.selectedInterrupt = 0;
+        session.selectedPackageScript = 0;
+        session.selectedPackageInstruction = 0;
+        session.clamp();
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        std::string error;
+        if (!syncEditorSessionToWorld(world, editor, session, selectedFighterDef, &error)) {
+            updateEditorPackageFailure(editor, error);
+            editor.status = "Editor: package fighter selection failed: " + error;
+            return false;
+        }
+        const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
+        editor.status = selected
+            ? "Editor: selected package fighter " + selected->name
+            : "Editor: selected package fighter";
+        return true;
+    };
+    if (uiButton({rect.x + rect.width - 76.0f, rect.y + 30.0f, 30.0f, 22.0f}, "<")) {
+        selectPackageFighter(packageFighterIndex - 1);
+        return;
+    }
+    if (uiButton({rect.x + rect.width - 40.0f, rect.y + 30.0f, 30.0f, 22.0f}, ">")) {
+        selectPackageFighter(packageFighterIndex + 1);
+        return;
+    }
+    std::string renamedFighter;
+    if (uiTextField({rect.x + 10.0f, rect.y + 56.0f, rect.width - 20.0f, 24.0f},
+            "package-fighter-name",
+            editor,
+            def.name,
+            renamedFighter,
+            48))
+    {
+        std::string error;
+        const std::string oldName = def.name;
+        if (pf::renameEditorSessionPackageFighter(session, packageFighterIndex, renamedFighter, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: renamed package fighter " + oldName + " to " + renamedFighter);
+            return;
+        }
+        editor.status = "Editor: rename package fighter failed: " + error;
+    }
+    const float fighterButtonY = rect.y + 86.0f;
+    if (uiButton({rect.x + 10.0f, fighterButtonY, 58.0f, 22.0f}, "+Blank")) {
+        std::string error;
+        int added = -1;
+        pf::FighterDefinition blank = pf::makeFighterEditorBlankDefinition(
+            pf::uniqueEditorPackageFighterName(session.package, "BlankFighter"),
+            def.properties.common);
+        if (pf::addEditorSessionPackageFighter(session, blank, blank.name, &added, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added blank package fighter " + blank.name);
+            return;
+        }
+        editor.status = "Editor: add package fighter failed: " + error;
+    }
+    if (uiButton({rect.x + 74.0f, fighterButtonY, 54.0f, 22.0f}, "Clone")) {
+        std::string error;
+        int added = -1;
+        if (pf::duplicateEditorSessionPackageFighter(session, packageFighterIndex, {}, &added, &error)) {
+            const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned package fighter " + (selected ? selected->name : std::string{"fighter"}));
+            return;
+        }
+        editor.status = "Editor: clone package fighter failed: " + error;
+    }
+    if (uiButton({rect.x + 134.0f, fighterButtonY, 54.0f, 22.0f}, "-Ftr")) {
+        std::string error;
+        const std::string removed = def.name;
+        if (pf::removeEditorSessionPackageFighter(session, packageFighterIndex, {}, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed package fighter " + removed);
+            return;
+        }
+        editor.status = "Editor: remove package fighter failed: " + error;
+    }
     std::string committedSearch;
-    if (uiTextField({rect.x + 10.0f, rect.y + 58.0f, rect.width - 20.0f, 24.0f}, "state-search", editor, editor.stateSearch, committedSearch, 48)) {
+    if (uiTextField({rect.x + 10.0f, rect.y + 116.0f, rect.width - 20.0f, 24.0f}, "state-search", editor, editor.stateSearch, committedSearch, 48)) {
         editor.stateSearch = committedSearch;
     }
     if (editor.stateSearch.empty()) {
-        DrawText("Search states", static_cast<int>(rect.x + 18.0f), static_cast<int>(rect.y + 65.0f), 12, Fade(RAYWHITE, 0.55f));
+        DrawText("Search states", static_cast<int>(rect.x + 18.0f), static_cast<int>(rect.y + 123.0f), 12, Fade(RAYWHITE, 0.55f));
     }
     const std::array<pf::FighterEditorStateGroupFilter, 9> groupFilters{
         pf::FighterEditorStateGroupFilter::All,
@@ -8074,15 +8203,15 @@ static void drawEditorStateBrowserWorkstation(
     const int currentGroupIndex = currentGroupIt == groupFilters.end()
         ? 0
         : static_cast<int>(std::distance(groupFilters.begin(), currentGroupIt));
-    if (uiButton({rect.x + 10.0f, rect.y + 88.0f, 26.0f, 22.0f}, "<")) {
+    if (uiButton({rect.x + 10.0f, rect.y + 146.0f, 26.0f, 22.0f}, "<")) {
         editor.stateGroupFilter = groupFilters[static_cast<size_t>(wrappedIndex(currentGroupIndex - 1, static_cast<int>(groupFilters.size())))];
     }
-    if (uiButton({rect.x + rect.width - 36.0f, rect.y + 88.0f, 26.0f, 22.0f}, ">")) {
+    if (uiButton({rect.x + rect.width - 36.0f, rect.y + 146.0f, 26.0f, 22.0f}, ">")) {
         editor.stateGroupFilter = groupFilters[static_cast<size_t>(wrappedIndex(currentGroupIndex + 1, static_cast<int>(groupFilters.size())))];
     }
     DrawText(("Group: " + std::string(editorStateGroupFilterName(editor.stateGroupFilter))).c_str(),
         static_cast<int>(rect.x + 44.0f),
-        static_cast<int>(rect.y + 94.0f),
+        static_cast<int>(rect.y + 152.0f),
         11,
         Fade(RAYWHITE, 0.68f));
 
@@ -8098,7 +8227,7 @@ static void drawEditorStateBrowserWorkstation(
         }
     }
 
-    const int rowCount = std::max(1, static_cast<int>((rect.height - 152.0f) / 43.0f));
+    const int rowCount = std::max(1, static_cast<int>((rect.height - 210.0f) / 43.0f));
     int selectedVisible = 0;
     for (int i = 0; i < static_cast<int>(visibleStates.size()); ++i) {
         if (visibleStates[static_cast<size_t>(i)] == editor.selectedState) {
@@ -8110,7 +8239,7 @@ static void drawEditorStateBrowserWorkstation(
     for (int row = 0; row < std::min(rowCount, static_cast<int>(visibleStates.size())); ++row) {
         const int stateIndex = visibleStates[static_cast<size_t>(start + row)];
         const pf::FighterState& state = def.states[static_cast<size_t>(stateIndex)];
-        const Rectangle rowRect{rect.x + 10.0f, rect.y + 118.0f + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
+        const Rectangle rowRect{rect.x + 10.0f, rect.y + 176.0f + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
         const bool active = stateIndex == editor.selectedState;
         drawWorkstationRow(rowRect, std::to_string(stateIndex) + "  " + state.name, active, SKYBLUE);
         DrawText((std::string(editorStateGroupFilterName(classifyEditorStateGroup(state))) + "  " +
@@ -8132,7 +8261,7 @@ static void drawEditorStateBrowserWorkstation(
         }
     }
     if (visibleStates.empty()) {
-        DrawText("No matching states", static_cast<int>(rect.x + 12.0f), static_cast<int>(rect.y + 100.0f), 13, Fade(RAYWHITE, 0.65f));
+        DrawText("No matching states", static_cast<int>(rect.x + 12.0f), static_cast<int>(rect.y + 176.0f), 13, Fade(RAYWHITE, 0.65f));
     }
     DrawText((std::to_string(visibleStates.size()) + " shown / " + std::to_string(def.states.size()) + " total").c_str(),
         static_cast<int>(rect.x + 10.0f),
@@ -10781,9 +10910,9 @@ static void drawEditorWorkstation(
         editor.status = "Editor session failed: " + sessionError;
         return;
     }
-    pf::FighterDefinition* sessionDef = session.rootFighter();
+    pf::FighterDefinition* sessionDef = selectedEditorSessionFighter(session);
     if (!sessionDef) {
-        editor.status = "Editor session has no root fighter";
+        editor.status = "Editor session has no selected fighter";
         return;
     }
     pf::FighterDefinition& def = *sessionDef;
@@ -10811,7 +10940,7 @@ static void drawEditorWorkstation(
     drawEditorViewportOverlayControls(editor, layout.viewport);
 
     drawEditorToolStrip(world, editor, session, selectedFighterDef, layout.toolStrip);
-    drawEditorStateBrowserWorkstation(world, editor, session, def, layout.leftBrowser);
+    drawEditorStateBrowserWorkstation(world, editor, session, selectedFighterDef, def, layout.leftBrowser);
     drawEditorTimelineWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.timeline);
     if (editor.workspace == pf::EditorWorkspace::Assets) {
         drawEditorObjectWorkstation(world, editor, session, selectedFighterDef, layout.rightGraph);
@@ -11420,7 +11549,11 @@ int main() {
         std::string error;
         int created = -1;
         if (pf::createEditorSessionState(editorSession, {}, editorSession.selectedState, &created, &error)) {
-            syncMainEditorSession("Editor: created session state " + editorSession.rootFighter()->states[static_cast<size_t>(created)].name);
+            const pf::FighterDefinition* edited = selectedEditorSessionFighter(editorSession);
+            const std::string stateName = edited && created >= 0 && created < static_cast<int>(edited->states.size())
+                ? edited->states[static_cast<size_t>(created)].name
+                : std::string{"state"};
+            syncMainEditorSession("Editor: created session state " + stateName);
         } else {
             editor.status = "Editor: create state failed: " + error;
         }
@@ -11430,8 +11563,9 @@ int main() {
             return;
         }
         std::string error;
-        const std::string removed = editorSession.rootFighter() && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(editorSession.rootFighter()->states.size())
-            ? editorSession.rootFighter()->states[static_cast<size_t>(editorSession.selectedState)].name
+        const pf::FighterDefinition* edited = selectedEditorSessionFighter(editorSession);
+        const std::string removed = edited && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(edited->states.size())
+            ? edited->states[static_cast<size_t>(editorSession.selectedState)].name
             : std::string{"state"};
         if (pf::removeEditorSessionState(editorSession, editorSession.selectedState, {}, &error)) {
             syncMainEditorSession("Editor: removed session state " + removed);
@@ -11579,7 +11713,7 @@ int main() {
                 editorSession.clamp();
                 syncEditorSelectionFromSession(editor, editorSession);
                 editor.selectionKind = pf::FighterEditorSelectionKind::State;
-                if (pf::FighterDefinition* def = editorSession.rootFighter()) {
+                if (pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession)) {
                     previewEditorSelectedState(world, editor, *def);
                 }
             }
@@ -11592,7 +11726,7 @@ int main() {
                 editorSession.clamp();
                 syncEditorSelectionFromSession(editor, editorSession);
                 editor.selectionKind = pf::FighterEditorSelectionKind::State;
-                if (pf::FighterDefinition* def = editorSession.rootFighter()) {
+                if (pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession)) {
                     previewEditorSelectedState(world, editor, *def);
                 }
             }
@@ -11645,7 +11779,7 @@ int main() {
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
             if (ensureMainEditorSession()) {
-                pf::FighterDefinition* def = editorSession.rootFighter();
+                pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession);
                 if (def && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(def->states.size())) {
                     pf::FighterState& state = def->states[static_cast<size_t>(editorSession.selectedState)];
                     if (!state.action.empty()) {
@@ -11665,7 +11799,7 @@ int main() {
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
             if (ensureMainEditorSession()) {
-                pf::FighterDefinition* def = editorSession.rootFighter();
+                pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession);
                 if (def && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(def->states.size())) {
                     pf::FighterState& state = def->states[static_cast<size_t>(editorSession.selectedState)];
                     if (!state.action.empty()) {
