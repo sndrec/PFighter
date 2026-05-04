@@ -120,6 +120,7 @@ struct FighterEditor {
     int selectedPackageVariable = 0;
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;
+    int selectedPackageGraphNode = 0;
     FighterEditorSelectionKind selectionKind = FighterEditorSelectionKind::State;
     int selectedObjectDef = 0;
     int selectedObjectState = 0;

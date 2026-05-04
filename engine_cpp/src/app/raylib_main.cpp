@@ -9992,12 +9992,14 @@ static void drawEditorLogicGraphWorkstation(
     if (uiButton({rect.x + rect.width - 288.0f, rect.y + 29.0f, 38.0f, 22.0f}, "<")) {
         editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript - 1, static_cast<int>(def.packageScripts.size()));
         editor.selectedPackageInstruction = 0;
+        editor.selectedPackageGraphNode = 0;
         session.selectedPackageScript = editor.selectedPackageScript;
         session.selectedPackageInstruction = 0;
     }
     if (uiButton({rect.x + rect.width - 246.0f, rect.y + 29.0f, 38.0f, 22.0f}, ">")) {
         editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript + 1, static_cast<int>(def.packageScripts.size()));
         editor.selectedPackageInstruction = 0;
+        editor.selectedPackageGraphNode = 0;
         session.selectedPackageScript = editor.selectedPackageScript;
         session.selectedPackageInstruction = 0;
     }
@@ -10049,6 +10051,7 @@ static void drawEditorLogicGraphWorkstation(
         {
             editor.selectedPackageScript = scriptIndex;
             editor.selectedPackageInstruction = 0;
+            editor.selectedPackageGraphNode = 0;
             editor.selectionKind = pf::FighterEditorSelectionKind::Script;
             session.selectedPackageScript = scriptIndex;
             session.selectedPackageInstruction = 0;
@@ -10165,6 +10168,87 @@ static void drawEditorLogicGraphWorkstation(
         drawPackageScriptBlockGraph(script, editor, canvas, &session);
         return;
     }
+    auto selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+        return node.id == editor.selectedPackageGraphNode;
+    });
+    if (selectedGraphNodeIt == script.graph.nodes.end()) {
+        editor.selectedPackageGraphNode = script.graph.entryNode;
+        selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+            return node.id == editor.selectedPackageGraphNode;
+        });
+        if (selectedGraphNodeIt == script.graph.nodes.end()) {
+            editor.selectedPackageGraphNode = script.graph.nodes.front().id;
+            selectedGraphNodeIt = script.graph.nodes.begin();
+        }
+    }
+    auto selectedGraphNodeIndex = [&]() {
+        const auto found = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+            return node.id == editor.selectedPackageGraphNode;
+        });
+        return found == script.graph.nodes.end()
+            ? 0
+            : static_cast<int>(std::distance(script.graph.nodes.begin(), found));
+    };
+    auto selectGraphNodeByIndex = [&](int index) {
+        if (script.graph.nodes.empty()) {
+            return;
+        }
+        const int nodeIndex = wrappedIndex(index, static_cast<int>(script.graph.nodes.size()));
+        const pf::PackageScriptGraphNode& node = script.graph.nodes[static_cast<size_t>(nodeIndex)];
+        editor.selectedPackageGraphNode = node.id;
+        if (node.kind == pf::PackageScriptGraphNodeKind::Instruction && node.instructionIndex >= 0) {
+            editor.selectedPackageInstruction = std::clamp(node.instructionIndex, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
+            session.selectedPackageInstruction = editor.selectedPackageInstruction;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+        } else {
+            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+        }
+    };
+    auto nudgeSelectedGraphNode = [&](pf::Fix dx, pf::Fix dy, const std::string& label) -> bool {
+        const auto found = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+            return node.id == editor.selectedPackageGraphNode;
+        });
+        if (found == script.graph.nodes.end()) {
+            return false;
+        }
+        pf::PackageScriptGraphNode edited = *found;
+        edited.position.x += dx;
+        edited.position.y += dy;
+        std::string error;
+        if (pf::setEditorSessionPackageScriptGraphNode(session, editor.selectedPackageScript, edited.id, edited, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: nudged graph node " + label);
+            return true;
+        }
+        editor.status = "Editor: graph node edit failed: " + error;
+        return false;
+    };
+    const float graphControlY = actionY + 30.0f;
+    DrawText(("Node #" + std::to_string(editor.selectedPackageGraphNode)).c_str(),
+        static_cast<int>(rect.x + 12.0f),
+        static_cast<int>(graphControlY + 6.0f),
+        10,
+        Fade(RAYWHITE, 0.68f));
+    if (uiButton({rect.x + 86.0f, graphControlY, 36.0f, 22.0f}, "N<")) {
+        selectGraphNodeByIndex(selectedGraphNodeIndex() - 1);
+        return;
+    }
+    if (uiButton({rect.x + 128.0f, graphControlY, 36.0f, 22.0f}, "N>")) {
+        selectGraphNodeByIndex(selectedGraphNodeIndex() + 1);
+        return;
+    }
+    if (uiButton({rect.x + 174.0f, graphControlY, 34.0f, 22.0f}, "X-")) {
+        if (nudgeSelectedGraphNode(-pf::fx(16), 0, "left")) return;
+    }
+    if (uiButton({rect.x + 214.0f, graphControlY, 34.0f, 22.0f}, "X+")) {
+        if (nudgeSelectedGraphNode(pf::fx(16), 0, "right")) return;
+    }
+    if (uiButton({rect.x + 254.0f, graphControlY, 34.0f, 22.0f}, "Y-")) {
+        if (nudgeSelectedGraphNode(0, -pf::fx(16), "up")) return;
+    }
+    if (uiButton({rect.x + 294.0f, graphControlY, 34.0f, 22.0f}, "Y+")) {
+        if (nudgeSelectedGraphNode(0, pf::fx(16), "down")) return;
+    }
+    const Rectangle graphCanvas{canvas.x, canvas.y + 28.0f, canvas.width, std::max(28.0f, canvas.height - 28.0f)};
     const float scale = 0.72f;
     for (const pf::PackageScriptGraphLink& link : script.graph.links) {
         const auto from = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) { return node.id == link.fromNode; });
@@ -10172,18 +10256,19 @@ static void drawEditorLogicGraphWorkstation(
         if (from == script.graph.nodes.end() || to == script.graph.nodes.end()) {
             continue;
         }
-        const Vector2 a{canvas.x + 40.0f + pf::fxToFloat(from->position.x) * scale + 104.0f, canvas.y + 28.0f + pf::fxToFloat(from->position.y) * scale + 22.0f};
-        const Vector2 b{canvas.x + 40.0f + pf::fxToFloat(to->position.x) * scale, canvas.y + 28.0f + pf::fxToFloat(to->position.y) * scale + 22.0f};
+        const Vector2 a{graphCanvas.x + 40.0f + pf::fxToFloat(from->position.x) * scale + 104.0f, graphCanvas.y + 28.0f + pf::fxToFloat(from->position.y) * scale + 22.0f};
+        const Vector2 b{graphCanvas.x + 40.0f + pf::fxToFloat(to->position.x) * scale, graphCanvas.y + 28.0f + pf::fxToFloat(to->position.y) * scale + 22.0f};
         DrawLineBezier(a, b, 2.0f, Fade(SKYBLUE, 0.6f));
     }
     for (const pf::PackageScriptGraphNode& node : script.graph.nodes) {
         const Rectangle nodeRect{
-            canvas.x + 40.0f + pf::fxToFloat(node.position.x) * scale,
-            canvas.y + 28.0f + pf::fxToFloat(node.position.y) * scale,
+            graphCanvas.x + 40.0f + pf::fxToFloat(node.position.x) * scale,
+            graphCanvas.y + 28.0f + pf::fxToFloat(node.position.y) * scale,
             node.kind == pf::PackageScriptGraphNodeKind::Entry ? 86.0f : 112.0f,
             44.0f,
         };
-        const bool selected = node.instructionIndex == editor.selectedPackageInstruction && node.kind == pf::PackageScriptGraphNodeKind::Instruction;
+        const bool selected = node.id == editor.selectedPackageGraphNode ||
+            (node.instructionIndex == editor.selectedPackageInstruction && node.kind == pf::PackageScriptGraphNodeKind::Instruction);
         const Color fill = node.kind == pf::PackageScriptGraphNodeKind::Entry ? Fade(PURPLE, 0.74f) : (selected ? Fade(ORANGE, 0.78f) : Fade(BLUE, 0.56f));
         DrawRectangleRounded(nodeRect, 0.08f, 6, fill);
         DrawRectangleRoundedLines(nodeRect, 0.08f, 6, selected ? ORANGE : Fade(RAYWHITE, 0.5f));
@@ -10194,10 +10279,15 @@ static void drawEditorLogicGraphWorkstation(
                 : "Node");
         DrawText(clippedText(label, 11, nodeRect.width - 12.0f).c_str(), static_cast<int>(nodeRect.x + 7.0f), static_cast<int>(nodeRect.y + 9.0f), 11, RAYWHITE);
         DrawText(("#" + std::to_string(node.id)).c_str(), static_cast<int>(nodeRect.x + 7.0f), static_cast<int>(nodeRect.y + 25.0f), 10, Fade(RAYWHITE, 0.68f));
-        if (CheckCollisionPointRec(GetMousePosition(), nodeRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && node.instructionIndex >= 0) {
-            editor.selectedPackageInstruction = node.instructionIndex;
-            editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
-            session.selectedPackageInstruction = node.instructionIndex;
+        if (CheckCollisionPointRec(GetMousePosition(), nodeRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            editor.selectedPackageGraphNode = node.id;
+            if (node.kind == pf::PackageScriptGraphNodeKind::Instruction && node.instructionIndex >= 0) {
+                editor.selectedPackageInstruction = node.instructionIndex;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                session.selectedPackageInstruction = node.instructionIndex;
+            } else {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+            }
         }
     }
 }
