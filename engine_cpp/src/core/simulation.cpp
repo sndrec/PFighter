@@ -7145,6 +7145,12 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarObjectHitlag:
                 setVar(instruction.dst, object.hitlag);
                 break;
+            case PackageScriptOp::SetObjectHitlag:
+                setGameObjectHitlag(world, objectIndex, instruction.intValue);
+                break;
+            case PackageScriptOp::SetObjectHitlagFromVar:
+                setGameObjectHitlag(world, objectIndex, var(instruction.srcA));
+                break;
             case PackageScriptOp::SetVarObjectGroundSegment:
                 setVar(instruction.dst, object.groundSegment);
                 break;

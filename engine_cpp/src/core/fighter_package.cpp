@@ -262,6 +262,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetObjectDamage:
     case PackageScriptOp::SetObjectDamageFromVar:
     case PackageScriptOp::SetVarObjectHitlag:
+    case PackageScriptOp::SetObjectHitlag:
+    case PackageScriptOp::SetObjectHitlagFromVar:
     case PackageScriptOp::SetVarObjectGroundSegment:
     case PackageScriptOp::SetVarObjectPositionX:
     case PackageScriptOp::SetVarObjectPositionY:
@@ -1809,6 +1811,17 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetObjectDamageFromVar:
         if (!allowObjectContextReads) {
             throw std::runtime_error("fighter package script object damage write is invalid");
+        }
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetObjectHitlag:
+        if (!allowObjectContextReads || instruction.intValue < 0) {
+            throw std::runtime_error("fighter package script object hitlag write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetObjectHitlagFromVar:
+        if (!allowObjectContextReads) {
+            throw std::runtime_error("fighter package script object hitlag write is invalid");
         }
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;

@@ -478,6 +478,8 @@ enum class PackageScriptOp : uint8_t {
     SetObjectDamage,
     SetObjectDamageFromVar,
     SetVarObjectHitlag,
+    SetObjectHitlag,
+    SetObjectHitlagFromVar,
     SetVarObjectGroundSegment,
     SetVarObjectPositionX,
     SetVarObjectPositionY,

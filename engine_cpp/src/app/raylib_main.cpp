@@ -1119,6 +1119,8 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetObjectDamage: return "ObjDmgSet";
     case pf::PackageScriptOp::SetObjectDamageFromVar: return "ObjDmgVar";
     case pf::PackageScriptOp::SetVarObjectHitlag: return "ObjHitlg";
+    case pf::PackageScriptOp::SetObjectHitlag: return "ObjHitSet";
+    case pf::PackageScriptOp::SetObjectHitlagFromVar: return "ObjHitVar";
     case pf::PackageScriptOp::SetVarObjectGroundSegment: return "ObjFloor";
     case pf::PackageScriptOp::SetVarObjectPositionX: return "ObjPosX";
     case pf::PackageScriptOp::SetVarObjectPositionY: return "ObjPosY";
@@ -1290,6 +1292,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetObjectDamageFromVar:
         instruction.op = pf::PackageScriptOp::SetObjectDamage;
+        break;
+    case pf::PackageScriptOp::SetObjectHitlagFromVar:
+        instruction.op = pf::PackageScriptOp::SetObjectHitlag;
         break;
     case pf::PackageScriptOp::SpawnObjectFromVars:
         instruction.op = pf::PackageScriptOp::SpawnObject;
@@ -1621,6 +1626,12 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetObjectDamageFromVar:
         label += " = v" + std::to_string(instruction.srcA);
         break;
+    case pf::PackageScriptOp::SetObjectHitlag:
+        label += " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetObjectHitlagFromVar:
+        label += " = v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::SetVarOwnedObjectCount:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
@@ -1917,7 +1928,9 @@ static pf::PackageScriptOp nextObjectContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarObjectDamage: return pf::PackageScriptOp::SetObjectDamage;
     case pf::PackageScriptOp::SetObjectDamage: return pf::PackageScriptOp::SetObjectDamageFromVar;
     case pf::PackageScriptOp::SetObjectDamageFromVar: return pf::PackageScriptOp::SetVarObjectHitlag;
-    case pf::PackageScriptOp::SetVarObjectHitlag: return pf::PackageScriptOp::SetVarObjectGroundSegment;
+    case pf::PackageScriptOp::SetVarObjectHitlag: return pf::PackageScriptOp::SetObjectHitlag;
+    case pf::PackageScriptOp::SetObjectHitlag: return pf::PackageScriptOp::SetObjectHitlagFromVar;
+    case pf::PackageScriptOp::SetObjectHitlagFromVar: return pf::PackageScriptOp::SetVarObjectGroundSegment;
     case pf::PackageScriptOp::SetVarObjectGroundSegment: return pf::PackageScriptOp::SetVarObjectPositionX;
     case pf::PackageScriptOp::SetVarObjectPositionX: return pf::PackageScriptOp::SetVarObjectPositionY;
     case pf::PackageScriptOp::SetVarObjectPositionY: return pf::PackageScriptOp::SetVarObjectVelocityX;

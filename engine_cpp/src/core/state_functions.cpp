@@ -2732,6 +2732,8 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetObjectDamage:
         case PackageScriptOp::SetObjectDamageFromVar:
         case PackageScriptOp::SetVarObjectHitlag:
+        case PackageScriptOp::SetObjectHitlag:
+        case PackageScriptOp::SetObjectHitlagFromVar:
         case PackageScriptOp::SetVarObjectGroundSegment:
         case PackageScriptOp::SetVarObjectPositionX:
         case PackageScriptOp::SetVarObjectPositionY:
