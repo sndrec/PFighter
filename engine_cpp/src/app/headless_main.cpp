@@ -6287,7 +6287,34 @@ int main(int argc, char** argv) {
         editorGraphCompileProbe.instructions[1].op == pf::PackageScriptOp::SetVarImmediate &&
         editorGraphCompileProbe.graph.nodes[1].instructionIndex == 1 &&
         editorGraphCompileProbe.graph.nodes[2].instructionIndex == 0;
-    const bool editorSessionCompileScriptGraphOk = editorSessionCompileStandaloneGraphOk &&
+    pf::PackageScriptInstruction editorSkipInstruction;
+    editorSkipInstruction.op = pf::PackageScriptOp::SkipIfVarLessThanImmediate;
+    editorSkipInstruction.dst = 0;
+    editorSkipInstruction.intValue = 1;
+    pf::PackageScriptInstruction editorJumpInstruction;
+    editorJumpInstruction.op = pf::PackageScriptOp::JumpRelative;
+    pf::PackageScriptInstruction editorTrueInstruction = editorSetVarInstruction;
+    editorTrueInstruction.intValue = 11;
+    pf::PackageScript editorBranchGraphCompileProbe;
+    editorBranchGraphCompileProbe.name = "BranchGraphCompileProbe";
+    editorBranchGraphCompileProbe.instructions = {
+        editorSkipInstruction,
+        editorJumpInstruction,
+        editorTrueInstruction,
+        editorNopInstruction,
+    };
+    editorBranchGraphCompileProbe.graph = pf::makePackageScriptLinearGraph(editorBranchGraphCompileProbe);
+    editorBranchGraphCompileProbe.graph.links.push_back({1, 1, 3, 0});
+    editorBranchGraphCompileProbe.graph.links.push_back({2, 1, 4, 0});
+    const bool editorSessionCompileBranchGraphOk = editorSessionCompileStandaloneGraphOk &&
+        pf::compilePackageScriptGraph(editorBranchGraphCompileProbe, &packageError) &&
+        editorBranchGraphCompileProbe.instructions.size() == 4 &&
+        editorBranchGraphCompileProbe.instructions[0].op == pf::PackageScriptOp::SkipIfVarLessThanImmediate &&
+        editorBranchGraphCompileProbe.instructions[1].op == pf::PackageScriptOp::JumpRelative &&
+        editorBranchGraphCompileProbe.instructions[1].intValue == 2 &&
+        editorBranchGraphCompileProbe.instructions[2].op == pf::PackageScriptOp::SetVarImmediate &&
+        editorBranchGraphCompileProbe.instructions[3].op == pf::PackageScriptOp::Nop;
+    const bool editorSessionCompileScriptGraphOk = editorSessionCompileBranchGraphOk &&
         pf::compileEditorSessionPackageScriptGraph(editorSession, editorLogicScriptIndex, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions.size() == 2;
@@ -8303,6 +8330,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
               << " fighter_editor_session_script_graph_ok=" << editorSessionScriptGraphOk
               << " fighter_editor_session_compile_standalone_graph_ok=" << editorSessionCompileStandaloneGraphOk
+              << " fighter_editor_session_compile_branch_graph_ok=" << editorSessionCompileBranchGraphOk
               << " fighter_editor_session_compile_script_graph_ok=" << editorSessionCompileScriptGraphOk
               << " fighter_editor_session_move_instruction_ok=" << editorSessionMoveInstructionOk
               << " fighter_editor_session_invalid_instruction_rejected=" << editorSessionInvalidInstructionRejected

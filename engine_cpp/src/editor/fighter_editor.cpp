@@ -762,12 +762,15 @@ bool graphNodeSeen(const std::vector<int>& seen, int nodeId) {
     return std::find(seen.begin(), seen.end(), nodeId) != seen.end();
 }
 
-bool packageInstructionUsesRelativeControlFlow(PackageScriptOp op) {
+bool packageInstructionIsSkipBranch(PackageScriptOp op) {
     return op == PackageScriptOp::SkipIfVarLessThanImmediate ||
         op == PackageScriptOp::SkipIfVarLessThanVar ||
         op == PackageScriptOp::SkipIfVarEqualImmediate ||
-        op == PackageScriptOp::SkipIfVarEqualVar ||
-        op == PackageScriptOp::JumpRelative;
+        op == PackageScriptOp::SkipIfVarEqualVar;
+}
+
+bool packageInstructionIsGraphRetargetable(PackageScriptOp op) {
+    return packageInstructionIsSkipBranch(op) || op == PackageScriptOp::JumpRelative;
 }
 
 int graphInstructionNodeCount(const PackageScriptGraph& graph) {
@@ -776,14 +779,21 @@ int graphInstructionNodeCount(const PackageScriptGraph& graph) {
     }));
 }
 
-bool nextGraphControlNode(const PackageScriptGraph& graph, int currentNode, int& nextNode, std::string* error) {
-    bool found = false;
+bool graphSocketTarget(
+    const PackageScriptGraph& graph,
+    int currentNode,
+    int socket,
+    int& nextNode,
+    bool& found,
+    std::string* error)
+{
+    found = false;
     for (const PackageScriptGraphLink& link : graph.links) {
-        if (link.fromNode != currentNode || link.fromSocket != 0) {
+        if (link.fromNode != currentNode || link.fromSocket != socket) {
             continue;
         }
         if (found) {
-            setEditorError(error, "editor package script graph has multiple control links");
+            setEditorError(error, "editor package script graph has multiple links from one socket");
             return false;
         }
         found = true;
@@ -792,6 +802,75 @@ bool nextGraphControlNode(const PackageScriptGraph& graph, int currentNode, int&
     if (!found) {
         nextNode = -1;
     }
+    return true;
+}
+
+bool nextGraphControlNode(const PackageScriptGraph& graph, int currentNode, int& nextNode, std::string* error) {
+    bool found = false;
+    return graphSocketTarget(graph, currentNode, 0, nextNode, found, error);
+}
+
+bool compiledGraphNodeIndex(const std::vector<int>& compiledNodeIds, int nodeId, int& compiledIndex) {
+    const auto found = std::find(compiledNodeIds.begin(), compiledNodeIds.end(), nodeId);
+    if (found == compiledNodeIds.end()) {
+        return false;
+    }
+    compiledIndex = static_cast<int>(found - compiledNodeIds.begin());
+    return true;
+}
+
+bool resolveGraphTargetIndex(
+    const PackageScriptGraph& graph,
+    const std::vector<int>& compiledNodeIds,
+    int targetNode,
+    int instructionCount,
+    int& targetIndex,
+    std::string* error)
+{
+    if (targetNode < 0) {
+        targetIndex = instructionCount;
+        return true;
+    }
+
+    std::vector<int> seenNodes;
+    int currentNode = targetNode;
+    while (currentNode >= 0) {
+        if (graphNodeSeen(seenNodes, currentNode)) {
+            setEditorError(error, "editor package script graph target has a control cycle");
+            return false;
+        }
+        seenNodes.push_back(currentNode);
+
+        const PackageScriptGraphNode* node = graphNodeById(graph, currentNode);
+        if (!node) {
+            setEditorError(error, "editor package script graph target is invalid");
+            return false;
+        }
+        if (node->kind == PackageScriptGraphNodeKind::Instruction) {
+            if (!compiledGraphNodeIndex(compiledNodeIds, node->id, targetIndex)) {
+                setEditorError(error, "editor package script graph target is disconnected");
+                return false;
+            }
+            return true;
+        }
+        if (node->kind == PackageScriptGraphNodeKind::Entry) {
+            setEditorError(error, "editor package script graph target is invalid");
+            return false;
+        }
+
+        bool found = false;
+        int nextNode = -1;
+        if (!graphSocketTarget(graph, currentNode, 0, nextNode, found, error)) {
+            return false;
+        }
+        if (!found) {
+            targetIndex = instructionCount;
+            return true;
+        }
+        currentNode = nextNode;
+    }
+
+    targetIndex = instructionCount;
     return true;
 }
 
@@ -2623,13 +2702,6 @@ bool compilePackageScriptGraph(PackageScript& script, std::string* error) {
         setEditorError(error, "editor package script graph entry is invalid");
         return false;
     }
-    for (const PackageScriptInstruction& instruction : script.instructions) {
-        if (packageInstructionUsesRelativeControlFlow(instruction.op)) {
-            setEditorError(error, "editor package script graph compile does not support relative control flow yet");
-            return false;
-        }
-    }
-
     std::vector<PackageScriptInstruction> compiled;
     std::vector<int> compiledNodeIds;
     std::vector<int> seenNodes;
@@ -2680,6 +2752,74 @@ bool compilePackageScriptGraph(PackageScript& script, std::string* error) {
     if (compiled.size() != script.instructions.size()) {
         setEditorError(error, "editor package script graph does not cover all bytecode instructions");
         return false;
+    }
+
+    const int instructionCount = static_cast<int>(compiled.size());
+    for (int compiledIndex = 0; compiledIndex < instructionCount; ++compiledIndex) {
+        PackageScriptInstruction& instruction = compiled[static_cast<size_t>(compiledIndex)];
+        if (!packageInstructionIsGraphRetargetable(instruction.op)) {
+            continue;
+        }
+
+        const int nodeId = compiledNodeIds[static_cast<size_t>(compiledIndex)];
+        if (instruction.op == PackageScriptOp::JumpRelative) {
+            bool found = false;
+            int targetNode = -1;
+            if (!graphSocketTarget(graph, nodeId, 1, targetNode, found, error)) {
+                return false;
+            }
+            if (!found && !graphSocketTarget(graph, nodeId, 0, targetNode, found, error)) {
+                return false;
+            }
+            int targetIndex = instructionCount;
+            if (!resolveGraphTargetIndex(graph, compiledNodeIds, found ? targetNode : -1, instructionCount, targetIndex, error)) {
+                return false;
+            }
+            instruction.intValue = targetIndex - compiledIndex;
+            continue;
+        }
+
+        if (compiledIndex + 2 > instructionCount) {
+            setEditorError(error, "editor package script graph branch target is invalid");
+            return false;
+        }
+
+        bool foundFallthrough = false;
+        int fallthroughNode = -1;
+        if (!graphSocketTarget(graph, nodeId, 0, fallthroughNode, foundFallthrough, error)) {
+            return false;
+        }
+        int fallthroughIndex = instructionCount;
+        if (!resolveGraphTargetIndex(
+                graph,
+                compiledNodeIds,
+                foundFallthrough ? fallthroughNode : -1,
+                instructionCount,
+                fallthroughIndex,
+                error))
+        {
+            return false;
+        }
+        if (fallthroughIndex != compiledIndex + 1) {
+            setEditorError(error, "editor package script graph branch fallthrough is invalid");
+            return false;
+        }
+
+        bool foundTaken = false;
+        int takenNode = -1;
+        if (!graphSocketTarget(graph, nodeId, 1, takenNode, foundTaken, error)) {
+            return false;
+        }
+        if (foundTaken) {
+            int takenIndex = instructionCount;
+            if (!resolveGraphTargetIndex(graph, compiledNodeIds, takenNode, instructionCount, takenIndex, error)) {
+                return false;
+            }
+            if (takenIndex != compiledIndex + 2) {
+                setEditorError(error, "editor package script graph branch taken target is not bytecode-representable");
+                return false;
+            }
+        }
     }
 
     script.instructions = std::move(compiled);
