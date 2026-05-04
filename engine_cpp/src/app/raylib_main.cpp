@@ -12284,8 +12284,37 @@ static std::string editorContextDetail(
     return "state " + state.name;
 }
 
-static std::string editorSelectedGraphDiagnostic(const pf::FighterEditor& editor, const pf::FighterDefinition& def, Color& color) {
+static std::string editorSelectedGraphDiagnostic(
+    const pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    const pf::FighterDefinition& def,
+    Color& color)
+{
     color = Fade(RAYWHITE, 0.62f);
+    const bool objectGraphContext =
+        (editor.workspace == pf::EditorWorkspace::Assets ||
+         editor.selectionKind == pf::FighterEditorSelectionKind::Object ||
+         editor.selectionKind == pf::FighterEditorSelectionKind::ObjectCallback) &&
+        editor.selectedObjectDef >= 0 &&
+        editor.selectedObjectDef < static_cast<int>(session.package.objects.size());
+    if (objectGraphContext) {
+        const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        if (object.packageScripts.empty()) {
+            return "Graph: selected object has no scripts";
+        }
+        const int scriptIndex = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+        pf::PackageScript script = object.packageScripts[static_cast<size_t>(scriptIndex)];
+        if (script.graph.nodes.empty()) {
+            return "Graph: selected object script has no metadata";
+        }
+        std::string error;
+        if (pf::compilePackageScriptGraph(script, &error)) {
+            color = GREEN;
+            return "Graph: selected object script compiles";
+        }
+        color = RED;
+        return "Graph: object " + error;
+    }
     if (def.packageScripts.empty()) {
         return "Graph: no package scripts";
     }
@@ -12342,9 +12371,36 @@ static std::string editorDiagnosticContextHint(
         if (!object.name.empty() && containsCaseInsensitive(message, object.name)) {
             return "Context hint: object #" + std::to_string(objectIndex) + " " + object.name;
         }
+        for (int scriptIndex = 0; scriptIndex < static_cast<int>(object.packageScripts.size()); ++scriptIndex) {
+            const pf::PackageScript& script = object.packageScripts[static_cast<size_t>(scriptIndex)];
+            if (!script.name.empty() && containsCaseInsensitive(message, script.name)) {
+                return "Context hint: object #" + std::to_string(objectIndex) + " " + object.name +
+                    " script #" + std::to_string(scriptIndex) + " " + script.name;
+            }
+        }
     }
 
     const std::string lowerMessage = lowerAscii(message);
+    const bool selectedObjectValid =
+        editor.selectedObjectDef >= 0 &&
+        editor.selectedObjectDef < static_cast<int>(session.package.objects.size());
+    if ((lowerMessage.find("object script") != std::string::npos ||
+         lowerMessage.find("object graph") != std::string::npos) &&
+        selectedObjectValid)
+    {
+        const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        std::string hint = "Context hint: selected object #" + std::to_string(editor.selectedObjectDef) + " " + object.name;
+        if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(object.packageScripts.size())) {
+            const pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+            hint += " script #" + std::to_string(editor.selectedPackageScript) + " " + script.name +
+                " nodes=" + std::to_string(script.graph.nodes.size());
+            if (editor.selectedPackageInstruction >= 0 && editor.selectedPackageInstruction < static_cast<int>(script.instructions.size())) {
+                hint += " instruction #" + std::to_string(editor.selectedPackageInstruction) + " " +
+                    packageInstructionLabel(script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)]);
+            }
+        }
+        return hint;
+    }
     if (lowerMessage.find("script graph") != std::string::npos &&
         editor.selectedPackageScript >= 0 &&
         editor.selectedPackageScript < static_cast<int>(def.packageScripts.size()))
@@ -12438,7 +12494,7 @@ static void drawEditorDiagnosticsWorkstation(
         11,
         Fade(RAYWHITE, 0.72f));
     Color graphDiagnosticColor = Fade(RAYWHITE, 0.62f);
-    const std::string graphDiagnostic = editorSelectedGraphDiagnostic(editor, def, graphDiagnosticColor);
+    const std::string graphDiagnostic = editorSelectedGraphDiagnostic(editor, session, def, graphDiagnosticColor);
     DrawText(clippedText(graphDiagnostic, 11, rect.width * 0.42f).c_str(),
         static_cast<int>(rect.x + rect.width * 0.58f),
         static_cast<int>(y + 44.0f),
