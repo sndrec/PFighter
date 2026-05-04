@@ -570,6 +570,9 @@ enum class PackageScriptOp : uint8_t {
     SetVarNotEqualVar,
     SetVarGreaterThanImmediate,
     SetVarGreaterThanVar,
+    SetVarNot,
+    SetVarAnd,
+    SetVarOr,
 };
 
 struct PackageScriptInstruction {

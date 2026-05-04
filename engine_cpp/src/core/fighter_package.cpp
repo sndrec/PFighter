@@ -366,6 +366,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarNotEqualVar:
     case PackageScriptOp::SetVarGreaterThanImmediate:
     case PackageScriptOp::SetVarGreaterThanVar:
+    case PackageScriptOp::SetVarNot:
+    case PackageScriptOp::SetVarAnd:
+    case PackageScriptOp::SetVarOr:
         return true;
     }
     return false;
@@ -1802,6 +1805,7 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarEqualImmediate:
     case PackageScriptOp::SetVarNotEqualImmediate:
     case PackageScriptOp::SetVarGreaterThanImmediate:
+    case PackageScriptOp::SetVarNot:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
@@ -1809,6 +1813,8 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarEqualVar:
     case PackageScriptOp::SetVarNotEqualVar:
     case PackageScriptOp::SetVarGreaterThanVar:
+    case PackageScriptOp::SetVarAnd:
+    case PackageScriptOp::SetVarOr:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
         requireVariableIndex(instruction.srcB, variableCount, "source");

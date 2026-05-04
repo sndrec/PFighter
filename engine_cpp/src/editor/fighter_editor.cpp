@@ -571,6 +571,8 @@ void remapRemovedPackageVariableInstruction(
     case PackageScriptOp::SetVarEqualVar:
     case PackageScriptOp::SetVarNotEqualVar:
     case PackageScriptOp::SetVarGreaterThanVar:
+    case PackageScriptOp::SetVarAnd:
+    case PackageScriptOp::SetVarOr:
     case PackageScriptOp::SetVarInteractObjectsFromVars:
         remapRemovedPackageVariableRefs(instruction, removedIndex, variableCountAfterRemove, true, true, true);
         return;
@@ -579,6 +581,7 @@ void remapRemovedPackageVariableInstruction(
     case PackageScriptOp::SetVarEqualImmediate:
     case PackageScriptOp::SetVarNotEqualImmediate:
     case PackageScriptOp::SetVarGreaterThanImmediate:
+    case PackageScriptOp::SetVarNot:
         remapRemovedPackageVariableRefs(instruction, removedIndex, variableCountAfterRemove, true, true, false);
         return;
     case PackageScriptOp::SetFighterJumpsUsedFromVar:

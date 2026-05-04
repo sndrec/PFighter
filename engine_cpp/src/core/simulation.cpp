@@ -7412,6 +7412,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarGreaterThanVar:
                 setVar(instruction.dst, var(instruction.srcA) > var(instruction.srcB) ? 1 : 0);
                 break;
+            case PackageScriptOp::SetVarNot:
+                setVar(instruction.dst, var(instruction.srcA) == 0 ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarAnd:
+                setVar(instruction.dst, var(instruction.srcA) != 0 && var(instruction.srcB) != 0 ? 1 : 0);
+                break;
+            case PackageScriptOp::SetVarOr:
+                setVar(instruction.dst, var(instruction.srcA) != 0 || var(instruction.srcB) != 0 ? 1 : 0);
+                break;
             case PackageScriptOp::AddVarImmediate:
                 setVar(instruction.dst, var(instruction.dst) + instruction.intValue);
                 break;

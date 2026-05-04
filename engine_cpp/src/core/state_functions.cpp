@@ -2704,6 +2704,15 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarGreaterThanVar:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) > packageVar(fighter, instruction.srcB) ? 1 : 0);
             break;
+        case PackageScriptOp::SetVarNot:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) == 0 ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarAnd:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != 0 && packageVar(fighter, instruction.srcB) != 0 ? 1 : 0);
+            break;
+        case PackageScriptOp::SetVarOr:
+            setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != 0 || packageVar(fighter, instruction.srcB) != 0 ? 1 : 0);
+            break;
         case PackageScriptOp::AddVarImmediate:
             setPackageVar(fighter, instruction.dst, packageVar(fighter, instruction.dst) + instruction.intValue);
             break;

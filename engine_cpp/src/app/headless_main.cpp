@@ -4678,6 +4678,10 @@ int main(int argc, char** argv) {
         {"NotEqualVarResult", 0},
         {"GreaterThanImmediateResult", 0},
         {"GreaterThanVarResult", 0},
+        {"NotTrueResult", 0},
+        {"NotFalseResult", 0},
+        {"AndResult", 0},
+        {"OrResult", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4929,7 +4933,7 @@ int main(int argc, char** argv) {
         },
     }, {
         "ExpressionScript",
-        16,
+        20,
         {
             {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 4, 0, {}},
             {pf::PackageScriptOp::SetVarImmediate, 1, -1, -1, 7, 0, {}},
@@ -4941,6 +4945,10 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarNotEqualVar, 64, 0, 1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGreaterThanImmediate, 65, 1, -1, 6, 0, {}},
             {pf::PackageScriptOp::SetVarGreaterThanVar, 66, 1, 0, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarNot, 67, 59, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarNot, 68, 62, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarAnd, 69, 59, 62, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarOr, 70, 62, 63, 0, 0, {}},
         },
     }};
     pf::FighterDefinition packageAltFighter = packageSourceWorld.fighterDefs[0];
@@ -5008,6 +5016,10 @@ int main(int argc, char** argv) {
         {"ObjectNotEqualVarResult", 0},
         {"ObjectGreaterThanImmediateResult", 0},
         {"ObjectGreaterThanVarResult", 0},
+        {"ObjectNotTrueResult", 0},
+        {"ObjectNotFalseResult", 0},
+        {"ObjectAndResult", 0},
+        {"ObjectOrResult", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
@@ -5209,7 +5221,7 @@ int main(int argc, char** argv) {
         },
     }, {
         "ObjectExpressionScript",
-        16,
+        20,
         {
             {pf::PackageScriptOp::SetVarImmediate, 0, -1, -1, 3, 0, {}},
             {pf::PackageScriptOp::SetVarImmediate, 1, -1, -1, 9, 0, {}},
@@ -5221,6 +5233,10 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarNotEqualVar, 50, 0, 1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGreaterThanImmediate, 51, 1, -1, 8, 0, {}},
             {pf::PackageScriptOp::SetVarGreaterThanVar, 52, 1, 0, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarNot, 53, 45, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarNot, 54, 48, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarAnd, 55, 45, 48, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarOr, 56, 48, 49, 0, 0, {}},
         },
     }};
     packageSourceWorld.objectDefs[1].onAccessory = {{std::string{"script:ObjectSmokeScript"}}};
@@ -5752,6 +5768,12 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidExpressionVarWritePackage = sourcePackage;
     invalidExpressionVarWritePackage.fighters[0].packageScripts.back().instructions[3].srcB = 999;
     const bool invalidPackageExpressionVarWriteRejected = pf::writeFighterPackage(invalidExpressionVarWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidLogicNotWritePackage = sourcePackage;
+    invalidLogicNotWritePackage.fighters[0].packageScripts.back().instructions[10].srcA = 999;
+    const bool invalidPackageLogicNotWriteRejected = pf::writeFighterPackage(invalidLogicNotWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidLogicVarWritePackage = sourcePackage;
+    invalidLogicVarWritePackage.fighters[0].packageScripts.back().instructions[12].srcB = 999;
+    const bool invalidPackageLogicVarWriteRejected = pf::writeFighterPackage(invalidLogicVarWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidInteractionReadWritePackage = sourcePackage;
     invalidInteractionReadWritePackage.fighters[0].packageScripts[4].instructions[9].dst = 999;
     const bool invalidPackageInteractionReadWriteRejected = pf::writeFighterPackage(invalidInteractionReadWritePackage, &invalidPackageError).empty();
@@ -5939,11 +5961,11 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 67 &&
+        loadedPackage.fighters[0].packageVariables.size() == 71 &&
         loadedPackage.fighters[0].packageScripts.size() == 24 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 53 &&
+        loadedPackage.objects[1].packageVariables.size() == 57 &&
         loadedPackage.objects[1].packageScripts.size() == 21;
     const auto loadedRuntimePackageHasFighter = [&](const std::string& name) {
         return std::any_of(loadedRuntimePackage.fighters.begin(), loadedRuntimePackage.fighters.end(), [&](const pf::FighterDefinition& fighter) {
@@ -7116,7 +7138,7 @@ int main(int argc, char** argv) {
         pf::runPackageScript(packageExpressionScriptWorld, packageExpressionScriptWorld.fighters[0], "ExpressionScript");
     }
     const bool packageExpressionScriptOk = packageShapeOk &&
-        packageExpressionScriptWorld.fighters[0].packageVars.size() >= 67 &&
+        packageExpressionScriptWorld.fighters[0].packageVars.size() >= 71 &&
         packageExpressionScriptWorld.fighters[0].packageVars[59] == 1 &&
         packageExpressionScriptWorld.fighters[0].packageVars[60] == 1 &&
         packageExpressionScriptWorld.fighters[0].packageVars[61] == 1 &&
@@ -7124,7 +7146,11 @@ int main(int argc, char** argv) {
         packageExpressionScriptWorld.fighters[0].packageVars[63] == 1 &&
         packageExpressionScriptWorld.fighters[0].packageVars[64] == 1 &&
         packageExpressionScriptWorld.fighters[0].packageVars[65] == 1 &&
-        packageExpressionScriptWorld.fighters[0].packageVars[66] == 1;
+        packageExpressionScriptWorld.fighters[0].packageVars[66] == 1 &&
+        packageExpressionScriptWorld.fighters[0].packageVars[67] == 0 &&
+        packageExpressionScriptWorld.fighters[0].packageVars[68] == 1 &&
+        packageExpressionScriptWorld.fighters[0].packageVars[69] == 0 &&
+        packageExpressionScriptWorld.fighters[0].packageVars[70] == 1;
     bool packageVarSpawnObjectOk = false;
     for (const pf::GameObjectRuntime& object : packageInputScriptWorld.objects) {
         if (object.objectDef >= 0 &&
@@ -7677,7 +7703,7 @@ int main(int argc, char** argv) {
             ? &packageObjectExpressionScriptWorld.objects[static_cast<size_t>(packageObjectExpressionIndex)]
             : nullptr;
     const bool packageObjectExpressionScriptOk = packageObjectExpression &&
-        packageObjectExpression->packageVars.size() >= 53 &&
+        packageObjectExpression->packageVars.size() >= 57 &&
         packageObjectExpression->packageVars[45] == 1 &&
         packageObjectExpression->packageVars[46] == 1 &&
         packageObjectExpression->packageVars[47] == 1 &&
@@ -7685,7 +7711,11 @@ int main(int argc, char** argv) {
         packageObjectExpression->packageVars[49] == 1 &&
         packageObjectExpression->packageVars[50] == 1 &&
         packageObjectExpression->packageVars[51] == 1 &&
-        packageObjectExpression->packageVars[52] == 1;
+        packageObjectExpression->packageVars[52] == 1 &&
+        packageObjectExpression->packageVars[53] == 0 &&
+        packageObjectExpression->packageVars[54] == 1 &&
+        packageObjectExpression->packageVars[55] == 0 &&
+        packageObjectExpression->packageVars[56] == 1;
     pf::World packageObjectStateScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageObjectStateScriptWorld.objectDefs = loadedPackage.objects;
@@ -8546,6 +8576,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_throw_flag_write_rejected=" << invalidPackageThrowFlagWriteRejected
               << " fighter_package_invalid_expression_immediate_write_rejected=" << invalidPackageExpressionImmediateWriteRejected
               << " fighter_package_invalid_expression_var_write_rejected=" << invalidPackageExpressionVarWriteRejected
+              << " fighter_package_invalid_logic_not_write_rejected=" << invalidPackageLogicNotWriteRejected
+              << " fighter_package_invalid_logic_var_write_rejected=" << invalidPackageLogicVarWriteRejected
               << " fighter_package_invalid_interaction_read_write_rejected=" << invalidPackageInteractionReadWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected

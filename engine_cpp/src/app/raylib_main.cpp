@@ -1211,6 +1211,9 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarNotEqualVar: return "NeVar";
     case pf::PackageScriptOp::SetVarGreaterThanImmediate: return "GtImm";
     case pf::PackageScriptOp::SetVarGreaterThanVar: return "GtVar";
+    case pf::PackageScriptOp::SetVarNot: return "Not";
+    case pf::PackageScriptOp::SetVarAnd: return "And";
+    case pf::PackageScriptOp::SetVarOr: return "Or";
     }
     return "Op";
 }
@@ -1417,6 +1420,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarNotEqualVar:
     case pf::PackageScriptOp::SetVarGreaterThanImmediate:
     case pf::PackageScriptOp::SetVarGreaterThanVar:
+    case pf::PackageScriptOp::SetVarNot:
+    case pf::PackageScriptOp::SetVarAnd:
+    case pf::PackageScriptOp::SetVarOr:
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarStateFrame:
     case pf::PackageScriptOp::SetVarStateIndex:
@@ -1823,6 +1829,15 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarGreaterThanVar:
         label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " > v" + std::to_string(instruction.srcB);
         break;
+    case pf::PackageScriptOp::SetVarNot:
+        label += " v" + std::to_string(instruction.dst) + " = !v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::SetVarAnd:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " && v" + std::to_string(instruction.srcB);
+        break;
+    case pf::PackageScriptOp::SetVarOr:
+        label += " v" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA) + " || v" + std::to_string(instruction.srcB);
+        break;
     case pf::PackageScriptOp::SetGroundVelocityFromVar:
     case pf::PackageScriptOp::SetAirVelocityXFromVar:
     case pf::PackageScriptOp::SetAirVelocityYFromVar:
@@ -2070,7 +2085,10 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarNotEqualImmediate: return pf::PackageScriptOp::SetVarNotEqualVar;
     case pf::PackageScriptOp::SetVarNotEqualVar: return pf::PackageScriptOp::SetVarGreaterThanImmediate;
     case pf::PackageScriptOp::SetVarGreaterThanImmediate: return pf::PackageScriptOp::SetVarGreaterThanVar;
-    case pf::PackageScriptOp::SetVarGreaterThanVar: return pf::PackageScriptOp::SetVarFrame;
+    case pf::PackageScriptOp::SetVarGreaterThanVar: return pf::PackageScriptOp::SetVarNot;
+    case pf::PackageScriptOp::SetVarNot: return pf::PackageScriptOp::SetVarAnd;
+    case pf::PackageScriptOp::SetVarAnd: return pf::PackageScriptOp::SetVarOr;
+    case pf::PackageScriptOp::SetVarOr: return pf::PackageScriptOp::SetVarFrame;
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
     case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarStateIndex;
     case pf::PackageScriptOp::SetVarStateIndex: return pf::PackageScriptOp::SetVarGrounded;
