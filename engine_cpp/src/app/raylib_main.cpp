@@ -4791,7 +4791,7 @@ static void updateEditorPackageSummary(
     editor.lastPackageChecksum = descriptor.checksum;
     editor.lastPackageFighters = static_cast<int>(descriptor.fighterNames.size());
     editor.lastPackageObjects = static_cast<int>(descriptor.objectNames.size());
-    editor.lastPackageAssets = static_cast<int>(descriptor.assetNames.size());
+    editor.lastPackageAssets = static_cast<int>(descriptor.legacyImportedAssetNames.size());
     editor.lastPackageValid = true;
     editor.lastPackageMessage = "OK";
 }
@@ -4849,7 +4849,7 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
                   " checksum=" + std::to_string(editor.lastPackageChecksum)).c_str(), 24, 448, 12, DARKGRAY);
         DrawText(("Contents: fighters=" + std::to_string(editor.lastPackageFighters) +
                   " objects=" + std::to_string(editor.lastPackageObjects) +
-                  " legacyHsdAssets=" + std::to_string(editor.lastPackageAssets)).c_str(), 24, 466, 12, DARKGRAY);
+                  " legacyImportedAssets=" + std::to_string(editor.lastPackageAssets)).c_str(), 24, 466, 12, DARKGRAY);
     } else {
         DrawText("Last package: none saved or loaded", 24, 448, 12, GRAY);
     }

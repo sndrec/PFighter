@@ -3250,7 +3250,7 @@ void validatePackageDescriptorManifest(const FighterPackageDescriptor& descripto
     requireUniqueNonemptyNames(descriptor.objectNames, "manifest object");
     requireUniqueNonemptyNames(descriptor.fighterScriptNames, "manifest fighter script");
     requireUniqueNonemptyNames(descriptor.objectScriptNames, "manifest object script");
-    if (!descriptor.assetNames.empty()) {
+    if (!descriptor.legacyImportedAssetNames.empty()) {
         throw std::runtime_error("fighter package manifest imported assets are not supported");
     }
     if (descriptor.fighterNames.empty() || descriptor.rootFighterName != descriptor.fighterNames.front()) {
@@ -3262,7 +3262,7 @@ void writePackageDescriptorManifest(PackageWriter& writer, const FighterPackageD
     writer.writeString(descriptor.rootFighterName);
     writeStringVector(writer, descriptor.fighterNames);
     writeStringVector(writer, descriptor.objectNames);
-    writeStringVector(writer, descriptor.assetNames);
+    writeStringVector(writer, descriptor.legacyImportedAssetNames);
     writeStringVector(writer, descriptor.fighterScriptNames);
     writeStringVector(writer, descriptor.objectScriptNames);
 }
@@ -3281,7 +3281,7 @@ FighterPackageDescriptor readPackageDescriptorManifest(
     descriptor.rootFighterName = reader.readString();
     descriptor.fighterNames = readStringVector(reader, kMaxFighters, "manifest fighter");
     descriptor.objectNames = readStringVector(reader, kMaxObjects, "manifest object");
-    descriptor.assetNames = readStringVector(reader, kMaxAssets, "manifest asset");
+    descriptor.legacyImportedAssetNames = readStringVector(reader, kMaxAssets, "manifest asset");
     descriptor.fighterScriptNames = readStringVector(reader, kMaxCallbacks, "manifest fighter script");
     descriptor.objectScriptNames = readStringVector(reader, kMaxCallbacks, "manifest object script");
     validatePackageDescriptorManifest(descriptor);
@@ -3294,7 +3294,7 @@ bool matchingPackageManifest(const FighterPackageDescriptor& manifest, const Fig
         manifest.rootFighterName == actual.rootFighterName &&
         manifest.fighterNames == actual.fighterNames &&
         manifest.objectNames == actual.objectNames &&
-        manifest.assetNames == actual.assetNames &&
+        manifest.legacyImportedAssetNames == actual.legacyImportedAssetNames &&
         manifest.fighterScriptNames == actual.fighterScriptNames &&
         manifest.objectScriptNames == actual.objectScriptNames;
 }
@@ -3312,7 +3312,7 @@ bool fighterPackageDescriptorMatches(
         expected.rootFighterName == actual.rootFighterName &&
         expected.fighterNames == actual.fighterNames &&
         expected.objectNames == actual.objectNames &&
-        expected.assetNames == actual.assetNames &&
+        expected.legacyImportedAssetNames == actual.legacyImportedAssetNames &&
         expected.fighterScriptNames == actual.fighterScriptNames &&
         expected.objectScriptNames == actual.objectScriptNames;
 }

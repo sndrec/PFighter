@@ -5529,7 +5529,7 @@ int main(int argc, char** argv) {
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
         packageDescriptor.fighterNames.size() == sourcePackage.fighters.size() &&
         packageDescriptor.objectNames.size() == sourcePackage.objects.size() &&
-        packageDescriptor.assetNames.empty() &&
+        packageDescriptor.legacyImportedAssetNames.empty() &&
         packageDescriptor.fighterScriptNames.size() >= 24 &&
         packageDescriptor.objectScriptNames.size() >= 20 &&
         std::find(packageDescriptor.fighterScriptNames.begin(), packageDescriptor.fighterScriptNames.end(), "SmokeScript") != packageDescriptor.fighterScriptNames.end() &&
@@ -5543,7 +5543,7 @@ int main(int argc, char** argv) {
         packageBytesDescriptor.rootFighterName == packageDescriptor.rootFighterName &&
         packageBytesDescriptor.fighterNames == packageDescriptor.fighterNames &&
         packageBytesDescriptor.objectNames == packageDescriptor.objectNames &&
-        packageBytesDescriptor.assetNames == packageDescriptor.assetNames &&
+        packageBytesDescriptor.legacyImportedAssetNames == packageDescriptor.legacyImportedAssetNames &&
         packageBytesDescriptor.fighterScriptNames == packageDescriptor.fighterScriptNames &&
         packageBytesDescriptor.objectScriptNames == packageDescriptor.objectScriptNames;
     const pf::FighterPackage runtimePackage = pf::makeRuntimeFighterPackage(packageSourceWorld, 0, "headless_smoke_runtime");
@@ -5560,7 +5560,7 @@ int main(int argc, char** argv) {
         runtimePackageDescriptor.rootFighterName == runtimePackage.fighters[0].name &&
         runtimePackageDescriptor.fighterNames.size() == runtimePackage.fighters.size() &&
         runtimePackageDescriptor.objectNames.size() == runtimePackage.objects.size() &&
-        runtimePackageDescriptor.assetNames.empty() &&
+        runtimePackageDescriptor.legacyImportedAssetNames.empty() &&
         runtimePackageDescriptor.fighterScriptNames.size() >= 24 &&
         runtimePackageDescriptor.objectScriptNames.size() >= 20 &&
         std::find(runtimePackageDescriptor.fighterScriptNames.begin(), runtimePackageDescriptor.fighterScriptNames.end(), "SmokeScript") != runtimePackageDescriptor.fighterScriptNames.end() &&
@@ -5574,7 +5574,7 @@ int main(int argc, char** argv) {
         runtimePackageBytesDescriptor.rootFighterName == runtimePackageDescriptor.rootFighterName &&
         runtimePackageBytesDescriptor.fighterNames == runtimePackageDescriptor.fighterNames &&
         runtimePackageBytesDescriptor.objectNames == runtimePackageDescriptor.objectNames &&
-        runtimePackageBytesDescriptor.assetNames == runtimePackageDescriptor.assetNames &&
+        runtimePackageBytesDescriptor.legacyImportedAssetNames == runtimePackageDescriptor.legacyImportedAssetNames &&
         runtimePackageBytesDescriptor.fighterScriptNames == runtimePackageDescriptor.fighterScriptNames &&
         runtimePackageBytesDescriptor.objectScriptNames == runtimePackageDescriptor.objectScriptNames;
     pf::FighterPackage invalidReadPackage;
@@ -8992,7 +8992,7 @@ int main(int argc, char** argv) {
               << " fighter_package_conversion_mismatch_rejected=" << packageConversionMismatchRejected
               << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
-              << " fighter_package_runtime_assets=" << runtimePackageDescriptor.assetNames.size()
+              << " fighter_package_runtime_legacy_imported_assets=" << runtimePackageDescriptor.legacyImportedAssetNames.size()
               << " fighter_package_install_ok=" << packageInstallOk
               << " fighter_package_bytes_install_ok=" << packageBytesInstallOk
               << " fighter_package_cache_store_ok=" << packageCacheStoreOk
