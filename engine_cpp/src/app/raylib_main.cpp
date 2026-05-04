@@ -779,7 +779,7 @@ static bool isBatchVisible(const HsdRenderBatch& batch, const pf::FighterRuntime
 }
 
 static void drawImportedMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    const pf::HsdFighterMesh& mesh = def.authoredMesh;
+    const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
     if (mesh.batches.empty() || fighter.hsdJointWorldTransforms.empty()) {
         return;
     }
@@ -4034,7 +4034,8 @@ static pf::Vec3 authoredMeshVertexWorld(const pf::FighterRuntime& fighter, const
 }
 
 static void drawAuthoredMesh(const pf::FighterDefinition& def, const pf::FighterRuntime& fighter) {
-    for (const pf::HsdMeshBatch& batch : def.authoredMesh.batches) {
+    const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+    for (const pf::HsdMeshBatch& batch : mesh.batches) {
         const Color color{batch.materialColor[0], batch.materialColor[1], batch.materialColor[2], batch.materialColor[3]};
         for (size_t i = 0; i + 2 < batch.vertices.size(); i += 3) {
             const pf::Vec3 a = authoredMeshVertexWorld(fighter, batch, batch.vertices[i]);
@@ -4055,7 +4056,8 @@ static bool authoredMeshVertexWorldAt(
     pf::Vec3& out)
 {
     int cursor = 0;
-    for (const pf::HsdMeshBatch& batch : def.authoredMesh.batches) {
+    const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+    for (const pf::HsdMeshBatch& batch : mesh.batches) {
         const int next = cursor + static_cast<int>(batch.vertices.size());
         if (vertexIndex >= cursor && vertexIndex < next) {
             out = authoredMeshVertexWorld(fighter, batch, batch.vertices[static_cast<size_t>(vertexIndex - cursor)]);
@@ -4120,14 +4122,16 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     } else if (fighter.fighterInvisible) {
         // ftDrawCommon skips fighter model display when x221E_b5 is set.
     } else if (hasAnimationPose) {
-        if (!def.authoredMesh.batches.empty()) {
+        const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+        if (!mesh.batches.empty()) {
             drawImportedMesh(def, fighter);
         } else {
             DrawCylinder(pos, 0.18f, 0.18f, 0.04f, 18, Fade(color, 0.45f));
             drawAnimationSkeleton(def, fighter, color);
         }
     } else {
-        if (!def.authoredMesh.batches.empty()) {
+        const pf::HsdFighterMesh& mesh = pf::authoredFighterMesh(def);
+        if (!mesh.batches.empty()) {
             drawAuthoredMesh(def, fighter);
         } else {
             DrawCube(pos, 0.55f, 1.1f, 0.35f, color);
@@ -4798,6 +4802,26 @@ static void updateEditorPackageFailure(pf::FighterEditor& editor, const std::str
     editor.lastPackageMessage = message;
 }
 
+static bool materializeEditableNativeFighterData(pf::FighterDefinition& def) {
+    bool materialized = false;
+    if (def.authoredClips.empty() && def.authoredClipSource) {
+        def.authoredClips = *def.authoredClipSource;
+        def.authoredClipSource.reset();
+        materialized = true;
+    }
+    if (def.authoredMesh.batches.empty() && def.authoredMesh.textures.empty() && def.authoredMeshSource) {
+        def.authoredMesh = *def.authoredMeshSource;
+        def.authoredMeshSource.reset();
+        materialized = true;
+    }
+    if (def.modelPartAnimations.empty() && def.modelPartAnimationSource) {
+        def.modelPartAnimations = *def.modelPartAnimationSource;
+        def.modelPartAnimationSource.reset();
+        materialized = true;
+    }
+    return materialized;
+}
+
 static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
     editor.clampToWorld(world);
     if (world.fighters.empty()) {
@@ -4808,6 +4832,9 @@ static void drawEditorAssetsWorkspace(pf::World& world, pf::FighterEditor& edito
         return;
     }
     pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+    if (materializeEditableNativeFighterData(def)) {
+        editor.status = "Editor: materialized native package asset data";
+    }
     const Rectangle panel{12.0f, 324.0f, 530.0f, 330.0f};
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
@@ -5954,11 +5981,9 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
     DrawRectangleRec(panel, Fade(RAYWHITE, 0.58f));
     DrawRectangleLinesEx(panel, 1.0f, DARKGRAY);
     DrawText("Animation Preview", 24, 336, 16, BLACK);
-    if (def.authoredClips.empty() && def.authoredClipSource) {
-        def.authoredClips = *def.authoredClipSource;
-        def.authoredClipSource.reset();
+    if (materializeEditableNativeFighterData(def)) {
         editor.selectedAnimationClip = 0;
-        editor.status = "Editor: materialized native animation clips";
+        editor.status = "Editor: materialized native package animation data";
     }
     std::vector<pf::AnimationClip>* authoredClips = &def.authoredClips;
     const std::vector<pf::AnimationClip>* clips = authoredClips;
