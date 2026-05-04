@@ -1104,11 +1104,13 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetAirVelocityX: return "AirVelX";
     case pf::PackageScriptOp::SetAirVelocityY: return "AirVelY";
     case pf::PackageScriptOp::SetAnimationRate: return "AnimRate";
+    case pf::PackageScriptOp::SetAnimationFrame: return "AnimFrm";
     case pf::PackageScriptOp::SetFacing: return "Facing";
     case pf::PackageScriptOp::SetGroundVelocityFromVar: return "GVelVar";
     case pf::PackageScriptOp::SetAirVelocityXFromVar: return "AirXVar";
     case pf::PackageScriptOp::SetAirVelocityYFromVar: return "AirYVar";
     case pf::PackageScriptOp::SetAnimationRateFromVar: return "AnimVar";
+    case pf::PackageScriptOp::SetAnimationFrameFromVar: return "FrmVar";
     case pf::PackageScriptOp::SetFacingFromVar: return "FaceVar";
     case pf::PackageScriptOp::ChangeState: return "State";
     case pf::PackageScriptOp::SpawnObject: return "Spawn";
@@ -1215,6 +1217,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         break;
     case pf::PackageScriptOp::SetAnimationRateFromVar:
         instruction.op = pf::PackageScriptOp::SetAnimationRate;
+        break;
+    case pf::PackageScriptOp::SetAnimationFrameFromVar:
+        instruction.op = pf::PackageScriptOp::SetAnimationFrame;
         break;
     case pf::PackageScriptOp::SetFacingFromVar:
         instruction.op = pf::PackageScriptOp::SetFacing;
@@ -1464,6 +1469,7 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetAirVelocityXFromVar:
     case pf::PackageScriptOp::SetAirVelocityYFromVar:
     case pf::PackageScriptOp::SetAnimationRateFromVar:
+    case pf::PackageScriptOp::SetAnimationFrameFromVar:
     case pf::PackageScriptOp::SetFacingFromVar:
         label += " v" + std::to_string(instruction.srcA);
         break;
@@ -1471,6 +1477,7 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetAirVelocityX:
     case pf::PackageScriptOp::SetAirVelocityY:
     case pf::PackageScriptOp::SetAnimationRate:
+    case pf::PackageScriptOp::SetAnimationFrame:
         label += " " + std::to_string(pf::fxToFloat(instruction.fixValue));
         break;
     case pf::PackageScriptOp::SetFacing:
@@ -1623,7 +1630,9 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetAirVelocityX: return pf::PackageScriptOp::SetAirVelocityY;
     case pf::PackageScriptOp::SetAirVelocityY: return pf::PackageScriptOp::SetAnimationRate;
     case pf::PackageScriptOp::SetAnimationRate: return pf::PackageScriptOp::SetAnimationRateFromVar;
-    case pf::PackageScriptOp::SetAnimationRateFromVar: return pf::PackageScriptOp::SetFacing;
+    case pf::PackageScriptOp::SetAnimationRateFromVar: return pf::PackageScriptOp::SetAnimationFrame;
+    case pf::PackageScriptOp::SetAnimationFrame: return pf::PackageScriptOp::SetAnimationFrameFromVar;
+    case pf::PackageScriptOp::SetAnimationFrameFromVar: return pf::PackageScriptOp::SetFacing;
     case pf::PackageScriptOp::SetFacing: return pf::PackageScriptOp::SetGroundVelocityFromVar;
     case pf::PackageScriptOp::SetGroundVelocityFromVar: return pf::PackageScriptOp::SetAirVelocityXFromVar;
     case pf::PackageScriptOp::SetAirVelocityXFromVar: return pf::PackageScriptOp::SetAirVelocityYFromVar;

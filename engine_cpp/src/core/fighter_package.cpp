@@ -265,6 +265,8 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SpawnFighter:
     case PackageScriptOp::SetAnimationRate:
     case PackageScriptOp::SetAnimationRateFromVar:
+    case PackageScriptOp::SetAnimationFrame:
+    case PackageScriptOp::SetAnimationFrameFromVar:
         return true;
     }
     return false;
@@ -1710,12 +1712,14 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetAirVelocityX:
     case PackageScriptOp::SetAirVelocityY:
     case PackageScriptOp::SetAnimationRate:
+    case PackageScriptOp::SetAnimationFrame:
     case PackageScriptOp::SetFacing:
         break;
     case PackageScriptOp::SetGroundVelocityFromVar:
     case PackageScriptOp::SetAirVelocityXFromVar:
     case PackageScriptOp::SetAirVelocityYFromVar:
     case PackageScriptOp::SetAnimationRateFromVar:
+    case PackageScriptOp::SetAnimationFrameFromVar:
     case PackageScriptOp::SetFacingFromVar:
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
