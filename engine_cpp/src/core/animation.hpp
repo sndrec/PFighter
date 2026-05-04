@@ -61,6 +61,7 @@ struct AnimationClip {
     uint32_t actionFlags = 0;
     int defaultBlendFrames = 0;
     Fix frameCount = 0;
+    bool generatedFallback = false;
     std::vector<AnimationTrack> tracks;
 };
 

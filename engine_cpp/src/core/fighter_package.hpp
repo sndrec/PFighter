@@ -12,7 +12,7 @@ namespace pf {
 
 struct FighterPackage {
     std::string name;
-    uint32_t version = 2;
+    uint32_t version = 3;
     std::vector<FighterDefinition> fighters;
     std::vector<GameObjectDefinition> objects;
     std::vector<std::shared_ptr<const HsdFighterAnimationAsset>> hsdAssets;

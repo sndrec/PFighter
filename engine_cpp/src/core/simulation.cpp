@@ -1742,6 +1742,7 @@ bool makeNativePackageFighterDefinition(const FighterDefinition& source, Fighter
         clip.actionIndex = actionIndex;
         clip.frameCount = fx(std::max(1, state.animationLengthFrames));
         clip.defaultBlendFrames = static_cast<int8_t>(std::clamp(state.defaultAnimationBlendFrames, 0, 127));
+        clip.generatedFallback = true;
         out.authoredClips.push_back(std::move(clip));
     }
     uniquifyAnimationClipNames(out.authoredClips);
@@ -2507,11 +2508,17 @@ static bool stateHasImportedAnimation(const FighterDefinition& def, const std::s
         return false;
     }
     const FighterState& state = def.states[static_cast<size_t>(index)];
-    if (state.animationActionIndex >= 0 && authoredAnimationClipByActionIndex(def, state.animationActionIndex)) {
-        return true;
+    if (state.animationActionIndex >= 0) {
+        const AnimationClip* clip = authoredAnimationClipByActionIndex(def, state.animationActionIndex);
+        if (clip && !clip->generatedFallback) {
+            return true;
+        }
     }
     const std::string suffix = "_ACTION_" + state.animation + "_figatree";
     for (const AnimationClip& clip : authoredAnimationClips(def)) {
+        if (clip.generatedFallback) {
+            continue;
+        }
         if (clip.name == state.animation ||
             (clip.name.size() >= suffix.size() &&
              clip.name.compare(clip.name.size() - suffix.size(), suffix.size(), suffix) == 0))

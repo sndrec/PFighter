@@ -13,7 +13,7 @@
 namespace pf {
 namespace {
 
-constexpr uint32_t kPackageVersion = 2;
+constexpr uint32_t kPackageVersion = 3;
 constexpr uint32_t kMaxFighters = 256;
 constexpr uint32_t kMaxAssets = 1024;
 constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
@@ -1507,6 +1507,7 @@ void writeAnimationClip(PackageWriter& writer, const AnimationClip& clip) {
     writer.writeU32(clip.actionFlags);
     writer.writeI32(clip.defaultBlendFrames);
     writer.writeI32(clip.frameCount);
+    writer.writeBool(clip.generatedFallback);
     writeVector(writer, clip.tracks, [&](const AnimationTrack& track) {
         writeAnimationTrack(writer, track);
     });
@@ -1519,6 +1520,7 @@ AnimationClip readAnimationClip(PackageReader& reader) {
     clip.actionFlags = reader.readU32();
     clip.defaultBlendFrames = reader.readI32();
     clip.frameCount = reader.readI32();
+    clip.generatedFallback = reader.readBool();
     clip.tracks = readVector<AnimationTrack>(reader, kMaxAnimationTracks, "animation track", [&]() {
         return readAnimationTrack(reader);
     });

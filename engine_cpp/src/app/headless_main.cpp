@@ -3524,17 +3524,25 @@ int main(int argc, char** argv) {
     const pf::FighterDefinition& appealDef = appealRightWorld.fighterDefs[static_cast<size_t>(appealRightWorld.fighters[0].fighterDef)];
     const pf::FighterState& appealSRState = appealDef.states[static_cast<size_t>(appealDef.stateIndex("AppealSR"))];
     const pf::FighterState& appealSLState = appealDef.states[static_cast<size_t>(appealDef.stateIndex("AppealSL"))];
-    const bool appealSRClipReady = appealDef.hsdAsset &&
-        pf::findClipByActionIndex(*appealDef.hsdAsset, appealSRState.animationActionIndex) != nullptr;
-    const bool appealSLClipReady = appealDef.hsdAsset &&
-        pf::findClipByActionIndex(*appealDef.hsdAsset, appealSLState.animationActionIndex) != nullptr;
-    std::cout << "appeal_right_input_state=" << pf::currentState(appealRightWorld, appealRightWorld.fighters[0]).name
-              << " appeal_left_input_state=" << pf::currentState(appealLeftWorld, appealLeftWorld.fighters[0]).name
+    const auto appealClipReady = [&](const pf::FighterState& state) {
+        const pf::AnimationClip* clip = pf::authoredAnimationClipByActionIndex(appealDef, state.animationActionIndex);
+        return clip != nullptr && !clip->generatedFallback;
+    };
+    const bool appealSRClipReady = appealClipReady(appealSRState);
+    const bool appealSLClipReady = appealClipReady(appealSLState);
+    const std::string& appealRightInputState = pf::currentState(appealRightWorld, appealRightWorld.fighters[0]).name;
+    const std::string& appealLeftInputState = pf::currentState(appealLeftWorld, appealLeftWorld.fighters[0]).name;
+    const bool appealResolutionOk =
+        appealRightInputState == "AppealSR" &&
+        appealLeftInputState == (appealSLClipReady ? "AppealSL" : "AppealSR");
+    std::cout << "appeal_right_input_state=" << appealRightInputState
+              << " appeal_left_input_state=" << appealLeftInputState
               << " appeal_finish_state=" << pf::currentState(appealFinishWorld, appealFinishTester).name
               << " appeal_sr_action=" << appealSRState.animationActionIndex
               << " appeal_sl_action=" << appealSLState.animationActionIndex
               << " appeal_sr_clip=" << appealSRClipReady
               << " appeal_sl_clip=" << appealSLClipReady
+              << " appeal_resolution_ok=" << appealResolutionOk
               << " appeal_sr_frames=" << appealSRState.animationLengthFrames
               << " appeal_sl_frames=" << appealSLState.animationLengthFrames
               << "\n";
@@ -5502,7 +5510,7 @@ int main(int argc, char** argv) {
     pf::FighterPackageDescriptor packageDescriptor;
     const bool packageDescriptorOk = pf::describeFighterPackage(sourcePackage, packageDescriptor, packageBytes, &packageError) &&
         packageDescriptor.name == sourcePackage.name &&
-        packageDescriptor.version == 2 &&
+        packageDescriptor.version == 3 &&
         packageDescriptor.byteSize == packageBytes.size() &&
         packageDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
@@ -5566,7 +5574,7 @@ int main(int argc, char** argv) {
     invalidWritePackage.fighters[0].packageScripts[0].instructions[0].op = static_cast<pf::PackageScriptOp>(255);
     const bool invalidPackageWriteRejected = pf::writeFighterPackage(invalidWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidVersionWritePackage = sourcePackage;
-    invalidVersionWritePackage.version = 1;
+    invalidVersionWritePackage.version = 2;
     const bool invalidPackageVersionWriteRejected = pf::writeFighterPackage(invalidVersionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidAnimationWritePackage = sourcePackage;
     invalidAnimationWritePackage.fighters[0].authoredSkeleton = {
@@ -9401,20 +9409,24 @@ int main(int argc, char** argv) {
               << "\n";
 
     for (const pf::FighterDefinition& def : world.fighterDefs) {
-        if (!def.hsdAsset) {
+        if (def.authoredSkeleton.empty() &&
+            pf::authoredAnimationClips(def).empty() &&
+            def.hurtboxes.empty())
+        {
             continue;
         }
-        const pf::HsdFighterAnimationAsset& asset = *def.hsdAsset;
-        const pf::AnimationClip* dashClip = pf::findClipByActionIndex(asset, 12);
-        std::cout << "hsd_asset_name=" << asset.name
+        const pf::AnimationClip* dashClip = pf::authoredAnimationClipByActionIndex(def, 12);
+        std::cout << "native_fighter_asset_name=" << def.name
                   << " fighter=" << def.name
-                  << " joints=" << asset.skeleton.size()
-                  << " hurtboxes=" << asset.hurtboxes.size()
-                  << " head_bone=" << asset.fighterBones.head
-                  << " shield_bone=" << asset.fighterBones.shield
-                  << " shield_size=" << (asset.hasAttributes ? pf::fxToFloat(asset.attributes.shieldSize) : -1.0f)
-                  << " clips=" << asset.clips.size()
-                  << " action_scripts=" << asset.actionScripts.size()
+                  << " joints=" << def.authoredSkeleton.size()
+                  << " hurtboxes=" << def.hurtboxes.size()
+                  << " head_bone=" << def.fighterBones.head
+                  << " shield_bone=" << def.fighterBones.shield
+                  << " shield_size=" << pf::fxToFloat(def.properties.initialShieldSize)
+                  << " clips=" << pf::authoredAnimationClips(def).size()
+                  << " action_scripts=" << std::count_if(def.states.begin(), def.states.end(), [](const pf::FighterState& state) {
+                      return !state.action.empty();
+                  })
                   << " dash_frames=" << (dashClip ? pf::fxToFloat(dashClip->frameCount) : -1.0f)
                   << "\n";
     }
