@@ -22,13 +22,16 @@ package load/save should operate on native authored data only.
   for converting HSD action scripts into native `Subaction` arrays. The general
   `core/action.hpp`/`action.cpp` pair now exposes only native action unfolding.
 - `engine_cpp/src/core/melee_fighter_converter.hpp` is the explicit API used by
-  `pfighter_package_converter.exe` for one-time Melee roster conversion. Normal
-  simulation consumers no longer include these conversion entry points through
-  `simulation.hpp`.
+  `pfighter_package_converter.exe` for one-time Melee roster conversion. The
+  converter can now be driven directly from a fighter/costume DAT pair; PFHA is
+  only a tool-side scratch/intermediate format. Normal simulation consumers no
+  longer include these conversion entry points through `simulation.hpp`.
 - `engine_cpp/src/core/melee_fighter_converter.cpp` owns the current PFHA/HSD
   import-to-native conversion path, including HSD action script decoding into
-  native subactions. Runtime simulation no longer includes the HSD action import
-  API.
+  native subactions. `engine_cpp/src/app/package_converter_main.cpp` owns the
+  optional DAT-fronted tool mode that invokes the HSD exporter into a temporary
+  PFHA scratch file before writing the native package. Runtime simulation no
+  longer includes the HSD action import API.
 - `engine_cpp/CMakeLists.txt` now builds `pfighter_importer` from
   `animation_asset.cpp`, `hsd_action_import.cpp`, and
   `melee_fighter_converter.cpp`. Runtime executables link `pfighter_core`;
@@ -56,10 +59,11 @@ package load/save should operate on native authored data only.
   `engine_cpp/data/packages/<fighter>_native.pfpkg`. Missing native packages now
   fail loudly instead of falling back to `*_hsd.pfighter.bin` during normal
   gameplay construction.
-- The explicit package converter still reads `*_hsd.pfighter.bin` inside
-  `melee_fighter_converter.cpp` and converts attributes, ledge snap values,
-  animation lengths, hurtboxes, action scripts, skeleton, clips, mesh, model
-  visibility, common bones, ECB source bones, and shield pose into native
+- The explicit package converter can read the existing `*_hsd.pfighter.bin`
+  importer assets for roster regeneration, or take a fighter DAT plus costume
+  DAT and hide PFHA as temporary scratch. It converts attributes, ledge snap
+  values, animation lengths, hurtboxes, action scripts, skeleton, clips, mesh,
+  model visibility, common bones, ECB source bones, and shield pose into native
   fields without storing imported assets on `FighterDefinition`.
 - With the installed generated packages present, the headless roster smoke sees
   zero HSD-backed roster assets and native data for all 27 fighters.

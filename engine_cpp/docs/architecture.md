@@ -26,8 +26,8 @@ Movement and collision should track Melee, not the Godot prototype. The Godot pr
 - Ledge catch/wait are normal data states that call the reusable `maintain_ledge` callback, matching Melee's common cliff flow where collision detects the ledge and the cliff state owns the snap.
 - The prototype fighter's baseline movement attributes are seeded from vanilla Mario's `PlMr.dat`, and common movement thresholds/cooldowns are seeded from vanilla `PlCo.dat`, both exported through HSDLib.
 - `Pl*AJ.dat` action animation files are treated as concatenated HSD DAT chunks. Fighter action-table animation offsets point to those mini-DAT chunk starts, so the exporter slices each chunk and imports its real `HSD_FigaTree` instead of extracting bespoke root-motion data.
-- HSD fighter assets now export costume skeletons, fighter bone lookup IDs, hurtboxes, and action clips into compact `data/fighters/*.pfighter.bin` files. `animation_asset.cpp` loads that binary schema into fixed-point C++ animation clips, and `animation.cpp` samples joint channels/root translation deltas for rollback-owned pose work.
-- The training world caches Mario's HSD asset once and stores sampled HSD joint poses, world joint positions, and evaluated Melee hurtbox capsules on `FighterRuntime`/`WorldSnapshot`. These are visible in the raylib debug overlay but are not yet authoritative for gameplay collision until the HSD transform/origin mapping is calibrated.
+- HSD fighter assets are an importer/tool concern. The package converter can take a fighter DAT plus costume DAT, use the exporter as temporary scratch, and write a native `.pfpkg` that stores authored skeletons, clips, mesh/material/texture data, fighter bone lookup IDs, hurtboxes, model-part visibility, shield pose, ECB source bones, attributes, and converted action subactions directly.
+- The training world loads generated native `.pfpkg` roster packages. Runtime pose sampling, model visibility, joint positions, and evaluated hurtbox capsules read native authored package data rather than interpreting HSD/DAT structures.
 - `WorldSnapshot` is the rollback boundary. It captures integer gameplay state, input buffers, active hitboxes, and bone poses.
 
 ## Melee DAT Reference
@@ -42,7 +42,13 @@ dotnet restore HSDLib-master\HSDRaw\HSDRaw.csproj --ignore-failed-sources /p:Net
 dotnet build HSDLib-master\HSDRaw\HSDRaw.csproj --no-restore /p:NetStandardImplicitPackageVersion=2.0.0
 ```
 
-The exporter writes compact binary runtime assets only. To export a full fighter animation asset from vanilla Mario's fighter/costume DATs:
+The preferred one-time fighter import writes a native authored package directly:
+
+```powershell
+engine_cpp\build-raylib\pfighter_package_converter.exe --fighter-dat vanillaroot\files\PlMr.dat --costume-dat vanillaroot\files\PlMrNr.dat --name Mario --out engine_cpp\data\packages\mario_native.pfpkg
+```
+
+The lower-level exporter can still write importer scratch assets for tooling/debugging:
 
 ```powershell
 dotnet run --project engine_cpp\tools\hsd_exporter\PFighter.HsdExporter.csproj -- --asset-bin-out engine_cpp\data\fighters\mario_hsd.pfighter.bin vanillaroot\files\PlMr.dat vanillaroot\files\PlMrNr.dat

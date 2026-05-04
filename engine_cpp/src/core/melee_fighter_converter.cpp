@@ -78,6 +78,18 @@ static const HsdFighterAssetSpec* meleeTrainingRosterSpecByName(const std::strin
     return nullptr;
 }
 
+static HsdFighterAssetSpec customFighterAssetSpec(
+    const std::string& displayName,
+    const std::string& sourceFileName,
+    bool shieldSizeScalesWithHealth = true)
+{
+    return HsdFighterAssetSpec{
+        displayName.c_str(),
+        sourceFileName.c_str(),
+        shieldSizeScalesWithHealth,
+    };
+}
+
 std::vector<std::string> meleeTrainingRosterFighterNames() {
     std::vector<std::string> names;
     names.reserve(meleeTrainingRoster().size());
@@ -668,10 +680,38 @@ bool makeConvertedMeleeFighterPackage(
         return failNativeConversion(error, "missing binary fighter asset: engine_cpp/data/fighters/" + std::string(spec->fileName));
     }
 
+    return makeConvertedMeleeFighterPackageFromAssetBin(
+        spec->displayName,
+        spec->fileName,
+        assetPath.string(),
+        package,
+        error);
+}
+
+bool saveConvertedMeleeFighterPackage(
+    const std::string& fighterName,
+    const std::string& path,
+    std::string* error)
+{
+    FighterPackage package;
+    if (!makeConvertedMeleeFighterPackage(fighterName, package, error)) {
+        return false;
+    }
+    return saveFighterPackage(path, package, error);
+}
+
+bool makeConvertedMeleeFighterPackageFromAssetBin(
+    const std::string& displayName,
+    const std::string& sourceFileName,
+    const std::string& assetBinPath,
+    FighterPackage& package,
+    std::string* error)
+{
     try {
+        const HsdFighterAssetSpec spec = customFighterAssetSpec(displayName, sourceFileName);
         const MeleeCommonData common = loadMeleeCommonData();
-        HsdFighterAnimationAsset asset = loadHsdFighterAnimationAsset(assetPath.string());
-        FighterDefinition imported = makeImportedFighterDefinition(*spec, common, asset);
+        HsdFighterAnimationAsset asset = loadHsdFighterAnimationAsset(assetBinPath);
+        FighterDefinition imported = makeImportedFighterDefinition(spec, common, asset);
         FighterDefinition native;
         if (!makeImportedNativePackageFighterDefinition(imported, asset, native, error)) {
             return false;
@@ -686,13 +726,15 @@ bool makeConvertedMeleeFighterPackage(
     }
 }
 
-bool saveConvertedMeleeFighterPackage(
-    const std::string& fighterName,
+bool saveConvertedMeleeFighterPackageFromAssetBin(
+    const std::string& displayName,
+    const std::string& sourceFileName,
+    const std::string& assetBinPath,
     const std::string& path,
     std::string* error)
 {
     FighterPackage package;
-    if (!makeConvertedMeleeFighterPackage(fighterName, package, error)) {
+    if (!makeConvertedMeleeFighterPackageFromAssetBin(displayName, sourceFileName, assetBinPath, package, error)) {
         return false;
     }
     return saveFighterPackage(path, package, error);
