@@ -231,6 +231,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFighterJumpsRemaining:
     case PackageScriptOp::SetFighterJumpsUsed:
     case PackageScriptOp::SetFighterJumpsUsedFromVar:
+    case PackageScriptOp::SetVarFighterCommandVar:
+    case PackageScriptOp::SetFighterCommandVarImmediate:
+    case PackageScriptOp::SetFighterCommandVarFromVar:
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:
     case PackageScriptOp::SetVarFighterPositionX:
@@ -1715,6 +1718,23 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetFighterJumpsUsedFromVar:
         if (!allowFighterContextReads || allowObjectContextReads) {
             throw std::runtime_error("fighter package script fighter jump write is invalid");
+        }
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarFighterCommandVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowFighterContextReads || instruction.intValue < 0 || instruction.intValue >= 4) {
+            throw std::runtime_error("fighter package script fighter command variable read is invalid");
+        }
+        break;
+    case PackageScriptOp::SetFighterCommandVarImmediate:
+        if (!allowFighterContextReads || allowObjectContextReads || instruction.dst < 0 || instruction.dst >= 4) {
+            throw std::runtime_error("fighter package script fighter command variable write is invalid");
+        }
+        break;
+    case PackageScriptOp::SetFighterCommandVarFromVar:
+        if (!allowFighterContextReads || allowObjectContextReads || instruction.dst < 0 || instruction.dst >= 4) {
+            throw std::runtime_error("fighter package script fighter command variable write is invalid");
         }
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;

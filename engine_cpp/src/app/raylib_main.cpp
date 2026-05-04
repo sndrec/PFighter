@@ -1088,6 +1088,9 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return "FJumpRem";
     case pf::PackageScriptOp::SetFighterJumpsUsed: return "SetJumps";
     case pf::PackageScriptOp::SetFighterJumpsUsedFromVar: return "JumpVar";
+    case pf::PackageScriptOp::SetVarFighterCommandVar: return "CmdRead";
+    case pf::PackageScriptOp::SetFighterCommandVarImmediate: return "CmdSet";
+    case pf::PackageScriptOp::SetFighterCommandVarFromVar: return "CmdVar";
     case pf::PackageScriptOp::SetVarFighterPercent: return "Pct";
     case pf::PackageScriptOp::SetVarFighterShield: return "ShieldHp";
     case pf::PackageScriptOp::SetVarFighterPositionX: return "PosX";
@@ -1264,6 +1267,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetFighterJumpsUsedFromVar:
         instruction.op = pf::PackageScriptOp::SetFighterJumpsUsed;
         break;
+    case pf::PackageScriptOp::SetFighterCommandVarFromVar:
+        instruction.op = pf::PackageScriptOp::SetFighterCommandVarImmediate;
+        break;
     case pf::PackageScriptOp::SpawnObjectFromVars:
         instruction.op = pf::PackageScriptOp::SpawnObject;
         break;
@@ -1287,6 +1293,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarFighterFacing:
     case pf::PackageScriptOp::SetVarFighterJumpsUsed:
     case pf::PackageScriptOp::SetVarFighterJumpsRemaining:
+    case pf::PackageScriptOp::SetVarFighterCommandVar:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1550,6 +1557,15 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarObjectAnimationRate:
         label += " v" + std::to_string(instruction.dst);
         break;
+    case pf::PackageScriptOp::SetVarFighterCommandVar:
+        label += " v" + std::to_string(instruction.dst) + " = cmd" + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetFighterCommandVarImmediate:
+        label += " cmd" + std::to_string(instruction.dst) + " " + std::to_string(instruction.intValue);
+        break;
+    case pf::PackageScriptOp::SetFighterCommandVarFromVar:
+        label += " cmd" + std::to_string(instruction.dst) + " = v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::SetVarOwnedObjectCount:
         label += " v" + std::to_string(instruction.dst) + " " + instruction.text;
         break;
@@ -1746,7 +1762,10 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterJumpsUsed: return pf::PackageScriptOp::SetVarFighterJumpsRemaining;
     case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return pf::PackageScriptOp::SetFighterJumpsUsed;
     case pf::PackageScriptOp::SetFighterJumpsUsed: return pf::PackageScriptOp::SetFighterJumpsUsedFromVar;
-    case pf::PackageScriptOp::SetFighterJumpsUsedFromVar: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetFighterJumpsUsedFromVar: return pf::PackageScriptOp::SetVarFighterCommandVar;
+    case pf::PackageScriptOp::SetVarFighterCommandVar: return pf::PackageScriptOp::SetFighterCommandVarImmediate;
+    case pf::PackageScriptOp::SetFighterCommandVarImmediate: return pf::PackageScriptOp::SetFighterCommandVarFromVar;
+    case pf::PackageScriptOp::SetFighterCommandVarFromVar: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
@@ -1808,7 +1827,9 @@ static bool packageScriptOpAllowedForObject(pf::PackageScriptOp op) {
         op != pf::PackageScriptOp::SetVarStickY &&
         op != pf::PackageScriptOp::SetVarCStickX &&
         op != pf::PackageScriptOp::SetVarCStickY &&
-        op != pf::PackageScriptOp::SetVarShield;
+        op != pf::PackageScriptOp::SetVarShield &&
+        op != pf::PackageScriptOp::SetFighterCommandVarImmediate &&
+        op != pf::PackageScriptOp::SetFighterCommandVarFromVar;
 }
 
 static pf::PackageScriptOp nextObjectPackageScriptOp(pf::PackageScriptOp op) {
@@ -1870,7 +1891,8 @@ static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterGrounded: return pf::PackageScriptOp::SetVarFighterFacing;
     case pf::PackageScriptOp::SetVarFighterFacing: return pf::PackageScriptOp::SetVarFighterJumpsUsed;
     case pf::PackageScriptOp::SetVarFighterJumpsUsed: return pf::PackageScriptOp::SetVarFighterJumpsRemaining;
-    case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterJumpsRemaining: return pf::PackageScriptOp::SetVarFighterCommandVar;
+    case pf::PackageScriptOp::SetVarFighterCommandVar: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
@@ -1909,6 +1931,14 @@ static void normalizePackageInstruction(
     }
     if (instruction.op == pf::PackageScriptOp::SetVarRandom && instruction.intValue <= 0) {
         instruction.intValue = 2;
+    }
+    if (instruction.op == pf::PackageScriptOp::SetVarFighterCommandVar) {
+        instruction.intValue = std::clamp(instruction.intValue, 0, 3);
+    }
+    if (instruction.op == pf::PackageScriptOp::SetFighterCommandVarImmediate ||
+        instruction.op == pf::PackageScriptOp::SetFighterCommandVarFromVar)
+    {
+        instruction.dst = std::clamp(instruction.dst < 0 ? 0 : instruction.dst, 0, 3);
     }
     if ((instruction.op == pf::PackageScriptOp::SetVarButtonDown ||
          instruction.op == pf::PackageScriptOp::SetVarButtonPressed) &&
@@ -1962,6 +1992,9 @@ static void normalizeObjectPackageInstruction(
     }
     if (instruction.op == pf::PackageScriptOp::SetVarRandom && instruction.intValue <= 0) {
         instruction.intValue = 2;
+    }
+    if (instruction.op == pf::PackageScriptOp::SetVarFighterCommandVar) {
+        instruction.intValue = std::clamp(instruction.intValue, 0, 3);
     }
     if (instruction.op == pf::PackageScriptOp::ChangeState && instruction.text.empty() && !def.states.empty()) {
         const int stateIndex = std::clamp(selectedObjectState, 0, static_cast<int>(def.states.size()) - 1);

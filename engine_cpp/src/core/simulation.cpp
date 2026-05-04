@@ -7013,7 +7013,8 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterGrounded:
             case PackageScriptOp::SetVarFighterFacing:
             case PackageScriptOp::SetVarFighterJumpsUsed:
-            case PackageScriptOp::SetVarFighterJumpsRemaining: {
+            case PackageScriptOp::SetVarFighterJumpsRemaining:
+            case PackageScriptOp::SetVarFighterCommandVar: {
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;
@@ -7042,6 +7043,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     break;
                 case PackageScriptOp::SetVarFighterJumpsRemaining:
                     setVar(instruction.dst, std::max(0, ownerDef.properties.maxJumps - owner.jumpsUsed));
+                    break;
+                case PackageScriptOp::SetVarFighterCommandVar:
+                    setVar(instruction.dst, static_cast<int32_t>(fighterCommandVar(owner, instruction.intValue)));
                     break;
                 case PackageScriptOp::SetVarFighterPercent:
                     setVar(instruction.dst, owner.percent);
@@ -7077,6 +7081,8 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             }
             case PackageScriptOp::SetFighterJumpsUsed:
             case PackageScriptOp::SetFighterJumpsUsedFromVar:
+            case PackageScriptOp::SetFighterCommandVarImmediate:
+            case PackageScriptOp::SetFighterCommandVarFromVar:
                 return;
             case PackageScriptOp::SetVarObjectOwner:
                 setVar(instruction.dst, object.ownerFighter);

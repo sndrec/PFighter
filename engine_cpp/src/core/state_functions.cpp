@@ -2657,6 +2657,15 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetFighterJumpsUsedFromVar:
             setFighterJumpsUsed(def, fighter, packageVar(fighter, instruction.srcA));
             break;
+        case PackageScriptOp::SetVarFighterCommandVar:
+            setPackageVar(fighter, instruction.dst, static_cast<int32_t>(fighterCommandVar(fighter, instruction.intValue)));
+            break;
+        case PackageScriptOp::SetFighterCommandVarImmediate:
+            setFighterCommandVar(fighter, instruction.dst, static_cast<uint32_t>(instruction.intValue));
+            break;
+        case PackageScriptOp::SetFighterCommandVarFromVar:
+            setFighterCommandVar(fighter, instruction.dst, static_cast<uint32_t>(packageVar(fighter, instruction.srcA)));
+            break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
             break;
