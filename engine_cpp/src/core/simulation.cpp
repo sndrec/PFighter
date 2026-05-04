@@ -7368,6 +7368,23 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::DestroyObjectFromVar:
                 destroyGameObjectByIndex(world, var(instruction.srcA));
                 return;
+            case PackageScriptOp::SetVarPickUpObjectFromVar:
+                setVar(instruction.dst, pickUpGameObject(world, objectIndex, var(instruction.srcA)) ? 1 : 0);
+                return;
+            case PackageScriptOp::SetVarDropObjectFromVar: {
+                const Vec2 velocity{object.facing * instruction.fixValue, instruction.intValue};
+                setVar(instruction.dst, dropGameObject(world, objectIndex, velocity) ? 1 : 0);
+                return;
+            }
+            case PackageScriptOp::SetVarThrowObjectFromVar: {
+                const int fighterIndex = var(instruction.srcA);
+                const int velocityFacing = validObjectOwnerFighterIndex(world, fighterIndex)
+                    ? world.fighters[static_cast<size_t>(fighterIndex)].facing
+                    : object.facing;
+                const Vec2 velocity{velocityFacing * instruction.fixValue, instruction.intValue};
+                setVar(instruction.dst, throwGameObject(world, objectIndex, fighterIndex, velocity) ? 1 : 0);
+                return;
+            }
             case PackageScriptOp::DestroyOwnedObjects:
                 destroyGameObjectsOwnedBy(world, object.ownerFighter, instruction.text);
                 if (!object.active) {

@@ -307,6 +307,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SpawnProjectileFromVarsSetVar:
     case PackageScriptOp::DestroyObject:
     case PackageScriptOp::DestroyObjectFromVar:
+    case PackageScriptOp::SetVarPickUpObjectFromVar:
+    case PackageScriptOp::SetVarDropObjectFromVar:
+    case PackageScriptOp::SetVarThrowObjectFromVar:
     case PackageScriptOp::DestroyOwnedObjects:
     case PackageScriptOp::SkipIfVarLessThanImmediate:
     case PackageScriptOp::SkipIfVarLessThanVar:
@@ -2030,6 +2033,12 @@ void validatePackageScriptInstruction(
         }
         break;
     case PackageScriptOp::DestroyObjectFromVar:
+        requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarPickUpObjectFromVar:
+    case PackageScriptOp::SetVarDropObjectFromVar:
+    case PackageScriptOp::SetVarThrowObjectFromVar:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
         requireVariableIndex(instruction.srcA, variableCount, "source");
         break;
     case PackageScriptOp::DestroyOwnedObjects:

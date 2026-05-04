@@ -2994,6 +2994,29 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::DestroyObjectFromVar:
             destroyGameObjectByIndex(world, packageVar(fighter, instruction.srcA));
             break;
+        case PackageScriptOp::SetVarPickUpObjectFromVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const bool ok = pickUpGameObject(world, packageVar(fighter, instruction.srcA), fighterIndex);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, ok ? 1 : 0);
+            }
+            break;
+        }
+        case PackageScriptOp::SetVarDropObjectFromVar: {
+            const Vec2 velocity{fighter.facing * instruction.fixValue, instruction.intValue};
+            const bool ok = dropGameObject(world, packageVar(fighter, instruction.srcA), velocity);
+            setPackageVar(fighter, instruction.dst, ok ? 1 : 0);
+            break;
+        }
+        case PackageScriptOp::SetVarThrowObjectFromVar: {
+            const int fighterIndex = static_cast<int>(&fighter - world.fighters.data());
+            const Vec2 velocity{fighter.facing * instruction.fixValue, instruction.intValue};
+            const bool ok = throwGameObject(world, packageVar(fighter, instruction.srcA), fighterIndex, velocity);
+            if (fighterIndex >= 0 && fighterIndex < static_cast<int>(world.fighters.size())) {
+                setPackageVar(world.fighters[static_cast<size_t>(fighterIndex)], instruction.dst, ok ? 1 : 0);
+            }
+            break;
+        }
         case PackageScriptOp::DestroyOwnedObjects:
             destroyGameObjectsOwnedBy(world, static_cast<int>(&fighter - world.fighters.data()), instruction.text);
             break;

@@ -1168,6 +1168,9 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnProjectileFromVarsSetVar: return "ProjVSV";
     case pf::PackageScriptOp::DestroyObject: return "KillObj";
     case pf::PackageScriptOp::DestroyObjectFromVar: return "KillVar";
+    case pf::PackageScriptOp::SetVarPickUpObjectFromVar: return "PickVar";
+    case pf::PackageScriptOp::SetVarDropObjectFromVar: return "DropVar";
+    case pf::PackageScriptOp::SetVarThrowObjectFromVar: return "ThrowVar";
     case pf::PackageScriptOp::DestroyOwnedObjects: return "KillOwn";
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return "IfVarLt";
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return "IfVarVar";
@@ -1341,6 +1344,9 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
         instruction.op = pf::PackageScriptOp::SpawnProjectile;
         break;
     case pf::PackageScriptOp::DestroyObjectFromVar:
+    case pf::PackageScriptOp::SetVarPickUpObjectFromVar:
+    case pf::PackageScriptOp::SetVarDropObjectFromVar:
+    case pf::PackageScriptOp::SetVarThrowObjectFromVar:
         instruction.op = pf::PackageScriptOp::Nop;
         break;
     case pf::PackageScriptOp::SetVarImmediate:
@@ -1764,6 +1770,15 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::DestroyObjectFromVar:
         label += " v" + std::to_string(instruction.srcA);
         break;
+    case pf::PackageScriptOp::SetVarPickUpObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " pick v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::SetVarDropObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " drop v" + std::to_string(instruction.srcA);
+        break;
+    case pf::PackageScriptOp::SetVarThrowObjectFromVar:
+        label += " v" + std::to_string(instruction.dst) + " throw v" + std::to_string(instruction.srcA);
+        break;
     case pf::PackageScriptOp::DestroyOwnedObjects:
         label += " " + instruction.text;
         break;
@@ -1977,7 +1992,10 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SpawnObjectFromVarsSetVar: return pf::PackageScriptOp::SpawnProjectileFromVarsSetVar;
     case pf::PackageScriptOp::SpawnProjectileFromVarsSetVar: return pf::PackageScriptOp::DestroyObjectFromVar;
     case pf::PackageScriptOp::DestroyObject: return pf::PackageScriptOp::DestroyObjectFromVar;
-    case pf::PackageScriptOp::DestroyObjectFromVar: return pf::PackageScriptOp::DestroyOwnedObjects;
+    case pf::PackageScriptOp::DestroyObjectFromVar: return pf::PackageScriptOp::SetVarPickUpObjectFromVar;
+    case pf::PackageScriptOp::SetVarPickUpObjectFromVar: return pf::PackageScriptOp::SetVarDropObjectFromVar;
+    case pf::PackageScriptOp::SetVarDropObjectFromVar: return pf::PackageScriptOp::SetVarThrowObjectFromVar;
+    case pf::PackageScriptOp::SetVarThrowObjectFromVar: return pf::PackageScriptOp::DestroyOwnedObjects;
     case pf::PackageScriptOp::DestroyOwnedObjects: return pf::PackageScriptOp::SkipIfVarLessThanImmediate;
     case pf::PackageScriptOp::SkipIfVarLessThanImmediate: return pf::PackageScriptOp::SkipIfVarLessThanVar;
     case pf::PackageScriptOp::SkipIfVarLessThanVar: return pf::PackageScriptOp::SkipIfVarEqualImmediate;
