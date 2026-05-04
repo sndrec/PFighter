@@ -8700,6 +8700,13 @@ static void drawEditorTimelineWorkstation(
                     editor.selectedSubaction = marker.sourceIndex;
                     session.selectedSubaction = marker.sourceIndex;
                     editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                    const pf::Subaction& selected = state.action[static_cast<size_t>(marker.sourceIndex)];
+                    if (selected.type == pf::SubactionType::SetHurtboxState &&
+                        selected.hurtboxIndex >= 0 &&
+                        selected.hurtboxIndex < static_cast<int>(def.hurtboxes.size()))
+                    {
+                        editor.selectedHurtbox = selected.hurtboxIndex;
+                    }
                 } else {
                     editor.selectionKind = pf::FighterEditorSelectionKind::State;
                 }
@@ -11317,6 +11324,64 @@ static void drawEditorInspectorWorkstation(
             if (uiButton({rect.x + 154.0f, offY, 42.0f, 22.0f}, "Y+")) {
                 editedSubaction.hitbox.offset.y += pf::fxFromFloat(0.1f);
                 if (commitSubaction(editedSubaction, "Editor: raised selected hitbox")) return;
+            }
+        }
+        if (subaction.type == pf::SubactionType::SetHurtboxState) {
+            const int authoredHurtboxCount = static_cast<int>(def.hurtboxes.size());
+            const bool targetsAll = subaction.hurtboxIndex < 0 && subaction.hsdBone < 0;
+            std::string targetLabel = targetsAll
+                ? "all hurtboxes"
+                : ("hurtbox #" + std::to_string(subaction.hurtboxIndex));
+            if (subaction.hurtboxIndex >= 0 && subaction.hurtboxIndex < authoredHurtboxCount) {
+                const pf::HurtboxDefinition& target = def.hurtboxes[static_cast<size_t>(subaction.hurtboxIndex)];
+                targetLabel += " " + std::string(pf::boneName(target.bone));
+            }
+            if (subaction.hsdBone >= 0) {
+                targetLabel = "bone id " + std::to_string(subaction.hsdBone);
+            }
+            DrawText(("Hurtbox timing: " + targetLabel + " -> " + hurtboxStateName(subaction.hurtboxState)).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(y + 132.0f),
+                11,
+                Fade(RAYWHITE, 0.72f));
+            const float hurtTimingY = y + 154.0f;
+            if (uiButton({rect.x + 10.0f, hurtTimingY, 48.0f, 22.0f}, "Prev") && authoredHurtboxCount > 0) {
+                editedSubaction.hsdBone = -1;
+                editedSubaction.hurtboxIndex = wrappedIndex(
+                    editedSubaction.hurtboxIndex < 0 ? authoredHurtboxCount - 1 : editedSubaction.hurtboxIndex - 1,
+                    authoredHurtboxCount);
+                editor.selectedHurtbox = editedSubaction.hurtboxIndex;
+                if (commitSubaction(editedSubaction, "Editor: retargeted hurtbox timing")) return;
+            }
+            if (uiButton({rect.x + 64.0f, hurtTimingY, 48.0f, 22.0f}, "Next") && authoredHurtboxCount > 0) {
+                editedSubaction.hsdBone = -1;
+                editedSubaction.hurtboxIndex = wrappedIndex(editedSubaction.hurtboxIndex + 1, authoredHurtboxCount);
+                editor.selectedHurtbox = editedSubaction.hurtboxIndex;
+                if (commitSubaction(editedSubaction, "Editor: retargeted hurtbox timing")) return;
+            }
+            if (uiButton({rect.x + 118.0f, hurtTimingY, 46.0f, 22.0f}, "All")) {
+                editedSubaction.hsdBone = -1;
+                editedSubaction.hurtboxIndex = -1;
+                if (commitSubaction(editedSubaction, "Editor: set hurtbox timing target to all")) return;
+            }
+            if (uiButton({rect.x + 170.0f, hurtTimingY, 54.0f, 22.0f}, "State")) {
+                editedSubaction.hurtboxState = nextHurtboxState(editedSubaction.hurtboxState);
+                if (commitSubaction(editedSubaction, "Editor: changed hurtbox timing state")) return;
+            }
+            DrawText("Timeline hurtbox markers select this subaction and its authored hurtbox target.",
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(hurtTimingY + 30.0f),
+                10,
+                Fade(RAYWHITE, 0.62f));
+        } else if (subaction.type == pf::SubactionType::SetBodyCollisionState) {
+            DrawText(("Body collision timing -> " + std::string(hurtboxStateName(subaction.hurtboxState))).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(y + 132.0f),
+                11,
+                Fade(RAYWHITE, 0.72f));
+            if (uiButton({rect.x + 10.0f, y + 154.0f, 64.0f, 22.0f}, "State")) {
+                editedSubaction.hurtboxState = nextHurtboxState(editedSubaction.hurtboxState);
+                if (commitSubaction(editedSubaction, "Editor: changed body collision timing state")) return;
             }
         }
     }
