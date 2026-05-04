@@ -11,8 +11,9 @@ package load/save should operate on native authored data only.
   HSDLib objects directly. It emits PFighter binary blobs with magic `PFHA`.
 - `engine_cpp/src/core/animation_asset.*` reads those `PFHA` blobs into
   `HsdFighterAnimationAsset`. Despite the name, this is no longer raw DAT data;
-  however it is still treated as a separate imported asset type by runtime and
-  packages.
+  however it is still a separate imported asset type and it still lives in core.
+  Long term, this loader should sit behind importer/converter tooling rather
+  than normal gameplay construction.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.
@@ -20,16 +21,24 @@ package load/save should operate on native authored data only.
   dependent package shapes can be rejected, but package read/write/install
   paths no longer serialize, deserialize, embed, or externally resolve imported
   HSD assets.
+- `FighterImportProvenance` now preserves source file name, source asset name,
+  and importer warnings as debug metadata. Action indices are retained on native
+  clips and state animation references, so provenance does not need to be
+  gameplay truth.
 
 ## Runtime Gameplay Dependencies To Remove Or Convert
 
-- Fighter roster construction in `simulation.cpp` loads `*_hsd.pfighter.bin`
-  through `cachedHsdFighterAsset`, sets `FighterDefinition::hasHsdAsset`, then
-  derives attributes, ledge snap values, animation lengths, and native
-  subactions from that asset at runtime.
-- Animation clip lookup still prefers `def.hsdAsset->clips` in several gameplay
-  paths, but skeleton evaluation/drawing now uses native `authoredSkeleton`
-  once the import/conversion boundary has copied it.
+- Fighter roster construction in `simulation.cpp` first attempts to load
+  `engine_cpp/data/packages/<fighter>_native.pfpkg`. If no native package is
+  installed, it falls back to `*_hsd.pfighter.bin` through
+  `cachedHsdFighterAsset`, sets `FighterDefinition::hasHsdAsset`, and converts
+  attributes, ledge snap values, animation lengths, hurtboxes, action scripts,
+  skeleton, clips, mesh, model visibility, common bones, ECB source bones, and
+  shield pose into native fields. This fallback is still runtime importer debt.
+- Normal animation clip lookup now goes through native authored clip accessors.
+  Package-first roster loads may store large native clip, mesh, and model-part
+  vectors behind shared `authored*Source` pointers for memory, but runtime reads
+  them through native accessors instead of interpreting HSD structures.
 - Imported hurtbox collision now populates `FighterDefinition::hurtboxes` with
   native joint/type/capsule data and runtime collision/grab/damage-region logic
   reads those native hurtbox definitions. The live capsule cache is still named
@@ -43,9 +52,7 @@ package load/save should operate on native authored data only.
 - Model visibility defaults now size from native `authoredMesh`, and model-part
   animation state resolves against native serialized model-part animation sets.
 - Shield pose base data is copied into native fighter metadata and serialized in
-  packages. Guard-stick blending still looks up action 38 through imported
-  animation clips until the animation payload migration is solved without
-  duplicating roster memory.
+  packages.
 - Some runtime fields and function names still use `hsd*` naming even when the
   value is now rollback-owned native pose state.
 
@@ -53,13 +60,15 @@ package load/save should operate on native authored data only.
 
 - Editor package snapshots native-convert imported fighters and clear
   `package.hsdAssets`; package loads no longer accept an external HSD asset pool.
-- Clip lists prefer imported clips when `def.hsdAsset` exists, so converted
-  Melee animations are not purely edited through `authoredClips`.
-- Imported mesh rendering now reads `def.authoredMesh`; imported mesh status and
-  editor controls still use the legacy `HsdMesh*` struct names.
-- The timeline/subaction editor can show converted action subactions, but the
-  conversion currently happens during runtime fighter construction, not as
-  persisted package data.
+- Clip lists, asset summaries, mesh rendering, selected-vertex overlays, and
+  animation previews now read native authored data. If package-first roster data
+  is still parked in source-backed native vectors, entering the assets or
+  animation workspace materializes those vectors into direct editable fields.
+- Imported mesh status and editor controls still use the legacy `HsdMesh*`
+  struct names even though package data is native.
+- The timeline/subaction editor can show converted action subactions from
+  persisted package data. `AttackHi3` has a headless package/editor gate that
+  verifies native hitbox/subaction timeline markers and native clip references.
 
 ## Package Format Dependencies To Remove
 
@@ -73,28 +82,39 @@ package load/save should operate on native authored data only.
 - Package validation checks native authored animation references and native
   hurtbox-index references. Imported HSD-dependent packages are rejected by
   write/read/install/test-world paths.
+- Current package format version is native-only and rejects packages that embed
+  raw imported assets, set `hasHsdAsset`, use invalid old versions, or depend on
+  HSD action/animation interpretation at package load time.
 
 ## Native Data Already Present But Incomplete
 
 - Native skeleton, animation clips, mesh textures/material-ish batches, and
   hurtboxes have storage and serialization.
 - Native mesh storage is still named `HsdFighterMesh`/`HsdMesh*`, but package
-  rendering now reads it from `FighterDefinition::authoredMesh`.
+  rendering now reads it through native authored mesh accessors.
 - Native metadata now exists for imported fighter bone roles, common-bone
-  lookup, ECB source bones, shield pose, and model-part animation sets. Native
-  metadata is still missing for import provenance.
+  lookup, ECB source bones, shield pose, model-part animation sets, and import
+  provenance.
 - Native action subactions exist, and HSD action scripts can be decoded into
-  `FighterState::action`, but the decoded result is not yet the package truth.
+  `FighterState::action`; converted packages persist those decoded native
+  subactions as package truth.
+- Provenance is still coarse. Per-joint/per-material source IDs and optional raw
+  command/source offsets are not yet serialized except where equivalent IDs
+  already survive in native records such as action indices, clip IDs, batch
+  object indices, model-part indices, and texture/material fields.
 
 ## First Migration Targets
 
-1. Add a conversion boundary that copies imported `PFHA` data into native
-   `FighterDefinition` fields immediately after import.
-2. Add native metadata fields for fighter bone roles, common-bone lookup,
-   model-part animation sets, shield pose, and import provenance.
-3. Continue moving imported roster construction behind an explicit conversion
-   boundary without duplicating the full Melee animation payload in runtime
-   memory.
-4. Switch runtime animation clips to read native fields only.
-5. Keep `HSDRaw` and `HsdFighterAnimationAsset` parsing isolated to exporter or
-   explicit conversion utilities until the names can be retired.
+1. Move `animation_asset.*`, `action.cpp` HSD script decode helpers, and the
+   `cachedHsdFighterAsset` fallback out of normal core gameplay construction and
+   behind explicit importer/converter entry points.
+2. Make native `.pfpkg` files the installed roster default for every converted
+   Melee fighter, then remove the automatic runtime `*_hsd.pfighter.bin`
+   fallback for normal gameplay.
+3. Retire `FighterDefinition::hsdAsset`, `FighterDefinition::hasHsdAsset`, and
+   `FighterPackage::hsdAssets` after package rejection compatibility tests no
+   longer need to construct legacy dependent shapes in memory.
+4. Rename remaining `hsd*` runtime pose/cache fields whose data is now native
+   rollback state, keeping serialization compatibility in mind.
+5. Expand import provenance for optional original joint/material/source-command
+   IDs without letting those IDs drive gameplay behavior.
