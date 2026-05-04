@@ -7544,19 +7544,45 @@ static void launchEditorTestWorld(
 
     const int editedFighterDef = selectedRuntime.fighterDef;
     const pf::FighterDefinition editedFighter = world.fighterDefs[static_cast<size_t>(editedFighterDef)];
-    const std::vector<pf::GameObjectDefinition> editedObjects = world.objectDefs;
+    pf::FighterPackage sourcePackage = makeEditorPackage(world, editedFighter);
+    std::string packageError;
+    const std::vector<uint8_t> packageBytes = pf::writeFighterPackage(sourcePackage, &packageError);
+    if (packageBytes.empty()) {
+        updateEditorPackageFailure(editor, packageError);
+        editor.status = "Editor test failed: package validation failed: " + packageError;
+        return;
+    }
+    pf::FighterPackage testPackage;
+    if (!pf::readFighterPackage(packageBytes, testPackage, &packageError) || testPackage.fighters.empty()) {
+        updateEditorPackageFailure(editor, packageError.empty() ? "package had no fighters" : packageError);
+        editor.status = "Editor test failed: package round-trip failed: " + editor.lastPackageMessage;
+        return;
+    }
+    updateEditorPackageSummary(editor, testPackage, packageBytes);
     const int sandbagFighterDef = fighterDefByName(world, "Sandbag", 0);
     world = pf::makeTrainingWorld(0, sandbagFighterDef);
+    const pf::FighterDefinition& testFighter = testPackage.fighters.front();
     int testFighterIndex = editedFighterDef;
     if (testFighterIndex >= 0 && testFighterIndex < static_cast<int>(world.fighterDefs.size()) &&
-        world.fighterDefs[static_cast<size_t>(testFighterIndex)].name == editedFighter.name)
+        world.fighterDefs[static_cast<size_t>(testFighterIndex)].name == testFighter.name)
     {
-        world.fighterDefs[static_cast<size_t>(testFighterIndex)] = editedFighter;
+        world.fighterDefs[static_cast<size_t>(testFighterIndex)] = testFighter;
     } else {
-        world.fighterDefs.push_back(editedFighter);
+        world.fighterDefs.push_back(testFighter);
         testFighterIndex = static_cast<int>(world.fighterDefs.size()) - 1;
     }
-    world.objectDefs = editedObjects;
+    for (size_t packageFighterIndex = 1; packageFighterIndex < testPackage.fighters.size(); ++packageFighterIndex) {
+        const pf::FighterDefinition& packageFighter = testPackage.fighters[packageFighterIndex];
+        auto existing = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& candidate) {
+            return candidate.name == packageFighter.name;
+        });
+        if (existing == world.fighterDefs.end()) {
+            world.fighterDefs.push_back(packageFighter);
+        } else {
+            *existing = packageFighter;
+        }
+    }
+    world.objectDefs = testPackage.objects;
     pf::resetTrainingFighter(world, 0, testFighterIndex, {-pf::fx(2), 0}, 1);
     selectedFighterDef = testFighterIndex;
     editor.selectedFighter = 0;
@@ -7568,8 +7594,8 @@ static void launchEditorTestWorld(
     replay.recordingActive = false;
     replay.playbackFrame = 0;
     editor.status = world.fighterDefs[static_cast<size_t>(world.fighters[1].fighterDef)].name == "Sandbag"
-        ? "Editor test: live unsaved fighter data loaded on Battlefield with Sandbag"
-        : "Editor test: live unsaved fighter data loaded on Battlefield; player 2 is inert";
+        ? "Editor test: package round-trip loaded on Battlefield with Sandbag checksum=" + std::to_string(editor.lastPackageChecksum)
+        : "Editor test: package round-trip loaded on Battlefield; player 2 is inert checksum=" + std::to_string(editor.lastPackageChecksum);
 }
 
 int main() {
