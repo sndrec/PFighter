@@ -8083,6 +8083,50 @@ static void drawEditorViewportOverlayControls(pf::FighterEditor& editor, Rectang
     toggleButton("Bones", editor.showSkeleton);
 }
 
+static bool packageInstructionTargetsFighterName(const pf::PackageScriptInstruction& instruction, const std::string& fighterName) {
+    if (instruction.text != fighterName) {
+        return false;
+    }
+    return instruction.op == pf::PackageScriptOp::SwitchFighterDefinition ||
+        instruction.op == pf::PackageScriptOp::SpawnFighter ||
+        instruction.op == pf::PackageScriptOp::SpawnFighterSetVar;
+}
+
+static const char* editorPackageFighterRoleName(const pf::FighterPackage& package, int fighterIndex) {
+    if (fighterIndex <= 0 || fighterIndex >= static_cast<int>(package.fighters.size())) {
+        return "root";
+    }
+    const std::string& fighterName = package.fighters[static_cast<size_t>(fighterIndex)].name;
+    bool switchedTo = false;
+    bool spawned = false;
+    auto inspectScripts = [&](const std::vector<pf::PackageScript>& scripts) {
+        for (const pf::PackageScript& script : scripts) {
+            for (const pf::PackageScriptInstruction& instruction : script.instructions) {
+                if (!packageInstructionTargetsFighterName(instruction, fighterName)) {
+                    continue;
+                }
+                switchedTo = switchedTo || instruction.op == pf::PackageScriptOp::SwitchFighterDefinition;
+                spawned = spawned ||
+                    instruction.op == pf::PackageScriptOp::SpawnFighter ||
+                    instruction.op == pf::PackageScriptOp::SpawnFighterSetVar;
+            }
+        }
+    };
+    for (const pf::FighterDefinition& fighter : package.fighters) {
+        inspectScripts(fighter.packageScripts);
+    }
+    for (const pf::GameObjectDefinition& object : package.objects) {
+        inspectScripts(object.packageScripts);
+    }
+    if (switchedTo) {
+        return "transform";
+    }
+    if (spawned) {
+        return "helper";
+    }
+    return "companion";
+}
+
 static void drawEditorStateBrowserWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -8181,12 +8225,35 @@ static void drawEditorStateBrowserWorkstation(
         }
         editor.status = "Editor: remove package fighter failed: " + error;
     }
+    const float fighterListY = rect.y + 116.0f;
+    DrawText("Package fighters", static_cast<int>(rect.x + 10.0f), static_cast<int>(fighterListY), 10, Fade(RAYWHITE, 0.62f));
+    const int fighterRows = std::min(3, packageFighterCount);
+    const int fighterStart = visibleListStart(packageFighterIndex, packageFighterCount, fighterRows);
+    for (int row = 0; row < fighterRows; ++row) {
+        const int fighterIndex = fighterStart + row;
+        const pf::FighterDefinition& packageFighter = session.package.fighters[static_cast<size_t>(fighterIndex)];
+        const Rectangle rowRect{
+            rect.x + 10.0f,
+            fighterListY + 16.0f + 25.0f * static_cast<float>(row),
+            rect.width - 20.0f,
+            22.0f,
+        };
+        const bool active = fighterIndex == packageFighterIndex;
+        const std::string label = std::to_string(fighterIndex) + "  " + packageFighter.name + "  [" +
+            editorPackageFighterRoleName(session.package, fighterIndex) + "]";
+        drawWorkstationRow(rowRect, clippedText(label, 10, rowRect.width - 8.0f), active, SKYBLUE);
+        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            selectPackageFighter(fighterIndex);
+            return;
+        }
+    }
+    const float searchY = fighterListY + 96.0f;
     std::string committedSearch;
-    if (uiTextField({rect.x + 10.0f, rect.y + 116.0f, rect.width - 20.0f, 24.0f}, "state-search", editor, editor.stateSearch, committedSearch, 48)) {
+    if (uiTextField({rect.x + 10.0f, searchY, rect.width - 20.0f, 24.0f}, "state-search", editor, editor.stateSearch, committedSearch, 48)) {
         editor.stateSearch = committedSearch;
     }
     if (editor.stateSearch.empty()) {
-        DrawText("Search states", static_cast<int>(rect.x + 18.0f), static_cast<int>(rect.y + 123.0f), 12, Fade(RAYWHITE, 0.55f));
+        DrawText("Search states", static_cast<int>(rect.x + 18.0f), static_cast<int>(searchY + 7.0f), 12, Fade(RAYWHITE, 0.55f));
     }
     const std::array<pf::FighterEditorStateGroupFilter, 9> groupFilters{
         pf::FighterEditorStateGroupFilter::All,
@@ -8203,15 +8270,16 @@ static void drawEditorStateBrowserWorkstation(
     const int currentGroupIndex = currentGroupIt == groupFilters.end()
         ? 0
         : static_cast<int>(std::distance(groupFilters.begin(), currentGroupIt));
-    if (uiButton({rect.x + 10.0f, rect.y + 146.0f, 26.0f, 22.0f}, "<")) {
+    const float groupY = searchY + 30.0f;
+    if (uiButton({rect.x + 10.0f, groupY, 26.0f, 22.0f}, "<")) {
         editor.stateGroupFilter = groupFilters[static_cast<size_t>(wrappedIndex(currentGroupIndex - 1, static_cast<int>(groupFilters.size())))];
     }
-    if (uiButton({rect.x + rect.width - 36.0f, rect.y + 146.0f, 26.0f, 22.0f}, ">")) {
+    if (uiButton({rect.x + rect.width - 36.0f, groupY, 26.0f, 22.0f}, ">")) {
         editor.stateGroupFilter = groupFilters[static_cast<size_t>(wrappedIndex(currentGroupIndex + 1, static_cast<int>(groupFilters.size())))];
     }
     DrawText(("Group: " + std::string(editorStateGroupFilterName(editor.stateGroupFilter))).c_str(),
         static_cast<int>(rect.x + 44.0f),
-        static_cast<int>(rect.y + 152.0f),
+        static_cast<int>(groupY + 6.0f),
         11,
         Fade(RAYWHITE, 0.68f));
 
@@ -8227,7 +8295,8 @@ static void drawEditorStateBrowserWorkstation(
         }
     }
 
-    const int rowCount = std::max(1, static_cast<int>((rect.height - 210.0f) / 43.0f));
+    const float stateListY = groupY + 30.0f;
+    const int rowCount = std::max(1, static_cast<int>((rect.y + rect.height - stateListY - 34.0f) / 43.0f));
     int selectedVisible = 0;
     for (int i = 0; i < static_cast<int>(visibleStates.size()); ++i) {
         if (visibleStates[static_cast<size_t>(i)] == editor.selectedState) {
@@ -8239,7 +8308,7 @@ static void drawEditorStateBrowserWorkstation(
     for (int row = 0; row < std::min(rowCount, static_cast<int>(visibleStates.size())); ++row) {
         const int stateIndex = visibleStates[static_cast<size_t>(start + row)];
         const pf::FighterState& state = def.states[static_cast<size_t>(stateIndex)];
-        const Rectangle rowRect{rect.x + 10.0f, rect.y + 176.0f + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
+        const Rectangle rowRect{rect.x + 10.0f, stateListY + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
         const bool active = stateIndex == editor.selectedState;
         drawWorkstationRow(rowRect, std::to_string(stateIndex) + "  " + state.name, active, SKYBLUE);
         DrawText((std::string(editorStateGroupFilterName(classifyEditorStateGroup(state))) + "  " +
@@ -8261,7 +8330,7 @@ static void drawEditorStateBrowserWorkstation(
         }
     }
     if (visibleStates.empty()) {
-        DrawText("No matching states", static_cast<int>(rect.x + 12.0f), static_cast<int>(rect.y + 176.0f), 13, Fade(RAYWHITE, 0.65f));
+        DrawText("No matching states", static_cast<int>(rect.x + 12.0f), static_cast<int>(stateListY), 13, Fade(RAYWHITE, 0.65f));
     }
     DrawText((std::to_string(visibleStates.size()) + " shown / " + std::to_string(def.states.size()) + " total").c_str(),
         static_cast<int>(rect.x + 10.0f),
