@@ -66,7 +66,11 @@ package load/save should operate on native authored data only.
   model visibility, common bones, ECB source bones, and shield pose into native
   fields without storing imported assets on `FighterDefinition`.
 - With the installed generated packages present, the headless roster smoke sees
-  zero HSD-backed roster assets and native data for all 27 fighters.
+  zero HSD-backed roster assets and native data for all 27 fighters. It also
+  verifies 27/27 self-contained native roster packages, 27/27 renderable native
+  meshes, and 26/27 native model-visibility groups; Sandbag is reported
+  explicitly as the only roster package without model-visibility groups in its
+  converted source data.
 - Normal animation clip lookup now goes through native authored clip accessors.
   Package-first roster loads may store large native clip, mesh, and model-part
   vectors behind shared `authored*Source` pointers for memory, but runtime reads
@@ -83,6 +87,9 @@ package load/save should operate on native authored data only.
   debug head/shield drawing read those native fields.
 - Model visibility defaults now size from native `authoredMesh`, and model-part
   animation state resolves against native serialized model-part animation sets.
+  Headless smoke verifies renderable native mesh data for every roster package
+  and reports Sandbag as the sole converted package without model-visibility
+  groups.
 - Shield pose base data is copied into native fighter metadata and serialized in
   packages.
 - Runtime pose, joint-world, TransN, model visibility, model-part animation,

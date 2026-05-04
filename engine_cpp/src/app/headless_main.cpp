@@ -7487,9 +7487,16 @@ int main(int argc, char** argv) {
             [](const pf::FighterMeshBatch& batch) { return batch.importSourceMaterialIndex >= 0; });
     int nativeRosterSelfContainedCount = 0;
     int nativeRosterImportSourceIdCount = 0;
+    int nativeRosterRenderableMeshCount = 0;
+    int nativeRosterModelVisibilityCount = 0;
+    int nativeRosterModelPartAnimationCount = 0;
+    int nativeRosterNoModelVisibilityCount = 0;
+    std::string nativeRosterNoModelVisibilityNames;
     for (const pf::FighterDefinition& fighter : world.fighterDefs) {
         const std::vector<pf::AnimationClip>& clips = pf::authoredAnimationClips(fighter);
         const pf::FighterMesh& mesh = pf::authoredFighterMesh(fighter);
+        const std::vector<pf::ModelPartAnimationSet>& modelPartAnimations =
+            pf::authoredModelPartAnimations(fighter);
         const bool nativeSelfContained =
             !fighter.name.empty() &&
             !fighter.importProvenance.sourceFileName.empty() &&
@@ -7524,6 +7531,60 @@ int main(int argc, char** argv) {
         if (hasSourceIds) {
             ++nativeRosterImportSourceIdCount;
         }
+
+        const bool texturesValid = std::all_of(
+            mesh.textures.begin(),
+            mesh.textures.end(),
+            [](const pf::FighterMeshTexture& texture) {
+                if (texture.width <= 0 || texture.height <= 0) {
+                    return false;
+                }
+                const uint64_t expectedBytes = static_cast<uint64_t>(texture.width) *
+                    static_cast<uint64_t>(texture.height) * 4u;
+                return texture.rgba.size() == expectedBytes;
+            });
+        const bool batchesRenderable = !mesh.batches.empty() &&
+            std::all_of(
+                mesh.batches.begin(),
+                mesh.batches.end(),
+                [&](const pf::FighterMeshBatch& batch) {
+                    return !batch.vertices.empty() &&
+                        (batch.vertices.size() % 3u) == 0u &&
+                        batch.texture >= -1 &&
+                        batch.texture < static_cast<int>(mesh.textures.size()) &&
+                        batch.importSourceMaterialIndex >= 0;
+                });
+        if (texturesValid && batchesRenderable) {
+            ++nativeRosterRenderableMeshCount;
+        }
+
+        const bool hasVisibilityBatches = std::any_of(
+            mesh.batches.begin(),
+            mesh.batches.end(),
+            [](const pf::FighterMeshBatch& batch) {
+                return batch.hiddenByVisibilityTable &&
+                    batch.modelPartIndex >= 0 &&
+                    batch.modelPartState >= 0;
+            });
+        const bool hasModelPartAnimationData = !modelPartAnimations.empty() &&
+            std::any_of(
+                modelPartAnimations.begin(),
+                modelPartAnimations.end(),
+                [](const pf::ModelPartAnimationSet& set) {
+                    return !set.entries.empty() || !set.animations.empty();
+                });
+        if (hasVisibilityBatches) {
+            ++nativeRosterModelVisibilityCount;
+        } else {
+            ++nativeRosterNoModelVisibilityCount;
+            if (!nativeRosterNoModelVisibilityNames.empty()) {
+                nativeRosterNoModelVisibilityNames += ",";
+            }
+            nativeRosterNoModelVisibilityNames += fighter.name;
+        }
+        if (hasModelPartAnimationData) {
+            ++nativeRosterModelPartAnimationCount;
+        }
     }
     const bool nativeRosterSelfContainedOk =
         nativeRosterSelfContainedCount == static_cast<int>(world.fighterDefs.size()) &&
@@ -7531,6 +7592,13 @@ int main(int argc, char** argv) {
     const bool nativeRosterImportSourceIdsAllOk =
         nativeRosterImportSourceIdCount == static_cast<int>(world.fighterDefs.size()) &&
         nativeRosterImportSourceIdCount == 27;
+    const bool nativeRosterRenderableMeshOk =
+        nativeRosterRenderableMeshCount == static_cast<int>(world.fighterDefs.size()) &&
+        nativeRosterRenderableMeshCount == 27;
+    const bool nativeRosterModelVisibilityOk =
+        nativeRosterModelVisibilityCount + nativeRosterNoModelVisibilityCount == static_cast<int>(world.fighterDefs.size()) &&
+        nativeRosterModelVisibilityCount > 0 &&
+        nativeRosterNoModelVisibilityCount <= 1;
     pf::FighterEditorSession nativePackageEditorSession;
     pf::FighterEditorStateTimeline nativePackageAttackHi3Timeline;
     const bool nativePackageAttackHi3TimelineOk = packageNativeAssetOk &&
@@ -9185,6 +9253,13 @@ int main(int argc, char** argv) {
               << " fighter_roster_native_self_contained_ok=" << nativeRosterSelfContainedOk
               << " fighter_roster_import_source_ids_count=" << nativeRosterImportSourceIdCount
               << " fighter_roster_import_source_ids_all_ok=" << nativeRosterImportSourceIdsAllOk
+              << " fighter_roster_renderable_mesh_count=" << nativeRosterRenderableMeshCount
+              << " fighter_roster_renderable_mesh_ok=" << nativeRosterRenderableMeshOk
+              << " fighter_roster_model_visibility_count=" << nativeRosterModelVisibilityCount
+              << " fighter_roster_no_model_visibility_count=" << nativeRosterNoModelVisibilityCount
+              << " fighter_roster_no_model_visibility_names=" << nativeRosterNoModelVisibilityNames
+              << " fighter_roster_model_visibility_ok=" << nativeRosterModelVisibilityOk
+              << " fighter_roster_model_part_animation_count=" << nativeRosterModelPartAnimationCount
               << " fighter_package_attackhi3_native_timeline_ok=" << nativePackageAttackHi3TimelineOk
               << " fighter_package_hsd_dependent_rejected=" << hsdDependentPackageRejected
               << " fighter_package_parity_ok=" << packageParityOk
