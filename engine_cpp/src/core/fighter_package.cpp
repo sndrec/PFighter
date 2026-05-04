@@ -240,6 +240,10 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFighterHeldObject:
     case PackageScriptOp::SetVarFighterGrabbedFighter:
     case PackageScriptOp::SetVarFighterGrabberFighter:
+    case PackageScriptOp::SetVarFighterHitlag:
+    case PackageScriptOp::SetVarFighterHitstun:
+    case PackageScriptOp::SetVarFighterDamageHitboxOwner:
+    case PackageScriptOp::SetVarFighterThrownHitboxOwner:
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:
     case PackageScriptOp::SetVarFighterPositionX:
@@ -1764,6 +1768,10 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::SetVarFighterHeldObject:
     case PackageScriptOp::SetVarFighterGrabbedFighter:
     case PackageScriptOp::SetVarFighterGrabberFighter:
+    case PackageScriptOp::SetVarFighterHitlag:
+    case PackageScriptOp::SetVarFighterHitstun:
+    case PackageScriptOp::SetVarFighterDamageHitboxOwner:
+    case PackageScriptOp::SetVarFighterThrownHitboxOwner:
         requireVariableIndex(instruction.dst, variableCount, "destination");
         if (!allowFighterContextReads) {
             throw std::runtime_error("fighter package script fighter interaction read is invalid");

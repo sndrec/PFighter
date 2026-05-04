@@ -7018,7 +7018,11 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterThrowFlag:
             case PackageScriptOp::SetVarFighterHeldObject:
             case PackageScriptOp::SetVarFighterGrabbedFighter:
-            case PackageScriptOp::SetVarFighterGrabberFighter: {
+            case PackageScriptOp::SetVarFighterGrabberFighter:
+            case PackageScriptOp::SetVarFighterHitlag:
+            case PackageScriptOp::SetVarFighterHitstun:
+            case PackageScriptOp::SetVarFighterDamageHitboxOwner:
+            case PackageScriptOp::SetVarFighterThrownHitboxOwner: {
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;
@@ -7062,6 +7066,18 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     break;
                 case PackageScriptOp::SetVarFighterGrabberFighter:
                     setVar(instruction.dst, owner.grabberFighter);
+                    break;
+                case PackageScriptOp::SetVarFighterHitlag:
+                    setVar(instruction.dst, owner.hitlag);
+                    break;
+                case PackageScriptOp::SetVarFighterHitstun:
+                    setVar(instruction.dst, owner.hitstun);
+                    break;
+                case PackageScriptOp::SetVarFighterDamageHitboxOwner:
+                    setVar(instruction.dst, owner.damageHitboxOwner);
+                    break;
+                case PackageScriptOp::SetVarFighterThrownHitboxOwner:
+                    setVar(instruction.dst, owner.thrownHitboxOwner);
                     break;
                 case PackageScriptOp::SetVarFighterPercent:
                     setVar(instruction.dst, owner.percent);

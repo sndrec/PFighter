@@ -1097,6 +1097,10 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterHeldObject: return "HeldObj";
     case pf::PackageScriptOp::SetVarFighterGrabbedFighter: return "Grabbed";
     case pf::PackageScriptOp::SetVarFighterGrabberFighter: return "Grabber";
+    case pf::PackageScriptOp::SetVarFighterHitlag: return "Hitlag";
+    case pf::PackageScriptOp::SetVarFighterHitstun: return "Hitstun";
+    case pf::PackageScriptOp::SetVarFighterDamageHitboxOwner: return "DmgOwn";
+    case pf::PackageScriptOp::SetVarFighterThrownHitboxOwner: return "ThrOwn";
     case pf::PackageScriptOp::SetVarFighterPercent: return "Pct";
     case pf::PackageScriptOp::SetVarFighterShield: return "ShieldHp";
     case pf::PackageScriptOp::SetVarFighterPositionX: return "PosX";
@@ -1305,6 +1309,10 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::SetVarFighterHeldObject:
     case pf::PackageScriptOp::SetVarFighterGrabbedFighter:
     case pf::PackageScriptOp::SetVarFighterGrabberFighter:
+    case pf::PackageScriptOp::SetVarFighterHitlag:
+    case pf::PackageScriptOp::SetVarFighterHitstun:
+    case pf::PackageScriptOp::SetVarFighterDamageHitboxOwner:
+    case pf::PackageScriptOp::SetVarFighterThrownHitboxOwner:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1544,6 +1552,10 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
     case pf::PackageScriptOp::SetVarFighterHeldObject:
     case pf::PackageScriptOp::SetVarFighterGrabbedFighter:
     case pf::PackageScriptOp::SetVarFighterGrabberFighter:
+    case pf::PackageScriptOp::SetVarFighterHitlag:
+    case pf::PackageScriptOp::SetVarFighterHitstun:
+    case pf::PackageScriptOp::SetVarFighterDamageHitboxOwner:
+    case pf::PackageScriptOp::SetVarFighterThrownHitboxOwner:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1794,7 +1806,11 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetFighterThrowFlagFromVar: return pf::PackageScriptOp::SetVarFighterHeldObject;
     case pf::PackageScriptOp::SetVarFighterHeldObject: return pf::PackageScriptOp::SetVarFighterGrabbedFighter;
     case pf::PackageScriptOp::SetVarFighterGrabbedFighter: return pf::PackageScriptOp::SetVarFighterGrabberFighter;
-    case pf::PackageScriptOp::SetVarFighterGrabberFighter: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterGrabberFighter: return pf::PackageScriptOp::SetVarFighterHitlag;
+    case pf::PackageScriptOp::SetVarFighterHitlag: return pf::PackageScriptOp::SetVarFighterHitstun;
+    case pf::PackageScriptOp::SetVarFighterHitstun: return pf::PackageScriptOp::SetVarFighterDamageHitboxOwner;
+    case pf::PackageScriptOp::SetVarFighterDamageHitboxOwner: return pf::PackageScriptOp::SetVarFighterThrownHitboxOwner;
+    case pf::PackageScriptOp::SetVarFighterThrownHitboxOwner: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;
@@ -1905,6 +1921,10 @@ static bool packageScriptOpIsFighterContextRead(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterHeldObject:
     case pf::PackageScriptOp::SetVarFighterGrabbedFighter:
     case pf::PackageScriptOp::SetVarFighterGrabberFighter:
+    case pf::PackageScriptOp::SetVarFighterHitlag:
+    case pf::PackageScriptOp::SetVarFighterHitstun:
+    case pf::PackageScriptOp::SetVarFighterDamageHitboxOwner:
+    case pf::PackageScriptOp::SetVarFighterThrownHitboxOwner:
     case pf::PackageScriptOp::SetVarFighterPercent:
     case pf::PackageScriptOp::SetVarFighterShield:
     case pf::PackageScriptOp::SetVarFighterPositionX:
@@ -1932,7 +1952,11 @@ static pf::PackageScriptOp nextFighterContextReadOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::SetVarFighterThrowFlag: return pf::PackageScriptOp::SetVarFighterHeldObject;
     case pf::PackageScriptOp::SetVarFighterHeldObject: return pf::PackageScriptOp::SetVarFighterGrabbedFighter;
     case pf::PackageScriptOp::SetVarFighterGrabbedFighter: return pf::PackageScriptOp::SetVarFighterGrabberFighter;
-    case pf::PackageScriptOp::SetVarFighterGrabberFighter: return pf::PackageScriptOp::SetVarFighterPercent;
+    case pf::PackageScriptOp::SetVarFighterGrabberFighter: return pf::PackageScriptOp::SetVarFighterHitlag;
+    case pf::PackageScriptOp::SetVarFighterHitlag: return pf::PackageScriptOp::SetVarFighterHitstun;
+    case pf::PackageScriptOp::SetVarFighterHitstun: return pf::PackageScriptOp::SetVarFighterDamageHitboxOwner;
+    case pf::PackageScriptOp::SetVarFighterDamageHitboxOwner: return pf::PackageScriptOp::SetVarFighterThrownHitboxOwner;
+    case pf::PackageScriptOp::SetVarFighterThrownHitboxOwner: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;
     case pf::PackageScriptOp::SetVarFighterShield: return pf::PackageScriptOp::SetVarFighterPositionX;
     case pf::PackageScriptOp::SetVarFighterPositionX: return pf::PackageScriptOp::SetVarFighterPositionY;

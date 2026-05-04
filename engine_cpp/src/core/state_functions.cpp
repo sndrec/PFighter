@@ -2684,6 +2684,18 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetVarFighterGrabberFighter:
             setPackageVar(fighter, instruction.dst, fighter.grabberFighter);
             break;
+        case PackageScriptOp::SetVarFighterHitlag:
+            setPackageVar(fighter, instruction.dst, fighter.hitlag);
+            break;
+        case PackageScriptOp::SetVarFighterHitstun:
+            setPackageVar(fighter, instruction.dst, fighter.hitstun);
+            break;
+        case PackageScriptOp::SetVarFighterDamageHitboxOwner:
+            setPackageVar(fighter, instruction.dst, fighter.damageHitboxOwner);
+            break;
+        case PackageScriptOp::SetVarFighterThrownHitboxOwner:
+            setPackageVar(fighter, instruction.dst, fighter.thrownHitboxOwner);
+            break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
             break;
