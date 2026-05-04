@@ -10497,6 +10497,121 @@ static void drawEditorInspectorWorkstation(
         static_cast<int>(rect.y + 6.0f),
         11,
         Fade(RAYWHITE, 0.68f));
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Instruction &&
+        editor.workspace == pf::EditorWorkspace::Assets &&
+        !session.package.objects.empty())
+    {
+        DrawText("Object Instruction", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        editor.selectedObjectDef = std::clamp(editor.selectedObjectDef, 0, static_cast<int>(session.package.objects.size()) - 1);
+        pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        if (object.packageScripts.empty()) {
+            DrawText("Selected object has no scripts", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, Fade(RAYWHITE, 0.62f));
+            return;
+        }
+        editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(object.packageScripts.size()) - 1);
+        pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        DrawText(clippedText(object.name + "  " + script.name, 11, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 62.0f),
+            11,
+            RAYWHITE);
+        if (script.instructions.empty()) {
+            DrawText("Selected object script has no instructions", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 86.0f), 11, Fade(RAYWHITE, 0.62f));
+            return;
+        }
+        editor.selectedPackageInstruction = std::clamp(editor.selectedPackageInstruction, 0, static_cast<int>(script.instructions.size()) - 1);
+        const pf::PackageScriptInstruction& selectedInstruction = script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)];
+        DrawText(clippedText("#" + std::to_string(editor.selectedPackageInstruction) + "  " + packageInstructionLabel(selectedInstruction), 11, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 84.0f),
+            11,
+            Fade(RAYWHITE, 0.76f));
+        auto commitObjectInstruction = [&](pf::PackageScriptInstruction instruction, const std::string& message) -> bool {
+            normalizeObjectPackageInstruction(instruction, object, world, editor.selectedObjectState, editor.selectedObjectDef);
+            std::string error;
+            if (pf::setEditorSessionObjectPackageInstruction(
+                    session,
+                    editor.selectedObjectDef,
+                    editor.selectedPackageScript,
+                    editor.selectedPackageInstruction,
+                    instruction,
+                    &error))
+            {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: object instruction edit failed: " + error;
+            return false;
+        };
+        pf::PackageScriptInstruction edited = selectedInstruction;
+        const float rowA = rect.y + 112.0f;
+        if (uiButton({rect.x + 10.0f, rowA, 52.0f, 22.0f}, "Op>")) {
+            edited.op = nextObjectPackageScriptOp(edited.op);
+            if (commitObjectInstruction(edited, "Editor: cycled object instruction op")) return;
+        }
+        if (uiButton({rect.x + 68.0f, rowA, 44.0f, 22.0f}, "Dst-")) {
+            --edited.dst;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction dst")) return;
+        }
+        if (uiButton({rect.x + 118.0f, rowA, 44.0f, 22.0f}, "Dst+")) {
+            ++edited.dst;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction dst")) return;
+        }
+        if (uiButton({rect.x + 168.0f, rowA, 42.0f, 22.0f}, "A-")) {
+            --edited.srcA;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction srcA")) return;
+        }
+        if (uiButton({rect.x + 216.0f, rowA, 42.0f, 22.0f}, "A+")) {
+            ++edited.srcA;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction srcA")) return;
+        }
+        if (uiButton({rect.x + 264.0f, rowA, 42.0f, 22.0f}, "B-")) {
+            --edited.srcB;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction srcB")) return;
+        }
+        if (uiButton({rect.x + 312.0f, rowA, 42.0f, 22.0f}, "B+")) {
+            ++edited.srcB;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction srcB")) return;
+        }
+        const float rowB = rowA + 30.0f;
+        DrawText(("dst=" + std::to_string(selectedInstruction.dst) +
+                  " a=" + std::to_string(selectedInstruction.srcA) +
+                  " b=" + std::to_string(selectedInstruction.srcB) +
+                  " i=" + std::to_string(selectedInstruction.intValue) +
+                  " f=" + std::to_string(pf::fxToFloat(selectedInstruction.fixValue))).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rowB + 4.0f),
+            10,
+            Fade(RAYWHITE, 0.64f));
+        if (uiButton({rect.x + rect.width - 178.0f, rowB, 42.0f, 22.0f}, "I-")) {
+            --edited.intValue;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction integer")) return;
+        }
+        if (uiButton({rect.x + rect.width - 130.0f, rowB, 42.0f, 22.0f}, "I+")) {
+            ++edited.intValue;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction integer")) return;
+        }
+        if (uiButton({rect.x + rect.width - 82.0f, rowB, 32.0f, 22.0f}, "F-")) {
+            edited.fixValue -= pf::fxFromFloat(0.1f);
+            if (commitObjectInstruction(edited, "Editor: changed object instruction fixed value")) return;
+        }
+        if (uiButton({rect.x + rect.width - 44.0f, rowB, 32.0f, 22.0f}, "F+")) {
+            edited.fixValue += pf::fxFromFloat(0.1f);
+            if (commitObjectInstruction(edited, "Editor: changed object instruction fixed value")) return;
+        }
+        std::string committedText;
+        if (uiTextField({rect.x + 10.0f, rowB + 30.0f, rect.width - 20.0f, 22.0f},
+                "workstation-object-instruction-text",
+                editor,
+                selectedInstruction.text,
+                committedText,
+                64))
+        {
+            edited.text = committedText;
+            if (commitObjectInstruction(edited, "Editor: changed object instruction target text")) return;
+        }
+        return;
+    }
     if (editor.selectionKind == pf::FighterEditorSelectionKind::ObjectCallback) {
         DrawText("Object Callback", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
         if (session.package.objects.empty()) {
@@ -12091,6 +12206,21 @@ static std::string editorContextDetail(
         }
         return "script none";
     case pf::FighterEditorSelectionKind::Instruction:
+        if (editor.workspace == pf::EditorWorkspace::Assets &&
+            editor.selectedObjectDef >= 0 &&
+            editor.selectedObjectDef < static_cast<int>(session.package.objects.size()))
+        {
+            const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+            if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(object.packageScripts.size())) {
+                const pf::PackageScript& script = object.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+                if (editor.selectedPackageInstruction >= 0 && editor.selectedPackageInstruction < static_cast<int>(script.instructions.size())) {
+                    return "object instruction #" + std::to_string(editor.selectedPackageInstruction) + " " +
+                        packageInstructionLabel(script.instructions[static_cast<size_t>(editor.selectedPackageInstruction)]) +
+                        " object=" + object.name + " script=" + script.name;
+                }
+            }
+            return "object instruction none";
+        }
         if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(def.packageScripts.size())) {
             const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
             if (editor.selectedPackageInstruction >= 0 && editor.selectedPackageInstruction < static_cast<int>(script.instructions.size())) {
