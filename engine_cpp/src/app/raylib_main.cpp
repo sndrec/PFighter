@@ -7561,6 +7561,38 @@ static const char* packageScriptGraphNodeKindName(pf::PackageScriptGraphNodeKind
     return "Node";
 }
 
+static const char* stateCallbackSlotName(pf::FighterEditorStateCallbackSlot slot) {
+    switch (slot) {
+    case pf::FighterEditorStateCallbackSlot::Enter: return "enter";
+    case pf::FighterEditorStateCallbackSlot::Frame: return "frame";
+    case pf::FighterEditorStateCallbackSlot::Landing: return "landing";
+    case pf::FighterEditorStateCallbackSlot::Airborne: return "airborne";
+    }
+    return "callback";
+}
+
+static const std::vector<pf::FunctionCall>& stateCallbackCalls(
+    const pf::FighterState& state,
+    pf::FighterEditorStateCallbackSlot slot)
+{
+    switch (slot) {
+    case pf::FighterEditorStateCallbackSlot::Enter: return state.onEnter;
+    case pf::FighterEditorStateCallbackSlot::Frame: return state.onFrame;
+    case pf::FighterEditorStateCallbackSlot::Landing: return state.onLanding;
+    case pf::FighterEditorStateCallbackSlot::Airborne: return state.onAirborne;
+    }
+    return state.onFrame;
+}
+
+static std::string packageScriptNameFromCallback(const pf::FunctionCall& call) {
+    constexpr const char* prefix = "script:";
+    constexpr size_t prefixLength = 7;
+    if (call.name.rfind(prefix, 0) == 0) {
+        return call.name.substr(prefixLength);
+    }
+    return {};
+}
+
 static const char* editorStateGroupFilterName(pf::FighterEditorStateGroupFilter filter) {
     switch (filter) {
     case pf::FighterEditorStateGroupFilter::All: return "All";
@@ -8353,6 +8385,8 @@ static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marke
     case pf::FighterEditorTimelineMarkerKind::Hitbox:
     case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
         return 1;
+    case pf::FighterEditorTimelineMarkerKind::Callback:
+        return 3;
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
     case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
@@ -8377,6 +8411,8 @@ static Color editorTimelineMarkerColor(const pf::FighterEditorTimelineMarker& ma
         return RED;
     case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
         return PURPLE;
+    case pf::FighterEditorTimelineMarkerKind::Callback:
+        return VIOLET;
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
         return LIME;
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
@@ -8403,6 +8439,8 @@ static std::string editorTimelineMarkerLabel(const pf::FighterEditorTimelineMark
         return "hitbox";
     case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
         return "throw hitbox";
+    case pf::FighterEditorTimelineMarkerKind::Callback:
+        return std::string(stateCallbackSlotName(marker.callbackSlot)) + " callback";
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
         return "interruptible";
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
@@ -8616,11 +8654,25 @@ static void drawEditorTimelineWorkstation(
             const int markerFrame = std::clamp(marker.frame, 0, frameCount);
             const float x = ruler.x + ruler.width * static_cast<float>(markerFrame) / static_cast<float>(frameCount);
             const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
+            bool selectedCallbackScript = false;
+            if (marker.kind == pf::FighterEditorTimelineMarkerKind::Callback &&
+                editor.selectionKind == pf::FighterEditorSelectionKind::Script &&
+                editor.selectedPackageScript >= 0 &&
+                editor.selectedPackageScript < static_cast<int>(def.packageScripts.size()))
+            {
+                const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, marker.callbackSlot);
+                selectedCallbackScript =
+                    marker.sourceIndex >= 0 &&
+                    marker.sourceIndex < static_cast<int>(calls.size()) &&
+                    packageScriptNameFromCallback(calls[static_cast<size_t>(marker.sourceIndex)]) ==
+                        def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+            }
             const bool selected =
                 ((marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable ||
                      marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable) &&
                     editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt &&
                     marker.sourceIndex == editor.selectedInterrupt) ||
+                selectedCallbackScript ||
                 ((marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction ||
                      marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox ||
                      marker.kind == pf::FighterEditorTimelineMarkerKind::ThrowHitbox ||
@@ -8645,7 +8697,14 @@ static void drawEditorTimelineWorkstation(
     DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(rect.height - 32.0f), BLUE);
     if (hoveredMarker >= 0 && hoveredMarker < static_cast<int>(timeline.markers.size())) {
         const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(hoveredMarker)];
-        DrawText((editorTimelineMarkerLabel(marker) + " @ frame " + std::to_string(marker.frame)).c_str(),
+        std::string markerText = editorTimelineMarkerLabel(marker) + " @ frame " + std::to_string(marker.frame);
+        if (marker.kind == pf::FighterEditorTimelineMarkerKind::Callback) {
+            const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, marker.callbackSlot);
+            if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(calls.size())) {
+                markerText += " " + calls[static_cast<size_t>(marker.sourceIndex)].name;
+            }
+        }
+        DrawText(markerText.c_str(),
             static_cast<int>(ruler.x),
             static_cast<int>(rect.y + rect.height - 24.0f),
             11,
@@ -8704,6 +8763,25 @@ static void drawEditorTimelineWorkstation(
                         editor.selectedInterrupt = marker.sourceIndex;
                         session.selectedInterrupt = marker.sourceIndex;
                         editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+                    }
+                } else if (marker.kind == pf::FighterEditorTimelineMarkerKind::Callback) {
+                    const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, marker.callbackSlot);
+                    if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(calls.size())) {
+                        const std::string scriptName = packageScriptNameFromCallback(calls[static_cast<size_t>(marker.sourceIndex)]);
+                        const auto scriptIt = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
+                            return script.name == scriptName;
+                        });
+                        if (scriptIt != def.packageScripts.end()) {
+                            editor.selectedPackageScript = static_cast<int>(std::distance(def.packageScripts.begin(), scriptIt));
+                            editor.selectedPackageInstruction = 0;
+                            editor.selectedPackageGraphNode = 0;
+                            session.selectedPackageScript = editor.selectedPackageScript;
+                            session.selectedPackageInstruction = 0;
+                            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+                        } else {
+                            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+                            editor.status = "Editor: callback marker references non-package callback " + calls[static_cast<size_t>(marker.sourceIndex)].name;
+                        }
                     }
                 } else if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(state.action.size())) {
                     editor.selectedSubaction = marker.sourceIndex;

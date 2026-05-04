@@ -6484,6 +6484,12 @@ int main(int argc, char** argv) {
                 marker.frame == 1;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::Callback &&
+                marker.callbackSlot == pf::FighterEditorStateCallbackSlot::Enter &&
+                marker.sourceIndex == 0 &&
+                marker.frame == 0;
+        }) &&
+        std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
             return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox && marker.frame == 3;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {

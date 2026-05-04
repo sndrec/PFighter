@@ -344,7 +344,8 @@ void appendTimelineMarker(
     int frame,
     int sourceIndex,
     SubactionType subactionType = SubactionType::SyncTimer,
-    InterruptCondition interruptCondition = InterruptCondition::JumpPressed)
+    InterruptCondition interruptCondition = InterruptCondition::JumpPressed,
+    FighterEditorStateCallbackSlot callbackSlot = FighterEditorStateCallbackSlot::Frame)
 {
     FighterEditorTimelineMarker marker;
     marker.kind = kind;
@@ -352,6 +353,7 @@ void appendTimelineMarker(
     marker.sourceIndex = sourceIndex;
     marker.subactionType = subactionType;
     marker.interruptCondition = interruptCondition;
+    marker.callbackSlot = callbackSlot;
     timeline.markers.push_back(marker);
 }
 
@@ -2599,6 +2601,22 @@ bool buildEditorSessionStateTimeline(
             state->initialInterruptibleFrame,
             -1);
     }
+    auto appendCallbackMarkers = [&](const std::vector<FunctionCall>& calls, FighterEditorStateCallbackSlot slot, int frame) {
+        for (size_t i = 0; i < calls.size(); ++i) {
+            appendTimelineMarker(
+                timeline,
+                FighterEditorTimelineMarkerKind::Callback,
+                frame,
+                static_cast<int>(i),
+                SubactionType::CallScript,
+                InterruptCondition::JumpPressed,
+                slot);
+        }
+    };
+    appendCallbackMarkers(state->onEnter, FighterEditorStateCallbackSlot::Enter, 0);
+    appendCallbackMarkers(state->onFrame, FighterEditorStateCallbackSlot::Frame, 0);
+    appendCallbackMarkers(state->onLanding, FighterEditorStateCallbackSlot::Landing, timeline.frameCount);
+    appendCallbackMarkers(state->onAirborne, FighterEditorStateCallbackSlot::Airborne, timeline.frameCount);
     for (size_t i = 0; i < state->interrupts.size(); ++i) {
         const InterruptRule& interrupt = state->interrupts[i];
         appendTimelineMarker(
