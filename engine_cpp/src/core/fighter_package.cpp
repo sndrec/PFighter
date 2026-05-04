@@ -13,7 +13,7 @@
 namespace pf {
 namespace {
 
-constexpr uint32_t kPackageVersion = 1;
+constexpr uint32_t kPackageVersion = 2;
 constexpr uint32_t kMaxFighters = 256;
 constexpr uint32_t kMaxAssets = 1024;
 constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
@@ -2915,6 +2915,7 @@ void writeFighterDefinition(PackageWriter& writer, const FighterPackage& package
     writeFighterBoneTable(writer, fighter.fighterBones);
     writeI32Array(writer, fighter.commonBoneLookup);
     writeI32Array(writer, fighter.environmentCollisionBones);
+    writer.writeI32(fighter.environmentCollisionMultiplier);
     writer.writeBool(fighter.hasShieldPose);
     writeAnimationPose(writer, fighter.shieldPose);
     writeVector(writer, fighter.authoredSkeleton, [&](const AnimationJoint& joint) {
@@ -2953,6 +2954,7 @@ FighterDefinition readFighterDefinition(PackageReader& reader) {
     fighter.fighterBones = readFighterBoneTable(reader);
     fighter.commonBoneLookup = readI32Array<54>(reader);
     fighter.environmentCollisionBones = readI32Array<6>(reader);
+    fighter.environmentCollisionMultiplier = reader.readI32();
     fighter.hasShieldPose = reader.readBool();
     fighter.shieldPose = readAnimationPose(reader);
     fighter.authoredSkeleton = readVector<AnimationJoint>(reader, kMaxAnimationJoints, "authored skeleton joint", [&]() {

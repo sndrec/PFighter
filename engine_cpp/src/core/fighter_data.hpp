@@ -814,6 +814,7 @@ struct FighterDefinition {
         return lookup;
     }();
     std::array<int, 6> environmentCollisionBones{-1, -1, -1, -1, -1, -1};
+    Fix environmentCollisionMultiplier = 0;
     bool hasShieldPose = false;
     AnimationPose shieldPose;
     std::vector<AnimationJoint> authoredSkeleton;

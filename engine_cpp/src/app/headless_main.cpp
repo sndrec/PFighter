@@ -5502,7 +5502,7 @@ int main(int argc, char** argv) {
     pf::FighterPackageDescriptor packageDescriptor;
     const bool packageDescriptorOk = pf::describeFighterPackage(sourcePackage, packageDescriptor, packageBytes, &packageError) &&
         packageDescriptor.name == sourcePackage.name &&
-        packageDescriptor.version == 1 &&
+        packageDescriptor.version == 2 &&
         packageDescriptor.byteSize == packageBytes.size() &&
         packageDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
@@ -5566,7 +5566,7 @@ int main(int argc, char** argv) {
     invalidWritePackage.fighters[0].packageScripts[0].instructions[0].op = static_cast<pf::PackageScriptOp>(255);
     const bool invalidPackageWriteRejected = pf::writeFighterPackage(invalidWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidVersionWritePackage = sourcePackage;
-    invalidVersionWritePackage.version = 2;
+    invalidVersionWritePackage.version = 1;
     const bool invalidPackageVersionWriteRejected = pf::writeFighterPackage(invalidVersionWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidAnimationWritePackage = sourcePackage;
     invalidAnimationWritePackage.fighters[0].authoredSkeleton = {

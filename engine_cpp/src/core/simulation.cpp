@@ -877,6 +877,7 @@ static FighterDefinition makeImportedFighterDefinition(
     def.properties.shieldSizeScalesWithHealth = spec.shieldSizeScalesWithHealth;
     if (def.hsdAsset->hasEnvironmentCollision) {
         def.environmentCollisionBones = def.hsdAsset->environmentCollision.bones;
+        def.environmentCollisionMultiplier = def.hsdAsset->environmentCollision.multiplier;
         def.properties.ledgeSnapX = def.hsdAsset->environmentCollision.ledgeGrabWidth;
         def.properties.ledgeSnapY = def.hsdAsset->environmentCollision.ledgeGrabYOffset;
         def.properties.ledgeSnapHeight = def.hsdAsset->environmentCollision.ledgeGrabHeight;
@@ -1711,6 +1712,7 @@ bool makeNativePackageFighterDefinition(const FighterDefinition& source, Fighter
     }
     if (source.hsdAsset->hasEnvironmentCollision) {
         out.environmentCollisionBones = source.hsdAsset->environmentCollision.bones;
+        out.environmentCollisionMultiplier = source.hsdAsset->environmentCollision.multiplier;
         out.authoredEcb.enabled = true;
     }
     for (FighterState& state : out.states) {
@@ -2323,13 +2325,12 @@ static void refreshEcbMetadata(Ecb& ecb, const FighterRuntime& fighter) {
     ecb.floorIndex = fighter.groundSegment;
 }
 
-static bool calculateHsdDesiredEcb(const FighterDefinition& def, FighterRuntime& fighter, Ecb& out) {
-    if (!def.hsdAsset || !def.hsdAsset->hasEnvironmentCollision || fighter.hsdJointWorldPositions.empty()) {
+static bool calculateBoneDesiredEcb(const FighterDefinition& def, FighterRuntime& fighter, Ecb& out) {
+    if (fighter.hsdJointWorldPositions.empty()) {
         return false;
     }
 
-    const HsdEnvironmentCollision& source = def.hsdAsset->environmentCollision;
-    for (int bone : source.bones) {
+    for (int bone : def.environmentCollisionBones) {
         if (bone < 0 || static_cast<size_t>(bone) >= fighter.hsdJointWorldPositions.size()) {
             return false;
         }
@@ -2338,13 +2339,13 @@ static bool calculateHsdDesiredEcb(const FighterDefinition& def, FighterRuntime&
     const Vec3 topN = fighter.hsdJointWorldPositions.size() > 1
         ? fighter.hsdJointWorldPositions[1]
         : Vec3{fighter.position.x, fighter.position.y, 0};
-    const Vec3 first = fighter.hsdJointWorldPositions[static_cast<size_t>(source.bones[0])];
+    const Vec3 first = fighter.hsdJointWorldPositions[static_cast<size_t>(def.environmentCollisionBones[0])];
     Fix minHorizontal = first.z;
     Fix maxHorizontal = first.z;
     Fix minY = first.y;
     Fix maxY = first.y;
-    for (size_t i = 1; i < source.bones.size(); ++i) {
-        const Vec3 joint = fighter.hsdJointWorldPositions[static_cast<size_t>(source.bones[i])];
+    for (size_t i = 1; i < def.environmentCollisionBones.size(); ++i) {
+        const Vec3 joint = fighter.hsdJointWorldPositions[static_cast<size_t>(def.environmentCollisionBones[i])];
         minHorizontal = std::min(minHorizontal, joint.z);
         maxHorizontal = std::max(maxHorizontal, joint.z);
         minY = std::min(minY, joint.y);
@@ -2354,7 +2355,7 @@ static bool calculateHsdDesiredEcb(const FighterDefinition& def, FighterRuntime&
     const Fix halfWidth = fxMul(fxAbs(maxHorizontal - minHorizontal), fxFromFloat(0.5f));
     const Fix bottom = (fighter.grounded ? topN.y : minY) - fighter.position.y;
     const Fix top = maxY - fighter.position.y;
-    const Fix sideY = source.multiplier + fxMul(bottom + top, fxFromFloat(0.5f));
+    const Fix sideY = def.environmentCollisionMultiplier + fxMul(bottom + top, fxFromFloat(0.5f));
     const Fix centerX = fighter.facing * topN.z;
     out.points[0] = {centerX - halfWidth, sideY};
     out.points[1] = {centerX, top};
@@ -2377,7 +2378,7 @@ static bool calculateAuthoredDesiredEcb(const FighterDefinition& def, FighterRun
 
 static Ecb calculateDesiredEcb(const FighterDefinition& def, FighterRuntime& fighter) {
     Ecb desired;
-    if (calculateHsdDesiredEcb(def, fighter, desired)) {
+    if (calculateBoneDesiredEcb(def, fighter, desired)) {
         return desired;
     }
     if (calculateAuthoredDesiredEcb(def, fighter, desired)) {
