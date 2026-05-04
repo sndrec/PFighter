@@ -76,6 +76,7 @@ enum class FighterEditorSelectionKind : uint8_t {
     State,
     Subaction,
     Interrupt,
+    Callback,
     Script,
     Instruction,
     Variable,
@@ -119,6 +120,8 @@ struct FighterEditor {
     int selectedState = 0;
     int selectedSubaction = 0;
     int selectedInterrupt = 0;
+    FighterEditorStateCallbackSlot selectedStateCallbackSlot = FighterEditorStateCallbackSlot::Enter;
+    int selectedStateCallback = 0;
     int selectedPackageVariable = 0;
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;

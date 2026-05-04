@@ -7542,6 +7542,7 @@ static const char* editorSelectionKindName(pf::FighterEditorSelectionKind kind) 
     case pf::FighterEditorSelectionKind::State: return "State";
     case pf::FighterEditorSelectionKind::Subaction: return "Timeline subaction";
     case pf::FighterEditorSelectionKind::Interrupt: return "Interrupt window";
+    case pf::FighterEditorSelectionKind::Callback: return "State callback";
     case pf::FighterEditorSelectionKind::Script: return "Script";
     case pf::FighterEditorSelectionKind::Instruction: return "Graph instruction";
     case pf::FighterEditorSelectionKind::Variable: return "Package variable";
@@ -7582,6 +7583,13 @@ static const std::vector<pf::FunctionCall>& stateCallbackCalls(
     case pf::FighterEditorStateCallbackSlot::Airborne: return state.onAirborne;
     }
     return state.onFrame;
+}
+
+static std::vector<pf::FunctionCall> editedStateCallbackCalls(
+    const pf::FighterState& state,
+    pf::FighterEditorStateCallbackSlot slot)
+{
+    return stateCallbackCalls(state, slot);
 }
 
 static std::string packageScriptNameFromCallback(const pf::FunctionCall& call) {
@@ -8672,16 +8680,11 @@ static void drawEditorTimelineWorkstation(
             const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
             bool selectedCallbackScript = false;
             if (marker.kind == pf::FighterEditorTimelineMarkerKind::Callback &&
-                editor.selectionKind == pf::FighterEditorSelectionKind::Script &&
-                editor.selectedPackageScript >= 0 &&
-                editor.selectedPackageScript < static_cast<int>(def.packageScripts.size()))
+                editor.selectionKind == pf::FighterEditorSelectionKind::Callback)
             {
-                const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, marker.callbackSlot);
                 selectedCallbackScript =
-                    marker.sourceIndex >= 0 &&
-                    marker.sourceIndex < static_cast<int>(calls.size()) &&
-                    packageScriptNameFromCallback(calls[static_cast<size_t>(marker.sourceIndex)]) ==
-                        def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+                    marker.callbackSlot == editor.selectedStateCallbackSlot &&
+                    marker.sourceIndex == editor.selectedStateCallback;
             }
             const bool selected =
                 ((marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable ||
@@ -8783,6 +8786,9 @@ static void drawEditorTimelineWorkstation(
                 } else if (marker.kind == pf::FighterEditorTimelineMarkerKind::Callback) {
                     const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, marker.callbackSlot);
                     if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(calls.size())) {
+                        editor.selectedStateCallbackSlot = marker.callbackSlot;
+                        editor.selectedStateCallback = marker.sourceIndex;
+                        editor.selectionKind = pf::FighterEditorSelectionKind::Callback;
                         const std::string scriptName = packageScriptNameFromCallback(calls[static_cast<size_t>(marker.sourceIndex)]);
                         const auto scriptIt = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
                             return script.name == scriptName;
@@ -8793,9 +8799,7 @@ static void drawEditorTimelineWorkstation(
                             editor.selectedPackageGraphNode = 0;
                             session.selectedPackageScript = editor.selectedPackageScript;
                             session.selectedPackageInstruction = 0;
-                            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
                         } else {
-                            editor.selectionKind = pf::FighterEditorSelectionKind::State;
                             editor.status = "Editor: callback marker references non-package callback " + calls[static_cast<size_t>(marker.sourceIndex)].name;
                         }
                     }
@@ -11099,6 +11103,65 @@ static void drawEditorInspectorWorkstation(
             Fade(RAYWHITE, 0.62f));
         return;
     }
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Callback) {
+        DrawText("State Callback", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
+        const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, editor.selectedStateCallbackSlot);
+        DrawText(("Slot " + std::string(stateCallbackSlotName(editor.selectedStateCallbackSlot)) +
+                  "  count=" + std::to_string(calls.size())).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 62.0f),
+            12,
+            RAYWHITE);
+        if (calls.empty()) {
+            DrawText("No callbacks in this slot", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 88.0f), 11, Fade(RAYWHITE, 0.62f));
+            return;
+        }
+        editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, static_cast<int>(calls.size()) - 1);
+        const pf::FunctionCall& call = calls[static_cast<size_t>(editor.selectedStateCallback)];
+        DrawText(clippedText("#" + std::to_string(editor.selectedStateCallback) + "  " + call.name, 12, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 86.0f),
+            12,
+            Fade(RAYWHITE, 0.78f));
+        auto commitCallbacks = [&](std::vector<pf::FunctionCall> edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionStateCallbacks(session, session.selectedState, editor.selectedStateCallbackSlot, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: callback edit failed: " + error;
+            return false;
+        };
+        const float callbackY = rect.y + 112.0f;
+        if (uiButton({rect.x + 10.0f, callbackY, 54.0f, 22.0f}, "Prev")) {
+            editor.selectedStateCallback = wrappedIndex(editor.selectedStateCallback - 1, static_cast<int>(calls.size()));
+            return;
+        }
+        if (uiButton({rect.x + 70.0f, callbackY, 54.0f, 22.0f}, "Next")) {
+            editor.selectedStateCallback = wrappedIndex(editor.selectedStateCallback + 1, static_cast<int>(calls.size()));
+            return;
+        }
+        if (uiButton({rect.x + 130.0f, callbackY, 76.0f, 22.0f}, "UseScript") && !def.packageScripts.empty()) {
+            std::vector<pf::FunctionCall> edited = editedStateCallbackCalls(state, editor.selectedStateCallbackSlot);
+            edited[static_cast<size_t>(editor.selectedStateCallback)].name =
+                "script:" + packageScriptTargetName(def.packageScripts, editor.selectedPackageScript);
+            if (commitCallbacks(edited, "Editor: retargeted state callback")) return;
+        }
+        if (uiButton({rect.x + 212.0f, callbackY, 70.0f, 22.0f}, "Remove")) {
+            std::vector<pf::FunctionCall> edited = editedStateCallbackCalls(state, editor.selectedStateCallbackSlot);
+            edited.erase(edited.begin() + editor.selectedStateCallback);
+            editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, std::max(0, static_cast<int>(edited.size()) - 1));
+            if (commitCallbacks(edited, "Editor: removed state callback")) return;
+        }
+        if (!def.packageScripts.empty()) {
+            DrawText(clippedText("Selected script: " + def.packageScripts[static_cast<size_t>(std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1))].name, 10, rect.width - 20.0f).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(callbackY + 32.0f),
+                10,
+                Fade(RAYWHITE, 0.64f));
+        }
+        return;
+    }
     if (editor.workspace == pf::EditorWorkspace::Logic && !def.packageScripts.empty()) {
         editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
         session.selectedPackageScript = editor.selectedPackageScript;
@@ -11770,6 +11833,16 @@ static std::string editorContextDetail(
                 " disable=" + std::to_string(interrupt.disableFrame);
         }
         return "interrupt none";
+    case pf::FighterEditorSelectionKind::Callback:
+        {
+            const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, editor.selectedStateCallbackSlot);
+            if (editor.selectedStateCallback >= 0 && editor.selectedStateCallback < static_cast<int>(calls.size())) {
+                return std::string("callback ") + stateCallbackSlotName(editor.selectedStateCallbackSlot) +
+                    " #" + std::to_string(editor.selectedStateCallback) +
+                    " " + calls[static_cast<size_t>(editor.selectedStateCallback)].name;
+            }
+        }
+        return std::string("callback ") + stateCallbackSlotName(editor.selectedStateCallbackSlot) + " none";
     case pf::FighterEditorSelectionKind::Script:
         if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(def.packageScripts.size())) {
             const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
