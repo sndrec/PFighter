@@ -8348,17 +8348,41 @@ static void drawEditorStateBrowserWorkstation(
     const float stateListY = groupY + 30.0f;
     const int rowCount = std::max(1, static_cast<int>((rect.y + rect.height - stateListY - 34.0f) / 43.0f));
     int selectedVisible = 0;
+    bool selectedStateVisible = false;
     for (int i = 0; i < static_cast<int>(visibleStates.size()); ++i) {
         if (visibleStates[static_cast<size_t>(i)] == editor.selectedState) {
             selectedVisible = i;
+            selectedStateVisible = true;
             break;
         }
     }
+    if (!visibleStates.empty() && !selectedStateVisible) {
+        const pf::FighterState& firstState = def.states[static_cast<size_t>(visibleStates.front())];
+        DrawText(clippedText("Current state hidden by filter", 10, rect.width - 100.0f).c_str(),
+            static_cast<int>(rect.x + 12.0f),
+            static_cast<int>(stateListY),
+            10,
+            Fade(YELLOW, 0.82f));
+        if (uiButton({rect.x + rect.width - 88.0f, stateListY - 3.0f, 78.0f, 22.0f}, "Select")) {
+            editor.selectedState = visibleStates.front();
+            editor.selectedSubaction = 0;
+            editor.selectedInterrupt = 0;
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+            session.selectedState = editor.selectedState;
+            session.selectedSubaction = 0;
+            session.selectedInterrupt = 0;
+            session.clamp();
+            previewEditorSelectedState(world, editor, def);
+            editor.status = "Editor: selected filtered state " + firstState.name;
+            return;
+        }
+    }
     const int start = visibleListStart(selectedVisible, static_cast<int>(visibleStates.size()), rowCount);
+    const float filteredOffsetY = (!visibleStates.empty() && !selectedStateVisible) ? 24.0f : 0.0f;
     for (int row = 0; row < std::min(rowCount, static_cast<int>(visibleStates.size())); ++row) {
         const int stateIndex = visibleStates[static_cast<size_t>(start + row)];
         const pf::FighterState& state = def.states[static_cast<size_t>(stateIndex)];
-        const Rectangle rowRect{rect.x + 10.0f, stateListY + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
+        const Rectangle rowRect{rect.x + 10.0f, stateListY + filteredOffsetY + 43.0f * static_cast<float>(row), rect.width - 20.0f, 36.0f};
         const bool active = stateIndex == editor.selectedState;
         drawWorkstationRow(rowRect, std::to_string(stateIndex) + "  " + state.name, active, SKYBLUE);
         DrawText((std::string(editorStateGroupFilterName(classifyEditorStateGroup(state))) + "  " +
@@ -8377,6 +8401,7 @@ static void drawEditorStateBrowserWorkstation(
             session.selectedInterrupt = 0;
             session.clamp();
             previewEditorSelectedState(world, editor, def);
+            editor.status = "Editor: selected state " + state.name + " from browser";
         }
     }
     if (visibleStates.empty()) {
