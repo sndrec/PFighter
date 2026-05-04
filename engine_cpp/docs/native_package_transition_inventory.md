@@ -17,6 +17,10 @@ package load/save should operate on native authored data only.
 - `engine_cpp/src/core/hsd_action_import.hpp` is the explicit import-facing API
   for converting HSD action scripts into native `Subaction` arrays. The general
   `core/action.hpp`/`action.cpp` pair now exposes only native action unfolding.
+- `engine_cpp/src/core/melee_fighter_converter.hpp` is the explicit API used by
+  `pfighter_package_converter.exe` for one-time Melee roster conversion. Normal
+  simulation consumers no longer include these conversion entry points through
+  `simulation.hpp`.
 - `FighterDefinition` already has native editable fields for properties, shield,
   ECB, authored skeleton, authored clips, authored mesh, package scripts,
   authored hurtboxes, states, interrupts, callbacks, and subactions.

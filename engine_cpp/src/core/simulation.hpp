@@ -504,15 +504,6 @@ bool makeNativePackageFighterDefinition(
     const FighterDefinition& source,
     FighterDefinition& out,
     std::string* error = nullptr);
-std::vector<std::string> meleeTrainingRosterFighterNames();
-bool makeConvertedMeleeFighterPackage(
-    const std::string& fighterName,
-    FighterPackage& package,
-    std::string* error = nullptr);
-bool saveConvertedMeleeFighterPackage(
-    const std::string& fighterName,
-    const std::string& path,
-    std::string* error = nullptr);
 FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef, const std::string& packageName = {});
 bool installFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef = nullptr, std::string* error = nullptr);
 bool installFighterPackageBytes(
