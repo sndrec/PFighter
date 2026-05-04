@@ -7485,6 +7485,52 @@ int main(int argc, char** argv) {
             nativeRosterProvenanceMesh.batches.begin(),
             nativeRosterProvenanceMesh.batches.end(),
             [](const pf::FighterMeshBatch& batch) { return batch.importSourceMaterialIndex >= 0; });
+    int nativeRosterSelfContainedCount = 0;
+    int nativeRosterImportSourceIdCount = 0;
+    for (const pf::FighterDefinition& fighter : world.fighterDefs) {
+        const std::vector<pf::AnimationClip>& clips = pf::authoredAnimationClips(fighter);
+        const pf::FighterMesh& mesh = pf::authoredFighterMesh(fighter);
+        const bool nativeSelfContained =
+            !fighter.name.empty() &&
+            !fighter.importProvenance.sourceFileName.empty() &&
+            !fighter.importProvenance.sourceAssetName.empty() &&
+            !fighter.authoredSkeleton.empty() &&
+            !clips.empty() &&
+            !fighter.states.empty() &&
+            !fighter.hurtboxes.empty() &&
+            (!mesh.batches.empty() || !mesh.textures.empty());
+        if (nativeSelfContained) {
+            ++nativeRosterSelfContainedCount;
+        }
+
+        const bool hasSourceIds =
+            std::any_of(
+                fighter.authoredSkeleton.begin(),
+                fighter.authoredSkeleton.end(),
+                [](const pf::AnimationJoint& joint) { return joint.importSourceJointIndex >= 0; }) &&
+            std::any_of(
+                clips.begin(),
+                clips.end(),
+                [](const pf::AnimationClip& clip) { return clip.importSourceClipIndex >= 0; }) &&
+            (mesh.textures.empty() ||
+             std::any_of(
+                mesh.textures.begin(),
+                mesh.textures.end(),
+                [](const pf::FighterMeshTexture& texture) { return texture.importSourceTextureIndex >= 0; })) &&
+            std::any_of(
+                mesh.batches.begin(),
+                mesh.batches.end(),
+                [](const pf::FighterMeshBatch& batch) { return batch.importSourceMaterialIndex >= 0; });
+        if (hasSourceIds) {
+            ++nativeRosterImportSourceIdCount;
+        }
+    }
+    const bool nativeRosterSelfContainedOk =
+        nativeRosterSelfContainedCount == static_cast<int>(world.fighterDefs.size()) &&
+        nativeRosterSelfContainedCount == 27;
+    const bool nativeRosterImportSourceIdsAllOk =
+        nativeRosterImportSourceIdCount == static_cast<int>(world.fighterDefs.size()) &&
+        nativeRosterImportSourceIdCount == 27;
     pf::FighterEditorSession nativePackageEditorSession;
     pf::FighterEditorStateTimeline nativePackageAttackHi3Timeline;
     const bool nativePackageAttackHi3TimelineOk = packageNativeAssetOk &&
@@ -9135,6 +9181,10 @@ int main(int argc, char** argv) {
               << " fighter_package_native_asset_ok=" << packageNativeAssetOk
               << " fighter_package_import_provenance_ok=" << packageImportProvenanceOk
               << " fighter_roster_import_source_ids_ok=" << nativeRosterImportSourceIdsOk
+              << " fighter_roster_native_self_contained_count=" << nativeRosterSelfContainedCount
+              << " fighter_roster_native_self_contained_ok=" << nativeRosterSelfContainedOk
+              << " fighter_roster_import_source_ids_count=" << nativeRosterImportSourceIdCount
+              << " fighter_roster_import_source_ids_all_ok=" << nativeRosterImportSourceIdsAllOk
               << " fighter_package_attackhi3_native_timeline_ok=" << nativePackageAttackHi3TimelineOk
               << " fighter_package_hsd_dependent_rejected=" << hsdDependentPackageRejected
               << " fighter_package_parity_ok=" << packageParityOk
