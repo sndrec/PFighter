@@ -7388,18 +7388,17 @@ static void drawEditorTestLabWorkspace(pf::World& world, pf::FighterEditor& edit
 }
 
 static void previewEditorSelectedState(pf::World& world, pf::FighterEditor& editor, const pf::FighterDefinition& def) {
-    if (world.fighters.empty() || def.states.empty()) {
+    (void)world;
+    if (def.states.empty()) {
         editor.status = "Editor: no state available to preview";
         return;
     }
-    editor.selectedFighter = std::clamp(editor.selectedFighter, 0, static_cast<int>(world.fighters.size()) - 1);
-    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
     editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
     const pf::FighterState& selectedState = def.states[static_cast<size_t>(editor.selectedState)];
-    pf::changeFighterState(world, fighter, selectedState.name, 0, pf::kDisableAnimationBlendFrames);
-    editor.animationPreviewActive = false;
+    editor.previewCacheFrame = 0;
+    editor.previewCacheDirty = true;
     editor.paused = true;
-    editor.status = "Editor: previewing selected state " + selectedState.name;
+    editor.status = "Editor: queued savestate preview for " + selectedState.name;
 }
 
 static void drawEditorStateBrowser(pf::World& world, const pf::FighterDefinition& def, pf::FighterEditor& editor) {
@@ -7700,85 +7699,221 @@ static void drawWorkstationRow(Rectangle rect, const std::string& label, bool ac
     DrawText(clippedText(label, 12, rect.width - 10.0f).c_str(), static_cast<int>(rect.x + 6.0f), static_cast<int>(rect.y + 7.0f), 12, RAYWHITE);
 }
 
-static void scrubEditorSelectedState(pf::World& world, pf::FighterEditor& editor, int frame) {
+static pf::StageDefinition makeEditorPreviewStage(bool airborne) {
+    pf::StageDefinition stage;
+    stage.name = airborne ? "Editor Air Preview" : "Editor Flat Preview";
+    stage.blastMin = {-pf::fx(250), -pf::fx(250)};
+    stage.blastMax = {pf::fx(250), pf::fx(250)};
+    if (!airborne) {
+        pf::StageSegment floor;
+        floor.start = {-pf::fx(120), 0};
+        floor.end = {pf::fx(120), 0};
+        floor.friction = pf::fx(1);
+        floor.type = pf::SegmentType::Solid;
+        floor.lineKind = pf::SegmentLineKind::Floor;
+        stage.segments.push_back(floor);
+    }
+    return stage;
+}
+
+static bool editorPreviewStateStartsAirborne(const pf::FighterState& state) {
+    const pf::FighterEditorStateGroupFilter group = classifyEditorStateGroup(state);
+    if (group == pf::FighterEditorStateGroupFilter::Air || group == pf::FighterEditorStateGroupFilter::Ledge) {
+        return true;
+    }
+    const std::string name = lowerAscii(state.name + " " + state.animation);
+    return stateNameContainsAny(name, {"air", "fall", "jump", "cliff", "ledge"});
+}
+
+static int editorFindRuntimeFighterDef(const pf::World& world, const std::string& name, int fallback) {
+    if (!name.empty()) {
+        const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& def) {
+            return def.name == name;
+        });
+        if (found != world.fighterDefs.end()) {
+            return static_cast<int>(std::distance(world.fighterDefs.begin(), found));
+        }
+    }
+    if (!world.fighterDefs.empty()) {
+        return std::clamp(fallback, 0, static_cast<int>(world.fighterDefs.size()) - 1);
+    }
+    return -1;
+}
+
+static int editorPreviewFrameCount(
+    const pf::FighterEditorSession& session,
+    const pf::FighterState& state)
+{
+    pf::FighterEditorStateTimeline timeline;
+    std::string timelineError;
+    if (pf::buildEditorSessionStateTimeline(session, session.selectedState, timeline, &timelineError)) {
+        return std::max(1, timeline.frameCount);
+    }
+    const pf::UnfoldedAction actionFrames = pf::unfoldAction(state.action);
+    return std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
+}
+
+static void applyEditorPreviewFixture(pf::World& world, bool airborne) {
     if (world.fighters.empty()) {
         return;
     }
-    editor.clampToWorld(world);
-    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
-    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
-        return;
-    }
-    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    if (def.states.empty()) {
-        return;
-    }
-    editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
-    const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
-    pf::changeFighterState(world, fighter, state.name, 0, pf::kDisableAnimationBlendFrames);
-    fighter.internalFrame = std::max(0, frame);
-    fighter.lastStateChangeFrame = world.frame - fighter.internalFrame;
-    fighter.animationFrame = pf::fx(fighter.internalFrame);
-    if (state.animationActionIndex >= 0) {
-        pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), state.animationActionIndex, fighter.animationFrame);
-    }
-    pf::calculateEcb(def, fighter, true);
-    editor.animationPreviewActive = true;
-    editor.paused = true;
-    editor.status = "Editor: scrubbed " + state.name + " to frame " + std::to_string(fighter.internalFrame);
-}
-
-static void prepareEditorEditPreview(pf::World& world, pf::FighterEditor& editor, bool advanceFrame) {
-    if (editor.testMode || world.fighters.empty()) {
-        return;
-    }
-    editor.clampToWorld(world);
-    pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
-    if (fighter.fighterDef < 0 || fighter.fighterDef >= static_cast<int>(world.fighterDefs.size())) {
-        return;
-    }
-    pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    if (def.states.empty()) {
-        return;
-    }
-
-    editor.selectedState = std::clamp(editor.selectedState, 0, static_cast<int>(def.states.size()) - 1);
-    const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
-    const bool stateChanged = fighter.state < 0 ||
-        fighter.state >= static_cast<int>(def.states.size()) ||
-        def.states[static_cast<size_t>(fighter.state)].name != state.name;
-    const int frameCount = std::max(1, state.animationLengthFrames);
-    int previewFrame = stateChanged ? 0 : std::clamp(fighter.internalFrame, 0, std::max(0, frameCount - 1));
-    if (advanceFrame && !stateChanged) {
-        if (previewFrame + 1 >= frameCount) {
-            previewFrame = state.loopAnimation ? 0 : frameCount - 1;
-            if (!state.loopAnimation) {
-                editor.paused = true;
-            }
-        } else {
-            ++previewFrame;
-        }
-    }
-    if (stateChanged) {
-        pf::changeFighterState(world, fighter, state.name, 0, pf::kDisableAnimationBlendFrames);
-    }
-
-    fighter.position = {};
-    fighter.previousPosition = {};
+    pf::FighterRuntime& fighter = world.fighters[0];
+    const pf::Vec2 position = airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{};
+    fighter.position = position;
+    fighter.previousPosition = position;
+    fighter.grounded = !airborne;
+    fighter.groundSegment = airborne || world.stage.segments.empty() ? -1 : 0;
+    fighter.groundNormal = {0, pf::fx(1)};
     fighter.facing = 1;
     fighter.hsdPoseFacing = 1;
     fighter.fighterVelocity = {};
     fighter.knockbackVelocity = {};
     fighter.groundVelocity = {};
     fighter.groundKnockbackVelocity = {};
-    fighter.internalFrame = previewFrame;
-    fighter.lastStateChangeFrame = world.frame - fighter.internalFrame;
-    fighter.animationFrame = pf::fx(fighter.internalFrame);
-    fighter.lastActionFrameExecuted = -1;
-    if (state.animationActionIndex >= 0) {
-        pf::previewFighterAnimation(world, static_cast<size_t>(editor.selectedFighter), state.animationActionIndex, fighter.animationFrame);
+    fighter.ecb.floorIndex = fighter.groundSegment;
+    fighter.previousEcb = fighter.ecb;
+}
+
+static bool restoreEditorPreviewFrame(pf::World& world, pf::FighterEditor& editor, int frame, std::string* error = nullptr) {
+    if (!editor.previewCacheValid || editor.previewCacheFrames.empty()) {
+        if (error) *error = "preview cache is empty";
+        return false;
+    }
+    const int maxFrame = static_cast<int>(editor.previewCacheFrames.size()) - 1;
+    editor.previewCacheFrame = std::clamp(frame, 0, maxFrame);
+    world.stage = editor.previewCacheStage;
+    pf::loadWorld(world, editor.previewCacheFrames[static_cast<size_t>(editor.previewCacheFrame)]);
+    editor.selectedFighter = 0;
+    editor.animationPreviewActive = true;
+    return true;
+}
+
+static bool rebuildEditorPreviewCache(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    int selectedFighterDef,
+    std::string* error = nullptr)
+{
+    if (editor.testMode) {
+        if (error) *error = "test mode owns the live world";
+        return false;
+    }
+    if (world.fighters.empty()) {
+        if (error) *error = "world has no preview fighter";
+        return false;
+    }
+    if (session.package.fighters.empty()) {
+        if (error) *error = "editor session has no package fighters";
+        return false;
+    }
+    const int packageFighter = std::clamp(session.selectedFighter, 0, static_cast<int>(session.package.fighters.size()) - 1);
+    const pf::FighterDefinition& def = session.package.fighters[static_cast<size_t>(packageFighter)];
+    if (def.states.empty()) {
+        if (error) *error = "selected package fighter has no states";
+        return false;
+    }
+    const int selectedState = std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    const pf::FighterState& state = def.states[static_cast<size_t>(selectedState)];
+    const int runtimeDef = editorFindRuntimeFighterDef(world, def.name, selectedFighterDef);
+    if (runtimeDef < 0) {
+        if (error) *error = "selected package fighter is not installed in the preview world";
+        return false;
+    }
+
+    const bool airborne = editorPreviewStateStartsAirborne(state);
+    pf::World previewWorld = world;
+    previewWorld.stage = makeEditorPreviewStage(airborne);
+    previewWorld.frame = 0;
+    previewWorld.objects.clear();
+    pf::resetTrainingFighter(previewWorld, 0, runtimeDef, airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{}, 1);
+    if (previewWorld.fighters.size() > 1) {
+        pf::resetTrainingFighter(previewWorld, 1, std::clamp(runtimeDef, 0, static_cast<int>(previewWorld.fighterDefs.size()) - 1), {pf::fx(40), airborne ? pf::fx(8) : 0}, -1);
+    }
+    applyEditorPreviewFixture(previewWorld, airborne);
+    pf::changeFighterState(previewWorld, previewWorld.fighters[0], state.name, 0, pf::kDisableAnimationBlendFrames);
+    applyEditorPreviewFixture(previewWorld, airborne);
+
+    const int authoredFrameCount = editorPreviewFrameCount(session, state);
+    constexpr int kMaxPreviewFrameCount = 600;
+    const int frameCount = std::clamp(authoredFrameCount, 1, kMaxPreviewFrameCount);
+    std::vector<pf::WorldSnapshot> frames;
+    frames.reserve(static_cast<size_t>(frameCount + 1));
+    std::vector<pf::InputFrame> inputs(previewWorld.fighters.size());
+    for (int frame = 0; frame <= frameCount; ++frame) {
+        pf::tickWorld(previewWorld, inputs);
+        frames.push_back(pf::saveWorld(previewWorld));
+    }
+
+    editor.previewCacheStage = previewWorld.stage;
+    editor.previewCacheFrames = std::move(frames);
+    editor.previewCacheFighter = packageFighter;
+    editor.previewCacheState = selectedState;
+    editor.previewCacheFrameCount = frameCount;
+    editor.previewCacheFrame = std::clamp(editor.previewCacheFrame, 0, frameCount);
+    editor.previewCacheValid = true;
+    editor.previewCacheDirty = false;
+    editor.previewCacheMessage = std::string(airborne ? "air fixture" : "flat fixture") +
+        ", " + std::to_string(frameCount + 1) + " cached frames" +
+        (authoredFrameCount > kMaxPreviewFrameCount ? " (capped)" : "");
+    if (!restoreEditorPreviewFrame(world, editor, editor.previewCacheFrame, error)) {
+        return false;
+    }
+    editor.selectedState = selectedState;
+    editor.status = "Editor: rebuilt savestate preview for " + state.name + " (" + editor.previewCacheMessage + ")";
+    return true;
+}
+
+static void scrubEditorSelectedState(pf::World& world, pf::FighterEditor& editor, int frame) {
+    editor.previewCacheFrame = std::max(0, frame);
+    editor.paused = true;
+    std::string error;
+    if (restoreEditorPreviewFrame(world, editor, editor.previewCacheFrame, &error)) {
+        editor.status = "Editor: restored preview frame " + std::to_string(editor.previewCacheFrame);
     } else {
-        pf::calculateEcb(def, fighter, true);
+        editor.previewCacheDirty = true;
+        editor.status = "Editor: queued preview scrub to frame " + std::to_string(editor.previewCacheFrame);
+    }
+}
+
+static void prepareEditorEditPreview(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    int selectedFighterDef,
+    bool advanceFrame)
+{
+    if (editor.testMode || world.fighters.empty()) {
+        return;
+    }
+    const bool cacheTargetsSelection =
+        editor.previewCacheValid &&
+        editor.previewCacheFighter == session.selectedFighter &&
+        editor.previewCacheState == session.selectedState;
+    if (editor.previewCacheDirty || !cacheTargetsSelection) {
+        std::string error;
+        if (!rebuildEditorPreviewCache(world, editor, session, selectedFighterDef, &error)) {
+            editor.previewCacheValid = false;
+            editor.previewCacheMessage = error;
+            editor.status = "Editor preview failed: " + error;
+        }
+        return;
+    }
+    if (advanceFrame && editor.previewCacheValid && !editor.previewCacheFrames.empty()) {
+        int nextFrame = editor.previewCacheFrame + 1;
+        if (nextFrame >= static_cast<int>(editor.previewCacheFrames.size())) {
+            const int packageFighter = std::clamp(session.selectedFighter, 0, static_cast<int>(session.package.fighters.size()) - 1);
+            const pf::FighterDefinition& def = session.package.fighters[static_cast<size_t>(packageFighter)];
+            const int selectedState = std::clamp(session.selectedState, 0, std::max(0, static_cast<int>(def.states.size()) - 1));
+            const bool loop = !def.states.empty() && def.states[static_cast<size_t>(selectedState)].loopAnimation;
+            nextFrame = loop ? 0 : static_cast<int>(editor.previewCacheFrames.size()) - 1;
+            if (!loop) {
+                editor.paused = true;
+            }
+        }
+        restoreEditorPreviewFrame(world, editor, nextFrame);
+    } else {
+        restoreEditorPreviewFrame(world, editor, editor.previewCacheFrame);
     }
 }
 
@@ -7948,6 +8083,8 @@ static bool syncEditorSessionMutation(
         return false;
     }
     editor.status = successMessage;
+    editor.uiRefreshPending = true;
+    editor.previewCacheDirty = true;
     return true;
 }
 
@@ -8213,6 +8350,8 @@ static void drawEditorStateBrowserWorkstation(
             editor.status = "Editor: package fighter selection failed: " + error;
             return false;
         }
+        editor.uiRefreshPending = true;
+        editor.previewCacheDirty = true;
         const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
         editor.status = selected
             ? "Editor: selected package fighter " + selected->name
@@ -8514,9 +8653,12 @@ static void drawEditorTimelineWorkstation(
         ? std::max(1, timeline.frameCount)
         : std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
     const int liveFrame = pf::currentState(world, fighter).name == state.name ? pf::frameInState(fighter) : 0;
+    const int playheadFrame = editor.previewCacheValid && editor.previewCacheFighter == session.selectedFighter && editor.previewCacheState == session.selectedState
+        ? editor.previewCacheFrame
+        : liveFrame;
     const Rectangle ruler{rect.x + 136.0f, rect.y + 38.0f, rect.width - 156.0f, 24.0f};
     DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 35.0f), 13, RAYWHITE);
-    DrawText(("Frame " + std::to_string(std::clamp(liveFrame, 0, frameCount)) + " / " + std::to_string(frameCount)).c_str(),
+    DrawText(("Frame " + std::to_string(std::clamp(playheadFrame, 0, frameCount)) + " / " + std::to_string(frameCount)).c_str(),
         static_cast<int>(rect.x + 10.0f),
         static_cast<int>(rect.y + 54.0f),
         11,
@@ -8531,7 +8673,7 @@ static void drawEditorTimelineWorkstation(
     auto addSubaction = [&](pf::Subaction subaction, const std::string& label) -> bool {
         std::string error;
         int added = -1;
-        const int targetFrame = std::clamp(liveFrame, 0, frameCount);
+        const int targetFrame = std::clamp(playheadFrame, 0, frameCount);
         if (pf::addEditorSessionSubactionAtFrame(session, session.selectedState, subaction, targetFrame, &added, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " subaction at frame " + std::to_string(targetFrame));
             return true;
@@ -8615,7 +8757,7 @@ static void drawEditorTimelineWorkstation(
         pf::InterruptRule interrupt;
         interrupt.targetState = "Wait";
         interrupt.condition = pf::InterruptCondition::WaitInput;
-        interrupt.enableFrame = std::max(0, liveFrame);
+        interrupt.enableFrame = std::max(0, playheadFrame);
         interrupt.disableFrame = 0;
         std::string error;
         int added = -1;
@@ -8740,7 +8882,7 @@ static void drawEditorTimelineWorkstation(
             const Rectangle markerRect{x - 4.0f, y + 1.0f, 8.0f, 16.0f};
             const bool hovered = CheckCollisionPointRec(mouse, markerRect);
             if (hovered) {
-                const int distance = std::abs(markerFrame - liveFrame);
+                const int distance = std::abs(markerFrame - playheadFrame);
                 if (distance < closestMarkerDistance) {
                     hoveredMarker = markerIndex;
                     closestMarkerDistance = distance;
@@ -8751,7 +8893,7 @@ static void drawEditorTimelineWorkstation(
             DrawRectangleLinesEx(markerRect, selected ? 2.0f : 1.0f, selected ? RAYWHITE : Fade(RAYWHITE, 0.38f));
         }
     }
-    const float playheadX = ruler.x + ruler.width * static_cast<float>(std::clamp(liveFrame, 0, frameCount)) / static_cast<float>(frameCount);
+    const float playheadX = ruler.x + ruler.width * static_cast<float>(std::clamp(playheadFrame, 0, frameCount)) / static_cast<float>(frameCount);
     DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(rect.height - 32.0f), BLUE);
     if (hoveredMarker >= 0 && hoveredMarker < static_cast<int>(timeline.markers.size())) {
         const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(hoveredMarker)];
@@ -12478,6 +12620,188 @@ static std::string editorContextDetail(
     return "state " + state.name;
 }
 
+static const pf::PackageScriptGraphNode* editorPackageGraphNodeById(
+    const pf::PackageScriptGraph& graph,
+    int nodeId)
+{
+    const auto found = std::find_if(graph.nodes.begin(), graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+    return found == graph.nodes.end() ? nullptr : &*found;
+}
+
+static std::string editorPackageGraphNodeSummary(
+    const pf::PackageScript& script,
+    const pf::PackageScriptGraphNode& node)
+{
+    std::string summary = "node #" + std::to_string(node.id) + " " + packageScriptGraphNodeKindName(node.kind);
+    if (node.kind == pf::PackageScriptGraphNodeKind::Instruction) {
+        summary += " inst=" + std::to_string(node.instructionIndex);
+        if (node.instructionIndex >= 0 && node.instructionIndex < static_cast<int>(script.instructions.size())) {
+            summary += " " + std::string(packageScriptOpName(script.instructions[static_cast<size_t>(node.instructionIndex)].op));
+        }
+    }
+    summary += " pos=(" + std::to_string(pf::fxToFloat(node.position.x)) +
+        ", " + std::to_string(pf::fxToFloat(node.position.y)) + ")";
+    return summary;
+}
+
+static std::vector<int> editorReachableGraphInstructionNodes(const pf::PackageScriptGraph& graph) {
+    std::vector<int> reachable;
+    std::vector<int> seen;
+    int currentNode = graph.entryNode;
+    while (currentNode >= 0) {
+        if (std::find(seen.begin(), seen.end(), currentNode) != seen.end()) {
+            break;
+        }
+        seen.push_back(currentNode);
+        const pf::PackageScriptGraphNode* node = editorPackageGraphNodeById(graph, currentNode);
+        if (!node) {
+            break;
+        }
+        if (node->kind == pf::PackageScriptGraphNodeKind::Instruction) {
+            reachable.push_back(node->id);
+        }
+        const auto link = std::find_if(graph.links.begin(), graph.links.end(), [&](const pf::PackageScriptGraphLink& candidate) {
+            return candidate.fromNode == currentNode && candidate.fromSocket == 0;
+        });
+        if (link == graph.links.end()) {
+            break;
+        }
+        currentNode = link->toNode;
+    }
+    return reachable;
+}
+
+static std::string editorPackageGraphIssueHint(
+    const pf::FighterEditor& editor,
+    const pf::PackageScript& script,
+    const std::string& error)
+{
+    const pf::PackageScriptGraph& graph = script.graph;
+    if (graph.nodes.empty()) {
+        return "Graph issue: script has no graph metadata";
+    }
+
+    const std::string lowerError = lowerAscii(error);
+    if (lowerError.find("entry is invalid") != std::string::npos) {
+        int entryCount = 0;
+        for (const pf::PackageScriptGraphNode& node : graph.nodes) {
+            if (node.kind == pf::PackageScriptGraphNodeKind::Entry) {
+                ++entryCount;
+            }
+        }
+        return "Graph issue: entryNode=" + std::to_string(graph.entryNode) +
+            " entryNodes=" + std::to_string(entryCount);
+    }
+
+    if (lowerError.find("multiple links from one socket") != std::string::npos) {
+        for (int i = 0; i < static_cast<int>(graph.links.size()); ++i) {
+            const pf::PackageScriptGraphLink& a = graph.links[static_cast<size_t>(i)];
+            for (int j = i + 1; j < static_cast<int>(graph.links.size()); ++j) {
+                const pf::PackageScriptGraphLink& b = graph.links[static_cast<size_t>(j)];
+                if (a.fromNode == b.fromNode && a.fromSocket == b.fromSocket) {
+                    return "Graph issue: duplicate outgoing links from node #" +
+                        std::to_string(a.fromNode) + " socket " + std::to_string(a.fromSocket);
+                }
+            }
+        }
+    }
+
+    if (lowerError.find("link target is invalid") != std::string::npos ||
+        lowerError.find("target is invalid") != std::string::npos)
+    {
+        for (const pf::PackageScriptGraphLink& link : graph.links) {
+            if (!editorPackageGraphNodeById(graph, link.fromNode) ||
+                !editorPackageGraphNodeById(graph, link.toNode))
+            {
+                return "Graph issue: invalid link " + std::to_string(link.fromNode) +
+                    ":" + std::to_string(link.fromSocket) + " -> " +
+                    std::to_string(link.toNode) + ":" + std::to_string(link.toSocket);
+            }
+        }
+    }
+
+    if (lowerError.find("instruction is invalid") != std::string::npos) {
+        for (const pf::PackageScriptGraphNode& node : graph.nodes) {
+            if (node.kind == pf::PackageScriptGraphNodeKind::Instruction &&
+                (node.instructionIndex < 0 || node.instructionIndex >= static_cast<int>(script.instructions.size())))
+            {
+                return "Graph issue: " + editorPackageGraphNodeSummary(script, node) +
+                    " outside instruction count " + std::to_string(script.instructions.size());
+            }
+        }
+    }
+
+    if (lowerError.find("instruction is duplicate") != std::string::npos) {
+        for (int i = 0; i < static_cast<int>(graph.nodes.size()); ++i) {
+            const pf::PackageScriptGraphNode& a = graph.nodes[static_cast<size_t>(i)];
+            if (a.kind != pf::PackageScriptGraphNodeKind::Instruction) {
+                continue;
+            }
+            for (int j = i + 1; j < static_cast<int>(graph.nodes.size()); ++j) {
+                const pf::PackageScriptGraphNode& b = graph.nodes[static_cast<size_t>(j)];
+                if (b.kind == pf::PackageScriptGraphNodeKind::Instruction &&
+                    a.instructionIndex == b.instructionIndex)
+                {
+                    return "Graph issue: nodes #" + std::to_string(a.id) + " and #" +
+                        std::to_string(b.id) + " both use instruction " +
+                        std::to_string(a.instructionIndex);
+                }
+            }
+        }
+    }
+
+    if (lowerError.find("control cycle") != std::string::npos) {
+        std::vector<int> seen;
+        int currentNode = graph.entryNode;
+        while (currentNode >= 0) {
+            if (std::find(seen.begin(), seen.end(), currentNode) != seen.end()) {
+                return "Graph issue: control cycle returns to node #" + std::to_string(currentNode);
+            }
+            seen.push_back(currentNode);
+            const auto link = std::find_if(graph.links.begin(), graph.links.end(), [&](const pf::PackageScriptGraphLink& candidate) {
+                return candidate.fromNode == currentNode && candidate.fromSocket == 0;
+            });
+            if (link == graph.links.end()) {
+                break;
+            }
+            currentNode = link->toNode;
+        }
+    }
+
+    if (lowerError.find("disconnected instruction nodes") != std::string::npos) {
+        const std::vector<int> reachable = editorReachableGraphInstructionNodes(graph);
+        for (const pf::PackageScriptGraphNode& node : graph.nodes) {
+            if (node.kind == pf::PackageScriptGraphNodeKind::Instruction &&
+                std::find(reachable.begin(), reachable.end(), node.id) == reachable.end())
+            {
+                return "Graph issue: disconnected " + editorPackageGraphNodeSummary(script, node);
+            }
+        }
+    }
+
+    if (lowerError.find("does not cover all bytecode instructions") != std::string::npos) {
+        for (int instructionIndex = 0; instructionIndex < static_cast<int>(script.instructions.size()); ++instructionIndex) {
+            const auto found = std::find_if(graph.nodes.begin(), graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                return node.kind == pf::PackageScriptGraphNodeKind::Instruction &&
+                    node.instructionIndex == instructionIndex;
+            });
+            if (found == graph.nodes.end()) {
+                return "Graph issue: missing graph node for instruction #" +
+                    std::to_string(instructionIndex) + " " +
+                    packageScriptOpName(script.instructions[static_cast<size_t>(instructionIndex)].op);
+            }
+        }
+    }
+
+    const pf::PackageScriptGraphNode* selected = editorPackageGraphNodeById(graph, editor.selectedPackageGraphNode);
+    if (selected) {
+        return "Graph focus: " + editorPackageGraphNodeSummary(script, *selected);
+    }
+    return "Graph focus: no selected graph node";
+}
+
 static std::string editorSelectedGraphDiagnostic(
     const pf::FighterEditor& editor,
     const pf::FighterEditorSession& session,
@@ -12504,10 +12828,13 @@ static std::string editorSelectedGraphDiagnostic(
         std::string error;
         if (pf::compilePackageScriptGraph(script, &error)) {
             color = GREEN;
-            return "Graph: selected object script compiles";
+            const pf::PackageScriptGraphNode* selected = editorPackageGraphNodeById(script.graph, editor.selectedPackageGraphNode);
+            return selected
+                ? "Graph: selected object script compiles; " + editorPackageGraphNodeSummary(script, *selected)
+                : "Graph: selected object script compiles";
         }
         color = RED;
-        return "Graph: object " + error;
+        return "Graph: object " + error + "; " + editorPackageGraphIssueHint(editor, script, error);
     }
     if (def.packageScripts.empty()) {
         return "Graph: no package scripts";
@@ -12520,10 +12847,13 @@ static std::string editorSelectedGraphDiagnostic(
     std::string error;
     if (pf::compilePackageScriptGraph(script, &error)) {
         color = GREEN;
-        return "Graph: selected script compiles";
+        const pf::PackageScriptGraphNode* selected = editorPackageGraphNodeById(script.graph, editor.selectedPackageGraphNode);
+        return selected
+            ? "Graph: selected script compiles; " + editorPackageGraphNodeSummary(script, *selected)
+            : "Graph: selected script compiles";
     }
     color = RED;
-    return "Graph: " + error;
+    return "Graph: " + error + "; " + editorPackageGraphIssueHint(editor, script, error);
 }
 
 static std::string editorDiagnosticContextHint(
@@ -12767,6 +13097,8 @@ static void drawEditorDiagnosticsWorkstation(
             updateEditorPackageFailure(editor, error);
             editor.status = "Editor package load sync failed: " + error;
         } else {
+            editor.uiRefreshPending = true;
+            editor.previewCacheDirty = true;
             updateEditorPackageSummary(editor, session.lastDescriptor);
             editor.selectionKind = pf::FighterEditorSelectionKind::State;
             editor.status = "Editor: loaded " + editor.packagePath +
@@ -12812,6 +13144,7 @@ static void drawEditorWorkstation(
     syncEditorSelectionFromSession(editor, session);
     pf::FighterState& state = def.states[static_cast<size_t>(session.selectedState)];
     const EditorWorkstationLayout layout = editorWorkstationLayout();
+    editor.uiRefreshPending = false;
 
     DrawRectangleRec(layout.viewport, Fade(BLACK, 0.08f));
     DrawRectangleLinesEx(layout.viewport, 1.0f, Fade(SKYBLUE, 0.45f));
@@ -12829,8 +13162,11 @@ static void drawEditorWorkstation(
     drawEditorViewportOverlayControls(editor, layout.viewport);
 
     drawEditorToolStrip(world, editor, session, selectedFighterDef, layout.toolStrip);
+    if (editor.uiRefreshPending) return;
     drawEditorStateBrowserWorkstation(world, editor, session, selectedFighterDef, def, layout.leftBrowser);
+    if (editor.uiRefreshPending) return;
     drawEditorTimelineWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.timeline);
+    if (editor.uiRefreshPending) return;
     if (editor.workspace == pf::EditorWorkspace::Assets) {
         drawEditorObjectWorkstation(world, editor, session, selectedFighterDef, layout.rightGraph);
     } else if (editor.workspace == pf::EditorWorkspace::Animation) {
@@ -12838,7 +13174,9 @@ static void drawEditorWorkstation(
     } else {
         drawEditorLogicGraphWorkstation(world, editor, session, selectedFighterDef, def, layout.rightGraph);
     }
+    if (editor.uiRefreshPending) return;
     drawEditorInspectorWorkstation(world, editor, session, selectedFighterDef, def, state, layout.rightInspector);
+    if (editor.uiRefreshPending) return;
     drawEditorDiagnosticsWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.diagnostics);
 }
 
@@ -13482,6 +13820,8 @@ int main() {
         editor.selectedInterrupt = editorSession.selectedInterrupt;
         editor.testMode = true;
         editor.animationPreviewActive = false;
+        editor.previewCacheValid = false;
+        editor.previewCacheDirty = true;
         editor.paused = false;
         replay.playbackLoaded = false;
         replay.realtimePlayback = false;
@@ -13504,6 +13844,8 @@ int main() {
         editor.selectedInterrupt = editorSession.selectedInterrupt;
         editor.testMode = false;
         editor.animationPreviewActive = true;
+        editor.previewCacheValid = false;
+        editor.previewCacheDirty = true;
         editor.paused = true;
         replay.playbackLoaded = false;
         replay.realtimePlayback = false;
@@ -13592,6 +13934,9 @@ int main() {
             editorSessionActive = false;
             editor.testMode = false;
             editor.animationPreviewActive = false;
+            editor.previewCacheValid = false;
+            editor.previewCacheDirty = true;
+            editor.previewCacheFrames.clear();
             editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) {
@@ -13760,7 +14105,9 @@ int main() {
             tickrate.accumulator = 0.0f;
         }
         if (editorEditMode) {
-            prepareEditorEditPreview(world, editor, !editor.paused);
+            if (ensureMainEditorSession()) {
+                prepareEditorEditPreview(world, editor, editorSession, testFighterDef, !editor.paused);
+            }
         }
 
         if (editor.sideView) {

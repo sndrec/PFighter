@@ -160,6 +160,16 @@ struct FighterEditor {
     bool sideView = false;
     bool testMode = false;
     bool animationPreviewActive = false;
+    bool uiRefreshPending = false;
+    bool previewCacheDirty = true;
+    bool previewCacheValid = false;
+    int previewCacheFighter = -1;
+    int previewCacheState = -1;
+    int previewCacheFrame = 0;
+    int previewCacheFrameCount = 0;
+    StageDefinition previewCacheStage;
+    std::vector<WorldSnapshot> previewCacheFrames;
+    std::string previewCacheMessage;
     EditorWorkspace workspace = EditorWorkspace::Moveset;
     FighterEditorStateGroupFilter stateGroupFilter = FighterEditorStateGroupFilter::All;
     std::string stateSearch;
