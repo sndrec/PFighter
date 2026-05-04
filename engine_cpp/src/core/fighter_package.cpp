@@ -219,6 +219,7 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::ScaleVarFixed:
     case PackageScriptOp::SetVarFrame:
     case PackageScriptOp::SetVarStateFrame:
+    case PackageScriptOp::SetVarStateIndex:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
     case PackageScriptOp::SetVarFighterPercent:
@@ -1667,6 +1668,7 @@ void validatePackageScriptInstruction(
     case PackageScriptOp::AddVarImmediate:
     case PackageScriptOp::SetVarFrame:
     case PackageScriptOp::SetVarStateFrame:
+    case PackageScriptOp::SetVarStateIndex:
     case PackageScriptOp::SetVarGrounded:
     case PackageScriptOp::SetVarFacing:
         requireVariableIndex(instruction.dst, variableCount, "destination");

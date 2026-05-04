@@ -1076,6 +1076,7 @@ static const char* packageScriptOpName(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::ScaleVarFixed: return "ScaleVar";
     case pf::PackageScriptOp::SetVarFrame: return "ReadFrame";
     case pf::PackageScriptOp::SetVarStateFrame: return "StateFrm";
+    case pf::PackageScriptOp::SetVarStateIndex: return "StateIdx";
     case pf::PackageScriptOp::SetVarGrounded: return "ReadGround";
     case pf::PackageScriptOp::SetVarFacing: return "ReadFace";
     case pf::PackageScriptOp::SetVarFighterPercent: return "Pct";
@@ -1263,6 +1264,7 @@ static void sanitizePackageInstructionForVariableCount(pf::PackageScriptInstruct
     case pf::PackageScriptOp::ScaleVarFixed:
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarStateFrame:
+    case pf::PackageScriptOp::SetVarStateIndex:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
     case pf::PackageScriptOp::SetVarFighterPercent:
@@ -1488,6 +1490,7 @@ static std::string packageInstructionLabel(const pf::PackageScriptInstruction& i
         break;
     case pf::PackageScriptOp::SetVarFrame:
     case pf::PackageScriptOp::SetVarStateFrame:
+    case pf::PackageScriptOp::SetVarStateIndex:
     case pf::PackageScriptOp::SetVarGrounded:
     case pf::PackageScriptOp::SetVarFacing:
     case pf::PackageScriptOp::SetVarFighterPercent:
@@ -1694,7 +1697,8 @@ static pf::PackageScriptOp nextPackageScriptOp(pf::PackageScriptOp op) {
     case pf::PackageScriptOp::AddVar: return pf::PackageScriptOp::ScaleVarFixed;
     case pf::PackageScriptOp::ScaleVarFixed: return pf::PackageScriptOp::SetVarFrame;
     case pf::PackageScriptOp::SetVarFrame: return pf::PackageScriptOp::SetVarStateFrame;
-    case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarGrounded;
+    case pf::PackageScriptOp::SetVarStateFrame: return pf::PackageScriptOp::SetVarStateIndex;
+    case pf::PackageScriptOp::SetVarStateIndex: return pf::PackageScriptOp::SetVarGrounded;
     case pf::PackageScriptOp::SetVarGrounded: return pf::PackageScriptOp::SetVarFacing;
     case pf::PackageScriptOp::SetVarFacing: return pf::PackageScriptOp::SetVarFighterPercent;
     case pf::PackageScriptOp::SetVarFighterPercent: return pf::PackageScriptOp::SetVarFighterShield;

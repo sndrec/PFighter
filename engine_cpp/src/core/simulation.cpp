@@ -6959,6 +6959,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarStateFrame:
                 setVar(instruction.dst, frameInObjectState(world, object));
                 break;
+            case PackageScriptOp::SetVarStateIndex:
+                setVar(instruction.dst, object.state);
+                break;
             case PackageScriptOp::SetVarGrounded:
                 setVar(instruction.dst, object.grounded ? 1 : 0);
                 break;

@@ -435,6 +435,7 @@ enum class PackageScriptOp : uint8_t {
     ScaleVarFixed,
     SetVarFrame,
     SetVarStateFrame,
+    SetVarStateIndex,
     SetVarGrounded,
     SetVarFacing,
     SetVarFighterPercent,
