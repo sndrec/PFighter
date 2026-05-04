@@ -491,6 +491,7 @@ int spawnFighter(World& world, const std::string& fighterName, Vec2 position, in
 int spawnGameObject(World& world, const std::string& objectName, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 int spawnGameObjectOfKind(World& world, const std::string& objectName, GameObjectKind requiredKind, int ownerFighter, Vec2 position, int facing, Vec2 velocity = {});
 int countGameObjectsOwnedBy(const World& world, int ownerFighter, const std::string& objectName);
+bool destroyGameObjectByIndex(World& world, int objectIndex);
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName);
 bool pickUpGameObject(World& world, int objectIndex, int fighterIndex);
 bool dropGameObject(World& world, int objectIndex, Vec2 velocity = {});

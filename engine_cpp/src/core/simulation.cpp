@@ -1311,6 +1311,17 @@ int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string&
     return destroyed;
 }
 
+bool destroyGameObjectByIndex(World& world, int objectIndex) {
+    if (objectIndex < 0 || objectIndex >= static_cast<int>(world.objects.size()) ||
+        !world.objects[static_cast<size_t>(objectIndex)].active)
+    {
+        return false;
+    }
+    deactivateGameObject(world, static_cast<size_t>(objectIndex));
+    return objectIndex < static_cast<int>(world.objects.size()) &&
+        !world.objects[static_cast<size_t>(objectIndex)].active;
+}
+
 static bool validGameObjectIndex(const World& world, int objectIndex) {
     return objectIndex >= 0 && objectIndex < static_cast<int>(world.objects.size()) &&
         world.objects[static_cast<size_t>(objectIndex)].active;
@@ -7353,6 +7364,9 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             }
             case PackageScriptOp::DestroyObject:
                 deactivateGameObject(world, objectIndex);
+                return;
+            case PackageScriptOp::DestroyObjectFromVar:
+                destroyGameObjectByIndex(world, var(instruction.srcA));
                 return;
             case PackageScriptOp::DestroyOwnedObjects:
                 destroyGameObjectsOwnedBy(world, object.ownerFighter, instruction.text);

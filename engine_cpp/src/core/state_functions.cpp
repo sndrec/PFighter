@@ -2991,6 +2991,9 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         }
         case PackageScriptOp::DestroyObject:
             break;
+        case PackageScriptOp::DestroyObjectFromVar:
+            destroyGameObjectByIndex(world, packageVar(fighter, instruction.srcA));
+            break;
         case PackageScriptOp::DestroyOwnedObjects:
             destroyGameObjectsOwnedBy(world, static_cast<int>(&fighter - world.fighters.data()), instruction.text);
             break;
