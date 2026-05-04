@@ -5859,6 +5859,29 @@ int main(int argc, char** argv) {
         loadedRuntimePackageHasObject("TrainingItem") &&
         loadedRuntimePackageHasObject("PackageVelocityObject") &&
         loadedRuntimePackageHasObject("PackageProjectileObject");
+    pf::World packageInstallWorld = pf::makeTrainingWorld();
+    int packageInstallRoot = -1;
+    const bool packageInstallOk = packageLoaded &&
+        pf::installFighterPackage(packageInstallWorld, loadedPackage, &packageInstallRoot, &packageError) &&
+        packageInstallRoot >= 0 &&
+        packageInstallRoot < static_cast<int>(packageInstallWorld.fighterDefs.size()) &&
+        packageInstallWorld.fighterDefs[static_cast<size_t>(packageInstallRoot)].name == loadedPackage.fighters[0].name &&
+        packageInstallWorld.objectDefs.size() >= loadedPackage.objects.size();
+    pf::World runtimePackageInstallWorld = pf::makeTrainingWorld();
+    int runtimePackageInstallRoot = -1;
+    const bool runtimePackageInstallOk = runtimePackageLoaded &&
+        pf::installFighterPackage(runtimePackageInstallWorld, loadedRuntimePackage, &runtimePackageInstallRoot, &packageError) &&
+        runtimePackageInstallRoot >= 0 &&
+        runtimePackageInstallRoot < static_cast<int>(runtimePackageInstallWorld.fighterDefs.size()) &&
+        runtimePackageInstallWorld.fighterDefs[static_cast<size_t>(runtimePackageInstallRoot)].name == loadedRuntimePackage.fighters[0].name &&
+        std::any_of(runtimePackageInstallWorld.objectDefs.begin(), runtimePackageInstallWorld.objectDefs.end(), [](const pf::GameObjectDefinition& object) {
+            return object.name == "PackageProjectileObject";
+        });
+    pf::FighterPackage invalidInstallPackage = sourcePackage;
+    invalidInstallPackage.fighters[0].packageScripts[0].instructions[1].text = "MissingObject";
+    pf::World invalidPackageInstallWorld = pf::makeTrainingWorld();
+    const bool invalidPackageInstallRejected =
+        !pf::installFighterPackage(invalidPackageInstallWorld, invalidInstallPackage, nullptr, &invalidPackageError);
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
         loadedPackage.fighters[0].hsdAsset != nullptr &&
@@ -7188,6 +7211,8 @@ int main(int argc, char** argv) {
               << " fighter_package_runtime_fighters=" << loadedRuntimePackage.fighters.size()
               << " fighter_package_runtime_objects=" << loadedRuntimePackage.objects.size()
               << " fighter_package_runtime_assets=" << loadedRuntimePackage.hsdAssets.size()
+              << " fighter_package_install_ok=" << packageInstallOk
+              << " fighter_package_runtime_install_ok=" << runtimePackageInstallOk
               << " fighter_package_asset_ok=" << packageAssetOk
               << " fighter_package_parity_ok=" << packageParityOk
               << " fighter_package_script_var=" << packageScriptVar
@@ -7342,6 +7367,7 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_context_ok=" << packageObjectOwnerContextOk
               << " fighter_package_object_spawn_y_offset_ok=" << packageObjectSpawnYOffsetOk
               << " fighter_package_invalid_read_rejected=" << invalidPackageRejected
+              << " fighter_package_invalid_install_rejected=" << invalidPackageInstallRejected
               << " fighter_package_invalid_write_rejected=" << invalidPackageWriteRejected
               << " fighter_package_invalid_version_write_rejected=" << invalidPackageVersionWriteRejected
               << " fighter_package_invalid_animation_write_rejected=" << invalidPackageAnimationWriteRejected

@@ -7884,28 +7884,12 @@ static void launchEditorTestWorld(
     updateEditorPackageSummary(editor, testPackage, packageBytes);
     const int sandbagFighterDef = fighterDefByName(world, "Sandbag", 0);
     world = pf::makeTrainingWorld(0, sandbagFighterDef);
-    const pf::FighterDefinition& testFighter = testPackage.fighters.front();
-    int testFighterIndex = editedFighterDef;
-    if (testFighterIndex >= 0 && testFighterIndex < static_cast<int>(world.fighterDefs.size()) &&
-        world.fighterDefs[static_cast<size_t>(testFighterIndex)].name == testFighter.name)
-    {
-        world.fighterDefs[static_cast<size_t>(testFighterIndex)] = testFighter;
-    } else {
-        world.fighterDefs.push_back(testFighter);
-        testFighterIndex = static_cast<int>(world.fighterDefs.size()) - 1;
+    int testFighterIndex = -1;
+    if (!pf::installFighterPackage(world, testPackage, &testFighterIndex, &packageError)) {
+        updateEditorPackageFailure(editor, packageError);
+        editor.status = "Editor test failed: package install failed: " + editor.lastPackageMessage;
+        return;
     }
-    for (size_t packageFighterIndex = 1; packageFighterIndex < testPackage.fighters.size(); ++packageFighterIndex) {
-        const pf::FighterDefinition& packageFighter = testPackage.fighters[packageFighterIndex];
-        auto existing = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& candidate) {
-            return candidate.name == packageFighter.name;
-        });
-        if (existing == world.fighterDefs.end()) {
-            world.fighterDefs.push_back(packageFighter);
-        } else {
-            *existing = packageFighter;
-        }
-    }
-    world.objectDefs = testPackage.objects;
     pf::resetTrainingFighter(world, 0, testFighterIndex, {-pf::fx(2), 0}, 1);
     selectedFighterDef = testFighterIndex;
     editor.selectedFighter = 0;

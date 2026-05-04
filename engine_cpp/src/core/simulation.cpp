@@ -1428,6 +1428,74 @@ FighterPackage makeRuntimeFighterPackage(const World& world, int rootFighterDef,
     return package;
 }
 
+static bool setPackageInstallError(std::string* error, const std::string& message) {
+    if (error) {
+        *error = message;
+    }
+    return false;
+}
+
+static int upsertFighterDefinition(std::vector<FighterDefinition>& defs, const FighterDefinition& def) {
+    const auto existing = std::find_if(defs.begin(), defs.end(), [&](const FighterDefinition& candidate) {
+        return candidate.name == def.name;
+    });
+    if (existing != defs.end()) {
+        *existing = def;
+        return static_cast<int>(std::distance(defs.begin(), existing));
+    }
+    defs.push_back(def);
+    return static_cast<int>(defs.size()) - 1;
+}
+
+static int upsertGameObjectDefinition(std::vector<GameObjectDefinition>& defs, const GameObjectDefinition& def) {
+    const auto existing = std::find_if(defs.begin(), defs.end(), [&](const GameObjectDefinition& candidate) {
+        return candidate.name == def.name;
+    });
+    if (existing != defs.end()) {
+        *existing = def;
+        return static_cast<int>(std::distance(defs.begin(), existing));
+    }
+    defs.push_back(def);
+    return static_cast<int>(defs.size()) - 1;
+}
+
+bool installFighterPackage(World& world, const FighterPackage& package, int* rootFighterDef, std::string* error) {
+    if (rootFighterDef) {
+        *rootFighterDef = -1;
+    }
+    if (package.fighters.empty()) {
+        return setPackageInstallError(error, "fighter package has no root fighter");
+    }
+
+    std::string validationError;
+    if (writeFighterPackage(package, &validationError).empty()) {
+        return setPackageInstallError(error, validationError.empty() ? "fighter package validation failed" : validationError);
+    }
+
+    for (const GameObjectDefinition& object : package.objects) {
+        upsertGameObjectDefinition(world.objectDefs, object);
+    }
+
+    int installedRoot = -1;
+    for (size_t i = 0; i < package.fighters.size(); ++i) {
+        const int installed = upsertFighterDefinition(world.fighterDefs, package.fighters[i]);
+        if (i == 0) {
+            installedRoot = installed;
+        }
+    }
+
+    if (installedRoot < 0) {
+        return setPackageInstallError(error, "failed to install root fighter");
+    }
+    if (rootFighterDef) {
+        *rootFighterDef = installedRoot;
+    }
+    if (error) {
+        error->clear();
+    }
+    return true;
+}
+
 int destroyGameObjectsOwnedBy(World& world, int ownerFighter, const std::string& objectName) {
     if (ownerFighter < 0 || objectName.empty()) {
         return 0;
