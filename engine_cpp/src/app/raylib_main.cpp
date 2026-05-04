@@ -8930,6 +8930,120 @@ static void drawEditorObjectBoxPanel(
     }
 }
 
+static bool drawEditorObjectCallbackStrip(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    int objectIndex,
+    pf::GameObjectDefinition& object,
+    int scriptIndex,
+    Rectangle rect)
+{
+    if (object.packageScripts.empty() || scriptIndex < 0 || scriptIndex >= static_cast<int>(object.packageScripts.size())) {
+        return false;
+    }
+    const pf::PackageScript& script = object.packageScripts[static_cast<size_t>(scriptIndex)];
+    const int stateSlot = wrappedIndex(editor.selectedObjectStateCallback, 4);
+    const int eventSlot = wrappedIndex(editor.selectedObjectEventCallback, 21);
+    const pf::FighterEditorObjectStateCallbackSlot stateCallbackSlot =
+        static_cast<pf::FighterEditorObjectStateCallbackSlot>(stateSlot);
+    const pf::FighterEditorObjectEventCallbackSlot eventCallbackSlot =
+        static_cast<pf::FighterEditorObjectEventCallbackSlot>(eventSlot);
+    DrawText("Callbacks", static_cast<int>(rect.x), static_cast<int>(rect.y), 10, Fade(RAYWHITE, 0.62f));
+    const std::string stateSummary = !object.states.empty() && editor.selectedObjectState >= 0 && editor.selectedObjectState < static_cast<int>(object.states.size())
+        ? callbackSummary(objectStateCallbacks(object.states[static_cast<size_t>(editor.selectedObjectState)], stateSlot))
+        : "none";
+    const std::string eventSummary = callbackSummary(objectEventCallbacks(object, eventSlot));
+    DrawText(clippedText(std::string("State ") + objectStateCallbackLabel(stateSlot) + ": " + stateSummary, 10, rect.width - 12.0f).c_str(),
+        static_cast<int>(rect.x),
+        static_cast<int>(rect.y + 18.0f),
+        10,
+        Fade(RAYWHITE, 0.72f));
+    DrawText(clippedText(std::string("Event ") + objectEventCallbackLabel(eventSlot) + ": " + eventSummary, 10, rect.width - 12.0f).c_str(),
+        static_cast<int>(rect.x),
+        static_cast<int>(rect.y + 40.0f),
+        10,
+        Fade(RAYWHITE, 0.72f));
+
+    const float stateButtonY = rect.y + 62.0f;
+    const float eventButtonY = stateButtonY + 26.0f;
+    if (uiButton({rect.x, stateButtonY, 30.0f, 22.0f}, "S<")) {
+        editor.selectedObjectStateCallback = wrappedIndex(stateSlot - 1, 4);
+        return true;
+    }
+    if (uiButton({rect.x + 34.0f, stateButtonY, 30.0f, 22.0f}, "S>")) {
+        editor.selectedObjectStateCallback = wrappedIndex(stateSlot + 1, 4);
+        return true;
+    }
+    if (uiButton({rect.x + 68.0f, stateButtonY, 52.0f, 22.0f}, "BindS")) {
+        if (object.states.empty()) {
+            editor.status = "Editor: add an object state before binding a state callback";
+        } else {
+            std::string error;
+            if (pf::bindEditorSessionObjectPackageScriptStateCallback(
+                    session,
+                    objectIndex,
+                    editor.selectedObjectState,
+                    stateCallbackSlot,
+                    script.name,
+                    &error))
+            {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: bound object ") + objectStateCallbackLabel(stateSlot) + " callback");
+                return true;
+            }
+            editor.status = "Editor: object state callback bind failed: " + error;
+        }
+    }
+    if (uiButton({rect.x + 124.0f, stateButtonY, 34.0f, 22.0f}, "-S")) {
+        if (object.states.empty()) {
+            editor.status = "Editor: no object state callback to remove";
+        } else {
+            std::vector<pf::FunctionCall> calls = objectStateCallbacks(object.states[static_cast<size_t>(editor.selectedObjectState)], stateSlot);
+            removePackageScriptCallbackRefs(calls, script.name);
+            std::string error;
+            if (pf::setEditorSessionObjectStateCallbacks(session, objectIndex, editor.selectedObjectState, stateCallbackSlot, calls, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: removed object ") + objectStateCallbackLabel(stateSlot) + " callback");
+                return true;
+            }
+            editor.status = "Editor: object state callback remove failed: " + error;
+        }
+    }
+    if (uiButton({rect.x, eventButtonY, 30.0f, 22.0f}, "E<")) {
+        editor.selectedObjectEventCallback = wrappedIndex(eventSlot - 1, 21);
+        return true;
+    }
+    if (uiButton({rect.x + 34.0f, eventButtonY, 30.0f, 22.0f}, "E>")) {
+        editor.selectedObjectEventCallback = wrappedIndex(eventSlot + 1, 21);
+        return true;
+    }
+    if (uiButton({rect.x + 68.0f, eventButtonY, 52.0f, 22.0f}, "BindE")) {
+        std::string error;
+        if (pf::bindEditorSessionObjectPackageScriptEventCallback(
+                session,
+                objectIndex,
+                eventCallbackSlot,
+                script.name,
+                &error))
+        {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: bound object ") + objectEventCallbackLabel(eventSlot) + " callback");
+            return true;
+        }
+        editor.status = "Editor: object event callback bind failed: " + error;
+    }
+    if (uiButton({rect.x + 124.0f, eventButtonY, 34.0f, 22.0f}, "-E")) {
+        std::vector<pf::FunctionCall> calls = objectEventCallbacks(object, eventSlot);
+        removePackageScriptCallbackRefs(calls, script.name);
+        std::string error;
+        if (pf::setEditorSessionObjectEventCallbacks(session, objectIndex, eventCallbackSlot, calls, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, std::string("Editor: removed object ") + objectEventCallbackLabel(eventSlot) + " callback");
+            return true;
+        }
+        editor.status = "Editor: object event callback remove failed: " + error;
+    }
+    return false;
+}
+
 static void drawEditorObjectWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -9189,7 +9303,21 @@ static void drawEditorObjectWorkstation(
             editor.status = "Editor: remove object script failed: " + error;
         }
 
-        const float instrY = scriptY + 72.0f;
+        const float callbackY = scriptY + 72.0f;
+        if (drawEditorObjectCallbackStrip(
+                world,
+                editor,
+                session,
+                selectedFighterDef,
+                editor.selectedObjectDef,
+                object,
+                editor.selectedPackageScript,
+                {detailX, callbackY, detailW, 114.0f}))
+        {
+            return;
+        }
+
+        const float instrY = callbackY + 122.0f;
         if (uiButton({detailX, instrY, 54.0f, 22.0f}, "+Nop")) {
             std::string error;
             int added = -1;
