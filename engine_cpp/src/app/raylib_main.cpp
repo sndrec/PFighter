@@ -4136,7 +4136,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     }
 
     const bool drawDebug = editor.showBoxes;
-    if (!def.hasHsdAsset && (!hasAnimationPose || (drawDebug && editor.showSkeleton))) {
+    if (!hasAnimationPose || (drawDebug && editor.showSkeleton)) {
         for (int i = 0; i < pf::kBoneCount; ++i) {
             pf::Vec3 bone = fighter.bones[static_cast<size_t>(i)].position;
             bone.x += fighter.position.x;
@@ -4164,7 +4164,7 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         drawEcb(fighter, YELLOW);
         drawImportedEcbSources(def, fighter);
     }
-    if (editor.showHurtboxes && !def.hasHsdAsset) {
+    if (editor.showHurtboxes && fighter.hsdHurtboxCapsules.empty()) {
         for (const pf::HurtboxDefinition& hurt : def.hurtboxes) {
             pf::Vec3 base = fighter.bones[static_cast<size_t>(hurt.bone)].position;
             base.x += fighter.position.x;
