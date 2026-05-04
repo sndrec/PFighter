@@ -8270,6 +8270,73 @@ static void drawEditorStateBrowserWorkstation(
         Fade(RAYWHITE, 0.62f));
 }
 
+static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marker) {
+    switch (marker.kind) {
+    case pf::FighterEditorTimelineMarkerKind::Hitbox:
+    case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
+        return 1;
+    case pf::FighterEditorTimelineMarkerKind::Interruptible:
+    case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
+    case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
+        return 4;
+    case pf::FighterEditorTimelineMarkerKind::Subaction:
+        break;
+    }
+    if (marker.subactionType == pf::SubactionType::SetHurtboxState ||
+        marker.subactionType == pf::SubactionType::SetBodyCollisionState)
+    {
+        return 2;
+    }
+    if (marker.subactionType == pf::SubactionType::CallScript) {
+        return 3;
+    }
+    return 0;
+}
+
+static Color editorTimelineMarkerColor(const pf::FighterEditorTimelineMarker& marker) {
+    switch (marker.kind) {
+    case pf::FighterEditorTimelineMarkerKind::Hitbox:
+        return RED;
+    case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
+        return PURPLE;
+    case pf::FighterEditorTimelineMarkerKind::Interruptible:
+        return LIME;
+    case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
+        return GREEN;
+    case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
+        return Fade(GREEN, 0.62f);
+    case pf::FighterEditorTimelineMarkerKind::Subaction:
+        break;
+    }
+    if (marker.subactionType == pf::SubactionType::SetHurtboxState ||
+        marker.subactionType == pf::SubactionType::SetBodyCollisionState)
+    {
+        return SKYBLUE;
+    }
+    if (marker.subactionType == pf::SubactionType::CallScript) {
+        return VIOLET;
+    }
+    return ORANGE;
+}
+
+static std::string editorTimelineMarkerLabel(const pf::FighterEditorTimelineMarker& marker) {
+    switch (marker.kind) {
+    case pf::FighterEditorTimelineMarkerKind::Hitbox:
+        return "hitbox";
+    case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
+        return "throw hitbox";
+    case pf::FighterEditorTimelineMarkerKind::Interruptible:
+        return "interruptible";
+    case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
+        return std::string("interrupt enable ") + interruptConditionName(marker.interruptCondition);
+    case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
+        return std::string("interrupt disable ") + interruptConditionName(marker.interruptCondition);
+    case pf::FighterEditorTimelineMarkerKind::Subaction:
+        break;
+    }
+    return subactionTypeName(marker.subactionType);
+}
+
 static void drawEditorTimelineWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -8281,9 +8348,15 @@ static void drawEditorTimelineWorkstation(
     Rectangle rect)
 {
     drawPanelChrome(rect, "Timeline");
+    pf::FighterEditorStateTimeline timeline;
+    std::string timelineError;
+    const bool hasTimeline = pf::buildEditorSessionStateTimeline(session, session.selectedState, timeline, &timelineError);
     const pf::UnfoldedAction actionFrames = pf::unfoldAction(state.action);
-    const std::vector<int> subactionFrames = editorSubactionFirstFrames(state.action);
-    const int frameCount = std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
+    const std::vector<int> fallbackSubactionFrames = editorSubactionFirstFrames(state.action);
+    const std::vector<int>& subactionFrames = hasTimeline ? timeline.subactionFrames : fallbackSubactionFrames;
+    const int frameCount = hasTimeline
+        ? std::max(1, timeline.frameCount)
+        : std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
     const int liveFrame = pf::currentState(world, fighter).name == state.name ? pf::frameInState(fighter) : 0;
     const Rectangle ruler{rect.x + 136.0f, rect.y + 38.0f, rect.width - 156.0f, 24.0f};
     DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 35.0f), 13, RAYWHITE);
@@ -8292,6 +8365,13 @@ static void drawEditorTimelineWorkstation(
         static_cast<int>(rect.y + 54.0f),
         11,
         Fade(RAYWHITE, 0.68f));
+    if (!hasTimeline) {
+        DrawText(("Timeline model error: " + timelineError).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(rect.y + 71.0f),
+            10,
+            Fade(ORANGE, 0.88f));
+    }
     auto addSubaction = [&](pf::Subaction subaction, const std::string& label) -> bool {
         std::string error;
         int added = -1;
@@ -8412,6 +8492,8 @@ static void drawEditorTimelineWorkstation(
             DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, 14, subactionMarkerColor(subaction));
         }
     }
+    int hoveredMarker = -1;
+    const Vector2 mouse = GetMousePosition();
     for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {
         const pf::InterruptRule& rule = state.interrupts[static_cast<size_t>(interruptIndex)];
         const int startFrame = std::clamp(rule.enableFrame, 0, frameCount);
@@ -8431,13 +8513,119 @@ static void drawEditorTimelineWorkstation(
             DrawRectangle(static_cast<int>(x - 2.0f), static_cast<int>(ruler.y + 23.0f), 5, static_cast<int>(rect.height - 42.0f), SKYBLUE);
         }
     }
+    if (hasTimeline) {
+        int closestMarkerDistance = 1000000;
+        for (int markerIndex = 0; markerIndex < static_cast<int>(timeline.markers.size()); ++markerIndex) {
+            const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(markerIndex)];
+            const int lane = editorTimelineMarkerLane(marker);
+            if (lane < 0 || lane >= static_cast<int>(lanes.size())) {
+                continue;
+            }
+            const int markerFrame = std::clamp(marker.frame, 0, frameCount);
+            const float x = ruler.x + ruler.width * static_cast<float>(markerFrame) / static_cast<float>(frameCount);
+            const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
+            const bool selected =
+                ((marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable ||
+                     marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable) &&
+                    editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt &&
+                    marker.sourceIndex == editor.selectedInterrupt) ||
+                ((marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction ||
+                     marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox ||
+                     marker.kind == pf::FighterEditorTimelineMarkerKind::ThrowHitbox ||
+                     (marker.kind == pf::FighterEditorTimelineMarkerKind::Interruptible && marker.sourceIndex >= 0)) &&
+                    editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
+                    marker.sourceIndex == editor.selectedSubaction);
+            const Rectangle markerRect{x - 4.0f, y + 1.0f, 8.0f, 16.0f};
+            const bool hovered = CheckCollisionPointRec(mouse, markerRect);
+            if (hovered) {
+                const int distance = std::abs(markerFrame - liveFrame);
+                if (distance < closestMarkerDistance) {
+                    hoveredMarker = markerIndex;
+                    closestMarkerDistance = distance;
+                }
+            }
+            const Color color = editorTimelineMarkerColor(marker);
+            DrawRectangleRec(markerRect, Fade(color, selected ? 0.95f : 0.72f));
+            DrawRectangleLinesEx(markerRect, selected ? 2.0f : 1.0f, selected ? RAYWHITE : Fade(RAYWHITE, 0.38f));
+        }
+    }
     const float playheadX = ruler.x + ruler.width * static_cast<float>(std::clamp(liveFrame, 0, frameCount)) / static_cast<float>(frameCount);
     DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(rect.height - 32.0f), BLUE);
-    if (CheckCollisionPointRec(GetMousePosition(), {ruler.x, ruler.y, ruler.width, rect.height - 38.0f}) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        const float t = std::clamp((GetMousePosition().x - ruler.x) / ruler.width, 0.0f, 1.0f);
+    if (hoveredMarker >= 0 && hoveredMarker < static_cast<int>(timeline.markers.size())) {
+        const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(hoveredMarker)];
+        DrawText((editorTimelineMarkerLabel(marker) + " @ frame " + std::to_string(marker.frame)).c_str(),
+            static_cast<int>(ruler.x),
+            static_cast<int>(rect.y + rect.height - 24.0f),
+            11,
+            Fade(RAYWHITE, 0.78f));
+    } else if (editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
+               editor.selectedSubaction >= 0 &&
+               editor.selectedSubaction < static_cast<int>(state.action.size()) &&
+               editor.selectedSubaction < static_cast<int>(subactionFrames.size()))
+    {
+        DrawText(("Selected subaction #" + std::to_string(editor.selectedSubaction) + " " +
+                  subactionTypeName(state.action[static_cast<size_t>(editor.selectedSubaction)].type) +
+                  " @ frame " + std::to_string(subactionFrames[static_cast<size_t>(editor.selectedSubaction)])).c_str(),
+            static_cast<int>(ruler.x),
+            static_cast<int>(rect.y + rect.height - 24.0f),
+            11,
+            Fade(RAYWHITE, 0.72f));
+    } else if (editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt &&
+               editor.selectedInterrupt >= 0 &&
+               editor.selectedInterrupt < static_cast<int>(state.interrupts.size()))
+    {
+        const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
+        DrawText(("Selected interrupt #" + std::to_string(editor.selectedInterrupt) + " " +
+                  interruptConditionName(interrupt.condition) + " -> " + interrupt.targetState).c_str(),
+            static_cast<int>(ruler.x),
+            static_cast<int>(rect.y + rect.height - 24.0f),
+            11,
+            Fade(RAYWHITE, 0.72f));
+    }
+    if (CheckCollisionPointRec(mouse, {ruler.x, ruler.y, ruler.width, rect.height - 38.0f}) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        const float t = std::clamp((mouse.x - ruler.x) / ruler.width, 0.0f, 1.0f);
         const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(frameCount)));
-        const float clickedY = GetMousePosition().y;
+        const float clickedY = mouse.y;
         const int clickedLane = static_cast<int>((clickedY - (rect.y + 70.0f)) / 24.0f);
+        if (hasTimeline) {
+            int bestMarker = -1;
+            int bestDistance = 1000000;
+            for (int markerIndex = 0; markerIndex < static_cast<int>(timeline.markers.size()); ++markerIndex) {
+                const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(markerIndex)];
+                if (editorTimelineMarkerLane(marker) != clickedLane) {
+                    continue;
+                }
+                const int markerFrame = std::clamp(marker.frame, 0, frameCount);
+                const int distance = std::abs(markerFrame - clickedFrame);
+                if (distance < bestDistance) {
+                    bestMarker = markerIndex;
+                    bestDistance = distance;
+                }
+            }
+            const int markerPickTolerance = std::max(1, frameCount / 64);
+            if (bestMarker >= 0 && bestDistance <= markerPickTolerance) {
+                const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(bestMarker)];
+                if (marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable ||
+                    marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable)
+                {
+                    if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(state.interrupts.size())) {
+                        editor.selectedInterrupt = marker.sourceIndex;
+                        session.selectedInterrupt = marker.sourceIndex;
+                        editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+                    }
+                } else if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(state.action.size())) {
+                    editor.selectedSubaction = marker.sourceIndex;
+                    session.selectedSubaction = marker.sourceIndex;
+                    editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+                } else {
+                    editor.selectionKind = pf::FighterEditorSelectionKind::State;
+                }
+                session.selectedState = editor.selectedState;
+                session.clamp();
+                scrubEditorSelectedState(world, editor, clickedFrame);
+                return;
+            }
+        }
         if (clickedLane == 4) {
             int bestInterrupt = -1;
             int bestDistance = 1000000;
