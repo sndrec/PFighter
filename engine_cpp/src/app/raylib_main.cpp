@@ -9856,7 +9856,90 @@ static void drawEditorObjectWorkstation(
             editor.status = "Editor: object graph compile failed: " + error;
         }
 
-        const Rectangle canvas{detailX, instrY + 30.0f, detailW, std::max(44.0f, rect.y + rect.height - instrY - 40.0f)};
+        Rectangle canvas{detailX, instrY + 30.0f, detailW, std::max(44.0f, rect.y + rect.height - instrY - 40.0f)};
+        if (!script.graph.nodes.empty()) {
+            auto selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                return node.id == editor.selectedPackageGraphNode;
+            });
+            if (selectedGraphNodeIt == script.graph.nodes.end()) {
+                editor.selectedPackageGraphNode = script.graph.entryNode >= 0 ? script.graph.entryNode : script.graph.nodes.front().id;
+                selectedGraphNodeIt = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                    return node.id == editor.selectedPackageGraphNode;
+                });
+                if (selectedGraphNodeIt == script.graph.nodes.end()) {
+                    selectedGraphNodeIt = script.graph.nodes.begin();
+                    editor.selectedPackageGraphNode = selectedGraphNodeIt->id;
+                }
+            }
+            auto selectedGraphNodeIndex = [&]() {
+                const auto found = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                    return node.id == editor.selectedPackageGraphNode;
+                });
+                return found == script.graph.nodes.end()
+                    ? 0
+                    : static_cast<int>(std::distance(script.graph.nodes.begin(), found));
+            };
+            auto selectObjectGraphNodeByIndex = [&](int index) {
+                const int nodeIndex = wrappedIndex(index, static_cast<int>(script.graph.nodes.size()));
+                const pf::PackageScriptGraphNode& node = script.graph.nodes[static_cast<size_t>(nodeIndex)];
+                editor.selectedPackageGraphNode = node.id;
+                if (node.kind == pf::PackageScriptGraphNodeKind::Instruction && node.instructionIndex >= 0) {
+                    editor.selectedPackageInstruction = std::clamp(node.instructionIndex, 0, std::max(0, static_cast<int>(script.instructions.size()) - 1));
+                    session.selectedPackageInstruction = editor.selectedPackageInstruction;
+                    editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
+                } else {
+                    editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+                }
+            };
+            auto nudgeSelectedObjectGraphNode = [&](pf::Fix dx, pf::Fix dy, const std::string& label) -> bool {
+                const auto found = std::find_if(script.graph.nodes.begin(), script.graph.nodes.end(), [&](const pf::PackageScriptGraphNode& node) {
+                    return node.id == editor.selectedPackageGraphNode;
+                });
+                if (found == script.graph.nodes.end()) {
+                    return false;
+                }
+                pf::PackageScriptGraphNode edited = *found;
+                edited.position.x += dx;
+                edited.position.y += dy;
+                std::string error;
+                if (pf::setEditorSessionObjectPackageScriptGraphNode(session, editor.selectedObjectDef, editor.selectedPackageScript, edited.id, edited, &error)) {
+                    syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: nudged object graph node " + label);
+                    return true;
+                }
+                editor.status = "Editor: object graph node edit failed: " + error;
+                return false;
+            };
+
+            const float graphControlY = canvas.y;
+            DrawText(("Node #" + std::to_string(editor.selectedPackageGraphNode)).c_str(),
+                static_cast<int>(detailX + 2.0f),
+                static_cast<int>(graphControlY + 6.0f),
+                10,
+                Fade(RAYWHITE, 0.68f));
+            const float navX = detailX + std::min(74.0f, std::max(54.0f, detailW - 226.0f));
+            if (uiButton({navX, graphControlY, 30.0f, 22.0f}, "N<")) {
+                selectObjectGraphNodeByIndex(selectedGraphNodeIndex() - 1);
+                return;
+            }
+            if (uiButton({navX + 34.0f, graphControlY, 30.0f, 22.0f}, "N>")) {
+                selectObjectGraphNodeByIndex(selectedGraphNodeIndex() + 1);
+                return;
+            }
+            if (uiButton({navX + 72.0f, graphControlY, 30.0f, 22.0f}, "X-")) {
+                if (nudgeSelectedObjectGraphNode(-pf::fx(16), 0, "left")) return;
+            }
+            if (uiButton({navX + 106.0f, graphControlY, 30.0f, 22.0f}, "X+")) {
+                if (nudgeSelectedObjectGraphNode(pf::fx(16), 0, "right")) return;
+            }
+            if (uiButton({navX + 144.0f, graphControlY, 30.0f, 22.0f}, "Y-")) {
+                if (nudgeSelectedObjectGraphNode(0, -pf::fx(16), "up")) return;
+            }
+            if (uiButton({navX + 178.0f, graphControlY, 30.0f, 22.0f}, "Y+")) {
+                if (nudgeSelectedObjectGraphNode(0, pf::fx(16), "down")) return;
+            }
+            canvas.y += 28.0f;
+            canvas.height = std::max(28.0f, canvas.height - 28.0f);
+        }
         drawPackageScriptBlockGraph(script, editor, canvas);
     }
 }
