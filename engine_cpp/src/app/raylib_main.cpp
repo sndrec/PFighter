@@ -3491,8 +3491,8 @@ static pf::FighterDefinition makeEditorBlankFighterDefinition(const std::string&
     fallClip.actionIndex = 1;
     def.authoredClips = {waitClip, fallClip};
     def.hurtboxes = {
-        {pf::BoneId::Hip, {0, pf::fxFromFloat(-0.45f), 0}, {0, pf::fxFromFloat(0.55f), 0}, pf::fxFromFloat(0.45f), pf::HurtboxState::Normal, true},
-        {pf::BoneId::Head, {0, pf::fxFromFloat(-0.2f), 0}, {0, pf::fxFromFloat(0.2f), 0}, pf::fxFromFloat(0.32f), pf::HurtboxState::Normal, true},
+        pf::HurtboxDefinition{pf::BoneId::Hip, -1, "", {0, pf::fxFromFloat(-0.45f), 0}, {0, pf::fxFromFloat(0.55f), 0}, pf::fxFromFloat(0.45f), pf::HurtboxState::Normal, true},
+        pf::HurtboxDefinition{pf::BoneId::Head, -1, "", {0, pf::fxFromFloat(-0.2f), 0}, {0, pf::fxFromFloat(0.2f), 0}, pf::fxFromFloat(0.32f), pf::HurtboxState::Normal, true},
     };
 
     pf::FighterState wait;
@@ -12157,7 +12157,7 @@ static void drawEditorInspectorWorkstation(
         Fade(RAYWHITE, 0.72f));
     DrawText(("Subactions " + std::to_string(state.action.size()) +
               "  Interrupts " + std::to_string(state.interrupts.size()) +
-              "  Hurtboxes " + std::to_string(def.hasHsdAsset && def.hsdAsset ? def.hsdAsset->hurtboxes.size() : def.hurtboxes.size())).c_str(),
+              "  Hurtboxes " + std::to_string(def.hurtboxes.size())).c_str(),
         static_cast<int>(rect.x + 10.0f),
         static_cast<int>(y + 58.0f),
         11,

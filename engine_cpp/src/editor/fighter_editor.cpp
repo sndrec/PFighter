@@ -2029,8 +2029,8 @@ FighterDefinition makeFighterEditorBlankDefinition(const std::string& name, cons
     fallClip.actionIndex = 1;
     def.authoredClips = {waitClip, fallClip};
     def.hurtboxes = {
-        {BoneId::Hip, {0, fxFromFloat(-0.45f), 0}, {0, fxFromFloat(0.55f), 0}, fxFromFloat(0.45f), HurtboxState::Normal, true},
-        {BoneId::Head, {0, fxFromFloat(-0.2f), 0}, {0, fxFromFloat(0.2f), 0}, fxFromFloat(0.32f), HurtboxState::Normal, true},
+        HurtboxDefinition{BoneId::Hip, -1, "", {0, fxFromFloat(-0.45f), 0}, {0, fxFromFloat(0.55f), 0}, fxFromFloat(0.45f), HurtboxState::Normal, true},
+        HurtboxDefinition{BoneId::Head, -1, "", {0, fxFromFloat(-0.2f), 0}, {0, fxFromFloat(0.2f), 0}, fxFromFloat(0.32f), HurtboxState::Normal, true},
     };
 
     FighterState wait;

@@ -806,6 +806,8 @@ HitboxDefinition readHitbox(PackageReader& reader) {
 
 void writeHurtbox(PackageWriter& writer, const HurtboxDefinition& hurtbox) {
     writeEnum(writer, hurtbox.bone, validBoneId, "hurtbox bone");
+    writer.writeI32(hurtbox.joint);
+    writer.writeString(hurtbox.type);
     writeVec3(writer, hurtbox.startOffset);
     writeVec3(writer, hurtbox.endOffset);
     writer.writeI32(hurtbox.radius);
@@ -816,6 +818,8 @@ void writeHurtbox(PackageWriter& writer, const HurtboxDefinition& hurtbox) {
 HurtboxDefinition readHurtbox(PackageReader& reader) {
     HurtboxDefinition hurtbox;
     hurtbox.bone = readEnum<BoneId>(reader, validBoneId, "hurtbox bone");
+    hurtbox.joint = reader.readI32();
+    hurtbox.type = reader.readString();
     hurtbox.startOffset = readVec3(reader);
     hurtbox.endOffset = readVec3(reader);
     hurtbox.radius = reader.readI32();
@@ -2457,6 +2461,9 @@ void validateHurtboxGeometry(const HurtboxDefinition& hurtbox) {
     if (hurtbox.radius <= 0) {
         throw std::runtime_error("fighter package hurtbox radius is invalid");
     }
+    if (hurtbox.joint < -1) {
+        throw std::runtime_error("fighter package hurtbox joint is invalid");
+    }
 }
 
 void validateObjectHurtboxGeometry(const GameObjectHurtboxDefinition& hurtbox) {
@@ -2574,7 +2581,13 @@ size_t fighterHurtboxCount(const FighterDefinition& fighter) {
 }
 
 void validateSubactionReferences(const FighterDefinition& fighter, const Subaction& subaction) {
-    if (subaction.type != SubactionType::SetHurtboxState || subaction.hsdBone >= 0 || subaction.hurtboxIndex < 0) {
+    if (subaction.type != SubactionType::SetHurtboxState) {
+        return;
+    }
+    if (subaction.hsdBone >= 0) {
+        return;
+    }
+    if (subaction.hurtboxIndex < 0) {
         return;
     }
     if (subaction.hurtboxIndex >= static_cast<int>(fighterHurtboxCount(fighter))) {

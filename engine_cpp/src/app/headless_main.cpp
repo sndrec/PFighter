@@ -188,6 +188,7 @@ int main(int argc, char** argv) {
     size_t rosterAttributesReady = 0;
     size_t rosterActionScriptsReady = 0;
     size_t rosterNativeAttackEventsReady = 0;
+    size_t rosterNativeHurtboxesReady = 0;
     for (const pf::FighterDefinition& def : world.fighterDefs) {
         if (def.hasHsdAsset && def.hsdAsset &&
             !def.hsdAsset->skeleton.empty() &&
@@ -195,6 +196,13 @@ int main(int argc, char** argv) {
             !def.hsdAsset->hurtboxes.empty())
         {
             ++rosterHsdReady;
+        }
+        if (!def.hurtboxes.empty() &&
+            std::all_of(def.hurtboxes.begin(), def.hurtboxes.end(), [](const pf::HurtboxDefinition& hurtbox) {
+                return hurtbox.radius > 0 && hurtbox.joint >= 0;
+            }))
+        {
+            ++rosterNativeHurtboxesReady;
         }
         if (def.hasHsdAsset && def.hsdAsset && def.hsdAsset->hasAttributes) {
             ++rosterAttributesReady;
@@ -218,6 +226,7 @@ int main(int argc, char** argv) {
               << " fighter_roster_attrs_ready=" << rosterAttributesReady
               << " fighter_roster_scripts_ready=" << rosterActionScriptsReady
               << " fighter_roster_native_attack_events_ready=" << rosterNativeAttackEventsReady
+              << " fighter_roster_native_hurtboxes_ready=" << rosterNativeHurtboxesReady
               << "\n";
 
     pf::WorldSnapshot rewindPoint;
@@ -242,7 +251,7 @@ int main(int argc, char** argv) {
               << "\n";
     std::cout << "runtime_hsd_pose_joints=" << p1.hsdPose.joints.size()
               << " runtime_hsd_world_joints=" << p1.hsdJointWorldPositions.size()
-              << " runtime_hsd_hurtboxes=" << p1.hsdHurtboxCapsules.size()
+              << " runtime_native_pose_hurtboxes=" << p1.hsdHurtboxCapsules.size()
               << "\n";
 
     pf::loadWorld(world, rewindPoint);

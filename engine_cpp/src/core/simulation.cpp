@@ -748,6 +748,18 @@ static void applyCommonStateTimings(FighterDefinition& def) {
     }
 }
 
+static HurtboxDefinition nativeHurtboxFromImported(const HsdHurtbox& source) {
+    HurtboxDefinition out;
+    out.bone = BoneId::Hip;
+    out.joint = source.bone;
+    out.type = source.type;
+    out.startOffset = source.start;
+    out.endOffset = source.end;
+    out.radius = source.radius;
+    out.grabbable = source.grabbable;
+    return out;
+}
+
 static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spec, const MeleeCommonData& common) {
     FighterDefinition def = makeDebugRook();
     def.name = spec.displayName;
@@ -756,6 +768,12 @@ static FighterDefinition makeHsdFighterDefinition(const HsdFighterAssetSpec& spe
     applyCommonStateTimings(def);
     def.hsdAsset = cachedHsdFighterAsset(spec.fileName);
     def.hasHsdAsset = true;
+    def.authoredSkeleton = def.hsdAsset->skeleton;
+    def.hurtboxes.clear();
+    def.hurtboxes.reserve(def.hsdAsset->hurtboxes.size());
+    for (const HsdHurtbox& hurtbox : def.hsdAsset->hurtboxes) {
+        def.hurtboxes.push_back(nativeHurtboxFromImported(hurtbox));
+    }
     if (def.hsdAsset->hasAttributes) {
         applyHsdFighterAttributes(def, def.hsdAsset->attributes);
     }
@@ -810,10 +828,13 @@ static std::array<Fix, 16> fighterModelMatrix(const FighterDefinition& def, cons
 }
 
 static const std::vector<AnimationJoint>* fighterAnimationSkeleton(const FighterDefinition& def) {
+    if (!def.authoredSkeleton.empty()) {
+        return &def.authoredSkeleton;
+    }
     if (def.hasHsdAsset && def.hsdAsset) {
         return &def.hsdAsset->skeleton;
     }
-    return def.authoredSkeleton.empty() ? nullptr : &def.authoredSkeleton;
+    return nullptr;
 }
 
 static std::vector<JointWorldTransform> fighterWorldTransforms(const FighterDefinition& def, const FighterRuntime& fighter) {
@@ -1468,16 +1489,6 @@ static void collectRuntimePackageObjectDependencies(FighterPackage& package, con
             collectRuntimePackageInstructionDependencies(package, world, instruction);
         }
     }
-}
-
-static HurtboxDefinition nativeHurtboxFromImported(const HsdHurtbox& source) {
-    HurtboxDefinition out;
-    out.bone = BoneId::Hip;
-    out.startOffset = source.start;
-    out.endOffset = source.end;
-    out.radius = source.radius;
-    out.grabbable = source.grabbable;
-    return out;
 }
 
 FighterDefinition makeNativePackageFighterDefinition(const FighterDefinition& source) {
@@ -3332,20 +3343,25 @@ static Vec3 extractMeleeAnimTranslation(const FighterDefinition& def, const Figh
     return primary;
 }
 
-static void evaluateImportedHurtboxes(const FighterDefinition& def, FighterRuntime& fighter) {
+static void evaluateNativePoseHurtboxes(const FighterDefinition& def, FighterRuntime& fighter) {
     fighter.hsdHurtboxCapsules.clear();
-    if (!def.hsdAsset || fighter.hsdJointWorldTransforms.empty()) {
+    if (fighter.hsdJointWorldTransforms.empty()) {
         return;
     }
-    fighter.hsdHurtboxCapsules.reserve(def.hsdAsset->hurtboxes.size());
-    for (const HsdHurtbox& hurtbox : def.hsdAsset->hurtboxes) {
-        if (hurtbox.bone < 0 || static_cast<size_t>(hurtbox.bone) >= fighter.hsdJointWorldTransforms.size()) {
+    fighter.hsdHurtboxCapsules.reserve(def.hurtboxes.size());
+    for (const HurtboxDefinition& hurtbox : def.hurtboxes) {
+        if (hurtbox.joint < 0 || static_cast<size_t>(hurtbox.joint) >= fighter.hsdJointWorldTransforms.size()) {
+            Capsule capsule;
+            capsule.a = boneWorld(fighter, hurtbox.bone, hurtbox.startOffset);
+            capsule.b = boneWorld(fighter, hurtbox.bone, hurtbox.endOffset);
+            capsule.radius = hurtbox.radius;
+            fighter.hsdHurtboxCapsules.push_back(capsule);
             continue;
         }
-        const JointWorldTransform& transform = fighter.hsdJointWorldTransforms[static_cast<size_t>(hurtbox.bone)];
+        const JointWorldTransform& transform = fighter.hsdJointWorldTransforms[static_cast<size_t>(hurtbox.joint)];
         Capsule capsule;
-        capsule.a = transformPoint(transform, hurtbox.start);
-        capsule.b = transformPoint(transform, hurtbox.end);
+        capsule.a = transformPoint(transform, hurtbox.startOffset);
+        capsule.b = transformPoint(transform, hurtbox.endOffset);
         capsule.radius = hurtbox.radius;
         fighter.hsdHurtboxCapsules.push_back(capsule);
     }
@@ -3360,7 +3376,7 @@ static void refreshHsdWorldPose(const FighterDefinition& def, FighterRuntime& fi
     }
     fighter.hsdJointWorldTransforms = fighterWorldTransforms(def, fighter);
     fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
-    evaluateImportedHurtboxes(def, fighter);
+    evaluateNativePoseHurtboxes(def, fighter);
 }
 
 static bool hsdRelativeBonePosition(const FighterRuntime& fighter, int joint, Vec3& out) {
@@ -5516,12 +5532,12 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
         return;
     }
     if (sub.type == SubactionType::SetHurtboxState) {
-        if (sub.hsdBone >= 0 && def.hsdAsset) {
-            if (fighter.hurtboxStates.size() != def.hsdAsset->hurtboxes.size()) {
-                fighter.hurtboxStates.assign(def.hsdAsset->hurtboxes.size(), HurtboxState::Normal);
+        if (sub.hsdBone >= 0) {
+            if (fighter.hurtboxStates.size() != def.hurtboxes.size()) {
+                fighter.hurtboxStates.assign(def.hurtboxes.size(), HurtboxState::Normal);
             }
-            for (size_t i = 0; i < def.hsdAsset->hurtboxes.size(); ++i) {
-                if (def.hsdAsset->hurtboxes[i].bone == sub.hsdBone) {
+            for (size_t i = 0; i < def.hurtboxes.size(); ++i) {
+                if (def.hurtboxes[i].joint == sub.hsdBone) {
                     fighter.hurtboxStates[i] = sub.hurtboxState;
                 }
             }
@@ -6336,8 +6352,8 @@ static int damageLevelFromHitstun(Fix scaledHitstun, const MeleeCommonData& comm
 }
 
 static int hurtboxRegionForHit(const FighterDefinition& victimDef, size_t hurtboxIndex) {
-    if (victimDef.hasHsdAsset && victimDef.hsdAsset && hurtboxIndex < victimDef.hsdAsset->hurtboxes.size()) {
-        const std::string& type = victimDef.hsdAsset->hurtboxes[hurtboxIndex].type;
+    if (hurtboxIndex < victimDef.hurtboxes.size() && !victimDef.hurtboxes[hurtboxIndex].type.empty()) {
+        const std::string& type = victimDef.hurtboxes[hurtboxIndex].type;
         if (type == "Low") return 0;
         if (type == "High") return 2;
         return 1;
@@ -6844,7 +6860,7 @@ static void translateHsdJointSubtree(const FighterDefinition& def, FighterRuntim
         transform.matrix[11] += delta.z;
     }
     fighter.hsdJointWorldPositions = translationsFromTransforms(fighter.hsdJointWorldTransforms);
-    evaluateImportedHurtboxes(def, fighter);
+    evaluateNativePoseHurtboxes(def, fighter);
 }
 
 static Vec3 meleeCaptureAnchorWorld(const FighterDefinition& grabberDef, const FighterRuntime& grabber, bool constrained) {
@@ -8620,8 +8636,8 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
             if ((victim.grounded && !hitbox.def.hitGrounded) || (!victim.grounded && !hitbox.def.hitAirborne)) {
                 continue;
             }
-            const bool useImportedHurtboxes = victimDef.hasHsdAsset && victimDef.hsdAsset && !victim.hsdHurtboxCapsules.empty();
-            const size_t hurtboxCount = useImportedHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
+            const bool usePoseHurtboxes = !victim.hsdHurtboxCapsules.empty();
+            const size_t hurtboxCount = usePoseHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
             if (victim.hurtboxStates.size() != hurtboxCount) {
                 HurtboxState fillState = HurtboxState::Normal;
                 if (!victim.hurtboxStates.empty() &&
@@ -8647,7 +8663,7 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                     continue;
                 }
             }
-            if (useImportedHurtboxes) {
+            if (usePoseHurtboxes) {
                 for (size_t hurtboxIndex = 0; hurtboxIndex < victim.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
                     const HurtboxState capsuleState = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
                     const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
@@ -8655,8 +8671,8 @@ static void updateAndCheckHitboxes(World& world, size_t attackerIndex) {
                         continue;
                     }
                     if (hitbox.def.isGrab &&
-                        (hurtboxIndex >= victimDef.hsdAsset->hurtboxes.size() ||
-                         !victimDef.hsdAsset->hurtboxes[hurtboxIndex].grabbable))
+                        (hurtboxIndex >= victimDef.hurtboxes.size() ||
+                         !victimDef.hurtboxes[hurtboxIndex].grabbable))
                     {
                         continue;
                     }
@@ -8729,8 +8745,8 @@ static bool fighterTouchesCapsule(World& world, size_t fighterIndex, const Capsu
     }
     FighterRuntime& fighter = world.fighters[fighterIndex];
     const FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
-    const bool useImportedHurtboxes = def.hasHsdAsset && def.hsdAsset && !fighter.hsdHurtboxCapsules.empty();
-    const size_t hurtboxCount = useImportedHurtboxes ? fighter.hsdHurtboxCapsules.size() : def.hurtboxes.size();
+    const bool usePoseHurtboxes = !fighter.hsdHurtboxCapsules.empty();
+    const size_t hurtboxCount = usePoseHurtboxes ? fighter.hsdHurtboxCapsules.size() : def.hurtboxes.size();
     if (fighter.hurtboxStates.size() != hurtboxCount) {
         HurtboxState fillState = HurtboxState::Normal;
         if (!fighter.hurtboxStates.empty() &&
@@ -8742,7 +8758,7 @@ static bool fighterTouchesCapsule(World& world, size_t fighterIndex, const Capsu
         fighter.hurtboxStates.assign(hurtboxCount, fillState);
     }
 
-    if (useImportedHurtboxes) {
+    if (usePoseHurtboxes) {
         for (size_t hurtboxIndex = 0; hurtboxIndex < fighter.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
             const HurtboxState capsuleState = hurtboxIndex < fighter.hurtboxStates.size() ? fighter.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
             const HurtboxState state = fighter.bodyCollisionState == HurtboxState::Normal ? capsuleState : fighter.bodyCollisionState;
@@ -8857,8 +8873,8 @@ static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
                 }
             }
 
-            const bool useImportedHurtboxes = victimDef.hasHsdAsset && victimDef.hsdAsset && !victim.hsdHurtboxCapsules.empty();
-            const size_t hurtboxCount = useImportedHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
+            const bool usePoseHurtboxes = !victim.hsdHurtboxCapsules.empty();
+            const size_t hurtboxCount = usePoseHurtboxes ? victim.hsdHurtboxCapsules.size() : victimDef.hurtboxes.size();
             if (victim.hurtboxStates.size() != hurtboxCount) {
                 HurtboxState fillState = HurtboxState::Normal;
                 if (!victim.hurtboxStates.empty() &&
@@ -8870,7 +8886,7 @@ static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
                 victim.hurtboxStates.assign(hurtboxCount, fillState);
             }
 
-            if (useImportedHurtboxes) {
+            if (usePoseHurtboxes) {
                 for (size_t hurtboxIndex = 0; hurtboxIndex < victim.hsdHurtboxCapsules.size(); ++hurtboxIndex) {
                     const HurtboxState capsuleState = hurtboxIndex < victim.hurtboxStates.size() ? victim.hurtboxStates[hurtboxIndex] : HurtboxState::Normal;
                     const HurtboxState state = victim.bodyCollisionState == HurtboxState::Normal ? capsuleState : victim.bodyCollisionState;
@@ -8878,8 +8894,8 @@ static void updateAndCheckObjectHitboxes(World& world, size_t objectIndex) {
                         continue;
                     }
                     if (hitbox.def.isGrab &&
-                        (hurtboxIndex >= victimDef.hsdAsset->hurtboxes.size() ||
-                         !victimDef.hsdAsset->hurtboxes[hurtboxIndex].grabbable))
+                        (hurtboxIndex >= victimDef.hurtboxes.size() ||
+                         !victimDef.hurtboxes[hurtboxIndex].grabbable))
                     {
                         continue;
                     }

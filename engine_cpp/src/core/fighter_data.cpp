@@ -721,10 +721,10 @@ FighterDefinition makeDebugRook() {
     fighter.shield.startSizeHardShield = fighter.properties.initialShieldSize;
 
     fighter.hurtboxes = {
-        {BoneId::Hip, {0, 0, 0}, {0, fxFromFloat(1.0f), 0}, fxFromFloat(0.55f)},
-        {BoneId::Head, {0, 0, 0}, {0, fxFromFloat(0.35f), 0}, fxFromFloat(0.42f)},
-        {BoneId::HandL, {0, 0, 0}, {0, 0, 0}, fxFromFloat(0.26f)},
-        {BoneId::HandR, {0, 0, 0}, {0, 0, 0}, fxFromFloat(0.26f)},
+        HurtboxDefinition{BoneId::Hip, -1, "", {0, 0, 0}, {0, fxFromFloat(1.0f), 0}, fxFromFloat(0.55f)},
+        HurtboxDefinition{BoneId::Head, -1, "", {0, 0, 0}, {0, fxFromFloat(0.35f), 0}, fxFromFloat(0.42f)},
+        HurtboxDefinition{BoneId::HandL, -1, "", {0, 0, 0}, {0, 0, 0}, fxFromFloat(0.26f)},
+        HurtboxDefinition{BoneId::HandR, -1, "", {0, 0, 0}, {0, 0, 0}, fxFromFloat(0.26f)},
     };
 
     FighterState waitState;

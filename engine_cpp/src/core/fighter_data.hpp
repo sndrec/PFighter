@@ -373,6 +373,8 @@ enum class HurtboxState : uint8_t {
 
 struct HurtboxDefinition {
     BoneId bone = BoneId::Hip;
+    int joint = -1;
+    std::string type;
     Vec3 startOffset;
     Vec3 endOffset;
     Fix radius = fx(1);

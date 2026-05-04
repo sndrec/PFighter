@@ -99,7 +99,7 @@ static void commonEnter(World& world, FighterRuntime& fighter) {
     fighter.activeHitboxes.clear();
     fighter.fightersHitThisAction.clear();
     fighter.throwHitboxActive.fill(false);
-    const size_t hurtboxCount = def.hasHsdAsset && def.hsdAsset ? def.hsdAsset->hurtboxes.size() : def.hurtboxes.size();
+    const size_t hurtboxCount = def.hurtboxes.size();
     fighter.hurtboxStates.assign(hurtboxCount, HurtboxState::Normal);
     fighter.bodyCollisionState = HurtboxState::Normal;
     fighter.commandVars.fill(0);
