@@ -6271,8 +6271,28 @@ int main(int argc, char** argv) {
         pf::setEditorSessionPackageScriptGraph(editorSession, editorLogicScriptIndex, editorLogicGraph, &packageError) &&
         editorSession.rootFighter() &&
         editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes.size() == 3;
+    pf::PackageScript editorGraphCompileProbe;
+    editorGraphCompileProbe.name = "GraphCompileProbe";
+    editorGraphCompileProbe.instructions = {editorSetVarInstruction, editorNopInstruction};
+    editorGraphCompileProbe.graph = pf::makePackageScriptLinearGraph(editorGraphCompileProbe);
+    if (editorGraphCompileProbe.graph.links.size() >= 2) {
+        editorGraphCompileProbe.graph.links[0].toNode = 2;
+        editorGraphCompileProbe.graph.links[1].fromNode = 2;
+        editorGraphCompileProbe.graph.links[1].toNode = 1;
+    }
+    const bool editorSessionCompileStandaloneGraphOk = editorSessionScriptGraphOk &&
+        pf::compilePackageScriptGraph(editorGraphCompileProbe, &packageError) &&
+        editorGraphCompileProbe.instructions.size() == 2 &&
+        editorGraphCompileProbe.instructions[0].op == pf::PackageScriptOp::Nop &&
+        editorGraphCompileProbe.instructions[1].op == pf::PackageScriptOp::SetVarImmediate &&
+        editorGraphCompileProbe.graph.nodes[1].instructionIndex == 1 &&
+        editorGraphCompileProbe.graph.nodes[2].instructionIndex == 0;
+    const bool editorSessionCompileScriptGraphOk = editorSessionCompileStandaloneGraphOk &&
+        pf::compileEditorSessionPackageScriptGraph(editorSession, editorLogicScriptIndex, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].instructions.size() == 2;
     int editorMovedInstructionIndex = -1;
-    const bool editorSessionMoveInstructionOk = editorSessionScriptGraphOk &&
+    const bool editorSessionMoveInstructionOk = editorSessionCompileScriptGraphOk &&
         pf::moveEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, 1, -1, &editorMovedInstructionIndex, &packageError) &&
         editorMovedInstructionIndex == 0 &&
         editorSession.rootFighter() &&
@@ -6449,8 +6469,11 @@ int main(int argc, char** argv) {
         (editorObjectLogicGraph = pf::makePackageScriptLinearGraph(editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)]), true) &&
         pf::setEditorSessionObjectPackageScriptGraph(editorSession, editorArticleObjectIndex, editorObjectLogicScript, editorObjectLogicGraph, &packageError) &&
         editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes.size() == 3;
+    const bool editorSessionCompileObjectScriptGraphOk = editorSessionObjectScriptGraphOk &&
+        pf::compileEditorSessionObjectPackageScriptGraph(editorSession, editorArticleObjectIndex, editorObjectLogicScript, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].instructions.size() == 2;
     int editorMovedObjectInstructionIndex = -1;
-    const bool editorSessionMoveObjectInstructionOk = editorSessionObjectScriptGraphOk &&
+    const bool editorSessionMoveObjectInstructionOk = editorSessionCompileObjectScriptGraphOk &&
         pf::moveEditorSessionObjectPackageInstruction(
             editorSession,
             editorArticleObjectIndex,
@@ -8279,6 +8302,8 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_instruction_ok=" << editorSessionAddInstructionOk
               << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
               << " fighter_editor_session_script_graph_ok=" << editorSessionScriptGraphOk
+              << " fighter_editor_session_compile_standalone_graph_ok=" << editorSessionCompileStandaloneGraphOk
+              << " fighter_editor_session_compile_script_graph_ok=" << editorSessionCompileScriptGraphOk
               << " fighter_editor_session_move_instruction_ok=" << editorSessionMoveInstructionOk
               << " fighter_editor_session_invalid_instruction_rejected=" << editorSessionInvalidInstructionRejected
               << " fighter_editor_session_add_caller_script_ok=" << editorSessionAddCallerScriptOk
@@ -8308,6 +8333,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_object_instruction_ok=" << editorSessionAddObjectInstructionOk
               << " fighter_editor_session_add_second_object_instruction_ok=" << editorSessionAddSecondObjectInstructionOk
               << " fighter_editor_session_object_script_graph_ok=" << editorSessionObjectScriptGraphOk
+              << " fighter_editor_session_compile_object_script_graph_ok=" << editorSessionCompileObjectScriptGraphOk
               << " fighter_editor_session_move_object_instruction_ok=" << editorSessionMoveObjectInstructionOk
               << " fighter_editor_session_invalid_object_instruction_rejected=" << editorSessionInvalidObjectInstructionRejected
               << " fighter_editor_session_add_object_caller_script_ok=" << editorSessionAddObjectCallerScriptOk

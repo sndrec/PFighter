@@ -744,6 +744,57 @@ void remapGraphAfterInstructionSwap(PackageScriptGraph& graph, int firstIndex, i
     }
 }
 
+PackageScriptGraphNode* graphNodeById(PackageScriptGraph& graph, int nodeId) {
+    const auto found = std::find_if(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+    return found == graph.nodes.end() ? nullptr : &*found;
+}
+
+const PackageScriptGraphNode* graphNodeById(const PackageScriptGraph& graph, int nodeId) {
+    const auto found = std::find_if(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+    return found == graph.nodes.end() ? nullptr : &*found;
+}
+
+bool graphNodeSeen(const std::vector<int>& seen, int nodeId) {
+    return std::find(seen.begin(), seen.end(), nodeId) != seen.end();
+}
+
+bool packageInstructionUsesRelativeControlFlow(PackageScriptOp op) {
+    return op == PackageScriptOp::SkipIfVarLessThanImmediate ||
+        op == PackageScriptOp::SkipIfVarLessThanVar ||
+        op == PackageScriptOp::SkipIfVarEqualImmediate ||
+        op == PackageScriptOp::SkipIfVarEqualVar ||
+        op == PackageScriptOp::JumpRelative;
+}
+
+int graphInstructionNodeCount(const PackageScriptGraph& graph) {
+    return static_cast<int>(std::count_if(graph.nodes.begin(), graph.nodes.end(), [](const PackageScriptGraphNode& node) {
+        return node.kind == PackageScriptGraphNodeKind::Instruction;
+    }));
+}
+
+bool nextGraphControlNode(const PackageScriptGraph& graph, int currentNode, int& nextNode, std::string* error) {
+    bool found = false;
+    for (const PackageScriptGraphLink& link : graph.links) {
+        if (link.fromNode != currentNode || link.fromSocket != 0) {
+            continue;
+        }
+        if (found) {
+            setEditorError(error, "editor package script graph has multiple control links");
+            return false;
+        }
+        found = true;
+        nextNode = link.toNode;
+    }
+    if (!found) {
+        nextNode = -1;
+    }
+    return true;
+}
+
 bool validSessionObject(
     FighterEditorSession& session,
     int objectIndex,
@@ -2561,6 +2612,86 @@ PackageScriptGraph makePackageScriptLinearGraph(const PackageScript& script) {
     return graph;
 }
 
+bool compilePackageScriptGraph(PackageScript& script, std::string* error) {
+    PackageScriptGraph& graph = script.graph;
+    if (graph.nodes.empty()) {
+        setEditorError(error, "editor package script graph is empty");
+        return false;
+    }
+    PackageScriptGraphNode* entry = graphNodeById(graph, graph.entryNode);
+    if (!entry || entry->kind != PackageScriptGraphNodeKind::Entry) {
+        setEditorError(error, "editor package script graph entry is invalid");
+        return false;
+    }
+    for (const PackageScriptInstruction& instruction : script.instructions) {
+        if (packageInstructionUsesRelativeControlFlow(instruction.op)) {
+            setEditorError(error, "editor package script graph compile does not support relative control flow yet");
+            return false;
+        }
+    }
+
+    std::vector<PackageScriptInstruction> compiled;
+    std::vector<int> compiledNodeIds;
+    std::vector<int> seenNodes;
+    std::vector<int> seenInstructions;
+    int currentNode = graph.entryNode;
+    seenNodes.push_back(currentNode);
+    while (true) {
+        int nextNode = -1;
+        if (!nextGraphControlNode(graph, currentNode, nextNode, error)) {
+            return false;
+        }
+        if (nextNode < 0) {
+            break;
+        }
+        if (graphNodeSeen(seenNodes, nextNode)) {
+            setEditorError(error, "editor package script graph has a control cycle");
+            return false;
+        }
+        PackageScriptGraphNode* node = graphNodeById(graph, nextNode);
+        if (!node) {
+            setEditorError(error, "editor package script graph link target is invalid");
+            return false;
+        }
+        seenNodes.push_back(nextNode);
+        if (node->kind == PackageScriptGraphNodeKind::Instruction) {
+            if (node->instructionIndex < 0 || node->instructionIndex >= static_cast<int>(script.instructions.size())) {
+                setEditorError(error, "editor package script graph instruction is invalid");
+                return false;
+            }
+            if (std::find(seenInstructions.begin(), seenInstructions.end(), node->instructionIndex) != seenInstructions.end()) {
+                setEditorError(error, "editor package script graph instruction is duplicate");
+                return false;
+            }
+            seenInstructions.push_back(node->instructionIndex);
+            compiled.push_back(script.instructions[static_cast<size_t>(node->instructionIndex)]);
+            compiledNodeIds.push_back(node->id);
+        } else if (node->kind == PackageScriptGraphNodeKind::Entry) {
+            setEditorError(error, "editor package script graph control target is invalid");
+            return false;
+        }
+        currentNode = nextNode;
+    }
+
+    if (static_cast<int>(compiled.size()) != graphInstructionNodeCount(graph)) {
+        setEditorError(error, "editor package script graph has disconnected instruction nodes");
+        return false;
+    }
+    if (compiled.size() != script.instructions.size()) {
+        setEditorError(error, "editor package script graph does not cover all bytecode instructions");
+        return false;
+    }
+
+    script.instructions = std::move(compiled);
+    for (int compiledIndex = 0; compiledIndex < static_cast<int>(compiledNodeIds.size()); ++compiledIndex) {
+        PackageScriptGraphNode* node = graphNodeById(graph, compiledNodeIds[static_cast<size_t>(compiledIndex)]);
+        if (node) {
+            node->instructionIndex = compiledIndex;
+        }
+    }
+    return true;
+}
+
 bool setEditorSessionPackageScriptGraph(
     FighterEditorSession& session,
     int scriptIndex,
@@ -2574,6 +2705,24 @@ bool setEditorSessionPackageScriptGraph(
     FighterPackage previous = session.package;
     script->graph = graph;
     session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool compileEditorSessionPackageScriptGraph(
+    FighterEditorSession& session,
+    int scriptIndex,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!compilePackageScriptGraph(*script, error)) {
+        return false;
+    }
+    session.selectedPackageScript = scriptIndex;
+    session.selectedPackageInstruction = 0;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
@@ -4065,6 +4214,23 @@ bool setEditorSessionObjectPackageScriptGraph(
     }
     FighterPackage previous = session.package;
     script->graph = graph;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
+bool compileEditorSessionObjectPackageScriptGraph(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    if (!compilePackageScriptGraph(*script, error)) {
+        return false;
+    }
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 

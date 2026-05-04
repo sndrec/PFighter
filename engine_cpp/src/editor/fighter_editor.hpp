@@ -331,10 +331,15 @@ bool setEditorSessionPackageScriptBudget(
     int instructionBudget,
     std::string* error = nullptr);
 PackageScriptGraph makePackageScriptLinearGraph(const PackageScript& script);
+bool compilePackageScriptGraph(PackageScript& script, std::string* error = nullptr);
 bool setEditorSessionPackageScriptGraph(
     FighterEditorSession& session,
     int scriptIndex,
     const PackageScriptGraph& graph,
+    std::string* error = nullptr);
+bool compileEditorSessionPackageScriptGraph(
+    FighterEditorSession& session,
+    int scriptIndex,
     std::string* error = nullptr);
 bool addEditorSessionPackageInstruction(
     FighterEditorSession& session,
@@ -642,6 +647,11 @@ bool setEditorSessionObjectPackageScriptGraph(
     int objectIndex,
     int scriptIndex,
     const PackageScriptGraph& graph,
+    std::string* error = nullptr);
+bool compileEditorSessionObjectPackageScriptGraph(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
     std::string* error = nullptr);
 bool addEditorSessionObjectPackageInstruction(
     FighterEditorSession& session,
