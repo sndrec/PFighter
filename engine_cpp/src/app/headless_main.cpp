@@ -4645,6 +4645,9 @@ int main(int argc, char** argv) {
         {"CommandVarReadFromVar", 0},
         {"ThrowFlagRead", 0},
         {"ThrowFlagReadFromVar", 0},
+        {"HeldObjectVar", 0},
+        {"GrabbedFighterVar", 0},
+        {"GrabberFighterVar", 0},
     };
     packageSourceWorld.fighterDefs[0].packageScripts = {{
         "SmokeScript",
@@ -4689,6 +4692,9 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarFighterFacing, 27, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterJumpsUsed, 28, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterJumpsRemaining, 29, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterHeldObject, 35, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterGrabbedFighter, 36, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterGrabberFighter, 37, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGrounded, 3, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFacing, 4, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterPercent, 13, -1, -1, 0, 0, {}},
@@ -4848,6 +4854,9 @@ int main(int argc, char** argv) {
         {"ObjectRandomVar", 0},
         {"ObjectOwnerCommandVarRead", 0},
         {"ObjectOwnerThrowFlagRead", 0},
+        {"ObjectOwnerHeldObject", 0},
+        {"ObjectOwnerGrabbedFighter", 0},
+        {"ObjectOwnerGrabberFighter", 0},
     };
     packageSourceWorld.objectDefs[1].packageScripts = {{
         "ObjectSmokeScript",
@@ -4865,6 +4874,9 @@ int main(int argc, char** argv) {
             {pf::PackageScriptOp::SetVarFighterJumpsRemaining, 24, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFighterCommandVar, 27, -1, -1, 1, 0, {}},
             {pf::PackageScriptOp::SetVarFighterThrowFlag, 28, -1, -1, 4, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterHeldObject, 29, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterGrabbedFighter, 30, -1, -1, 0, 0, {}},
+            {pf::PackageScriptOp::SetVarFighterGrabberFighter, 31, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarGrounded, 3, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarFacing, 4, -1, -1, 0, 0, {}},
             {pf::PackageScriptOp::SetVarObjectOwner, 5, -1, -1, 0, 0, {}},
@@ -5278,6 +5290,9 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidThrowFlagWritePackage = sourcePackage;
     invalidThrowFlagWritePackage.fighters[0].packageScripts[16].instructions[3].srcA = 999;
     const bool invalidPackageThrowFlagWriteRejected = pf::writeFighterPackage(invalidThrowFlagWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidInteractionReadWritePackage = sourcePackage;
+    invalidInteractionReadWritePackage.fighters[0].packageScripts[4].instructions[9].dst = 999;
+    const bool invalidPackageInteractionReadWriteRejected = pf::writeFighterPackage(invalidInteractionReadWritePackage, &invalidPackageError).empty();
     pf::FighterPackage invalidObjectSwitchWritePackage = sourcePackage;
     invalidObjectSwitchWritePackage.objects[1].packageScripts[0].instructions.push_back({
         pf::PackageScriptOp::SwitchFighterDefinition,
@@ -5404,11 +5419,11 @@ int main(int argc, char** argv) {
         loadedPackage.fighters[0].authoredSkeleton.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches.size() == 1 &&
         loadedPackage.fighters[0].authoredMesh.batches[0].vertices.size() == 3 &&
-        loadedPackage.fighters[0].packageVariables.size() == 35 &&
+        loadedPackage.fighters[0].packageVariables.size() == 38 &&
         loadedPackage.fighters[0].packageScripts.size() == 17 &&
         loadedPackage.fighters[1].name == "SmokeAlt" &&
         loadedPackage.objects.size() > 1 &&
-        loadedPackage.objects[1].packageVariables.size() == 29 &&
+        loadedPackage.objects[1].packageVariables.size() == 32 &&
         loadedPackage.objects[1].packageScripts.size() == 5;
     const bool packageAssetOk = packageShapeOk &&
         loadedPackage.fighters[0].hasHsdAsset &&
@@ -5542,11 +5557,14 @@ int main(int argc, char** argv) {
         packageFactScriptWorld.fighters[0].previousPosition = packageFactScriptWorld.fighters[0].position;
         packageFactScriptWorld.fighters[0].groundVelocity = pf::fxFromFloat(0.75f);
         packageFactScriptWorld.fighters[0].fighterVelocity = {pf::fxFromFloat(-0.25f), pf::fxFromFloat(1.5f)};
+        packageFactScriptWorld.fighters[0].heldObject = 5;
+        packageFactScriptWorld.fighters[0].grabbedFighter = 1;
+        packageFactScriptWorld.fighters[0].grabberFighter = -1;
         packageFactScriptWorld.fighters[0].packageVars.clear();
     }
     pf::tickWorld(packageFactScriptWorld, {pf::InputFrame{}, pf::InputFrame{}});
     const bool packageFactScriptOk = packageShapeOk &&
-        packageFactScriptWorld.fighters[0].packageVars.size() >= 30 &&
+        packageFactScriptWorld.fighters[0].packageVars.size() >= 38 &&
         packageFactScriptWorld.fighters[0].packageVars[1] == 1 &&
         packageFactScriptWorld.fighters[0].packageVars[2] == 1 &&
         packageFactScriptWorld.fighters[0].packageVars[3] == 1 &&
@@ -5564,7 +5582,10 @@ int main(int argc, char** argv) {
         packageFactScriptWorld.fighters[0].packageVars[26] == 1 &&
         packageFactScriptWorld.fighters[0].packageVars[27] == -1 &&
         packageFactScriptWorld.fighters[0].packageVars[28] == 0 &&
-        packageFactScriptWorld.fighters[0].packageVars[29] == 2;
+        packageFactScriptWorld.fighters[0].packageVars[29] == 2 &&
+        packageFactScriptWorld.fighters[0].packageVars[35] == 5 &&
+        packageFactScriptWorld.fighters[0].packageVars[36] == 1 &&
+        packageFactScriptWorld.fighters[0].packageVars[37] == -1;
     pf::World packageJumpResourceScriptWorld = pf::makeTrainingWorld();
     if (packageShapeOk) {
         packageJumpResourceScriptWorld.fighterDefs[0] = loadedPackage.fighters[0];
@@ -5913,6 +5934,9 @@ int main(int argc, char** argv) {
         packageObjectScriptWorld.objectDefs = loadedPackage.objects;
         pf::setFighterCommandVar(packageObjectScriptWorld.fighters[0], 1, 13);
         pf::setFighterThrowFlag(packageObjectScriptWorld.fighters[0], 4, true);
+        packageObjectScriptWorld.fighters[0].heldObject = 8;
+        packageObjectScriptWorld.fighters[0].grabbedFighter = 1;
+        packageObjectScriptWorld.fighters[0].grabberFighter = -1;
     }
     const int packageObjectIndex = pf::spawnGameObject(
         packageObjectScriptWorld,
@@ -5940,7 +5964,7 @@ int main(int argc, char** argv) {
     const pf::Fix packageObjectCtxVelX = packageObject && packageObject->packageVars.size() > 12 ? packageObject->packageVars[12] : pf::Fix{-1};
     const pf::Fix packageObjectCtxVelY = packageObject && packageObject->packageVars.size() > 13 ? packageObject->packageVars[13] : pf::Fix{-1};
     const bool packageObjectFactScriptOk = packageObject &&
-        packageObject->packageVars.size() >= 29 &&
+        packageObject->packageVars.size() >= 32 &&
         packageObject->packageVars[1] == 1 &&
         packageObject->packageVars[2] == 1 &&
         packageObject->packageVars[3] == 0 &&
@@ -5968,6 +5992,9 @@ int main(int argc, char** argv) {
         packageObject->packageVars[25] == 17 &&
         packageObject->packageVars[27] == 13 &&
         packageObject->packageVars[28] == 1 &&
+        packageObject->packageVars[29] == 8 &&
+        packageObject->packageVars[30] == 1 &&
+        packageObject->packageVars[31] == -1 &&
         packageObject->animationRate == pf::fxFromFloat(0.25f) &&
         packageObject->animationFrame == pf::fxFromFloat(2.25f);
     const bool packageObjectOwnerVarWriteOk =
@@ -6181,6 +6208,9 @@ int main(int argc, char** argv) {
               << " fighter_package_script_fighter_facing=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 27 ? packageFactScriptWorld.fighters[0].packageVars[27] : -1)
               << " fighter_package_script_fighter_jumps_used=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 28 ? packageFactScriptWorld.fighters[0].packageVars[28] : -1)
               << " fighter_package_script_fighter_jumps_remaining=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 29 ? packageFactScriptWorld.fighters[0].packageVars[29] : -1)
+              << " fighter_package_script_held_object=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 35 ? packageFactScriptWorld.fighters[0].packageVars[35] : -1)
+              << " fighter_package_script_grabbed_fighter=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 36 ? packageFactScriptWorld.fighters[0].packageVars[36] : -1)
+              << " fighter_package_script_grabber_fighter=" << (packageFactScriptWorld.fighters[0].packageVars.size() > 37 ? packageFactScriptWorld.fighters[0].packageVars[37] : -1)
               << " fighter_package_script_jump_write_ok=" << packageJumpResourceScriptOk
               << " fighter_package_script_jump_write_used=" << packageJumpResourceScriptWorld.fighters[0].jumpsUsed
               << " fighter_package_script_random_ok=" << packageRandomScriptOk
@@ -6216,6 +6246,9 @@ int main(int argc, char** argv) {
               << " fighter_package_object_owner_var_read=" << (packageObject && packageObject->packageVars.size() > 25 ? packageObject->packageVars[25] : -1)
               << " fighter_package_object_owner_command_var=" << (packageObject && packageObject->packageVars.size() > 27 ? packageObject->packageVars[27] : -1)
               << " fighter_package_object_owner_throw_flag=" << (packageObject && packageObject->packageVars.size() > 28 ? packageObject->packageVars[28] : -1)
+              << " fighter_package_object_owner_held_object=" << (packageObject && packageObject->packageVars.size() > 29 ? packageObject->packageVars[29] : -1)
+              << " fighter_package_object_owner_grabbed_fighter=" << (packageObject && packageObject->packageVars.size() > 30 ? packageObject->packageVars[30] : -1)
+              << " fighter_package_object_owner_grabber_fighter=" << (packageObject && packageObject->packageVars.size() > 31 ? packageObject->packageVars[31] : -1)
               << " fighter_package_object_owner_var_write_ok=" << packageObjectOwnerVarWriteOk
               << " fighter_package_object_state_script_var=" << packageObjectStateScriptVar
               << " fighter_package_object_call_script_var=" << packageObjectCallScriptVar
@@ -6277,6 +6310,7 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_command_var_write_rejected=" << invalidPackageCommandVarWriteRejected
               << " fighter_package_invalid_throw_flag_read_write_rejected=" << invalidPackageThrowFlagReadWriteRejected
               << " fighter_package_invalid_throw_flag_write_rejected=" << invalidPackageThrowFlagWriteRejected
+              << " fighter_package_invalid_interaction_read_write_rejected=" << invalidPackageInteractionReadWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected
               << " fighter_package_invalid_object_switch_write_rejected=" << invalidPackageObjectSwitchWriteRejected

@@ -7015,7 +7015,10 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
             case PackageScriptOp::SetVarFighterJumpsUsed:
             case PackageScriptOp::SetVarFighterJumpsRemaining:
             case PackageScriptOp::SetVarFighterCommandVar:
-            case PackageScriptOp::SetVarFighterThrowFlag: {
+            case PackageScriptOp::SetVarFighterThrowFlag:
+            case PackageScriptOp::SetVarFighterHeldObject:
+            case PackageScriptOp::SetVarFighterGrabbedFighter:
+            case PackageScriptOp::SetVarFighterGrabberFighter: {
                 if (!validFighterIndex(world, object.ownerFighter)) {
                     setVar(instruction.dst, 0);
                     break;
@@ -7050,6 +7053,15 @@ static void runGameObjectFunction(World& world, size_t objectIndex, const Functi
                     break;
                 case PackageScriptOp::SetVarFighterThrowFlag:
                     setVar(instruction.dst, fighterThrowFlag(owner, instruction.intValue) ? 1 : 0);
+                    break;
+                case PackageScriptOp::SetVarFighterHeldObject:
+                    setVar(instruction.dst, owner.heldObject);
+                    break;
+                case PackageScriptOp::SetVarFighterGrabbedFighter:
+                    setVar(instruction.dst, owner.grabbedFighter);
+                    break;
+                case PackageScriptOp::SetVarFighterGrabberFighter:
+                    setVar(instruction.dst, owner.grabberFighter);
                     break;
                 case PackageScriptOp::SetVarFighterPercent:
                     setVar(instruction.dst, owner.percent);

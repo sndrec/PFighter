@@ -237,6 +237,9 @@ bool validPackageScriptOp(PackageScriptOp op) {
     case PackageScriptOp::SetVarFighterThrowFlag:
     case PackageScriptOp::SetFighterThrowFlagImmediate:
     case PackageScriptOp::SetFighterThrowFlagFromVar:
+    case PackageScriptOp::SetVarFighterHeldObject:
+    case PackageScriptOp::SetVarFighterGrabbedFighter:
+    case PackageScriptOp::SetVarFighterGrabberFighter:
     case PackageScriptOp::SetVarFighterPercent:
     case PackageScriptOp::SetVarFighterShield:
     case PackageScriptOp::SetVarFighterPositionX:
@@ -1757,6 +1760,14 @@ void validatePackageScriptInstruction(
             throw std::runtime_error("fighter package script fighter throw flag write is invalid");
         }
         requireVariableIndex(instruction.srcA, variableCount, "source");
+        break;
+    case PackageScriptOp::SetVarFighterHeldObject:
+    case PackageScriptOp::SetVarFighterGrabbedFighter:
+    case PackageScriptOp::SetVarFighterGrabberFighter:
+        requireVariableIndex(instruction.dst, variableCount, "destination");
+        if (!allowFighterContextReads) {
+            throw std::runtime_error("fighter package script fighter interaction read is invalid");
+        }
         break;
     case PackageScriptOp::SetVarObjectOwner:
     case PackageScriptOp::SetVarObjectHeldBy:

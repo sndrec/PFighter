@@ -2675,6 +2675,15 @@ void runPackageScript(World& world, FighterRuntime& fighter, const std::string& 
         case PackageScriptOp::SetFighterThrowFlagFromVar:
             setFighterThrowFlag(fighter, instruction.dst, packageVar(fighter, instruction.srcA) != 0);
             break;
+        case PackageScriptOp::SetVarFighterHeldObject:
+            setPackageVar(fighter, instruction.dst, fighter.heldObject);
+            break;
+        case PackageScriptOp::SetVarFighterGrabbedFighter:
+            setPackageVar(fighter, instruction.dst, fighter.grabbedFighter);
+            break;
+        case PackageScriptOp::SetVarFighterGrabberFighter:
+            setPackageVar(fighter, instruction.dst, fighter.grabberFighter);
+            break;
         case PackageScriptOp::SetVarFighterPercent:
             setPackageVar(fighter, instruction.dst, fighter.percent);
             break;
