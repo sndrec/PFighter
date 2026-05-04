@@ -5307,6 +5307,8 @@ int main(int argc, char** argv) {
     sourcePackage.hsdAssets = {packageSourceWorld.fighterDefs[0].hsdAsset};
     sourcePackage.fighters = {packageSourceWorld.fighterDefs[0], packageSourceWorld.fighterDefs.back()};
     sourcePackage.objects = packageSourceWorld.objectDefs;
+    sourcePackage.fighters[0].packageScripts[0].graph = pf::makePackageScriptLinearGraph(sourcePackage.fighters[0].packageScripts[0]);
+    sourcePackage.objects[1].packageScripts[0].graph = pf::makePackageScriptLinearGraph(sourcePackage.objects[1].packageScripts[0]);
     std::string packageError;
     pf::FighterPackage subactionProjectilePackage = sourcePackage;
     const int subactionProjectileStateIndex = subactionProjectilePackage.fighters[0].stateIndex("Wait");
@@ -5774,6 +5776,12 @@ int main(int argc, char** argv) {
     pf::FighterPackage invalidLogicVarWritePackage = sourcePackage;
     invalidLogicVarWritePackage.fighters[0].packageScripts.back().instructions[12].srcB = 999;
     const bool invalidPackageLogicVarWriteRejected = pf::writeFighterPackage(invalidLogicVarWritePackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScriptGraphInstructionPackage = sourcePackage;
+    invalidScriptGraphInstructionPackage.fighters[0].packageScripts[0].graph.nodes[1].instructionIndex = 999;
+    const bool invalidPackageScriptGraphInstructionRejected = pf::writeFighterPackage(invalidScriptGraphInstructionPackage, &invalidPackageError).empty();
+    pf::FighterPackage invalidScriptGraphLinkPackage = sourcePackage;
+    invalidScriptGraphLinkPackage.objects[1].packageScripts[0].graph.links[0].toNode = 999;
+    const bool invalidPackageScriptGraphLinkRejected = pf::writeFighterPackage(invalidScriptGraphLinkPackage, &invalidPackageError).empty();
     pf::FighterPackage invalidInteractionReadWritePackage = sourcePackage;
     invalidInteractionReadWritePackage.fighters[0].packageScripts[4].instructions[9].dst = 999;
     const bool invalidPackageInteractionReadWriteRejected = pf::writeFighterPackage(invalidInteractionReadWritePackage, &invalidPackageError).empty();
@@ -5967,6 +5975,13 @@ int main(int argc, char** argv) {
         loadedPackage.objects.size() > 1 &&
         loadedPackage.objects[1].packageVariables.size() == 57 &&
         loadedPackage.objects[1].packageScripts.size() == 21;
+    const bool packageScriptGraphOk = packageShapeOk &&
+        loadedPackage.fighters[0].packageScripts[0].graph.entryNode == 0 &&
+        loadedPackage.fighters[0].packageScripts[0].graph.nodes.size() == loadedPackage.fighters[0].packageScripts[0].instructions.size() + 1 &&
+        loadedPackage.fighters[0].packageScripts[0].graph.links.size() == loadedPackage.fighters[0].packageScripts[0].instructions.size() &&
+        loadedPackage.objects[1].packageScripts[0].graph.entryNode == 0 &&
+        loadedPackage.objects[1].packageScripts[0].graph.nodes.size() == loadedPackage.objects[1].packageScripts[0].instructions.size() + 1 &&
+        loadedPackage.objects[1].packageScripts[0].graph.links.size() == loadedPackage.objects[1].packageScripts[0].instructions.size();
     const auto loadedRuntimePackageHasFighter = [&](const std::string& name) {
         return std::any_of(loadedRuntimePackage.fighters.begin(), loadedRuntimePackage.fighters.end(), [&](const pf::FighterDefinition& fighter) {
             return fighter.name == name;
@@ -6249,10 +6264,20 @@ int main(int argc, char** argv) {
     const bool editorSessionAddSecondInstructionOk = editorSessionAddInstructionOk &&
         pf::addEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, editorNopInstruction, -1, &editorNopInstructionIndex, &packageError) &&
         editorNopInstructionIndex == 1;
+    pf::PackageScriptGraph editorLogicGraph;
+    const bool editorSessionScriptGraphOk = editorSessionAddSecondInstructionOk &&
+        editorSession.rootFighter() &&
+        (editorLogicGraph = pf::makePackageScriptLinearGraph(editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)]), true) &&
+        pf::setEditorSessionPackageScriptGraph(editorSession, editorLogicScriptIndex, editorLogicGraph, &packageError) &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes.size() == 3;
     int editorMovedInstructionIndex = -1;
-    const bool editorSessionMoveInstructionOk = editorSessionAddSecondInstructionOk &&
+    const bool editorSessionMoveInstructionOk = editorSessionScriptGraphOk &&
         pf::moveEditorSessionPackageInstruction(editorSession, editorLogicScriptIndex, 1, -1, &editorMovedInstructionIndex, &packageError) &&
-        editorMovedInstructionIndex == 0;
+        editorMovedInstructionIndex == 0 &&
+        editorSession.rootFighter() &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes[1].instructionIndex == 1 &&
+        editorSession.rootFighter()->packageScripts[static_cast<size_t>(editorLogicScriptIndex)].graph.nodes[2].instructionIndex == 0;
     pf::PackageScriptInstruction editorInvalidInstruction = editorSetVarInstruction;
     editorInvalidInstruction.dst = 9999;
     const bool editorSessionInvalidInstructionRejected = editorSessionMoveInstructionOk &&
@@ -6419,8 +6444,13 @@ int main(int argc, char** argv) {
             &editorObjectNopInstructionIndex,
             &packageError) &&
         editorObjectNopInstructionIndex == 1;
+    pf::PackageScriptGraph editorObjectLogicGraph;
+    const bool editorSessionObjectScriptGraphOk = editorSessionAddSecondObjectInstructionOk &&
+        (editorObjectLogicGraph = pf::makePackageScriptLinearGraph(editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)]), true) &&
+        pf::setEditorSessionObjectPackageScriptGraph(editorSession, editorArticleObjectIndex, editorObjectLogicScript, editorObjectLogicGraph, &packageError) &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes.size() == 3;
     int editorMovedObjectInstructionIndex = -1;
-    const bool editorSessionMoveObjectInstructionOk = editorSessionAddSecondObjectInstructionOk &&
+    const bool editorSessionMoveObjectInstructionOk = editorSessionObjectScriptGraphOk &&
         pf::moveEditorSessionObjectPackageInstruction(
             editorSession,
             editorArticleObjectIndex,
@@ -6429,7 +6459,9 @@ int main(int argc, char** argv) {
             -1,
             &editorMovedObjectInstructionIndex,
             &packageError) &&
-        editorMovedObjectInstructionIndex == 0;
+        editorMovedObjectInstructionIndex == 0 &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes[1].instructionIndex == 1 &&
+        editorSession.package.objects[static_cast<size_t>(editorArticleObjectIndex)].packageScripts[static_cast<size_t>(editorObjectLogicScript)].graph.nodes[2].instructionIndex == 0;
     pf::PackageScriptInstruction editorInvalidObjectInstruction = editorObjectSetVarInstruction;
     editorInvalidObjectInstruction.dst = 9999;
     const bool editorSessionInvalidObjectInstructionRejected = editorSessionMoveObjectInstructionOk &&
@@ -8203,6 +8235,7 @@ int main(int argc, char** argv) {
               << " fighter_package_descriptor_ok=" << packageDescriptorOk
               << " fighter_package_bytes_descriptor_ok=" << packageBytesDescriptorOk
               << " fighter_package_shape_ok=" << packageShapeOk
+              << " fighter_package_script_graph_ok=" << packageScriptGraphOk
               << " fighter_package_runtime_bytes=" << runtimePackageBytes.size()
               << " fighter_package_runtime_checksum=" << pf::fighterPackageChecksum(runtimePackageBytes)
               << " fighter_package_runtime_loaded=" << runtimePackageLoaded
@@ -8245,6 +8278,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_script_ok=" << editorSessionAddScriptOk
               << " fighter_editor_session_add_instruction_ok=" << editorSessionAddInstructionOk
               << " fighter_editor_session_add_second_instruction_ok=" << editorSessionAddSecondInstructionOk
+              << " fighter_editor_session_script_graph_ok=" << editorSessionScriptGraphOk
               << " fighter_editor_session_move_instruction_ok=" << editorSessionMoveInstructionOk
               << " fighter_editor_session_invalid_instruction_rejected=" << editorSessionInvalidInstructionRejected
               << " fighter_editor_session_add_caller_script_ok=" << editorSessionAddCallerScriptOk
@@ -8273,6 +8307,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_object_script_budget_ok=" << editorSessionObjectScriptBudgetOk
               << " fighter_editor_session_add_object_instruction_ok=" << editorSessionAddObjectInstructionOk
               << " fighter_editor_session_add_second_object_instruction_ok=" << editorSessionAddSecondObjectInstructionOk
+              << " fighter_editor_session_object_script_graph_ok=" << editorSessionObjectScriptGraphOk
               << " fighter_editor_session_move_object_instruction_ok=" << editorSessionMoveObjectInstructionOk
               << " fighter_editor_session_invalid_object_instruction_rejected=" << editorSessionInvalidObjectInstructionRejected
               << " fighter_editor_session_add_object_caller_script_ok=" << editorSessionAddObjectCallerScriptOk
@@ -8578,6 +8613,8 @@ int main(int argc, char** argv) {
               << " fighter_package_invalid_expression_var_write_rejected=" << invalidPackageExpressionVarWriteRejected
               << " fighter_package_invalid_logic_not_write_rejected=" << invalidPackageLogicNotWriteRejected
               << " fighter_package_invalid_logic_var_write_rejected=" << invalidPackageLogicVarWriteRejected
+              << " fighter_package_invalid_script_graph_instruction_rejected=" << invalidPackageScriptGraphInstructionRejected
+              << " fighter_package_invalid_script_graph_link_rejected=" << invalidPackageScriptGraphLinkRejected
               << " fighter_package_invalid_interaction_read_write_rejected=" << invalidPackageInteractionReadWriteRejected
               << " fighter_package_invalid_var_motion_write_rejected=" << invalidPackageVarMotionWriteRejected
               << " fighter_package_invalid_spawn_object_vars_write_rejected=" << invalidPackageSpawnObjectVarsWriteRejected

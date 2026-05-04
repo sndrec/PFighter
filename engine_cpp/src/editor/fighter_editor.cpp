@@ -692,6 +692,58 @@ bool hasFunctionCall(const std::vector<FunctionCall>& calls, const std::string& 
     });
 }
 
+bool graphHasNode(const PackageScriptGraph& graph, int nodeId) {
+    return std::any_of(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+}
+
+void eraseGraphLinksToMissingNodes(PackageScriptGraph& graph) {
+    graph.links.erase(
+        std::remove_if(graph.links.begin(), graph.links.end(), [&](const PackageScriptGraphLink& link) {
+            return !graphHasNode(graph, link.fromNode) || !graphHasNode(graph, link.toNode);
+        }),
+        graph.links.end());
+    if (graph.entryNode >= 0 && !graphHasNode(graph, graph.entryNode)) {
+        graph.entryNode = -1;
+    }
+}
+
+void remapGraphAfterInstructionInsert(PackageScriptGraph& graph, int instructionIndex) {
+    for (PackageScriptGraphNode& node : graph.nodes) {
+        if (node.kind == PackageScriptGraphNodeKind::Instruction && node.instructionIndex >= instructionIndex) {
+            ++node.instructionIndex;
+        }
+    }
+}
+
+void remapGraphAfterInstructionRemove(PackageScriptGraph& graph, int instructionIndex) {
+    graph.nodes.erase(
+        std::remove_if(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+            return node.kind == PackageScriptGraphNodeKind::Instruction && node.instructionIndex == instructionIndex;
+        }),
+        graph.nodes.end());
+    for (PackageScriptGraphNode& node : graph.nodes) {
+        if (node.kind == PackageScriptGraphNodeKind::Instruction && node.instructionIndex > instructionIndex) {
+            --node.instructionIndex;
+        }
+    }
+    eraseGraphLinksToMissingNodes(graph);
+}
+
+void remapGraphAfterInstructionSwap(PackageScriptGraph& graph, int firstIndex, int secondIndex) {
+    for (PackageScriptGraphNode& node : graph.nodes) {
+        if (node.kind != PackageScriptGraphNodeKind::Instruction) {
+            continue;
+        }
+        if (node.instructionIndex == firstIndex) {
+            node.instructionIndex = secondIndex;
+        } else if (node.instructionIndex == secondIndex) {
+            node.instructionIndex = firstIndex;
+        }
+    }
+}
+
 bool validSessionObject(
     FighterEditorSession& session,
     int objectIndex,
@@ -2486,6 +2538,45 @@ bool setEditorSessionPackageScriptBudget(
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
+PackageScriptGraph makePackageScriptLinearGraph(const PackageScript& script) {
+    PackageScriptGraph graph;
+    graph.entryNode = 0;
+    graph.nodes.push_back({0, PackageScriptGraphNodeKind::Entry, -1, {0, 0}, "Entry"});
+    for (int instructionIndex = 0; instructionIndex < static_cast<int>(script.instructions.size()); ++instructionIndex) {
+        const int nodeId = instructionIndex + 1;
+        graph.nodes.push_back({
+            nodeId,
+            PackageScriptGraphNodeKind::Instruction,
+            instructionIndex,
+            {fx(3), fx(instructionIndex * 2)},
+            {},
+        });
+        graph.links.push_back({
+            instructionIndex == 0 ? graph.entryNode : instructionIndex,
+            0,
+            nodeId,
+            0,
+        });
+    }
+    return graph;
+}
+
+bool setEditorSessionPackageScriptGraph(
+    FighterEditorSession& session,
+    int scriptIndex,
+    const PackageScriptGraph& graph,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionScript(session, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    script->graph = graph;
+    session.selectedPackageScript = scriptIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
 bool addEditorSessionPackageInstruction(
     FighterEditorSession& session,
     int scriptIndex,
@@ -2503,6 +2594,7 @@ bool addEditorSessionPackageInstruction(
         ? static_cast<int>(script->instructions.size())
         : std::clamp(insertIndex, 0, static_cast<int>(script->instructions.size()));
     script->instructions.insert(script->instructions.begin() + index, instruction);
+    remapGraphAfterInstructionInsert(script->graph, index);
     session.selectedPackageScript = scriptIndex;
     session.selectedPackageInstruction = index;
     if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
@@ -2552,6 +2644,7 @@ bool removeEditorSessionPackageInstruction(
     }
     FighterPackage previous = session.package;
     script->instructions.erase(script->instructions.begin() + instructionIndex);
+    remapGraphAfterInstructionRemove(script->graph, instructionIndex);
     session.selectedPackageScript = scriptIndex;
     session.selectedPackageInstruction = std::clamp(instructionIndex, 0, std::max(0, static_cast<int>(script->instructions.size()) - 1));
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
@@ -2584,6 +2677,7 @@ bool moveEditorSessionPackageInstruction(
     }
     FighterPackage previous = session.package;
     std::swap(script->instructions[static_cast<size_t>(instructionIndex)], script->instructions[static_cast<size_t>(targetIndex)]);
+    remapGraphAfterInstructionSwap(script->graph, instructionIndex, targetIndex);
     session.selectedPackageScript = scriptIndex;
     session.selectedPackageInstruction = targetIndex;
     if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
@@ -3958,6 +4052,22 @@ bool setEditorSessionObjectPackageScriptBudget(
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
+bool setEditorSessionObjectPackageScriptGraph(
+    FighterEditorSession& session,
+    int objectIndex,
+    int scriptIndex,
+    const PackageScriptGraph& graph,
+    std::string* error)
+{
+    PackageScript* script = nullptr;
+    if (!validSessionObjectScript(session, objectIndex, scriptIndex, nullptr, &script, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    script->graph = graph;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
 bool addEditorSessionObjectPackageInstruction(
     FighterEditorSession& session,
     int objectIndex,
@@ -3976,6 +4086,7 @@ bool addEditorSessionObjectPackageInstruction(
         ? static_cast<int>(script->instructions.size())
         : std::clamp(insertIndex, 0, static_cast<int>(script->instructions.size()));
     script->instructions.insert(script->instructions.begin() + index, instruction);
+    remapGraphAfterInstructionInsert(script->graph, index);
     if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
         return false;
     }
@@ -4023,6 +4134,7 @@ bool removeEditorSessionObjectPackageInstruction(
     }
     FighterPackage previous = session.package;
     script->instructions.erase(script->instructions.begin() + instructionIndex);
+    remapGraphAfterInstructionRemove(script->graph, instructionIndex);
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
@@ -4054,6 +4166,7 @@ bool moveEditorSessionObjectPackageInstruction(
     }
     FighterPackage previous = session.package;
     std::swap(script->instructions[static_cast<size_t>(instructionIndex)], script->instructions[static_cast<size_t>(targetIndex)]);
+    remapGraphAfterInstructionSwap(script->graph, instructionIndex, targetIndex);
     if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
         return false;
     }

@@ -585,10 +585,38 @@ struct PackageScriptInstruction {
     std::string text;
 };
 
+enum class PackageScriptGraphNodeKind : uint8_t {
+    Entry,
+    Instruction,
+    Comment,
+};
+
+struct PackageScriptGraphNode {
+    int id = -1;
+    PackageScriptGraphNodeKind kind = PackageScriptGraphNodeKind::Instruction;
+    int instructionIndex = -1;
+    Vec2 position{};
+    std::string label;
+};
+
+struct PackageScriptGraphLink {
+    int fromNode = -1;
+    int fromSocket = 0;
+    int toNode = -1;
+    int toSocket = 0;
+};
+
+struct PackageScriptGraph {
+    int entryNode = -1;
+    std::vector<PackageScriptGraphNode> nodes;
+    std::vector<PackageScriptGraphLink> links;
+};
+
 struct PackageScript {
     std::string name;
     int instructionBudget = 64;
     std::vector<PackageScriptInstruction> instructions;
+    PackageScriptGraph graph;
 };
 
 enum class SubactionType : uint8_t {

@@ -35,6 +35,8 @@ constexpr uint32_t kMaxMeshTextures = 4096;
 constexpr uint32_t kMaxMeshBatches = 65536;
 constexpr uint32_t kMaxMeshVertices = 1024 * 1024;
 constexpr uint32_t kMaxMeshMatrices = 65536;
+constexpr uint32_t kMaxScriptGraphNodes = 65536;
+constexpr uint32_t kMaxScriptGraphLinks = 131072;
 constexpr uint32_t kMaxStringBytes = 1 << 20;
 
 class PackageWriter {
@@ -374,6 +376,16 @@ bool validPackageScriptOp(PackageScriptOp op) {
     return false;
 }
 
+bool validPackageScriptGraphNodeKind(PackageScriptGraphNodeKind kind) {
+    switch (kind) {
+    case PackageScriptGraphNodeKind::Entry:
+    case PackageScriptGraphNodeKind::Instruction:
+    case PackageScriptGraphNodeKind::Comment:
+        return true;
+    }
+    return false;
+}
+
 bool validSubactionType(SubactionType type) {
     switch (type) {
     case SubactionType::SyncTimer:
@@ -666,12 +678,69 @@ PackageScriptInstruction readPackageScriptInstruction(PackageReader& reader) {
     return instruction;
 }
 
+void writePackageScriptGraphNode(PackageWriter& writer, const PackageScriptGraphNode& node) {
+    writer.writeI32(node.id);
+    writeEnum(writer, node.kind, validPackageScriptGraphNodeKind, "script graph node kind");
+    writer.writeI32(node.instructionIndex);
+    writeVec2(writer, node.position);
+    writer.writeString(node.label);
+}
+
+PackageScriptGraphNode readPackageScriptGraphNode(PackageReader& reader) {
+    PackageScriptGraphNode node;
+    node.id = reader.readI32();
+    node.kind = readEnum<PackageScriptGraphNodeKind>(reader, validPackageScriptGraphNodeKind, "script graph node kind");
+    node.instructionIndex = reader.readI32();
+    node.position = readVec2(reader);
+    node.label = reader.readString();
+    return node;
+}
+
+void writePackageScriptGraphLink(PackageWriter& writer, const PackageScriptGraphLink& link) {
+    writer.writeI32(link.fromNode);
+    writer.writeI32(link.fromSocket);
+    writer.writeI32(link.toNode);
+    writer.writeI32(link.toSocket);
+}
+
+PackageScriptGraphLink readPackageScriptGraphLink(PackageReader& reader) {
+    PackageScriptGraphLink link;
+    link.fromNode = reader.readI32();
+    link.fromSocket = reader.readI32();
+    link.toNode = reader.readI32();
+    link.toSocket = reader.readI32();
+    return link;
+}
+
+void writePackageScriptGraph(PackageWriter& writer, const PackageScriptGraph& graph) {
+    writer.writeI32(graph.entryNode);
+    writeVector(writer, graph.nodes, [&](const PackageScriptGraphNode& node) {
+        writePackageScriptGraphNode(writer, node);
+    });
+    writeVector(writer, graph.links, [&](const PackageScriptGraphLink& link) {
+        writePackageScriptGraphLink(writer, link);
+    });
+}
+
+PackageScriptGraph readPackageScriptGraph(PackageReader& reader) {
+    PackageScriptGraph graph;
+    graph.entryNode = reader.readI32();
+    graph.nodes = readVector<PackageScriptGraphNode>(reader, kMaxScriptGraphNodes, "script graph node", [&]() {
+        return readPackageScriptGraphNode(reader);
+    });
+    graph.links = readVector<PackageScriptGraphLink>(reader, kMaxScriptGraphLinks, "script graph link", [&]() {
+        return readPackageScriptGraphLink(reader);
+    });
+    return graph;
+}
+
 void writePackageScript(PackageWriter& writer, const PackageScript& script) {
     writer.writeString(script.name);
     writer.writeI32(script.instructionBudget);
     writeVector(writer, script.instructions, [&](const PackageScriptInstruction& instruction) {
         writePackageScriptInstruction(writer, instruction);
     });
+    writePackageScriptGraph(writer, script.graph);
 }
 
 PackageScript readPackageScript(PackageReader& reader) {
@@ -681,6 +750,7 @@ PackageScript readPackageScript(PackageReader& reader) {
     script.instructions = readVector<PackageScriptInstruction>(reader, kMaxSubactions, "script instruction", [&]() {
         return readPackageScriptInstruction(reader);
     });
+    script.graph = readPackageScriptGraph(reader);
     return script;
 }
 
@@ -2255,6 +2325,53 @@ void validateFunctionCalls(
     }
 }
 
+bool packageScriptGraphHasNode(const PackageScriptGraph& graph, int nodeId) {
+    return std::any_of(graph.nodes.begin(), graph.nodes.end(), [&](const PackageScriptGraphNode& node) {
+        return node.id == nodeId;
+    });
+}
+
+void validatePackageScriptGraph(const PackageScriptGraph& graph, int instructionCount) {
+    if (graph.nodes.size() > kMaxScriptGraphNodes || graph.links.size() > kMaxScriptGraphLinks) {
+        throw std::runtime_error("fighter package script graph size is invalid");
+    }
+    if (graph.entryNode >= 0 && !packageScriptGraphHasNode(graph, graph.entryNode)) {
+        throw std::runtime_error("fighter package script graph entry is invalid");
+    }
+
+    std::vector<int> seenNodeIds;
+    seenNodeIds.reserve(graph.nodes.size());
+    for (const PackageScriptGraphNode& node : graph.nodes) {
+        if (node.id < 0) {
+            throw std::runtime_error("fighter package script graph node id is invalid");
+        }
+        if (std::find(seenNodeIds.begin(), seenNodeIds.end(), node.id) != seenNodeIds.end()) {
+            throw std::runtime_error("fighter package script graph node id is duplicate");
+        }
+        seenNodeIds.push_back(node.id);
+        if (!validPackageScriptGraphNodeKind(node.kind)) {
+            throw std::runtime_error("fighter package script graph node kind is invalid");
+        }
+        if (node.kind == PackageScriptGraphNodeKind::Instruction) {
+            if (node.instructionIndex < 0 || node.instructionIndex >= instructionCount) {
+                throw std::runtime_error("fighter package script graph instruction is invalid");
+            }
+        } else if (node.instructionIndex != -1) {
+            throw std::runtime_error("fighter package script graph instruction is invalid");
+        }
+    }
+
+    for (const PackageScriptGraphLink& link : graph.links) {
+        if (!packageScriptGraphHasNode(graph, link.fromNode) ||
+            !packageScriptGraphHasNode(graph, link.toNode) ||
+            link.fromSocket < 0 ||
+            link.toSocket < 0)
+        {
+            throw std::runtime_error("fighter package script graph link is invalid");
+        }
+    }
+}
+
 void validatePackageScripts(
     const std::vector<PackageScript>& scripts,
     int variableCount,
@@ -2282,6 +2399,7 @@ void validatePackageScripts(
             throw std::runtime_error("fighter package script instruction budget is invalid");
         }
         const int instructionCount = static_cast<int>(script.instructions.size());
+        validatePackageScriptGraph(script.graph, instructionCount);
         for (int instructionIndex = 0; instructionIndex < instructionCount; ++instructionIndex) {
             validatePackageScriptInstruction(
                 script.instructions[static_cast<size_t>(instructionIndex)],
