@@ -201,10 +201,167 @@ static pf::InputFrame readPlayerInput(int player, bool arrows) {
     return mergeInput(readKeyboardInput(arrows), readGamepadInput(player));
 }
 
-static void drawCapsule(pf::Vec3 a, pf::Vec3 b, pf::Fix radius, Color color) {
-    DrawSphereWires(toRay(a), pf::fxToFloat(radius), 8, 8, color);
-    DrawSphereWires(toRay(b), pf::fxToFloat(radius), 8, 8, color);
-    DrawLine3D(toRay(a), toRay(b), color);
+static Color colorWithAlpha(Color color, unsigned char alpha) {
+    color.a = alpha;
+    return color;
+}
+
+static Color hitboxOverlayColor(const pf::HitboxDefinition& hitbox) {
+    if (hitbox.isGrab) {
+        return {255, 64, 220, 255};
+    }
+    return {255, 48, 36, 255};
+}
+
+static Color hurtboxOverlayColor(pf::HurtboxState state) {
+    switch (state) {
+    case pf::HurtboxState::Invincible:
+        return {42, 152, 255, 255};
+    case pf::HurtboxState::Intangible:
+        return {36, 214, 255, 255};
+    case pf::HurtboxState::Normal:
+    default:
+        return {255, 220, 36, 255};
+    }
+}
+
+static pf::HurtboxState effectiveHurtboxState(
+    const pf::FighterRuntime& fighter,
+    const pf::HurtboxDefinition& hurtbox,
+    size_t hurtboxIndex)
+{
+    const pf::HurtboxState indexedState = hurtboxIndex < fighter.hurtboxStates.size()
+        ? fighter.hurtboxStates[hurtboxIndex]
+        : pf::HurtboxState::Normal;
+    const pf::HurtboxState capsuleState = indexedState == pf::HurtboxState::Normal ? hurtbox.state : indexedState;
+    return fighter.bodyCollisionState == pf::HurtboxState::Normal ? capsuleState : fighter.bodyCollisionState;
+}
+
+static pf::HurtboxState effectivePoseHurtboxState(const pf::FighterRuntime& fighter, size_t hurtboxIndex) {
+    const pf::HurtboxState capsuleState = hurtboxIndex < fighter.hurtboxStates.size()
+        ? fighter.hurtboxStates[hurtboxIndex]
+        : pf::HurtboxState::Normal;
+    return fighter.bodyCollisionState == pf::HurtboxState::Normal ? capsuleState : fighter.bodyCollisionState;
+}
+
+struct DebugCapsuleOutline {
+    Vector3 start;
+    Vector3 end;
+    float radius = 0.0f;
+    Color color = WHITE;
+};
+
+static void drawCapsule(pf::Vec3 a, pf::Vec3 b, pf::Fix radius, Color color, std::vector<DebugCapsuleOutline>* outlines) {
+    const Vector3 start = toRay(a);
+    const Vector3 end = toRay(b);
+    const float drawRadius = std::max(0.001f, pf::fxToFloat(radius));
+    constexpr int kSlices = 28;
+    constexpr int kRings = 10;
+
+    rlDisableDepthTest();
+    rlDisableDepthMask();
+    rlDisableBackfaceCulling();
+
+    BeginBlendMode(BLEND_ADDITIVE);
+    DrawCapsule(start, end, drawRadius, kSlices, kRings, colorWithAlpha(color, 56));
+    EndBlendMode();
+
+    rlEnableDepthMask();
+    rlEnableDepthTest();
+
+    if (outlines) {
+        outlines->push_back({start, end, drawRadius, colorWithAlpha(color, 255)});
+    }
+}
+
+static Vector2 projectToViewport(Vector3 position, const Camera3D& camera, Rectangle viewport) {
+    const Vector2 projected = GetWorldToScreenEx(
+        position,
+        camera,
+        std::max(1, static_cast<int>(viewport.width)),
+        std::max(1, static_cast<int>(viewport.height)));
+    return {viewport.x + projected.x, viewport.y + projected.y};
+}
+
+static float capsuleScreenRadius(const DebugCapsuleOutline& capsule, const Camera3D& camera, Rectangle viewport) {
+    const Vector3 center = Vector3Scale(Vector3Add(capsule.start, capsule.end), 0.5f);
+    Vector3 forward = Vector3Subtract(camera.target, camera.position);
+    if (Vector3LengthSqr(forward) <= 0.000001f) {
+        forward = {0.0f, 0.0f, -1.0f};
+    }
+    forward = Vector3Normalize(forward);
+    Vector3 right = Vector3CrossProduct(forward, camera.up);
+    if (Vector3LengthSqr(right) <= 0.000001f) {
+        right = {1.0f, 0.0f, 0.0f};
+    } else {
+        right = Vector3Normalize(right);
+    }
+
+    const Vector2 centerScreen = projectToViewport(center, camera, viewport);
+    const Vector2 radiusScreen = projectToViewport(Vector3Add(center, Vector3Scale(right, capsule.radius)), camera, viewport);
+    const float dx = radiusScreen.x - centerScreen.x;
+    const float dy = radiusScreen.y - centerScreen.y;
+    return std::max(1.0f, std::sqrt(dx * dx + dy * dy));
+}
+
+static void drawAaLine(Vector2 a, Vector2 b, Color color) {
+    DrawLineEx(a, b, 2.0f, colorWithAlpha(color, 72));
+    DrawLineEx(a, b, 1.0f, color);
+}
+
+static void drawAaArc(Vector2 center, float radius, float startDegrees, float endDegrees, Color color) {
+    if (endDegrees < startDegrees) {
+        endDegrees += 360.0f;
+    }
+    constexpr int kArcSegments = 24;
+    Vector2 previous{
+        center.x + std::cos(startDegrees * DEG2RAD) * radius,
+        center.y + std::sin(startDegrees * DEG2RAD) * radius,
+    };
+    for (int i = 1; i <= kArcSegments; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kArcSegments);
+        const float angle = (startDegrees + (endDegrees - startDegrees) * t) * DEG2RAD;
+        const Vector2 next{
+            center.x + std::cos(angle) * radius,
+            center.y + std::sin(angle) * radius,
+        };
+        drawAaLine(previous, next, color);
+        previous = next;
+    }
+}
+
+static void drawDebugCapsuleOutlines2D(
+    const std::vector<DebugCapsuleOutline>& outlines,
+    const Camera3D& camera,
+    Rectangle viewport)
+{
+    for (const DebugCapsuleOutline& capsule : outlines) {
+        const Vector2 start = projectToViewport(capsule.start, camera, viewport);
+        const Vector2 end = projectToViewport(capsule.end, camera, viewport);
+        const float radius = capsuleScreenRadius(capsule, camera, viewport);
+        const float dx = end.x - start.x;
+        const float dy = end.y - start.y;
+        const float length = std::sqrt(dx * dx + dy * dy);
+        if (length <= 0.5f) {
+            drawAaArc(start, radius, 0.0f, 360.0f, capsule.color);
+            continue;
+        }
+
+        const Vector2 dir{dx / length, dy / length};
+        const Vector2 normal{-dir.y, dir.x};
+        drawAaLine(
+            {start.x + normal.x * radius, start.y + normal.y * radius},
+            {end.x + normal.x * radius, end.y + normal.y * radius},
+            capsule.color);
+        drawAaLine(
+            {start.x - normal.x * radius, start.y - normal.y * radius},
+            {end.x - normal.x * radius, end.y - normal.y * radius},
+            capsule.color);
+
+        const float directionAngle = std::atan2(dir.y, dir.x) * RAD2DEG;
+        drawAaArc(end, radius, directionAngle - 90.0f, directionAngle + 90.0f, capsule.color);
+        drawAaArc(start, radius, directionAngle + 90.0f, directionAngle + 270.0f, capsule.color);
+    }
 }
 
 static void drawEcb(const pf::FighterRuntime& fighter, Color color) {
@@ -4317,7 +4474,13 @@ static void drawEditorSelectedAuthoredJoint(const pf::World& world, const pf::Fi
     DrawSphereWires(jointPosition, 0.16f, 12, 8, BLACK);
 }
 
-static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighter, Color color, const pf::FighterEditor& editor) {
+static void drawFighter(
+    const pf::World& world,
+    const pf::FighterRuntime& fighter,
+    Color color,
+    const pf::FighterEditor& editor,
+    std::vector<DebugCapsuleOutline>* capsuleOutlines)
+{
     const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
     const Vector3 pos = toRayGround(fighter.position);
     const bool hasAnimationPose = !fighter.jointWorldPositions.empty() && animationSkeletonForDrawing(def) != nullptr;
@@ -4373,16 +4536,28 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
         drawNativeEcbSourceJoints(def, fighter);
     }
     if (editor.showHurtboxes && fighter.poseHurtboxCapsules.empty()) {
-        for (const pf::HurtboxDefinition& hurt : def.hurtboxes) {
+        for (size_t hurtboxIndex = 0; hurtboxIndex < def.hurtboxes.size(); ++hurtboxIndex) {
+            const pf::HurtboxDefinition& hurt = def.hurtboxes[hurtboxIndex];
             pf::Vec3 base = fighter.bones[static_cast<size_t>(hurt.bone)].position;
             base.x += fighter.position.x;
             base.y += fighter.position.y;
-            drawCapsule(base + hurt.startOffset, base + hurt.endOffset, hurt.radius, GREEN);
+            drawCapsule(
+                base + hurt.startOffset,
+                base + hurt.endOffset,
+                hurt.radius,
+                hurtboxOverlayColor(effectiveHurtboxState(fighter, hurt, hurtboxIndex)),
+                capsuleOutlines);
         }
     }
     if (editor.showHurtboxes) {
-        for (const pf::Capsule& hurt : fighter.poseHurtboxCapsules) {
-            drawCapsule(hurt.a, hurt.b, hurt.radius, GREEN);
+        for (size_t hurtboxIndex = 0; hurtboxIndex < fighter.poseHurtboxCapsules.size(); ++hurtboxIndex) {
+            const pf::Capsule& hurt = fighter.poseHurtboxCapsules[hurtboxIndex];
+            drawCapsule(
+                hurt.a,
+                hurt.b,
+                hurt.radius,
+                hurtboxOverlayColor(effectivePoseHurtboxState(fighter, hurtboxIndex)),
+                capsuleOutlines);
         }
     }
     if (editor.showSkeleton) {
@@ -4390,12 +4565,16 @@ static void drawFighter(const pf::World& world, const pf::FighterRuntime& fighte
     }
     if (editor.showHitboxes) {
         for (const pf::ActiveHitbox& hit : fighter.activeHitboxes) {
-            drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+            drawCapsule(hit.previous, hit.current, hit.def.radius, hitboxOverlayColor(hit.def), capsuleOutlines);
         }
     }
 }
 
-static void drawGameObjects(const pf::World& world, const pf::FighterEditor& editor) {
+static void drawGameObjects(
+    const pf::World& world,
+    const pf::FighterEditor& editor,
+    std::vector<DebugCapsuleOutline>* capsuleOutlines)
+{
     for (const pf::GameObjectRuntime& object : world.objects) {
         if (!object.active || object.objectDef < 0 || object.objectDef >= static_cast<int>(world.objectDefs.size())) {
             continue;
@@ -4409,7 +4588,7 @@ static void drawGameObjects(const pf::World& world, const pf::FighterEditor& edi
         }
         if (editor.showHitboxes) {
             for (const pf::ActiveHitbox& hit : object.activeHitboxes) {
-                drawCapsule(hit.previous, hit.current, hit.def.radius, RED);
+                drawCapsule(hit.previous, hit.current, hit.def.radius, hitboxOverlayColor(hit.def), capsuleOutlines);
             }
         }
         if (editor.showHurtboxes) {
@@ -4418,7 +4597,8 @@ static void drawGameObjects(const pf::World& world, const pf::FighterEditor& edi
                     {object.position.x + hurtbox.startOffset.x, object.position.y + hurtbox.startOffset.y, hurtbox.startOffset.z},
                     {object.position.x + hurtbox.endOffset.x, object.position.y + hurtbox.endOffset.y, hurtbox.endOffset.z},
                     hurtbox.radius,
-                    GREEN);
+                    hurtboxOverlayColor(hurtbox.state),
+                    capsuleOutlines);
             }
         }
         if (editor.showHurtboxes) {
@@ -4427,7 +4607,8 @@ static void drawGameObjects(const pf::World& world, const pf::FighterEditor& edi
                     {object.position.x + touchbox.startOffset.x, object.position.y + touchbox.startOffset.y, touchbox.startOffset.z},
                     {object.position.x + touchbox.endOffset.x, object.position.y + touchbox.endOffset.y, touchbox.endOffset.z},
                     touchbox.radius,
-                    SKYBLUE);
+                    SKYBLUE,
+                    capsuleOutlines);
             }
         }
     }
@@ -8271,7 +8452,8 @@ static void prepareEditorEditPreview(
 static void drawWorldScene3D(
     const pf::World& world,
     const pf::FighterEditor& editor,
-    bool editorEditMode)
+    bool editorEditMode,
+    std::vector<DebugCapsuleOutline>* capsuleOutlines)
 {
     DrawGrid(40, 10.0f);
     if (!editorEditMode) {
@@ -8292,16 +8474,16 @@ static void drawWorldScene3D(
     }
     if (editorEditMode) {
         if (editor.selectedFighter >= 0 && editor.selectedFighter < static_cast<int>(world.fighters.size())) {
-            drawFighter(world, world.fighters[static_cast<size_t>(editor.selectedFighter)], ORANGE, editor);
+            drawFighter(world, world.fighters[static_cast<size_t>(editor.selectedFighter)], ORANGE, editor, capsuleOutlines);
         }
     } else {
         if (!world.fighters.empty()) {
-            drawFighter(world, world.fighters[0], ORANGE, editor);
+            drawFighter(world, world.fighters[0], ORANGE, editor, capsuleOutlines);
         }
         if (world.fighters.size() > 1) {
-            drawFighter(world, world.fighters[1], SKYBLUE, editor);
+            drawFighter(world, world.fighters[1], SKYBLUE, editor, capsuleOutlines);
         }
-        drawGameObjects(world, editor);
+        drawGameObjects(world, editor, capsuleOutlines);
     }
     if (editorEditMode) {
         drawEditorSelectedAuthoredMeshVertex(world, editor);
@@ -16193,19 +16375,26 @@ int main() {
                     GetScreenHeight() - static_cast<int>(viewport.y + viewport.height),
                     static_cast<int>(viewport.width),
                     static_cast<int>(viewport.height));
+                std::vector<DebugCapsuleOutline> capsuleOutlines;
                 BeginMode3D(camera);
-                drawWorldScene3D(world, editor, true);
+                drawWorldScene3D(world, editor, true, &capsuleOutlines);
                 EndMode3D();
                 rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+                drawDebugCapsuleOutlines2D(capsuleOutlines, camera, viewport);
                 EndScissorMode();
             } else {
+                std::vector<DebugCapsuleOutline> capsuleOutlines;
                 BeginMode3D(camera);
-                drawWorldScene3D(world, editor, false);
+                drawWorldScene3D(world, editor, false, &capsuleOutlines);
                 if (editorMode) {
                     drawEditorSelectedAuthoredMeshVertex(world, editor);
                     drawEditorSelectedAuthoredJoint(world, editor);
                 }
                 EndMode3D();
+                drawDebugCapsuleOutlines2D(
+                    capsuleOutlines,
+                    camera,
+                    {0.0f, 0.0f, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())});
             }
             if (editorMode) {
                 drawEditorWorkstation(world, editor, editorSession, editorSessionActive, testFighterDef);
