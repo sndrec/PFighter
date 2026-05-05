@@ -7127,7 +7127,7 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
             editor.status = "Editor: added script subaction to " + state.name;
         }
     }
-    if (!state.interrupts.empty()) {
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt && !state.interrupts.empty()) {
         editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
         pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
         normalizeInterruptPackageVariable(interrupt, static_cast<int>(def.packageVariables.size()));
@@ -11273,7 +11273,7 @@ static void drawEditorAnimationWorkstation(
     }
 }
 
-static void drawEditorLogicGraphWorkstation(
+static void drawEditorScriptGraphWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
     pf::FighterEditorSession& session,
@@ -11281,7 +11281,7 @@ static void drawEditorLogicGraphWorkstation(
     pf::FighterDefinition& def,
     Rectangle rect)
 {
-    drawPanelChrome(rect, "Logic Graph");
+    drawPanelChrome(rect, "Scripts / Graph");
     if (def.packageScripts.empty()) {
         DrawText("No package scripts", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 36.0f), 13, Fade(RAYWHITE, 0.7f));
         if (uiButton({rect.x + 10.0f, rect.y + 58.0f, 90.0f, 24.0f}, "+ Script")) {
@@ -11608,6 +11608,267 @@ static void drawEditorLogicGraphWorkstation(
             }
         }
     }
+}
+
+static void drawEditorStateLogicTabs(pf::FighterEditor& editor, Rectangle rect) {
+    const float y = rect.y + 26.0f;
+    const float tabW = std::max(74.0f, (rect.width - 32.0f) / 3.0f);
+    const Rectangle callbacks{rect.x + 10.0f, y, tabW, 24.0f};
+    const Rectangle interrupts{callbacks.x + tabW + 6.0f, y, tabW, 24.0f};
+    const Rectangle scripts{interrupts.x + tabW + 6.0f, y, tabW, 24.0f};
+    if (uiButton(callbacks, "Callbacks", editor.stateLogicTab == 0)) {
+        editor.stateLogicTab = 0;
+    }
+    if (uiButton(interrupts, "Interrupts", editor.stateLogicTab == 1)) {
+        editor.stateLogicTab = 1;
+    }
+    if (uiButton(scripts, "Scripts", editor.stateLogicTab == 2)) {
+        editor.stateLogicTab = 2;
+    }
+}
+
+static void drawEditorStateCallbacksWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    pf::FighterDefinition& def,
+    const pf::FighterState& state,
+    Rectangle rect)
+{
+    DrawText("State callbacks", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 8.0f), 13, RAYWHITE);
+    const std::array<pf::FighterEditorStateCallbackSlot, 4> slots{
+        pf::FighterEditorStateCallbackSlot::Enter,
+        pf::FighterEditorStateCallbackSlot::Frame,
+        pf::FighterEditorStateCallbackSlot::Landing,
+        pf::FighterEditorStateCallbackSlot::Airborne,
+    };
+    const float slotW = std::clamp(rect.width * 0.28f, 92.0f, 128.0f);
+    const float callsX = rect.x + slotW + 20.0f;
+    const float callsW = std::max(120.0f, rect.width - slotW - 30.0f);
+    const float listY = rect.y + 32.0f;
+    for (int row = 0; row < static_cast<int>(slots.size()); ++row) {
+        const pf::FighterEditorStateCallbackSlot slot = slots[static_cast<size_t>(row)];
+        const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, slot);
+        const bool active = editor.selectionKind == pf::FighterEditorSelectionKind::Callback &&
+            editor.selectedStateCallbackSlot == slot;
+        const std::string label = std::string(stateCallbackSlotName(slot)) + " (" + std::to_string(calls.size()) + ")";
+        if (uiListRow({rect.x + 10.0f, listY + 24.0f * row, slotW, 21.0f}, label, active)) {
+            editor.selectedStateCallbackSlot = slot;
+            editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, std::max(0, static_cast<int>(calls.size()) - 1));
+            editor.selectionKind = pf::FighterEditorSelectionKind::Callback;
+        }
+    }
+
+    const std::vector<pf::FunctionCall>& calls = stateCallbackCalls(state, editor.selectedStateCallbackSlot);
+    DrawText((std::string(stateCallbackSlotName(editor.selectedStateCallbackSlot)) + " calls").c_str(),
+        static_cast<int>(callsX),
+        static_cast<int>(rect.y + 8.0f),
+        12,
+        Fade(RAYWHITE, 0.76f));
+    if (calls.empty()) {
+        DrawText("No calls assigned", static_cast<int>(callsX), static_cast<int>(listY + 4.0f), 11, Fade(RAYWHITE, 0.58f));
+    } else {
+        editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, static_cast<int>(calls.size()) - 1);
+        const int visible = std::min(5, static_cast<int>(calls.size()));
+        const int start = visibleListStart(editor.selectedStateCallback, static_cast<int>(calls.size()), visible);
+        for (int row = 0; row < visible; ++row) {
+            const int callIndex = start + row;
+            const pf::FunctionCall& call = calls[static_cast<size_t>(callIndex)];
+            if (uiListRow({callsX, listY + 24.0f * row, callsW, 21.0f},
+                    clippedText("#" + std::to_string(callIndex) + " " + call.name, 11, callsW - 10.0f),
+                    editor.selectionKind == pf::FighterEditorSelectionKind::Callback &&
+                        editor.selectedStateCallback == callIndex))
+            {
+                editor.selectedStateCallback = callIndex;
+                editor.selectionKind = pf::FighterEditorSelectionKind::Callback;
+                const std::string scriptName = packageScriptNameFromCallback(call);
+                if (!scriptName.empty()) {
+                    const auto found = std::find_if(def.packageScripts.begin(), def.packageScripts.end(), [&](const pf::PackageScript& script) {
+                        return script.name == scriptName;
+                    });
+                    if (found != def.packageScripts.end()) {
+                        editor.selectedPackageScript = static_cast<int>(std::distance(def.packageScripts.begin(), found));
+                        session.selectedPackageScript = editor.selectedPackageScript;
+                    }
+                }
+            }
+        }
+    }
+
+    auto commitCallbacks = [&](std::vector<pf::FunctionCall> edited, const std::string& message) -> bool {
+        std::string error;
+        if (pf::setEditorSessionStateCallbacks(session, session.selectedState, editor.selectedStateCallbackSlot, edited, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+            return true;
+        }
+        editor.status = "Editor: callback edit failed: " + error;
+        return false;
+    };
+
+    const float actionY = rect.y + rect.height - 58.0f;
+    if (!def.packageScripts.empty()) {
+        editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+        session.selectedPackageScript = editor.selectedPackageScript;
+        DrawText(clippedText("Script: " + def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name, 10, rect.width - 20.0f).c_str(),
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(actionY),
+            10,
+            Fade(RAYWHITE, 0.66f));
+        if (uiButton({rect.x + 10.0f, actionY + 18.0f, 34.0f, 22.0f}, "<")) {
+            editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript - 1, static_cast<int>(def.packageScripts.size()));
+            session.selectedPackageScript = editor.selectedPackageScript;
+        }
+        if (uiButton({rect.x + 50.0f, actionY + 18.0f, 34.0f, 22.0f}, ">")) {
+            editor.selectedPackageScript = wrappedIndex(editor.selectedPackageScript + 1, static_cast<int>(def.packageScripts.size()));
+            session.selectedPackageScript = editor.selectedPackageScript;
+        }
+        if (uiButton({rect.x + 92.0f, actionY + 18.0f, 82.0f, 22.0f}, "Assign")) {
+            std::string error;
+            const std::string scriptName = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)].name;
+            if (pf::bindEditorSessionPackageScriptCallback(session, session.selectedState, editor.selectedStateCallbackSlot, scriptName, &error)) {
+                editor.selectionKind = pf::FighterEditorSelectionKind::Callback;
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: assigned state callback script");
+                return;
+            }
+            editor.status = "Editor: assign callback failed: " + error;
+        }
+        if (uiButton({rect.x + 182.0f, actionY + 18.0f, 74.0f, 22.0f}, "Open")) {
+            editor.stateLogicTab = 2;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+        }
+    }
+    if (uiButton({rect.x + rect.width - 188.0f, actionY + 18.0f, 84.0f, 22.0f}, "+ Script")) {
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionPackageScript(session, {}, 64, &added, &error)) {
+            editor.selectedPackageScript = added;
+            session.selectedPackageScript = added;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: created package script");
+            return;
+        }
+        editor.status = "Editor: create script failed: " + error;
+    }
+    if (uiButton({rect.x + rect.width - 96.0f, actionY + 18.0f, 84.0f, 22.0f}, "Remove")) {
+        if (!calls.empty()) {
+            std::vector<pf::FunctionCall> edited = editedStateCallbackCalls(state, editor.selectedStateCallbackSlot);
+            editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, static_cast<int>(edited.size()) - 1);
+            edited.erase(edited.begin() + editor.selectedStateCallback);
+            editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, std::max(0, static_cast<int>(edited.size()) - 1));
+            if (commitCallbacks(edited, "Editor: removed state callback")) return;
+        }
+    }
+}
+
+static void drawEditorStateInterruptsWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    const pf::FighterDefinition& def,
+    const pf::FighterState& state,
+    Rectangle rect)
+{
+    DrawText("State interrupts", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 8.0f), 13, RAYWHITE);
+    const float listY = rect.y + 32.0f;
+    const int visible = std::min(7, static_cast<int>(state.interrupts.size()));
+    const int start = visibleListStart(editor.selectedInterrupt, static_cast<int>(state.interrupts.size()), std::max(1, visible));
+    if (state.interrupts.empty()) {
+        DrawText("No interrupt rules", static_cast<int>(rect.x + 10.0f), static_cast<int>(listY + 4.0f), 11, Fade(RAYWHITE, 0.58f));
+    }
+    for (int row = 0; row < visible; ++row) {
+        const int interruptIndex = start + row;
+        const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(interruptIndex)];
+        const std::string label =
+            "#" + std::to_string(interruptIndex) + " " +
+            interruptConditionName(interrupt.condition) + " -> " + interrupt.targetState +
+            "  " + std::to_string(interrupt.enableFrame) + "-" +
+            (interrupt.disableFrame > 0 ? std::to_string(interrupt.disableFrame) : std::string{"end"}) +
+            "  " + groundRequirementName(interrupt.ground);
+        if (uiListRow({rect.x + 10.0f, listY + 24.0f * row, rect.width - 20.0f, 21.0f},
+                clippedText(label, 11, rect.width - 30.0f),
+                editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt &&
+                    editor.selectedInterrupt == interruptIndex))
+        {
+            editor.selectedInterrupt = interruptIndex;
+            session.selectedInterrupt = interruptIndex;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+        }
+    }
+
+    const float actionY = rect.y + rect.height - 32.0f;
+    if (uiButton({rect.x + 10.0f, actionY, 72.0f, 22.0f}, "+ Rule")) {
+        pf::InterruptRule rule;
+        rule.targetState = def.stateIndex("Wait") >= 0 ? "Wait" : state.name;
+        rule.condition = pf::InterruptCondition::JumpPressed;
+        rule.enableFrame = 0;
+        rule.disableFrame = std::max(0, state.animationLengthFrames);
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionInterrupt(session, session.selectedState, rule, -1, &added, &error)) {
+            editor.selectedInterrupt = added;
+            session.selectedInterrupt = added;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added interrupt rule");
+            return;
+        }
+        editor.status = "Editor: add interrupt failed: " + error;
+    }
+    if (uiButton({rect.x + 90.0f, actionY, 72.0f, 22.0f}, "Clone") && !state.interrupts.empty()) {
+        editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
+        std::string error;
+        int added = -1;
+        if (pf::addEditorSessionInterrupt(session, session.selectedState, state.interrupts[static_cast<size_t>(editor.selectedInterrupt)], editor.selectedInterrupt + 1, &added, &error)) {
+            editor.selectedInterrupt = added;
+            session.selectedInterrupt = added;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned interrupt rule");
+            return;
+        }
+        editor.status = "Editor: clone interrupt failed: " + error;
+    }
+    if (uiButton({rect.x + 170.0f, actionY, 80.0f, 22.0f}, "Remove") && !state.interrupts.empty()) {
+        editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
+        std::string error;
+        if (pf::removeEditorSessionInterrupt(session, session.selectedState, editor.selectedInterrupt, &error)) {
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed interrupt rule");
+            return;
+        }
+        editor.status = "Editor: remove interrupt failed: " + error;
+    }
+}
+
+static void drawEditorLogicGraphWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    pf::FighterDefinition& def,
+    Rectangle rect)
+{
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Callback) {
+        editor.stateLogicTab = 0;
+    } else if (editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt) {
+        editor.stateLogicTab = 1;
+    }
+    drawPanelChrome(rect, "State Logic");
+    drawEditorStateLogicTabs(editor, rect);
+    const Rectangle content{rect.x + 8.0f, rect.y + 56.0f, rect.width - 16.0f, std::max(64.0f, rect.height - 64.0f)};
+    if (session.selectedState < 0 || session.selectedState >= static_cast<int>(def.states.size())) {
+        DrawText("No selected state", static_cast<int>(content.x + 2.0f), static_cast<int>(content.y + 8.0f), 12, Fade(RAYWHITE, 0.62f));
+        return;
+    }
+    const pf::FighterState& state = def.states[static_cast<size_t>(session.selectedState)];
+    if (editor.stateLogicTab == 0) {
+        drawEditorStateCallbacksWorkstation(world, editor, session, selectedFighterDef, def, state, content);
+        return;
+    }
+    if (editor.stateLogicTab == 1) {
+        drawEditorStateInterruptsWorkstation(world, editor, session, selectedFighterDef, def, state, content);
+        return;
+    }
+    drawEditorScriptGraphWorkstation(world, editor, session, selectedFighterDef, def, content);
 }
 
 static void drawEditorInspectorWorkstation(
