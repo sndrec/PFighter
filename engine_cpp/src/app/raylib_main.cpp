@@ -12131,7 +12131,55 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: rename state failed: " + error;
         }
     }
-    DrawText(("Anim  " + clippedText(state.animation, 11, rect.width - 78.0f)).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 82.0f), 11, Fade(RAYWHITE, 0.78f));
+    int currentClipIndex = -1;
+    for (int clipIndex = 0; clipIndex < static_cast<int>(def.authoredClips.size()); ++clipIndex) {
+        const pf::AnimationClip& clip = def.authoredClips[static_cast<size_t>(clipIndex)];
+        if ((state.animationActionIndex >= 0 && clip.actionIndex == state.animationActionIndex) ||
+            (state.animationActionIndex < 0 && clip.name == state.animation))
+        {
+            currentClipIndex = clipIndex;
+            break;
+        }
+    }
+    const std::string animationSummary = currentClipIndex >= 0
+        ? ("Anim #" + std::to_string(currentClipIndex) + "  " + state.animation +
+           "  action=" + std::to_string(state.animationActionIndex))
+        : ("Anim  " + state.animation + "  action=" + std::to_string(state.animationActionIndex));
+    DrawText(clippedText(animationSummary, 11, rect.width - 178.0f).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 82.0f), 11, Fade(RAYWHITE, 0.78f));
+    auto assignStateClip = [&](int clipIndex) -> bool {
+        if (def.authoredClips.empty()) {
+            editor.status = "Editor: selected fighter has no authored clips";
+            return false;
+        }
+        clipIndex = wrappedIndex(clipIndex, static_cast<int>(def.authoredClips.size()));
+        const pf::AnimationClip& clip = def.authoredClips[static_cast<size_t>(clipIndex)];
+        const int clipFrames = std::max(1, static_cast<int>(pf::fxToFloat(clip.frameCount) + 0.5f));
+        std::string error;
+        if (pf::setEditorSessionStateAnimation(session, session.selectedState, clip.name, clip.actionIndex, clipFrames, &error)) {
+            editor.selectedAnimationClip = clipIndex;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: assigned state animation " + clip.name);
+            return true;
+        }
+        editor.status = "Editor: state animation failed: " + error;
+        return false;
+    };
+    const float clipButtonY = rect.y + 78.0f;
+    const float clipButtonX = rect.x + rect.width - 160.0f;
+    if (uiButton({clipButtonX, clipButtonY, 46.0f, 22.0f}, "Clip-")) {
+        assignStateClip((currentClipIndex >= 0 ? currentClipIndex : editor.selectedAnimationClip) - 1);
+        return;
+    }
+    if (uiButton({clipButtonX + 52.0f, clipButtonY, 46.0f, 22.0f}, "Clip+")) {
+        assignStateClip((currentClipIndex >= 0 ? currentClipIndex : editor.selectedAnimationClip) + 1);
+        return;
+    }
+    if (uiButton({clipButtonX + 104.0f, clipButtonY, 56.0f, 22.0f}, "Open")) {
+        editor.workspace = pf::EditorWorkspace::Animation;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Animation;
+        editor.selectedAnimationClip = currentClipIndex >= 0 ? currentClipIndex : std::clamp(editor.selectedAnimationClip, 0, std::max(0, static_cast<int>(def.authoredClips.size()) - 1));
+        editor.status = "Editor: opened selected state animation clip";
+        return;
+    }
     drawInspectorRule(rect.y + 104.0f, "Timing");
     DrawText(("Length " + std::to_string(state.animationLengthFrames) +
               "    IASA " + std::to_string(state.initialInterruptibleFrame) +
