@@ -1,5 +1,7 @@
 #include "core/hsd_action_import.hpp"
 
+#include "core/action.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <utility>
@@ -168,7 +170,7 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
         Subaction sub;
         switch (command.code) {
         case 0x00:
-            return result;
+            return makeExplicitTimelineAction(result);
         case 0x01:
             sub.type = SubactionType::SyncTimer;
             sub.frames = static_cast<int>(reader.read(26));
@@ -346,7 +348,7 @@ std::vector<Subaction> decodeHsdActionScript(const HsdFighterAnimationAsset&, co
             break;
         }
     }
-    return result;
+    return makeExplicitTimelineAction(result);
 }
 
 } // namespace pf

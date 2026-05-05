@@ -657,6 +657,7 @@ enum class SubactionType : uint8_t {
 
 struct Subaction {
     SubactionType type = SubactionType::SyncTimer;
+    int startFrame = 0;
     int frames = 0;
     int loopCount = 1;
     int interruptibleFrame = 0;

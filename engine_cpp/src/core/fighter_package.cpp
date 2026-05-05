@@ -888,6 +888,7 @@ InterruptRule readInterrupt(PackageReader& reader) {
 
 void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
     writeEnum(writer, subaction.type, validSubactionType, "subaction type");
+    writer.writeI32(subaction.startFrame);
     writer.writeI32(subaction.frames);
     writer.writeI32(subaction.loopCount);
     writer.writeI32(subaction.interruptibleFrame);
@@ -914,6 +915,7 @@ void writeSubaction(PackageWriter& writer, const Subaction& subaction) {
 Subaction readSubaction(PackageReader& reader) {
     Subaction subaction;
     subaction.type = readEnum<SubactionType>(reader, validSubactionType, "subaction type");
+    subaction.startFrame = reader.readI32();
     subaction.frames = reader.readI32();
     subaction.loopCount = reader.readI32();
     subaction.interruptibleFrame = reader.readI32();
@@ -2805,8 +2807,15 @@ void validateObjectStateTiming(const GameObjectStateDefinition& state) {
 }
 
 void validateSubactionTiming(const Subaction& subaction) {
-    if (subaction.frames < 0 || subaction.loopCount < 0) {
+    if (subaction.startFrame < 0 || subaction.frames < 0 || subaction.loopCount < 0) {
         throw std::runtime_error("fighter package subaction timing is invalid");
+    }
+    if (subaction.type == SubactionType::SyncTimer ||
+        subaction.type == SubactionType::AsyncTimer ||
+        subaction.type == SubactionType::SetLoop ||
+        subaction.type == SubactionType::ExecuteLoop)
+    {
+        throw std::runtime_error("fighter package contains imported timing/control subactions");
     }
 }
 
@@ -2898,7 +2907,11 @@ void validateFighterPackageReferences(const FighterPackage& package) {
                 validateInterruptRulePackageRefs(rule, static_cast<int>(fighter.packageVariables.size()));
             }
             for (const Subaction& subaction : state.action) {
-                validateSubactionTiming(subaction);
+                try {
+                    validateSubactionTiming(subaction);
+                } catch (const std::runtime_error& ex) {
+                    throw std::runtime_error(std::string(ex.what()) + " in " + fighter.name + "::" + state.name);
+                }
                 validateSubactionReferences(fighter, subaction);
                 validateSubactionImportProvenance(subaction);
                 if (subaction.type == SubactionType::SpawnObject && !hasName(packageObjectNames, subaction.objectName)) {

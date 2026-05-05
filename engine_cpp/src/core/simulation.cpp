@@ -5382,16 +5382,15 @@ static void executeSubaction(World& world, size_t fighterIndex, const FighterDef
 }
 
 static void executeActionFrame(World& world, size_t fighterIndex, const FighterDefinition& def, const FighterState& state, int actionFrame) {
-    const UnfoldedAction action = unfoldAction(state.action);
-    if (actionFrame < 0 || actionFrame >= static_cast<int>(action.size())) {
-        return;
-    }
     if (fighterIndex >= world.fighters.size()) {
         return;
     }
     const int sourceDef = world.fighters[fighterIndex].fighterDef;
     const int sourceState = world.fighters[fighterIndex].state;
-    for (const Subaction& sub : action[static_cast<size_t>(actionFrame)]) {
+    for (const Subaction& sub : state.action) {
+        if (sub.startFrame != actionFrame) {
+            continue;
+        }
         if (fighterIndex >= world.fighters.size()) {
             return;
         }

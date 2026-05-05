@@ -1,5 +1,6 @@
 #if PFIGHTER_WITH_RAYLIB
 #include "core/fighter_package.hpp"
+#include "core/action.hpp"
 #include "core/replay.hpp"
 #include "core/simulation.hpp"
 #include "editor/fighter_editor.hpp"
@@ -2886,19 +2887,22 @@ static void remapRemovedPackageObjectTargets(
 {
     for (pf::FighterDefinition& fighter : world.fighterDefs) {
         for (pf::FighterState& state : fighter.states) {
-            for (pf::Subaction& subaction : state.action) {
-                if ((subaction.type != pf::SubactionType::SpawnObject &&
-                     subaction.type != pf::SubactionType::SpawnProjectile) ||
-                    subaction.objectName != removedObjectName)
-                {
-                    continue;
-                }
-                if (replacementObjectName.empty()) {
-                    subaction.type = pf::SubactionType::SyncTimer;
-                    subaction.objectName.clear();
-                    subaction.spawnVelocity = {};
-                    subaction.spawnOffset = {};
-                } else {
+            if (replacementObjectName.empty()) {
+                state.action.erase(
+                    std::remove_if(state.action.begin(), state.action.end(), [&](const pf::Subaction& subaction) {
+                        return (subaction.type == pf::SubactionType::SpawnObject ||
+                                subaction.type == pf::SubactionType::SpawnProjectile) &&
+                            subaction.objectName == removedObjectName;
+                    }),
+                    state.action.end());
+            } else {
+                for (pf::Subaction& subaction : state.action) {
+                    if ((subaction.type != pf::SubactionType::SpawnObject &&
+                         subaction.type != pf::SubactionType::SpawnProjectile) ||
+                        subaction.objectName != removedObjectName)
+                    {
+                        continue;
+                    }
                     subaction.objectName = replacementObjectName;
                 }
             }
@@ -3966,13 +3970,11 @@ static void remapPackageScriptInstructionRefs(
 
 static void removePackageScriptSubactionRefs(std::vector<pf::FighterState>& states, const std::string& scriptName) {
     for (pf::FighterState& state : states) {
-        for (pf::Subaction& subaction : state.action) {
-            if (subaction.type == pf::SubactionType::CallScript && subaction.objectName == scriptName) {
-                subaction.type = pf::SubactionType::SyncTimer;
-                subaction.objectName.clear();
-                subaction.frames = std::max(1, subaction.frames);
-            }
-        }
+        state.action.erase(
+            std::remove_if(state.action.begin(), state.action.end(), [&](const pf::Subaction& subaction) {
+                return subaction.type == pf::SubactionType::CallScript && subaction.objectName == scriptName;
+            }),
+            state.action.end());
     }
 }
 
@@ -7049,23 +7051,7 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         state.initialInterruptibleFrame = std::max(0, state.initialInterruptibleFrame - 1);
         editor.status = "Editor: moved IASA earlier for " + state.name;
     }
-    if (uiButton({516.0f, 440.0f, 58.0f, 24.0f}, "+ Sync")) {
-        pf::Subaction subaction;
-        subaction.type = pf::SubactionType::SyncTimer;
-        subaction.frames = 5;
-        state.action.push_back(subaction);
-        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
-        editor.status = "Editor: added sync timer subaction to " + state.name;
-    }
-    if (uiButton({582.0f, 440.0f, 58.0f, 24.0f}, "+ Async")) {
-        pf::Subaction subaction;
-        subaction.type = pf::SubactionType::AsyncTimer;
-        subaction.frames = 5;
-        state.action.push_back(subaction);
-        editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
-        editor.status = "Editor: added async timer subaction to " + state.name;
-    }
-    if (uiButton({648.0f, 440.0f, 58.0f, 24.0f}, "+ Intbl")) {
+    if (uiButton({516.0f, 440.0f, 58.0f, 24.0f}, "+ Intbl")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::SetInterruptible;
         subaction.frames = 1;
@@ -7074,7 +7060,7 @@ static void drawEditorMovesetWorkspace(pf::World& world, pf::FighterEditor& edit
         editor.selectedSubaction = static_cast<int>(state.action.size()) - 1;
         editor.status = "Editor: added interruptible marker to " + state.name;
     }
-    if (uiButton({714.0f, 440.0f, 58.0f, 24.0f}, "+ Rev")) {
+    if (uiButton({582.0f, 440.0f, 58.0f, 24.0f}, "+ Rev")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::ReverseDirection;
         subaction.frames = 1;
@@ -7793,46 +7779,7 @@ static void drawEditorStateBrowser(pf::World& world, const pf::FighterDefinition
 }
 
 static std::vector<int> editorSubactionFirstFrames(const std::vector<pf::Subaction>& action) {
-    std::vector<int> frames(action.size(), -1);
-    int currentFrame = 0;
-    int loopCount = 0;
-    size_t loopStart = 0;
-    size_t index = 0;
-    int safety = 0;
-    while (index < action.size() && safety < 10000) {
-        ++safety;
-        const pf::Subaction& subaction = action[index];
-        if (subaction.type == pf::SubactionType::SetLoop) {
-            loopStart = index + 1;
-            loopCount = std::max(0, subaction.loopCount - 1);
-            ++index;
-            continue;
-        }
-        if (subaction.type == pf::SubactionType::ExecuteLoop) {
-            if (loopCount > 0) {
-                index = loopStart;
-                --loopCount;
-            } else {
-                ++index;
-            }
-            continue;
-        }
-        if (subaction.type == pf::SubactionType::SyncTimer) {
-            currentFrame += subaction.frames;
-            ++index;
-            continue;
-        }
-        if (subaction.type == pf::SubactionType::AsyncTimer) {
-            currentFrame = std::max(currentFrame, subaction.frames);
-            ++index;
-            continue;
-        }
-        if (frames[index] < 0) {
-            frames[index] = currentFrame;
-        }
-        ++index;
-    }
-    return frames;
+    return pf::subactionFirstFrames(action);
 }
 
 struct EditorWorkstationLayout {
@@ -9190,6 +9137,73 @@ static std::string editorTimelineMarkerLabel(const pf::FighterEditorTimelineMark
     return subactionTypeName(marker.subactionType);
 }
 
+static bool editorTimelineShiftHeld() {
+    return IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+}
+
+static bool editorTimelineHasSelectedSubaction(const pf::FighterEditor& editor, int subactionIndex) {
+    return std::find(editor.selectedSubactions.begin(), editor.selectedSubactions.end(), subactionIndex) != editor.selectedSubactions.end();
+}
+
+static void editorTimelineSanitizeSelection(pf::FighterEditor& editor, int actionCount) {
+    editor.selectedSubactions.erase(
+        std::remove_if(editor.selectedSubactions.begin(), editor.selectedSubactions.end(), [&](int index) {
+            return index < 0 || index >= actionCount;
+        }),
+        editor.selectedSubactions.end());
+    std::sort(editor.selectedSubactions.begin(), editor.selectedSubactions.end());
+    editor.selectedSubactions.erase(std::unique(editor.selectedSubactions.begin(), editor.selectedSubactions.end()), editor.selectedSubactions.end());
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
+        editor.selectedSubaction >= 0 &&
+        editor.selectedSubaction < actionCount &&
+        !editorTimelineHasSelectedSubaction(editor, editor.selectedSubaction))
+    {
+        editor.selectedSubactions.push_back(editor.selectedSubaction);
+        std::sort(editor.selectedSubactions.begin(), editor.selectedSubactions.end());
+    }
+    if (!editor.selectedSubactions.empty()) {
+        editor.selectedSubaction = editor.selectedSubactions.back();
+    }
+}
+
+static void editorTimelineSelectSubaction(
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int subactionIndex,
+    bool additive)
+{
+    if (subactionIndex < 0) {
+        if (!additive) {
+            editor.selectedSubactions.clear();
+        }
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        return;
+    }
+    if (!additive) {
+        editor.selectedSubactions.clear();
+        editor.selectedSubactions.push_back(subactionIndex);
+    } else {
+        auto found = std::find(editor.selectedSubactions.begin(), editor.selectedSubactions.end(), subactionIndex);
+        if (found == editor.selectedSubactions.end()) {
+            editor.selectedSubactions.push_back(subactionIndex);
+        } else {
+            editor.selectedSubactions.erase(found);
+        }
+        if (editor.selectedSubactions.empty()) {
+            editor.selectedSubactions.push_back(subactionIndex);
+        }
+    }
+    std::sort(editor.selectedSubactions.begin(), editor.selectedSubactions.end());
+    editor.selectedSubaction = subactionIndex;
+    session.selectedSubaction = subactionIndex;
+    editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+}
+
+static int editorTimelineFrameFromMouse(Rectangle ruler, int frameCount, float mouseX) {
+    const float t = std::clamp((mouseX - ruler.x) / ruler.width, 0.0f, 1.0f);
+    return static_cast<int>(std::round(t * static_cast<float>(frameCount)));
+}
+
 static void drawEditorTimelineWorkstation(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -9197,7 +9211,7 @@ static void drawEditorTimelineWorkstation(
     int& selectedFighterDef,
     const pf::FighterRuntime& fighter,
     const pf::FighterDefinition& def,
-    const pf::FighterState& state,
+    pf::FighterState& state,
     Rectangle rect)
 {
     drawPanelChrome(rect, "Timeline");
@@ -9247,6 +9261,99 @@ static void drawEditorTimelineWorkstation(
         return lane >= editor.timelineLaneScroll && lane < editor.timelineLaneScroll + visibleLaneCount;
     };
     const Rectangle ruler{rect.x + 136.0f, rulerY, rect.width - 156.0f, 24.0f};
+    editorTimelineSanitizeSelection(editor, static_cast<int>(state.action.size()));
+    if (editorUiAcceptsInput() && IsKeyPressed(KEY_B)) {
+        editor.timelineBoxSelectArmed = true;
+        editor.timelineBoxSelecting = false;
+        editor.status = "Editor: box select armed";
+    }
+    if (editorUiAcceptsInput() && IsKeyPressed(KEY_G) && !editor.selectedSubactions.empty()) {
+        editor.timelineGrabActive = true;
+        editor.timelineGrabCancel = false;
+        editor.timelineDragStartMouseX = mouse.x;
+        editor.timelineDragStartMouseY = mouse.y;
+        editor.timelineDragMouseX = mouse.x;
+        editor.timelineDragMouseY = mouse.y;
+        editor.timelineGrabSubactions = editor.selectedSubactions;
+        editor.timelineGrabStartFrames.clear();
+        for (int index : editor.timelineGrabSubactions) {
+            editor.timelineGrabStartFrames.push_back(state.action[static_cast<size_t>(index)].startFrame);
+        }
+        editor.status = "Editor: grabbing selected subactions";
+    }
+    if (editorUiAcceptsInput() && editorTimelineShiftHeld() && IsKeyPressed(KEY_D) && !editor.selectedSubactions.empty()) {
+        const std::vector<int> sourceSelection = editor.selectedSubactions;
+        std::vector<int> duplicated;
+        duplicated.reserve(sourceSelection.size());
+        for (int index : sourceSelection) {
+            if (index < 0 || index >= static_cast<int>(state.action.size())) {
+                continue;
+            }
+            state.action.push_back(state.action[static_cast<size_t>(index)]);
+            duplicated.push_back(static_cast<int>(state.action.size()) - 1);
+        }
+        if (!duplicated.empty()) {
+            editor.selectedSubactions = duplicated;
+            editor.selectedSubaction = duplicated.back();
+            session.selectedSubaction = editor.selectedSubaction;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+            editor.timelineGrabActive = true;
+            editor.timelineGrabCancel = false;
+            editor.timelineDragStartMouseX = mouse.x;
+            editor.timelineDragStartMouseY = mouse.y;
+            editor.timelineDragMouseX = mouse.x;
+            editor.timelineDragMouseY = mouse.y;
+            editor.timelineGrabSubactions = duplicated;
+            editor.timelineGrabStartFrames.clear();
+            for (int index : editor.timelineGrabSubactions) {
+                editor.timelineGrabStartFrames.push_back(state.action[static_cast<size_t>(index)].startFrame);
+            }
+            editor.status = "Editor: duplicated subactions, move mouse and click to place";
+        }
+    }
+    if (editor.timelineGrabActive) {
+        editor.timelineDragMouseX = mouse.x;
+        editor.timelineDragMouseY = mouse.y;
+        int minStart = frameCount;
+        int maxStart = 0;
+        for (int start : editor.timelineGrabStartFrames) {
+            minStart = std::min(minStart, start);
+            maxStart = std::max(maxStart, start);
+        }
+        const float frameWidth = ruler.width / static_cast<float>(std::max(1, frameCount));
+        int deltaFrames = frameWidth > 0.0f
+            ? static_cast<int>(std::round((mouse.x - editor.timelineDragStartMouseX) / frameWidth))
+            : 0;
+        deltaFrames = std::clamp(deltaFrames, -minStart, frameCount - maxStart);
+        for (int i = 0; i < static_cast<int>(editor.timelineGrabSubactions.size()) &&
+             i < static_cast<int>(editor.timelineGrabStartFrames.size());
+             ++i)
+        {
+            const int subactionIndex = editor.timelineGrabSubactions[static_cast<size_t>(i)];
+            if (subactionIndex < 0 || subactionIndex >= static_cast<int>(state.action.size())) {
+                continue;
+            }
+            state.action[static_cast<size_t>(subactionIndex)].startFrame =
+                std::clamp(editor.timelineGrabStartFrames[static_cast<size_t>(i)] + deltaFrames, 0, frameCount);
+        }
+        if (uiMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+            for (int i = 0; i < static_cast<int>(editor.timelineGrabSubactions.size()) &&
+                 i < static_cast<int>(editor.timelineGrabStartFrames.size());
+                 ++i)
+            {
+                const int subactionIndex = editor.timelineGrabSubactions[static_cast<size_t>(i)];
+                if (subactionIndex >= 0 && subactionIndex < static_cast<int>(state.action.size())) {
+                    state.action[static_cast<size_t>(subactionIndex)].startFrame = editor.timelineGrabStartFrames[static_cast<size_t>(i)];
+                }
+            }
+            editor.timelineGrabActive = false;
+            editor.status = "Editor: canceled subaction grab";
+        } else if (uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            editor.timelineGrabActive = false;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved selected subactions");
+            return;
+        }
+    }
     DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(headerY), 13, RAYWHITE);
     DrawText(("Frame " + std::to_string(std::clamp(playheadFrame, 0, frameCount)) + " / " + std::to_string(frameCount)).c_str(),
         static_cast<int>(rect.x + 10.0f),
@@ -9289,6 +9396,7 @@ static void drawEditorTimelineWorkstation(
         const int targetFrame = std::clamp(playheadFrame, 0, frameCount);
         if (pf::addEditorSessionSubactionAtFrame(session, session.selectedState, subaction, targetFrame, &added, &error)) {
             editor.selectedSubaction = added;
+            editor.selectedSubactions = {added};
             session.selectedSubaction = added;
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " subaction at frame " + std::to_string(targetFrame));
             return true;
@@ -9298,16 +9406,7 @@ static void drawEditorTimelineWorkstation(
     };
     const float actionX = rect.x + 196.0f;
     const float actionY = toolbarY;
-    if (uiButton({actionX, actionY, 50.0f, 22.0f}, "Wait")) {
-        pf::Subaction subaction;
-        subaction.type = pf::SubactionType::SyncTimer;
-        subaction.frames = 5;
-        if (addSubaction(subaction, "sync timer")) {
-            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
-            return;
-        }
-    }
-    if (uiButton({actionX + 56.0f, actionY, 58.0f, 22.0f}, "Hitbox")) {
+    if (uiButton({actionX, actionY, 58.0f, 22.0f}, "Hitbox")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::CreateHitbox;
         subaction.frames = 3;
@@ -9339,7 +9438,7 @@ static void drawEditorTimelineWorkstation(
             return;
         }
     }
-    if (uiButton({actionX + 120.0f, actionY, 66.0f, 22.0f}, "Hurtbox")) {
+    if (uiButton({actionX + 64.0f, actionY, 66.0f, 22.0f}, "Hurtbox")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::SetHurtboxState;
         subaction.frames = 1;
@@ -9352,7 +9451,7 @@ static void drawEditorTimelineWorkstation(
             return;
         }
     }
-    if (uiButton({actionX + 192.0f, actionY, 52.0f, 22.0f}, "Clear")) {
+    if (uiButton({actionX + 136.0f, actionY, 52.0f, 22.0f}, "Clear")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::ClearHitboxes;
         subaction.frames = 1;
@@ -9361,7 +9460,7 @@ static void drawEditorTimelineWorkstation(
             return;
         }
     }
-    if (uiButton({actionX + 250.0f, actionY, 54.0f, 22.0f}, "Script")) {
+    if (uiButton({actionX + 194.0f, actionY, 54.0f, 22.0f}, "Script")) {
         if (def.packageScripts.empty()) {
             editor.status = "Editor: add a package script before adding script subactions";
         } else {
@@ -9375,10 +9474,26 @@ static void drawEditorTimelineWorkstation(
             }
         }
     }
-    if (uiButton({actionX + 310.0f, actionY, 58.0f, 22.0f}, "Remove")) {
+    if (uiButton({actionX + 254.0f, actionY, 58.0f, 22.0f}, "Remove")) {
         std::string error;
-        if (pf::removeEditorSessionSubaction(session, session.selectedState, editor.selectedSubaction, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected subaction");
+        std::vector<int> toRemove = editor.selectedSubactions.empty()
+            ? std::vector<int>{editor.selectedSubaction}
+            : editor.selectedSubactions;
+        std::sort(toRemove.begin(), toRemove.end(), [](int a, int b) { return a > b; });
+        bool removedAny = false;
+        for (int index : toRemove) {
+            if (index < 0 || index >= static_cast<int>(state.action.size())) {
+                continue;
+            }
+            if (!pf::removeEditorSessionSubaction(session, session.selectedState, index, &error)) {
+                editor.status = "Editor: remove subaction failed: " + error;
+                return;
+            }
+            removedAny = true;
+        }
+        if (removedAny) {
+            editor.selectedSubactions.clear();
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected subactions");
             editor.selectionKind = state.action.empty() ? pf::FighterEditorSelectionKind::State : pf::FighterEditorSelectionKind::Subaction;
             return;
         }
@@ -9442,14 +9557,31 @@ static void drawEditorTimelineWorkstation(
         const float y = laneY(lane);
         const bool selected =
             editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
-            editor.selectedSubaction == subactionIndex;
+            editorTimelineHasSelectedSubaction(editor, subactionIndex);
+        int stackedCount = 0;
+        for (int otherIndex = 0;
+             otherIndex < static_cast<int>(state.action.size()) &&
+             otherIndex < static_cast<int>(subactionFrames.size());
+             ++otherIndex)
+        {
+            if (subactionFrames[static_cast<size_t>(otherIndex)] == startFrame &&
+                editorTimelineSubactionLaneIndex(lanes, state.action[static_cast<size_t>(otherIndex)]) == lane)
+            {
+                ++stackedCount;
+            }
+        }
         const Color color = subactionMarkerColor(subaction);
+        const Rectangle eventRect{x, y + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)};
+        if (stackedCount > 1) {
+            DrawRectangleRec({eventRect.x - 3.0f, eventRect.y - 3.0f, eventRect.width, eventRect.height}, Fade(color, selected ? 0.32f : 0.18f));
+            DrawRectangleLinesEx({eventRect.x - 3.0f, eventRect.y - 3.0f, eventRect.width, eventRect.height}, 1.0f, Fade(RAYWHITE, 0.28f));
+        }
         DrawRectangleRec(
-            {x, y + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)},
+            eventRect,
             Fade(color, selected ? 0.54f : 0.28f));
         if (selected) {
             DrawRectangleLinesEx(
-                {x, y + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)},
+                eventRect,
                 1.0f,
                 RAYWHITE);
         }
@@ -9566,17 +9698,170 @@ static void drawEditorTimelineWorkstation(
             Fade(RAYWHITE, 0.72f));
     }
     const Rectangle timelineHitRect{ruler.x, ruler.y, ruler.width, std::max(24.0f, footerY - ruler.y)};
+    if (editor.timelineBoxSelecting) {
+        const Rectangle box{
+            std::min(editor.timelineDragStartMouseX, mouse.x),
+            std::min(editor.timelineDragStartMouseY, mouse.y),
+            std::fabs(mouse.x - editor.timelineDragStartMouseX),
+            std::fabs(mouse.y - editor.timelineDragStartMouseY),
+        };
+        DrawRectangleRec(box, Fade(SKYBLUE, 0.16f));
+        DrawRectangleLinesEx(box, 1.0f, SKYBLUE);
+    }
+    if (editor.timelineStackPickerOpen) {
+        std::vector<int> stacked;
+        for (int subactionIndex = 0;
+             subactionIndex < static_cast<int>(state.action.size()) &&
+             subactionIndex < static_cast<int>(subactionFrames.size());
+             ++subactionIndex)
+        {
+            const int lane = editorTimelineSubactionLaneIndex(lanes, state.action[static_cast<size_t>(subactionIndex)]);
+            if (lane == editor.timelineStackPickerLane &&
+                subactionFrames[static_cast<size_t>(subactionIndex)] == editor.timelineStackPickerFrame)
+            {
+                stacked.push_back(subactionIndex);
+            }
+        }
+        const float pickerW = 178.0f;
+        const float rowH = 22.0f;
+        const Rectangle picker{
+            std::clamp(editor.timelineStackPickerX, rect.x + 4.0f, rect.x + rect.width - pickerW - 4.0f),
+            std::clamp(editor.timelineStackPickerY, rect.y + 4.0f, rect.y + rect.height - rowH * static_cast<float>(std::max(1, static_cast<int>(stacked.size()))) - 4.0f),
+            pickerW,
+            rowH * static_cast<float>(std::max(1, static_cast<int>(stacked.size()))),
+        };
+        DrawRectangleRec(picker, {20, 26, 31, 245});
+        DrawRectangleLinesEx(picker, 1.0f, Fade(SKYBLUE, 0.82f));
+        if (stacked.empty()) {
+            editor.timelineStackPickerOpen = false;
+        } else {
+            for (int row = 0; row < static_cast<int>(stacked.size()); ++row) {
+                const int subactionIndex = stacked[static_cast<size_t>(row)];
+                const Rectangle rowRect{picker.x, picker.y + rowH * static_cast<float>(row), picker.width, rowH};
+                const bool hovered = CheckCollisionPointRec(mouse, rowRect);
+                DrawRectangleRec(rowRect, hovered ? Fade(ORANGE, 0.52f) : Fade(RAYWHITE, 0.06f));
+                DrawText(("#" + std::to_string(subactionIndex) + " " +
+                          subactionTypeName(state.action[static_cast<size_t>(subactionIndex)].type)).c_str(),
+                    static_cast<int>(rowRect.x + 6.0f),
+                    static_cast<int>(rowRect.y + 6.0f),
+                    10,
+                    RAYWHITE);
+                if (hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    editorTimelineSelectSubaction(editor, session, subactionIndex, editorTimelineShiftHeld());
+                    editor.timelineStackPickerOpen = false;
+                    session.selectedState = editor.selectedState;
+                    session.clamp();
+                    scrubEditorSelectedState(world, editor, editor.timelineStackPickerFrame);
+                    return;
+                }
+            }
+            if (uiMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+                editor.timelineStackPickerOpen = false;
+            }
+        }
+    }
     const bool timelinePressed = CheckCollisionPointRec(mouse, timelineHitRect) && uiMouseButtonPressed(MOUSE_BUTTON_LEFT);
     const bool timelineDragging = CheckCollisionPointRec(mouse, timelineHitRect) && uiMouseButtonDown(MOUSE_BUTTON_LEFT);
+    if (editor.timelineBoxSelectArmed && timelinePressed && CheckCollisionPointRec(mouse, laneViewport)) {
+        editor.timelineBoxSelecting = true;
+        editor.timelineDragStartMouseX = mouse.x;
+        editor.timelineDragStartMouseY = mouse.y;
+        editor.timelineDragMouseX = mouse.x;
+        editor.timelineDragMouseY = mouse.y;
+        return;
+    }
+    if (editor.timelineBoxSelecting && uiMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        const Rectangle box{
+            std::min(editor.timelineDragStartMouseX, mouse.x),
+            std::min(editor.timelineDragStartMouseY, mouse.y),
+            std::fabs(mouse.x - editor.timelineDragStartMouseX),
+            std::fabs(mouse.y - editor.timelineDragStartMouseY),
+        };
+        std::vector<int> selected;
+        for (int subactionIndex = 0;
+             subactionIndex < static_cast<int>(state.action.size()) &&
+             subactionIndex < static_cast<int>(subactionFrames.size());
+             ++subactionIndex)
+        {
+            const int startFrame = subactionFrames[static_cast<size_t>(subactionIndex)];
+            const int lane = editorTimelineSubactionLaneIndex(lanes, state.action[static_cast<size_t>(subactionIndex)]);
+            if (startFrame < 0 || lane < 0 || !laneVisible(lane)) {
+                continue;
+            }
+            const pf::Subaction& subaction = state.action[static_cast<size_t>(subactionIndex)];
+            const int endFrame = std::clamp(startFrame + std::max(1, subaction.frames), startFrame + 1, frameCount);
+            const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(startFrame, 0, frameCount)) / static_cast<float>(frameCount);
+            const float endX = ruler.x + ruler.width * static_cast<float>(endFrame) / static_cast<float>(frameCount);
+            const Rectangle eventRect{x, laneY(lane) + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)};
+            if (CheckCollisionRecs(box, eventRect)) {
+                selected.push_back(subactionIndex);
+            }
+        }
+        editor.selectedSubactions = selected;
+        if (!selected.empty()) {
+            editor.selectedSubaction = selected.back();
+            session.selectedSubaction = editor.selectedSubaction;
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+        }
+        editor.timelineBoxSelecting = false;
+        editor.timelineBoxSelectArmed = false;
+        editor.status = "Editor: box selected " + std::to_string(selected.size()) + " subactions";
+        return;
+    }
     if (timelinePressed || timelineDragging) {
         const float t = std::clamp((mouse.x - ruler.x) / ruler.width, 0.0f, 1.0f);
         const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(frameCount)));
         const float clickedY = mouse.y;
         const int clickedLane = editor.timelineLaneScroll + static_cast<int>((clickedY - laneTop) / laneH);
+        if (timelinePressed && CheckCollisionPointRec(mouse, laneViewport)) {
+            std::vector<int> pickedSubactions;
+            for (int subactionIndex = 0;
+                 subactionIndex < static_cast<int>(state.action.size()) &&
+                 subactionIndex < static_cast<int>(subactionFrames.size());
+                 ++subactionIndex)
+            {
+                const int startFrame = subactionFrames[static_cast<size_t>(subactionIndex)];
+                const int lane = editorTimelineSubactionLaneIndex(lanes, state.action[static_cast<size_t>(subactionIndex)]);
+                if (startFrame < 0 || lane != clickedLane || !laneVisible(lane)) {
+                    continue;
+                }
+                const pf::Subaction& subaction = state.action[static_cast<size_t>(subactionIndex)];
+                const int endFrame = std::clamp(startFrame + std::max(1, subaction.frames), startFrame + 1, frameCount);
+                const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(startFrame, 0, frameCount)) / static_cast<float>(frameCount);
+                const float endX = ruler.x + ruler.width * static_cast<float>(endFrame) / static_cast<float>(frameCount);
+                const Rectangle eventRect{x, laneY(lane) + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)};
+                if (CheckCollisionPointRec(mouse, eventRect)) {
+                    pickedSubactions.push_back(subactionIndex);
+                }
+            }
+            if (pickedSubactions.size() > 1) {
+                editor.timelineStackPickerOpen = true;
+                editor.timelineStackPickerFrame = subactionFrames[static_cast<size_t>(pickedSubactions.front())];
+                editor.timelineStackPickerLane = clickedLane;
+                editor.timelineStackPickerX = mouse.x;
+                editor.timelineStackPickerY = mouse.y;
+                scrubEditorSelectedState(world, editor, clickedFrame);
+                return;
+            }
+            if (pickedSubactions.size() == 1) {
+                editorTimelineSelectSubaction(editor, session, pickedSubactions.front(), editorTimelineShiftHeld());
+                session.selectedState = editor.selectedState;
+                session.clamp();
+                scrubEditorSelectedState(world, editor, clickedFrame);
+                return;
+            }
+        }
         if (hasTimeline && timelinePressed) {
             int pickedMarker = -1;
             for (int markerIndex = static_cast<int>(timeline.markers.size()) - 1; markerIndex >= 0; --markerIndex) {
                 const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(markerIndex)];
+                if (marker.kind == pf::FighterEditorTimelineMarkerKind::Subaction ||
+                    marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox ||
+                    marker.kind == pf::FighterEditorTimelineMarkerKind::ThrowHitbox ||
+                    marker.kind == pf::FighterEditorTimelineMarkerKind::Interruptible)
+                {
+                    continue;
+                }
                 if (editorTimelineMarkerLane(lanes, marker, state) != clickedLane) {
                     continue;
                 }
@@ -12916,31 +13201,33 @@ static void drawEditorInspectorWorkstation(
         };
         pf::Subaction editedSubaction = subaction;
         const float subY = y + 124.0f;
-        DrawText("Frames",
+        DrawText("Start",
             static_cast<int>(rect.x + 10.0f),
             static_cast<int>(subY + 5.0f),
             10,
             Fade(RAYWHITE, 0.68f));
+        int committedStartFrame = subaction.startFrame;
+        if (uiIntField({rect.x + 60.0f, subY, 54.0f, 22.0f}, "selected-subaction-start", editor, subaction.startFrame, committedStartFrame)) {
+            editedSubaction.startFrame = std::max(0, committedStartFrame);
+            if (commitSubaction(editedSubaction, "Editor: changed selected subaction start frame")) return;
+        }
+        DrawText("Frames",
+            static_cast<int>(rect.x + 122.0f),
+            static_cast<int>(subY + 5.0f),
+            10,
+            Fade(RAYWHITE, 0.68f));
         int committedFrames = subaction.frames;
-        if (uiIntField({rect.x + 60.0f, subY, 54.0f, 22.0f}, "selected-subaction-frames", editor, subaction.frames, committedFrames)) {
+        if (uiIntField({rect.x + 172.0f, subY, 54.0f, 22.0f}, "selected-subaction-frames", editor, subaction.frames, committedFrames)) {
             editedSubaction.frames = std::max(0, committedFrames);
             if (commitSubaction(editedSubaction, "Editor: changed selected subaction duration")) return;
         }
-        if (uiButton({rect.x + 122.0f, subY, 48.0f, 22.0f}, "Fr-")) {
-            editedSubaction.frames = std::max(0, editedSubaction.frames - 1);
-            if (commitSubaction(editedSubaction, "Editor: shortened selected subaction")) return;
-        }
-        if (uiButton({rect.x + 176.0f, subY, 48.0f, 22.0f}, "Fr+")) {
-            ++editedSubaction.frames;
-            if (commitSubaction(editedSubaction, "Editor: lengthened selected subaction")) return;
-        }
         if (subaction.type == pf::SubactionType::CallScript && !def.packageScripts.empty()) {
-            if (uiButton({rect.x + 190.0f, subY, 74.0f, 22.0f}, "UseScript")) {
+            if (uiButton({rect.x + 238.0f, subY, 74.0f, 22.0f}, "UseScript")) {
                 editedSubaction.objectName = packageScriptTargetName(def.packageScripts, editor.selectedPackageScript);
                 if (commitSubaction(editedSubaction, "Editor: retargeted script subaction")) return;
             }
             DrawText(clippedText("call " + subaction.objectName, 10, rect.width - 282.0f).c_str(),
-                static_cast<int>(rect.x + 272.0f),
+                static_cast<int>(rect.x + 318.0f),
                 static_cast<int>(subY + 5.0f),
                 10,
                 Fade(RAYWHITE, 0.68f));

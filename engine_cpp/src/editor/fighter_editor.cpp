@@ -291,46 +291,7 @@ std::vector<FunctionCall>* stateCallbacks(FighterState& state, FighterEditorStat
 }
 
 std::vector<int> editorSubactionFirstFrames(const std::vector<Subaction>& action) {
-    std::vector<int> frames(action.size(), -1);
-    int currentFrame = 0;
-    int loopCount = 0;
-    size_t loopStart = 0;
-    size_t index = 0;
-    int safety = 0;
-    while (index < action.size() && safety < 10000) {
-        ++safety;
-        const Subaction& subaction = action[index];
-        if (subaction.type == SubactionType::SetLoop) {
-            loopStart = index + 1;
-            loopCount = std::max(0, subaction.loopCount - 1);
-            ++index;
-            continue;
-        }
-        if (subaction.type == SubactionType::ExecuteLoop) {
-            if (loopCount > 0) {
-                index = loopStart;
-                --loopCount;
-            } else {
-                ++index;
-            }
-            continue;
-        }
-        if (subaction.type == SubactionType::SyncTimer) {
-            currentFrame += subaction.frames;
-            ++index;
-            continue;
-        }
-        if (subaction.type == SubactionType::AsyncTimer) {
-            currentFrame = std::max(currentFrame, subaction.frames);
-            ++index;
-            continue;
-        }
-        if (frames[index] < 0) {
-            frames[index] = currentFrame;
-        }
-        ++index;
-    }
-    return frames;
+    return subactionFirstFrames(action);
 }
 
 void appendTimelineMarker(
@@ -427,13 +388,11 @@ void remapPackageScriptInstructionRefs(
 
 void removePackageScriptSubactionRefs(std::vector<FighterState>& states, const std::string& scriptName) {
     for (FighterState& state : states) {
-        for (Subaction& subaction : state.action) {
-            if (subaction.type == SubactionType::CallScript && subaction.objectName == scriptName) {
-                subaction.type = SubactionType::SyncTimer;
-                subaction.objectName.clear();
-                subaction.frames = std::max(1, subaction.frames);
-            }
-        }
+        state.action.erase(
+            std::remove_if(state.action.begin(), state.action.end(), [&](const Subaction& subaction) {
+                return subaction.type == SubactionType::CallScript && subaction.objectName == scriptName;
+            }),
+            state.action.end());
     }
 }
 
@@ -1219,11 +1178,10 @@ void remapObjectSubactionTarget(
         return;
     }
     if (newName.empty()) {
-        subaction.type = SubactionType::SyncTimer;
+        subaction.type = SubactionType::ClearHitboxes;
         subaction.objectName.clear();
         subaction.spawnVelocity = {};
         subaction.spawnOffset = {};
-        subaction.frames = std::max(1, subaction.frames);
         return;
     }
     subaction.objectName = newName;
@@ -1240,8 +1198,17 @@ void remapPackageObjectTargets(
 {
     for (FighterDefinition& fighter : package.fighters) {
         for (FighterState& state : fighter.states) {
-            for (Subaction& subaction : state.action) {
-                remapObjectSubactionTarget(subaction, oldName, newName, newKind);
+            if (newName.empty()) {
+                state.action.erase(
+                    std::remove_if(state.action.begin(), state.action.end(), [&](const Subaction& subaction) {
+                        return (subaction.type == SubactionType::SpawnObject || subaction.type == SubactionType::SpawnProjectile) &&
+                            subaction.objectName == oldName;
+                    }),
+                    state.action.end());
+            } else {
+                for (Subaction& subaction : state.action) {
+                    remapObjectSubactionTarget(subaction, oldName, newName, newKind);
+                }
             }
         }
         for (PackageScript& script : fighter.packageScripts) {
@@ -2873,69 +2840,18 @@ bool addEditorSessionSubactionAtFrame(
     }
     targetFrame = std::max(0, targetFrame);
     FighterPackage previous = session.package;
-
-    int currentFrame = 0;
+    Subaction inserted = subaction;
+    inserted.startFrame = targetFrame;
     int insertIndex = static_cast<int>(state->action.size());
     for (int index = 0; index < static_cast<int>(state->action.size()); ++index) {
-        Subaction& existing = state->action[static_cast<size_t>(index)];
-        if (existing.type == SubactionType::SyncTimer) {
-            const int duration = std::max(0, existing.frames);
-            const int timerEndFrame = currentFrame + duration;
-            if (targetFrame <= timerEndFrame) {
-                if (targetFrame == currentFrame) {
-                    insertIndex = index;
-                    state->action.insert(state->action.begin() + insertIndex, subaction);
-                } else if (targetFrame == timerEndFrame) {
-                    insertIndex = index + 1;
-                    state->action.insert(state->action.begin() + insertIndex, subaction);
-                } else {
-                    Subaction after = existing;
-                    existing.frames = targetFrame - currentFrame;
-                    after.frames = timerEndFrame - targetFrame;
-                    insertIndex = index + 1;
-                    state->action.insert(state->action.begin() + insertIndex, subaction);
-                    state->action.insert(state->action.begin() + insertIndex + 1, after);
-                }
-                session.selectedState = stateIndex;
-                session.selectedSubaction = insertIndex;
-                if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
-                    return false;
-                }
-                if (addedSubactionIndex) {
-                    *addedSubactionIndex = insertIndex;
-                }
-                return true;
-            }
-            currentFrame = timerEndFrame;
-            continue;
-        }
-        if (existing.type == SubactionType::AsyncTimer) {
-            currentFrame = std::max(currentFrame, std::max(0, existing.frames));
-            continue;
-        }
-        if (currentFrame >= targetFrame) {
+        const Subaction& existing = state->action[static_cast<size_t>(index)];
+        if (existing.startFrame > targetFrame) {
             insertIndex = index;
-            state->action.insert(state->action.begin() + insertIndex, subaction);
-            session.selectedState = stateIndex;
-            session.selectedSubaction = insertIndex;
-            if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
-                return false;
-            }
-            if (addedSubactionIndex) {
-                *addedSubactionIndex = insertIndex;
-            }
-            return true;
+            break;
         }
     }
 
-    if (currentFrame < targetFrame) {
-        Subaction pad;
-        pad.type = SubactionType::SyncTimer;
-        pad.frames = targetFrame - currentFrame;
-        state->action.push_back(pad);
-    }
-    state->action.push_back(subaction);
-    insertIndex = static_cast<int>(state->action.size()) - 1;
+    state->action.insert(state->action.begin() + insertIndex, inserted);
     session.selectedState = stateIndex;
     session.selectedSubaction = insertIndex;
     if (!validateEditorSessionAfterMutation(session, std::move(previous), error)) {
@@ -2964,6 +2880,18 @@ bool setEditorSessionSubaction(
     }
     FighterPackage previous = session.package;
     state->action[static_cast<size_t>(subactionIndex)] = subaction;
+    state->action[static_cast<size_t>(subactionIndex)].startFrame = std::max(0, state->action[static_cast<size_t>(subactionIndex)].startFrame);
+    const int selectedStartFrame = state->action[static_cast<size_t>(subactionIndex)].startFrame;
+    std::stable_sort(state->action.begin(), state->action.end(), [](const Subaction& a, const Subaction& b) {
+        return a.startFrame < b.startFrame;
+    });
+    subactionIndex = std::clamp(subactionIndex, 0, static_cast<int>(state->action.size()) - 1);
+    for (int index = 0; index < static_cast<int>(state->action.size()); ++index) {
+        if (state->action[static_cast<size_t>(index)].startFrame == selectedStartFrame) {
+            subactionIndex = index;
+            break;
+        }
+    }
     session.selectedState = stateIndex;
     session.selectedSubaction = subactionIndex;
     return validateEditorSessionAfterMutation(session, std::move(previous), error);

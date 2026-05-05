@@ -1,5 +1,6 @@
 #include "core/melee_fighter_converter.hpp"
 
+#include "core/action.hpp"
 #include "core/hsd_action_import.hpp"
 #include "core/imported_fighter_asset.hpp"
 #include "core/simulation.hpp"
@@ -717,6 +718,9 @@ bool makeConvertedMeleeFighterPackageFromAssetBin(
         FighterDefinition native;
         if (!makeImportedNativePackageFighterDefinition(imported, asset, native, error)) {
             return false;
+        }
+        for (FighterState& state : native.states) {
+            state.action = makeExplicitTimelineAction(state.action);
         }
 
         package = {};

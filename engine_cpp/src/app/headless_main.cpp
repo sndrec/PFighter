@@ -6572,8 +6572,9 @@ int main(int argc, char** argv) {
         editorSession.rootFighter()->states[0].action.clear();
     }
     pf::Subaction editorTempSubaction;
-    editorTempSubaction.type = pf::SubactionType::SyncTimer;
-    editorTempSubaction.frames = 3;
+    editorTempSubaction.type = pf::SubactionType::SetInterruptible;
+    editorTempSubaction.startFrame = 3;
+    editorTempSubaction.frames = 1;
     int editorTempSubactionIndex = -1;
     const bool editorSessionAddRemoveSubactionOk = editorSessionCallbacksOk &&
         pf::addEditorSessionSubaction(editorSession, 0, editorTempSubaction, -1, &editorTempSubactionIndex, &packageError) &&
@@ -6618,13 +6619,13 @@ int main(int argc, char** argv) {
     const bool editorSessionFrameSubactionOk = editorSessionMoveSubactionOk &&
         pf::addEditorSessionSubactionAtFrame(editorSession, 0, editorFrameInsertSubaction, 1, &editorFrameInsertSubactionIndex, &packageError) &&
         editorSession.rootFighter() &&
-        editorSession.rootFighter()->states[0].action.size() >= 4 &&
-        editorSession.rootFighter()->states[0].action[0].type == pf::SubactionType::SyncTimer &&
-        editorSession.rootFighter()->states[0].action[0].frames == 1 &&
+        editorSession.rootFighter()->states[0].action.size() >= 3 &&
         editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].type == pf::SubactionType::SetHurtboxState &&
+        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].startFrame == 1 &&
         editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex)].hurtboxState == pf::HurtboxState::Intangible &&
-        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex + 1)].type == pf::SubactionType::SyncTimer &&
-        editorSession.rootFighter()->states[0].action[static_cast<size_t>(editorFrameInsertSubactionIndex + 1)].frames == 2;
+        std::any_of(editorSession.rootFighter()->states[0].action.begin(), editorSession.rootFighter()->states[0].action.end(), [](const pf::Subaction& subaction) {
+            return subaction.type == pf::SubactionType::SetInterruptible && subaction.startFrame == 3;
+        });
     pf::InterruptRule editorTempInterrupt;
     editorTempInterrupt.targetState = "Wait";
     editorTempInterrupt.condition = pf::InterruptCondition::WaitInput;
@@ -6663,7 +6664,7 @@ int main(int argc, char** argv) {
                 marker.frame == 0;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
-            return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox && marker.frame == 3;
+            return marker.kind == pf::FighterEditorTimelineMarkerKind::Hitbox && marker.frame == 0;
         }) &&
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
             return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptEnable && marker.frame == 4;
@@ -6875,7 +6876,9 @@ int main(int argc, char** argv) {
         std::none_of(editorRootAfterScriptRemove->states[0].onFrame.begin(), editorRootAfterScriptRemove->states[0].onFrame.end(), [](const pf::FunctionCall& call) {
             return call.name == "script:EditorLogicRenamed";
         }) &&
-        editorRootAfterScriptRemove->states[0].action[static_cast<size_t>(editorScriptSubactionIndex)].type == pf::SubactionType::SyncTimer &&
+        std::none_of(editorRootAfterScriptRemove->states[0].action.begin(), editorRootAfterScriptRemove->states[0].action.end(), [](const pf::Subaction& subaction) {
+            return subaction.type == pf::SubactionType::CallScript && subaction.objectName == "EditorLogicRenamed";
+        }) &&
         editorCallerScriptAfterRemove != editorRootAfterScriptRemove->packageScripts.end() &&
         !editorCallerScriptAfterRemove->instructions.empty() &&
         editorCallerScriptAfterRemove->instructions[0].op == pf::PackageScriptOp::Nop;
@@ -7245,7 +7248,10 @@ int main(int argc, char** argv) {
     const pf::FighterDefinition* editorRootAfterObjectRemove = editorSession.rootFighter();
     const bool editorSessionObjectRefsRemovedOk = editorSessionRemoveObjectOk &&
         editorRootAfterObjectRemove &&
-        editorRootAfterObjectRemove->states[0].action[static_cast<size_t>(editorArticleSpawnSubactionIndex)].type == pf::SubactionType::SyncTimer &&
+        std::none_of(editorRootAfterObjectRemove->states[0].action.begin(), editorRootAfterObjectRemove->states[0].action.end(), [](const pf::Subaction& subaction) {
+            return (subaction.type == pf::SubactionType::SpawnObject || subaction.type == pf::SubactionType::SpawnProjectile) &&
+                subaction.objectName == "EditorArticleRenamed";
+        }) &&
         std::none_of(editorSession.package.objects.begin(), editorSession.package.objects.end(), [](const pf::GameObjectDefinition& object) {
             return object.name == "EditorArticleRenamed";
         });
