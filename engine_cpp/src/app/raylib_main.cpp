@@ -7981,6 +7981,28 @@ static void syncEditorSelectionFromSession(pf::FighterEditor& editor, const pf::
     editor.selectedPackageInstruction = session.selectedPackageInstruction;
 }
 
+static void resetEditorSelectionForPackageFighter(pf::FighterEditor& editor, pf::FighterEditorSession& session) {
+    session.selectedState = 0;
+    session.selectedSubaction = 0;
+    session.selectedInterrupt = 0;
+    session.selectedPackageScript = 0;
+    session.selectedPackageInstruction = 0;
+    editor.selectedPackageVariable = 0;
+    editor.selectedPackageGraphNode = 0;
+    editor.selectedStateCallbackSlot = pf::FighterEditorStateCallbackSlot::Enter;
+    editor.selectedStateCallback = 0;
+    editor.selectedAnimationClip = 0;
+    editor.selectedAnimationJoint = 0;
+    editor.selectedAnimationTrack = 0;
+    editor.selectedAnimationKey = 0;
+    editor.animationScrubFrame = 0;
+    editor.selectedAuthoredMeshVertex = 0;
+    editor.selectedHurtbox = 0;
+    editor.selectionKind = pf::FighterEditorSelectionKind::State;
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+}
+
 static pf::FighterDefinition* selectedEditorSessionFighter(pf::FighterEditorSession& session) {
     session.clamp();
     if (session.package.fighters.empty()) {
@@ -8352,13 +8374,7 @@ static void drawEditorStateBrowserWorkstation(
             return false;
         }
         session.selectedFighter = wrappedIndex(fighterIndex, static_cast<int>(session.package.fighters.size()));
-        session.selectedState = 0;
-        session.selectedSubaction = 0;
-        session.selectedInterrupt = 0;
-        session.selectedPackageScript = 0;
-        session.selectedPackageInstruction = 0;
-        session.clamp();
-        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        resetEditorSelectionForPackageFighter(editor, session);
         std::string error;
         if (!syncEditorSessionToWorld(world, editor, session, selectedFighterDef, &error)) {
             updateEditorPackageFailure(editor, error);
@@ -8405,6 +8421,7 @@ static void drawEditorStateBrowserWorkstation(
             pf::uniqueEditorPackageFighterName(session.package, "BlankFighter"),
             def.properties.common);
         if (pf::addEditorSessionPackageFighter(session, blank, blank.name, &added, &error)) {
+            resetEditorSelectionForPackageFighter(editor, session);
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added blank package fighter " + blank.name);
             return;
         }
@@ -8414,6 +8431,7 @@ static void drawEditorStateBrowserWorkstation(
         std::string error;
         int added = -1;
         if (pf::duplicateEditorSessionPackageFighter(session, packageFighterIndex, {}, &added, &error)) {
+            resetEditorSelectionForPackageFighter(editor, session);
             const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: cloned package fighter " + (selected ? selected->name : std::string{"fighter"}));
             return;
@@ -8424,6 +8442,7 @@ static void drawEditorStateBrowserWorkstation(
         std::string error;
         const std::string removed = def.name;
         if (pf::removeEditorSessionPackageFighter(session, packageFighterIndex, {}, &error)) {
+            resetEditorSelectionForPackageFighter(editor, session);
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed package fighter " + removed);
             return;
         }
@@ -13064,8 +13083,7 @@ static bool focusEditorDiagnosticTarget(
     switch (target.kind) {
     case EditorDiagnosticTargetKind::Fighter:
         session.selectedFighter = target.fighterIndex;
-        session.selectedState = 0;
-        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        resetEditorSelectionForPackageFighter(editor, session);
         editor.workspace = pf::EditorWorkspace::Moveset;
         break;
     case EditorDiagnosticTargetKind::State:
