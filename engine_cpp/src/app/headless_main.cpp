@@ -5520,10 +5520,23 @@ int main(int argc, char** argv) {
     pf::FighterPackage loadedPackage;
     const bool packageLoaded = pf::readFighterPackage(packageBytes, loadedPackage, &packageError);
     const bool packageValidated = pf::validateFighterPackage(sourcePackage, &packageError);
+    auto sourceStateMetadataOk = [&](const char* stateName, pf::FighterStateCategory category, pf::FighterStatePreviewFixture fixture) {
+        const int index = sourcePackage.fighters[0].stateIndex(stateName);
+        if (index < 0) {
+            return false;
+        }
+        const pf::FighterState& state = sourcePackage.fighters[0].states[static_cast<size_t>(index)];
+        return state.category == category && state.previewFixture == fixture;
+    };
+    const bool packageStateMetadataOk =
+        sourceStateMetadataOk("LandingAirN", pf::FighterStateCategory::Ground, pf::FighterStatePreviewFixture::Grounded) &&
+        sourceStateMetadataOk("LandingAirF", pf::FighterStateCategory::Ground, pf::FighterStatePreviewFixture::Grounded) &&
+        sourceStateMetadataOk("EscapeAir", pf::FighterStateCategory::Air, pf::FighterStatePreviewFixture::Airborne) &&
+        sourceStateMetadataOk("CliffWait", pf::FighterStateCategory::Ledge, pf::FighterStatePreviewFixture::Ledge);
     pf::FighterPackageDescriptor packageDescriptor;
     const bool packageDescriptorOk = pf::describeFighterPackage(sourcePackage, packageDescriptor, packageBytes, &packageError) &&
         packageDescriptor.name == sourcePackage.name &&
-        packageDescriptor.version == 6 &&
+        packageDescriptor.version == 7 &&
         packageDescriptor.byteSize == packageBytes.size() &&
         packageDescriptor.checksum == pf::fighterPackageChecksum(packageBytes) &&
         packageDescriptor.rootFighterName == sourcePackage.fighters[0].name &&
@@ -9091,6 +9104,7 @@ int main(int argc, char** argv) {
               << " fighter_package_checksum=" << pf::fighterPackageChecksum(packageBytes)
               << " fighter_package_loaded=" << packageLoaded
               << " fighter_package_validated=" << packageValidated
+              << " fighter_package_state_metadata_ok=" << packageStateMetadataOk
               << " fighter_package_descriptor_ok=" << packageDescriptorOk
               << " fighter_package_bytes_descriptor_ok=" << packageBytesDescriptorOk
               << " fighter_package_shape_ok=" << packageShapeOk

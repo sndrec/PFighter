@@ -7645,37 +7645,24 @@ static const char* editorStateGroupFilterName(pf::FighterEditorStateGroupFilter 
     return "All";
 }
 
-static bool stateNameContainsAny(const std::string& lowerName, std::initializer_list<const char*> needles) {
-    for (const char* needle : needles) {
-        if (lowerName.find(needle) != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static pf::FighterEditorStateGroupFilter classifyEditorStateGroup(const pf::FighterState& state) {
-    const std::string name = lowerAscii(state.name + " " + state.animation);
-    if (stateNameContainsAny(name, {"damage", "down", "bury", "ice", "sleep", "capture", "rebound"})) {
-        return pf::FighterEditorStateGroupFilter::Damage;
-    }
-    if (stateNameContainsAny(name, {"cliff", "ledge"})) {
-        return pf::FighterEditorStateGroupFilter::Ledge;
-    }
-    if (stateNameContainsAny(name, {"throw", "catch", "capture"})) {
-        return pf::FighterEditorStateGroupFilter::Throw;
-    }
-    if (stateNameContainsAny(name, {"special", "appeal"})) {
-        return pf::FighterEditorStateGroupFilter::Special;
-    }
-    if (stateNameContainsAny(name, {"attack", "smash", "guardattack", "sword", "jab"})) {
-        return pf::FighterEditorStateGroupFilter::Attack;
-    }
-    if (stateNameContainsAny(name, {"fall", "jump", "air", "escapeair", "pass"})) {
-        return pf::FighterEditorStateGroupFilter::Air;
-    }
-    if (stateNameContainsAny(name, {"wait", "walk", "dash", "run", "turn", "squat", "landing", "guard", "escape", "ottotto", "missfoot"})) {
+    switch (state.category) {
+    case pf::FighterStateCategory::Ground:
         return pf::FighterEditorStateGroupFilter::Ground;
+    case pf::FighterStateCategory::Air:
+        return pf::FighterEditorStateGroupFilter::Air;
+    case pf::FighterStateCategory::Attack:
+        return pf::FighterEditorStateGroupFilter::Attack;
+    case pf::FighterStateCategory::Special:
+        return pf::FighterEditorStateGroupFilter::Special;
+    case pf::FighterStateCategory::Throw:
+        return pf::FighterEditorStateGroupFilter::Throw;
+    case pf::FighterStateCategory::Ledge:
+        return pf::FighterEditorStateGroupFilter::Ledge;
+    case pf::FighterStateCategory::Damage:
+        return pf::FighterEditorStateGroupFilter::Damage;
+    case pf::FighterStateCategory::Other:
+        return pf::FighterEditorStateGroupFilter::Other;
     }
     return pf::FighterEditorStateGroupFilter::Other;
 }
@@ -7730,12 +7717,12 @@ static void drawWorkstationRow(Rectangle rect, const std::string& label, bool ac
     DrawText(clippedText(label, 12, rect.width - 10.0f).c_str(), static_cast<int>(rect.x + 6.0f), static_cast<int>(rect.y + 7.0f), 12, RAYWHITE);
 }
 
-static pf::StageDefinition makeEditorPreviewStage(bool airborne) {
+static pf::StageDefinition makeEditorPreviewStage(pf::FighterStatePreviewFixture fixture) {
     pf::StageDefinition stage;
-    stage.name = airborne ? "Editor Air Preview" : "Editor Flat Preview";
+    stage.name = fixture == pf::FighterStatePreviewFixture::Airborne ? "Editor Air Preview" : "Editor Flat Preview";
     stage.blastMin = {-pf::fx(250), -pf::fx(250)};
     stage.blastMax = {pf::fx(250), pf::fx(250)};
-    if (!airborne) {
+    if (fixture != pf::FighterStatePreviewFixture::Airborne) {
         pf::StageSegment floor;
         floor.start = {-pf::fx(120), 0};
         floor.end = {pf::fx(120), 0};
@@ -7745,15 +7732,6 @@ static pf::StageDefinition makeEditorPreviewStage(bool airborne) {
         stage.segments.push_back(floor);
     }
     return stage;
-}
-
-static bool editorPreviewStateStartsAirborne(const pf::FighterState& state) {
-    const pf::FighterEditorStateGroupFilter group = classifyEditorStateGroup(state);
-    if (group == pf::FighterEditorStateGroupFilter::Air || group == pf::FighterEditorStateGroupFilter::Ledge) {
-        return true;
-    }
-    const std::string name = lowerAscii(state.name + " " + state.animation);
-    return stateNameContainsAny(name, {"air", "fall", "jump", "cliff", "ledge"});
 }
 
 static void updateEditorSessionPackageSummary(pf::FighterEditor& editor, const pf::FighterEditorSession& session) {
@@ -7834,11 +7812,12 @@ static int editorPreviewFrameCount(
     return std::max(1, std::max(state.animationLengthFrames, static_cast<int>(actionFrames.size())));
 }
 
-static void applyEditorPreviewFixture(pf::World& world, bool airborne) {
+static void applyEditorPreviewFixture(pf::World& world, pf::FighterStatePreviewFixture fixture) {
     if (world.fighters.empty()) {
         return;
     }
     pf::FighterRuntime& fighter = world.fighters[0];
+    const bool airborne = fixture == pf::FighterStatePreviewFixture::Airborne;
     const pf::Vec2 position = airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{};
     fighter.position = position;
     fighter.previousPosition = position;
@@ -7923,18 +7902,23 @@ static bool rebuildEditorPreviewCache(
     const int selectedState = std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
     const pf::FighterState& state = def.states[static_cast<size_t>(selectedState)];
 
-    const bool airborne = editorPreviewStateStartsAirborne(state);
+    const pf::FighterStatePreviewFixture previewFixture = state.previewFixture;
     pf::World previewWorld;
     previewWorld.fighterDefs = session.package.fighters;
     previewWorld.objectDefs = session.package.objects;
-    previewWorld.stage = makeEditorPreviewStage(airborne);
+    previewWorld.stage = makeEditorPreviewStage(previewFixture);
     previewWorld.frame = 0;
     previewWorld.objects.clear();
     previewWorld.fighters.resize(1);
-    pf::resetTrainingFighter(previewWorld, 0, exportedPackageFighter, airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{}, 1);
-    applyEditorPreviewFixture(previewWorld, airborne);
+    pf::resetTrainingFighter(
+        previewWorld,
+        0,
+        exportedPackageFighter,
+        previewFixture == pf::FighterStatePreviewFixture::Airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{},
+        1);
+    applyEditorPreviewFixture(previewWorld, previewFixture);
     pf::changeFighterState(previewWorld, previewWorld.fighters[0], state.name, 0, pf::kDisableAnimationBlendFrames);
-    applyEditorPreviewFixture(previewWorld, airborne);
+    applyEditorPreviewFixture(previewWorld, previewFixture);
 
     const int authoredFrameCount = editorPreviewFrameCount(session, state);
     constexpr int kMaxPreviewFrameCount = 600;
@@ -7963,7 +7947,7 @@ static bool rebuildEditorPreviewCache(
     editor.previewCacheFrame = std::clamp(editor.previewCacheFrame, 0, frameCount);
     editor.previewCacheValid = true;
     editor.previewCacheDirty = false;
-    editor.previewCacheMessage = std::string(airborne ? "air fixture" : "flat fixture") +
+    editor.previewCacheMessage = std::string(previewFixture == pf::FighterStatePreviewFixture::Airborne ? "air fixture" : "flat fixture") +
         ", " + std::to_string(frameCount + 1) + " cached frames" +
         (authoredFrameCount > kMaxPreviewFrameCount ? " (capped)" : "");
     if (!restoreEditorPreviewFrame(world, editor, editor.previewCacheFrame, error)) {

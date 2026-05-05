@@ -13,7 +13,7 @@
 namespace pf {
 namespace {
 
-constexpr uint32_t kPackageVersion = 6;
+constexpr uint32_t kPackageVersion = 7;
 constexpr uint32_t kMaxFighters = 256;
 constexpr uint32_t kMaxAssets = 1024;
 constexpr uint32_t kMaxAssetBytes = 128 * 1024 * 1024;
@@ -440,6 +440,31 @@ bool validGroundRequirement(GroundRequirement ground) {
     case GroundRequirement::Any:
     case GroundRequirement::OnlyGrounded:
     case GroundRequirement::OnlyAirborne:
+        return true;
+    }
+    return false;
+}
+
+bool validFighterStateCategory(FighterStateCategory category) {
+    switch (category) {
+    case FighterStateCategory::Other:
+    case FighterStateCategory::Ground:
+    case FighterStateCategory::Air:
+    case FighterStateCategory::Attack:
+    case FighterStateCategory::Special:
+    case FighterStateCategory::Throw:
+    case FighterStateCategory::Ledge:
+    case FighterStateCategory::Damage:
+        return true;
+    }
+    return false;
+}
+
+bool validFighterStatePreviewFixture(FighterStatePreviewFixture fixture) {
+    switch (fixture) {
+    case FighterStatePreviewFixture::Grounded:
+    case FighterStatePreviewFixture::Airborne:
+    case FighterStatePreviewFixture::Ledge:
         return true;
     }
     return false;
@@ -917,6 +942,8 @@ void writeFighterState(PackageWriter& writer, const FighterState& state) {
     writer.writeString(state.name);
     writer.writeString(state.animation);
     writer.writeI32(state.animationActionIndex);
+    writeEnum(writer, state.category, validFighterStateCategory, "fighter state category");
+    writeEnum(writer, state.previewFixture, validFighterStatePreviewFixture, "fighter state preview fixture");
     writer.writeBool(state.useAnimPhysics);
     writer.writeBool(state.allowSlideoff);
     writer.writeBool(state.allowLedgeGrab);
@@ -947,6 +974,8 @@ FighterState readFighterState(PackageReader& reader) {
     state.name = reader.readString();
     state.animation = reader.readString();
     state.animationActionIndex = reader.readI32();
+    state.category = readEnum<FighterStateCategory>(reader, validFighterStateCategory, "fighter state category");
+    state.previewFixture = readEnum<FighterStatePreviewFixture>(reader, validFighterStatePreviewFixture, "fighter state preview fixture");
     state.useAnimPhysics = reader.readBool();
     state.allowSlideoff = reader.readBool();
     state.allowLedgeGrab = reader.readBool();
@@ -2735,7 +2764,8 @@ bool validAnimationBlendFrames(int blendFrames) {
 
 void validateFighterStateTiming(const FighterState& state) {
     if (state.animationActionIndex < -1 || state.animationLengthFrames <= 0 || state.initialInterruptibleFrame < 0 ||
-        state.defaultAnimationBlendFrames < 0 || !validAnimationBlendFrames(state.onAnimationFinishedBlendFrames))
+        state.defaultAnimationBlendFrames < 0 || !validAnimationBlendFrames(state.onAnimationFinishedBlendFrames) ||
+        !validFighterStateCategory(state.category) || !validFighterStatePreviewFixture(state.previewFixture))
     {
         throw std::runtime_error("fighter package state timing is invalid");
     }

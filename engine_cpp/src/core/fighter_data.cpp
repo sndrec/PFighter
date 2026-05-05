@@ -2045,6 +2045,82 @@ FighterDefinition makeDebugRook() {
     cliffJumpQuick2.name = "CliffJumpQuick2";
     cliffJumpQuick2.animation = "CliffJumpQuick2";
 
+    auto markStates = [](
+        std::initializer_list<FighterState*> states,
+        FighterStateCategory category,
+        FighterStatePreviewFixture fixture)
+    {
+        for (FighterState* state : states) {
+            state->category = category;
+            state->previewFixture = fixture;
+        }
+    };
+    markStates({
+        &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
+        &runBrake, &turnState, &turnRun, &jumpSquat, &squat, &squatWait, &squatRv,
+        &landing, &landingAirN, &landingAirF, &landingAirB, &landingAirHi, &landingAirLw,
+        &landingFallSpecial, &landingFallSpecialInterruptible, &ottotto, &ottottoWait,
+        &missFoot, &guardOn, &guardReflect, &guard, &guardOff, &guardSetoff,
+        &escapeN, &escapeF, &escapeB, &appealSR, &appealSL, &shieldBreakDown,
+        &shieldBreakDownD, &shieldBreakStand, &shieldBreakStandD, &furafura,
+    }, FighterStateCategory::Ground, FighterStatePreviewFixture::Grounded);
+    markStates({
+        &fallState, &fallAerial, &pass, &escapeAir, &fallSpecial, &passiveWallJump,
+        &itemScrewAir, &damageScrewAir, &damageIceJump, &buryJump, &passiveWall,
+        &passiveCeil, &wallDamage, &flyReflectWall, &flyReflectCeil, &downReflect,
+        &stopWall, &stopCeil, &jumpF, &jumpB, &jumpAerialF, &jumpAerialB,
+        &shieldBreakFly, &shieldBreakFall, &cliffJumpAir, &cliffJumpSlow2, &cliffJumpQuick2,
+    }, FighterStateCategory::Air, FighterStatePreviewFixture::Airborne);
+    markStates({
+        &attack11, &attack12, &attack13, &attack100Start, &attack100Loop, &attack100End,
+        &attackDash, &attackS3Hi, &attackS3HiS, &attackS3, &attackS3LwS, &attackS3Lw,
+        &attackHi3, &attackLw3, &attackS4Hi, &attackS4HiS, &attackS4, &attackS4LwS,
+        &attackS4Lw, &attackS42, &attackHi4, &attackLw4,
+    }, FighterStateCategory::Attack, FighterStatePreviewFixture::Grounded);
+    markStates({
+        &airAttack, &airAttackF, &airAttackB, &airAttackHi, &airAttackLw,
+    }, FighterStateCategory::Attack, FighterStatePreviewFixture::Airborne);
+    markStates({
+        &specialN, &specialS, &specialHi, &specialLw,
+    }, FighterStateCategory::Special, FighterStatePreviewFixture::Grounded);
+    markStates({
+        &specialAirN, &specialAirS, &specialAirHi, &specialAirLw,
+    }, FighterStateCategory::Special, FighterStatePreviewFixture::Airborne);
+    markStates({
+        &damageHi1, &damageHi2, &damageHi3, &damageN1, &damageN2, &damageN3,
+        &damageLw1, &damageLw2, &damageLw3, &damageAir1, &damageAir2, &damageAir3,
+        &damageFlyHi, &damageFlyN, &damageFlyLw, &damageFlyTop, &damageFlyRoll,
+        &damageFall, &itemScrew, &damageScrew, &damageSong, &damageSongWait,
+        &damageSongRv, &damageBind, &damageIce, &bury, &buryWait, &reboundStop,
+        &rebound, &downBoundU, &downWaitU, &downDamageU, &downStandU, &downAttackU,
+        &downForwardU, &downBackU, &downSpotU, &downBoundD, &downWaitD,
+        &downDamageD, &downStandD, &downAttackD, &downForwardD, &downBackD,
+        &downSpotD, &passive, &passiveStandF, &passiveStandB,
+    }, FighterStateCategory::Damage, FighterStatePreviewFixture::Grounded);
+    markStates({
+        &damageAir1, &damageAir2, &damageAir3, &damageFlyHi, &damageFlyN, &damageFlyLw,
+        &damageFlyTop, &damageFlyRoll, &damageFall,
+    }, FighterStateCategory::Damage, FighterStatePreviewFixture::Airborne);
+    markStates({
+        &catchState, &catchPull, &catchDash, &catchDashPull, &catchWait, &catchAttack,
+        &catchCut, &throwF, &throwB, &throwHi, &throwLw, &capturePulledHi,
+        &captureWaitHi, &captureDamageHi, &capturePulledLw, &captureWaitLw,
+        &captureDamageLw, &captureCut, &thrownF, &thrownB, &thrownHi, &thrownLw,
+        &thrownLwWomen, &thrownFF, &thrownFB, &thrownFHi, &thrownFLw,
+        &captureMewtwo, &captureYoshi, &captureNeck, &captureFoot, &captureCaptain,
+        &captureKoopa, &thrownKoopaF, &thrownKoopaB, &thrownMewtwo,
+    }, FighterStateCategory::Throw, FighterStatePreviewFixture::Grounded);
+    markStates({
+        &captureJump, &captureMewtwoAir, &captureKoopaAir, &thrownKoopaAirF,
+        &thrownKoopaAirB, &thrownMewtwoAir,
+    }, FighterStateCategory::Throw, FighterStatePreviewFixture::Airborne);
+    markStates({
+        &cliffCatch, &cliffWait, &cliffClimb, &cliffClimbSlow, &cliffClimbQuick,
+        &cliffEscape, &cliffEscapeSlow, &cliffEscapeQuick, &cliffAttack,
+        &cliffAttackSlow, &cliffAttackQuick, &cliffDrop, &cliffJump,
+        &cliffJumpSlow1, &cliffJumpQuick1,
+    }, FighterStateCategory::Ledge, FighterStatePreviewFixture::Ledge);
+
     for (FighterState* state : {
         &waitState, &walkSlow, &walkMiddle, &walkFast, &dashState, &runState, &runDirect,
         &turnState, &squat, &squatWait, &squatRv, &landing, &ottotto, &ottottoWait,

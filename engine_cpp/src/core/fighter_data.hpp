@@ -778,10 +778,29 @@ struct InterruptRule {
     int32_t packageValue = 1;
 };
 
+enum class FighterStateCategory : uint8_t {
+    Other,
+    Ground,
+    Air,
+    Attack,
+    Special,
+    Throw,
+    Ledge,
+    Damage,
+};
+
+enum class FighterStatePreviewFixture : uint8_t {
+    Grounded,
+    Airborne,
+    Ledge,
+};
+
 struct FighterState {
     std::string name;
     std::string animation;
     int animationActionIndex = -1;
+    FighterStateCategory category = FighterStateCategory::Ground;
+    FighterStatePreviewFixture previewFixture = FighterStatePreviewFixture::Grounded;
     bool useAnimPhysics = false;
     bool allowSlideoff = true;
     bool allowLedgeGrab = true;
