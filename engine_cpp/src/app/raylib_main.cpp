@@ -4454,6 +4454,120 @@ static void drawTopNav(AppMode& mode) {
     }
 }
 
+static void drawPanelChrome(Rectangle rect, const std::string& title);
+static void drawWorkstationRow(Rectangle rect, const std::string& label, bool active, Color accent);
+static std::string clippedText(std::string text, int fontSize, float maxWidth);
+
+enum class EditorOpenAction {
+    None,
+    InstalledFighter,
+    BlankFighter,
+    PackageFile,
+};
+
+struct EditorOpenRequest {
+    EditorOpenAction action = EditorOpenAction::None;
+    int fighterDef = -1;
+};
+
+static EditorOpenRequest drawEditorOpenScreen(pf::World& world, pf::FighterEditor& editor) {
+    EditorOpenRequest request;
+    const float screenW = static_cast<float>(GetScreenWidth());
+    const float screenH = static_cast<float>(GetScreenHeight());
+    const Rectangle panel{
+        std::max(24.0f, screenW * 0.5f - 310.0f),
+        104.0f,
+        std::min(620.0f, screenW - 48.0f),
+        std::max(420.0f, screenH - 168.0f),
+    };
+    drawPanelChrome(panel, "Open Fighter Package");
+    DrawText("Choose an installed fighter to edit, create a blank package, or load a package file.",
+        static_cast<int>(panel.x + 18.0f),
+        static_cast<int>(panel.y + 38.0f),
+        12,
+        Fade(RAYWHITE, 0.76f));
+
+    std::string committedPath;
+    if (uiTextField({panel.x + 18.0f, panel.y + 66.0f, panel.width - 140.0f, 24.0f},
+            "editor-open-package-path",
+            editor,
+            editor.packagePath,
+            committedPath,
+            96))
+    {
+        editor.packagePath = committedPath;
+    }
+    if (uiButton({panel.x + panel.width - 110.0f, panel.y + 66.0f, 92.0f, 24.0f}, "Load")) {
+        request.action = EditorOpenAction::PackageFile;
+        return request;
+    }
+    if (uiButton({panel.x + 18.0f, panel.y + 102.0f, 118.0f, 26.0f}, "Blank Fighter")) {
+        request.action = EditorOpenAction::BlankFighter;
+        return request;
+    }
+
+    const float listY = panel.y + 150.0f;
+    DrawText("Installed fighters",
+        static_cast<int>(panel.x + 18.0f),
+        static_cast<int>(listY - 22.0f),
+        12,
+        RAYWHITE);
+    const int fighterCount = static_cast<int>(world.fighterDefs.size());
+    const Rectangle listViewport{
+        panel.x + 18.0f,
+        listY,
+        panel.width - 36.0f,
+        std::max(160.0f, panel.y + panel.height - listY - 22.0f),
+    };
+    if (fighterCount <= 0) {
+        DrawText("No installed fighters are available.",
+            static_cast<int>(listViewport.x + 8.0f),
+            static_cast<int>(listViewport.y + 8.0f),
+            12,
+            Fade(RAYWHITE, 0.62f));
+        return request;
+    }
+    if (CheckCollisionPointRec(GetMousePosition(), listViewport)) {
+        const float wheel = uiMouseWheelMove();
+        if (wheel != 0.0f) {
+            editor.editorOpenListScroll -= static_cast<int>(std::round(wheel));
+        }
+    }
+    const int visibleRows = std::max(1, static_cast<int>(std::floor(listViewport.height / 26.0f)));
+    const int maxScroll = std::max(0, fighterCount - visibleRows);
+    editor.editorOpenListScroll = std::clamp(editor.editorOpenListScroll, 0, maxScroll);
+
+    ScopedScissor clip(listViewport);
+    for (int row = 0; row < visibleRows; ++row) {
+        const int fighterIndex = editor.editorOpenListScroll + row;
+        if (fighterIndex >= fighterCount) {
+            break;
+        }
+        const pf::FighterDefinition& fighter = world.fighterDefs[static_cast<size_t>(fighterIndex)];
+        const Rectangle rowRect{
+            listViewport.x,
+            listViewport.y + static_cast<float>(row) * 26.0f,
+            listViewport.width - (maxScroll > 0 ? 10.0f : 0.0f),
+            24.0f,
+        };
+        const std::string label = std::to_string(fighterIndex) + "  " + fighter.name +
+            "  states=" + std::to_string(fighter.states.size());
+        drawWorkstationRow(rowRect, clippedText(label, 12, rowRect.width - 12.0f), false, SKYBLUE);
+        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            request.action = EditorOpenAction::InstalledFighter;
+            request.fighterDef = fighterIndex;
+            return request;
+        }
+    }
+    if (maxScroll > 0) {
+        const float thumbH = std::max(24.0f, listViewport.height * static_cast<float>(visibleRows) / static_cast<float>(fighterCount));
+        const float thumbY = listViewport.y + (listViewport.height - thumbH) * static_cast<float>(editor.editorOpenListScroll) / static_cast<float>(maxScroll);
+        DrawRectangleRec({listViewport.x + listViewport.width - 5.0f, listViewport.y, 3.0f, listViewport.height}, Fade(RAYWHITE, 0.14f));
+        DrawRectangleRec({listViewport.x + listViewport.width - 6.0f, thumbY, 5.0f, thumbH}, Fade(SKYBLUE, 0.7f));
+    }
+    return request;
+}
+
 static void drawEditorWorkspaceTabs(pf::FighterEditor& editor) {
     const std::array<pf::EditorWorkspace, 5> workspaces{
         pf::EditorWorkspace::Moveset,
@@ -14801,6 +14915,101 @@ int main() {
     auto syncMainEditorSession = [&](const std::string& successMessage) -> bool {
         return syncEditorSessionMutation(world, editor, editorSession, testFighterDef, successMessage);
     };
+    auto openEditorSessionForInstalledFighter = [&](int fighterDef) -> bool {
+        if (world.fighterDefs.empty()) {
+            editor.status = "Editor open failed: no installed fighters";
+            return false;
+        }
+        const int fighterDefCount = static_cast<int>(world.fighterDefs.size());
+        fighterDef = std::clamp(fighterDef, 0, fighterDefCount - 1);
+        std::string error;
+        if (!pf::beginFighterEditorSessionFromWorld(world, fighterDef, editorSession, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor open failed: " + error;
+            return false;
+        }
+        testFighterDef = fighterDef;
+        if (!syncEditorSessionDefinitionsToWorld(world, editor, editorSession, testFighterDef, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor open sync failed: " + error;
+            return false;
+        }
+        editorSessionActive = true;
+        editor.testMode = false;
+        editor.animationPreviewActive = true;
+        editor.previewCacheValid = false;
+        editor.previewCacheDirty = true;
+        editor.previewCacheFrame = 0;
+        editor.previewCacheFrames.clear();
+        editor.previewCacheFighterDefs.clear();
+        editor.previewCacheObjectDefs.clear();
+        editor.paused = true;
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        editor.status = "Editor: opened installed fighter " + editorSession.package.fighters.front().name;
+        return true;
+    };
+    auto openBlankEditorSession = [&]() -> bool {
+        const pf::MeleeCommonData common = world.fighterDefs.empty()
+            ? pf::MeleeCommonData{}
+            : world.fighterDefs.front().properties.common;
+        std::string error;
+        if (!pf::beginBlankFighterEditorSession("BlankFighter", common, editorSession, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor blank package failed: " + error;
+            return false;
+        }
+        if (!syncEditorSessionDefinitionsToWorld(world, editor, editorSession, testFighterDef, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor blank sync failed: " + error;
+            return false;
+        }
+        editorSessionActive = true;
+        editor.testMode = false;
+        editor.animationPreviewActive = true;
+        editor.previewCacheValid = false;
+        editor.previewCacheDirty = true;
+        editor.previewCacheFrame = 0;
+        editor.previewCacheFrames.clear();
+        editor.previewCacheFighterDefs.clear();
+        editor.previewCacheObjectDefs.clear();
+        editor.paused = true;
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        editor.status = "Editor: opened blank fighter package";
+        return true;
+    };
+    auto openEditorSessionPackageFile = [&]() -> bool {
+        std::string error;
+        std::vector<uint8_t> bytes;
+        if (!readEditorPackageBytesFromFile(editor.packagePath, bytes, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor package open failed: " + error;
+            return false;
+        }
+        if (!pf::loadFighterEditorSessionPackage(bytes, editorSession, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor package open failed: " + error;
+            return false;
+        }
+        if (!syncEditorSessionDefinitionsToWorld(world, editor, editorSession, testFighterDef, &error)) {
+            editorSessionActive = false;
+            editor.status = "Editor package open sync failed: " + error;
+            return false;
+        }
+        editorSessionActive = true;
+        editor.testMode = false;
+        editor.animationPreviewActive = true;
+        editor.previewCacheValid = false;
+        editor.previewCacheDirty = true;
+        editor.previewCacheFrame = 0;
+        editor.previewCacheFrames.clear();
+        editor.previewCacheFighterDefs.clear();
+        editor.previewCacheObjectDefs.clear();
+        editor.paused = true;
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        updateEditorPackageSummary(editor, editorSession.lastDescriptor);
+        editor.status = "Editor: opened package " + editor.packagePath;
+        return true;
+    };
     auto createEditorSessionStateFromUi = [&]() {
         if (!ensureMainEditorSession()) {
             return;
@@ -14893,7 +15102,8 @@ int main() {
 
     while (!WindowShouldClose()) {
         const bool editorMode = appMode == AppMode::Editor;
-        const bool editorEditMode = editorMode && !editor.testMode;
+        const bool editorOpenMode = editorMode && !editor.testMode && !editorSessionActive;
+        const bool editorEditMode = editorMode && !editor.testMode && editorSessionActive;
         setCrashContext(buildCrashContext(appMode, world, editor, editorSession, editorSessionActive, testFighterDef));
         if (appMode == AppMode::Gameplay) {
             updateTickrateControl(tickrate);
@@ -14943,13 +15153,13 @@ int main() {
             CheckCollisionPointRec(GetMousePosition(), editorNewStateButtonRect());
         const bool deleteStateClicked = uiMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorDeleteStateButtonRect());
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_N) || newStateClicked)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && (IsKeyPressed(KEY_N) || newStateClicked)) {
             createEditorSessionStateFromUi();
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
             removeEditorSessionStateFromUi();
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_T) || testClicked)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && (IsKeyPressed(KEY_T) || testClicked)) {
             if (editor.testMode) {
                 returnEditorSessionFromTestWorld();
             } else {
@@ -14964,7 +15174,7 @@ int main() {
                 replay.realtimePlayback = false;
             }
         }
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_R)) {
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && !editorOpenMode && IsKeyPressed(KEY_R)) {
             world = pf::makeTrainingWorld(testFighterDef, testFighterDef);
             replay.playbackFrame = 0;
             replay.playbackLoaded = false;
@@ -14980,7 +15190,7 @@ int main() {
             editor.previewCacheObjectDefs.clear();
             editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && IsKeyPressed(KEY_LEFT_BRACKET)) {
             if (ensureMainEditorSession()) {
                 editorSession.selectedState = std::max(0, editorSession.selectedState - 1);
                 editorSession.selectedSubaction = 0;
@@ -14993,7 +15203,7 @@ int main() {
                 }
             }
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_RIGHT_BRACKET)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && IsKeyPressed(KEY_RIGHT_BRACKET)) {
             if (ensureMainEditorSession()) {
                 ++editorSession.selectedState;
                 editorSession.selectedSubaction = 0;
@@ -15007,7 +15217,7 @@ int main() {
             }
         }
         const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_COMMA)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && IsKeyPressed(KEY_COMMA)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
                 if (ensureMainEditorSession()) {
                     std::string error;
@@ -15024,7 +15234,7 @@ int main() {
                 editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
             }
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_PERIOD)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && IsKeyPressed(KEY_PERIOD)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
                 if (ensureMainEditorSession()) {
                     std::string error;
@@ -15041,7 +15251,7 @@ int main() {
                 editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
             }
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_BACKSPACE)) {
             if (ensureMainEditorSession()) {
                 std::string error;
                 if (pf::removeEditorSessionSubaction(editorSession, editorSession.selectedState, editor.selectedSubaction, &error)) {
@@ -15052,7 +15262,7 @@ int main() {
                 }
             }
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_MINUS)) {
             if (ensureMainEditorSession()) {
                 pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession);
                 if (def && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(def->states.size())) {
@@ -15072,7 +15282,7 @@ int main() {
                 }
             }
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && editor.workspace == pf::EditorWorkspace::Moveset && IsKeyPressed(KEY_EQUAL)) {
             if (ensureMainEditorSession()) {
                 pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession);
                 if (def && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(def->states.size())) {
@@ -15092,13 +15302,13 @@ int main() {
                 }
             }
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && editor.workspace == pf::EditorWorkspace::Assets && IsKeyPressed(KEY_U)) {
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && editor.workspace == pf::EditorWorkspace::Assets && IsKeyPressed(KEY_U)) {
             bindSelectedObjectStateCallback();
         }
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
-        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && !editorOpenMode && IsKeyPressed(KEY_LEFT)) selectFighterDef(testFighterDef - 1);
+        if (globalShortcutsEnabled && appMode != AppMode::MainMenu && !editorOpenMode && IsKeyPressed(KEY_RIGHT)) selectFighterDef(testFighterDef + 1);
         for (size_t i = 0; i < fighterKeys.size(); ++i) {
-            if (globalShortcutsEnabled && appMode != AppMode::MainMenu && IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
+            if (globalShortcutsEnabled && appMode != AppMode::MainMenu && !editorOpenMode && IsKeyPressed(fighterKeys[i]) && i < world.fighterDefs.size()) {
                 selectFighterDef(static_cast<int>(i));
             }
         }
@@ -15174,6 +15384,21 @@ int main() {
         ClearBackground({205, 214, 222, 255});
         if (appMode == AppMode::MainMenu) {
             drawMainMenu(appMode);
+        } else if (editorOpenMode) {
+            const EditorOpenRequest openRequest = drawEditorOpenScreen(world, editor);
+            switch (openRequest.action) {
+            case EditorOpenAction::InstalledFighter:
+                openEditorSessionForInstalledFighter(openRequest.fighterDef);
+                break;
+            case EditorOpenAction::BlankFighter:
+                openBlankEditorSession();
+                break;
+            case EditorOpenAction::PackageFile:
+                openEditorSessionPackageFile();
+                break;
+            case EditorOpenAction::None:
+                break;
+            }
         } else {
             if (editorEditMode) {
                 const EditorWorkstationLayout layout = editorWorkstationLayout(editor.diagnosticsCollapsed);
