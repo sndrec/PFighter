@@ -8775,6 +8775,8 @@ static void drawEditorTimelineWorkstation(
         int added = -1;
         const int targetFrame = std::clamp(playheadFrame, 0, frameCount);
         if (pf::addEditorSessionSubactionAtFrame(session, session.selectedState, subaction, targetFrame, &added, &error)) {
+            editor.selectedSubaction = added;
+            session.selectedSubaction = added;
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added " + label + " subaction at frame " + std::to_string(targetFrame));
             return true;
         }
@@ -8862,6 +8864,8 @@ static void drawEditorTimelineWorkstation(
         std::string error;
         int added = -1;
         if (pf::addEditorSessionInterrupt(session, session.selectedState, interrupt, -1, &added, &error)) {
+            editor.selectedInterrupt = added;
+            session.selectedInterrupt = added;
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added Wait interrupt");
             editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
             return;
