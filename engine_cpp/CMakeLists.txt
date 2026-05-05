@@ -139,9 +139,13 @@ if(PFIGHTER_BUILD_RAYLIB_APP)
 
     if(TARGET raylib OR raylib_FOUND)
         add_executable(pfighter_raylib
+            src/app/crash_dump.cpp
             src/app/raylib_main.cpp
         )
         target_link_libraries(pfighter_raylib PRIVATE pfighter_core raylib)
+        if(WIN32)
+            target_link_libraries(pfighter_raylib PRIVATE dbghelp)
+        endif()
         target_compile_definitions(pfighter_raylib PRIVATE PFIGHTER_WITH_RAYLIB=1)
         if(PFIGHTER_RAYLIB_DLL)
             add_custom_command(TARGET pfighter_raylib POST_BUILD

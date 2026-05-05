@@ -3,6 +3,7 @@
 #include "core/replay.hpp"
 #include "core/simulation.hpp"
 #include "editor/fighter_editor.hpp"
+#include "app/crash_dump.hpp"
 
 #include <raylib.h>
 #include <raymath.h>
@@ -13,12 +14,18 @@
 #include <cctype>
 #include <cstddef>
 #include <cmath>
+#include <chrono>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 enum class AppMode {
@@ -14174,7 +14181,91 @@ static void launchEditorTestWorld(
         : "Editor test: package round-trip loaded on Battlefield; player 2 is inert checksum=" + std::to_string(editor.lastPackageChecksum);
 }
 
+static const char* appModeName(AppMode mode) {
+    switch (mode) {
+    case AppMode::MainMenu: return "main menu";
+    case AppMode::Gameplay: return "gameplay";
+    case AppMode::Editor: return "editor";
+    }
+    return "unknown";
+}
+
+static std::string buildCrashContext(
+    AppMode appMode,
+    const pf::World& world,
+    const pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    bool sessionActive,
+    int selectedFighterDef)
+{
+    std::ostringstream out;
+    out << "mode=" << appModeName(appMode)
+        << " testMode=" << editor.testMode
+        << " paused=" << editor.paused
+        << " workspace=" << workspaceName(editor.workspace)
+        << " selection=" << editorSelectionKindName(editor.selectionKind)
+        << "\nstatus=" << editor.status
+        << "\nselectedFighterDef=" << selectedFighterDef
+        << " editor.selectedFighter=" << editor.selectedFighter
+        << " editor.selectedState=" << editor.selectedState
+        << " selectedSubaction=" << editor.selectedSubaction
+        << " selectedInterrupt=" << editor.selectedInterrupt
+        << "\nsessionActive=" << sessionActive
+        << " session.selectedFighter=" << session.selectedFighter
+        << " session.selectedState=" << session.selectedState
+        << " session.selectedSubaction=" << session.selectedSubaction
+        << " session.selectedInterrupt=" << session.selectedInterrupt
+        << " session.dirty=" << session.dirty
+        << "\npreviewCache valid=" << editor.previewCacheValid
+        << " dirty=" << editor.previewCacheDirty
+        << " fighter=" << editor.previewCacheFighter
+        << " state=" << editor.previewCacheState
+        << " frame=" << editor.previewCacheFrame
+        << " frames=" << editor.previewCacheFrames.size();
+    if (editor.selectedFighter >= 0 && editor.selectedFighter < static_cast<int>(world.fighters.size())) {
+        const pf::FighterRuntime& fighter = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+        out << "\nruntime fighterDef=" << fighter.fighterDef
+            << " state=" << fighter.state
+            << " stateFrame=" << pf::frameInState(fighter)
+            << " pos=(" << pf::fxToFloat(fighter.position.x) << ", " << pf::fxToFloat(fighter.position.y) << ")";
+        if (fighter.fighterDef >= 0 && fighter.fighterDef < static_cast<int>(world.fighterDefs.size())) {
+            const pf::FighterDefinition& def = world.fighterDefs[static_cast<size_t>(fighter.fighterDef)];
+            out << "\nruntime fighter=" << def.name
+                << " states=" << def.states.size()
+                << " packageScripts=" << def.packageScripts.size()
+                << " hurtboxes=" << def.hurtboxes.size()
+                << " clips=" << def.authoredClips.size();
+            if (editor.selectedState >= 0 && editor.selectedState < static_cast<int>(def.states.size())) {
+                const pf::FighterState& state = def.states[static_cast<size_t>(editor.selectedState)];
+                out << "\neditor state=" << state.name
+                    << " action=" << state.action.size()
+                    << " interrupts=" << state.interrupts.size()
+                    << " anim=" << state.animation
+                    << " actionIndex=" << state.animationActionIndex;
+            }
+        }
+    }
+    if (session.selectedFighter >= 0 && session.selectedFighter < static_cast<int>(session.package.fighters.size())) {
+        const pf::FighterDefinition& def = session.package.fighters[static_cast<size_t>(session.selectedFighter)];
+        out << "\nsession fighter=" << def.name
+            << " states=" << def.states.size()
+            << " packageScripts=" << def.packageScripts.size()
+            << " hurtboxes=" << def.hurtboxes.size()
+            << " clips=" << def.authoredClips.size();
+        if (session.selectedState >= 0 && session.selectedState < static_cast<int>(def.states.size())) {
+            const pf::FighterState& state = def.states[static_cast<size_t>(session.selectedState)];
+            out << "\nsession state=" << state.name
+                << " action=" << state.action.size()
+                << " interrupts=" << state.interrupts.size()
+                << " anim=" << state.animation
+                << " actionIndex=" << state.animationActionIndex;
+        }
+    }
+    return out.str();
+}
+
 int main() {
+    installCrashDumpHandler();
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(1280, 720, "PFighter C++ raylib prototype");
     if (!IsWindowReady()) {
@@ -14379,6 +14470,7 @@ int main() {
     while (!WindowShouldClose()) {
         const bool editorMode = appMode == AppMode::Editor;
         const bool editorEditMode = editorMode && !editor.testMode;
+        setCrashContext(buildCrashContext(appMode, world, editor, editorSession, editorSessionActive, testFighterDef));
         if (appMode == AppMode::Gameplay) {
             updateTickrateControl(tickrate);
         }
@@ -14651,6 +14743,7 @@ int main() {
             camera.projection = CAMERA_PERSPECTIVE;
         }
 
+        setCrashContext(buildCrashContext(appMode, world, editor, editorSession, editorSessionActive, testFighterDef));
         BeginDrawing();
         ClearBackground({205, 214, 222, 255});
         if (appMode == AppMode::MainMenu) {
