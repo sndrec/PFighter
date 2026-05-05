@@ -136,6 +136,8 @@ struct FighterEditor {
     FighterEditorStateCallbackSlot selectedStateCallbackSlot = FighterEditorStateCallbackSlot::Enter;
     int selectedStateCallback = 0;
     int stateLogicTab = 0;
+    int stateLogicCallbackScroll = 0;
+    int stateLogicInterruptScroll = 0;
     int selectedPackageVariable = 0;
     int selectedPackageScript = 0;
     int selectedPackageInstruction = 0;

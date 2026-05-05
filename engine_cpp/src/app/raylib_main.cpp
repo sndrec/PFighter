@@ -11656,6 +11656,7 @@ static void drawEditorStateCallbacksWorkstation(
         if (uiListRow({rect.x + 10.0f, listY + 24.0f * row, slotW, 21.0f}, label, active)) {
             editor.selectedStateCallbackSlot = slot;
             editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, std::max(0, static_cast<int>(calls.size()) - 1));
+            editor.stateLogicCallbackScroll = 0;
             editor.selectionKind = pf::FighterEditorSelectionKind::Callback;
         }
     }
@@ -11670,8 +11671,22 @@ static void drawEditorStateCallbacksWorkstation(
         DrawText("No calls assigned", static_cast<int>(callsX), static_cast<int>(listY + 4.0f), 11, Fade(RAYWHITE, 0.58f));
     } else {
         editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, static_cast<int>(calls.size()) - 1);
-        const int visible = std::min(5, static_cast<int>(calls.size()));
-        const int start = visibleListStart(editor.selectedStateCallback, static_cast<int>(calls.size()), visible);
+        const Rectangle callsViewport{callsX, listY, callsW, std::max(24.0f, rect.y + rect.height - 96.0f - listY)};
+        const int visible = std::max(1, std::min(static_cast<int>(calls.size()), static_cast<int>(std::floor(callsViewport.height / 24.0f))));
+        const int maxScroll = std::max(0, static_cast<int>(calls.size()) - visible);
+        if (CheckCollisionPointRec(GetMousePosition(), callsViewport)) {
+            const float wheel = uiMouseWheelMove();
+            if (wheel != 0.0f) {
+                editor.stateLogicCallbackScroll = std::clamp(
+                    editor.stateLogicCallbackScroll - static_cast<int>(std::round(wheel)),
+                    0,
+                    maxScroll);
+            }
+        }
+        editor.stateLogicCallbackScroll = std::clamp(editor.stateLogicCallbackScroll, 0, maxScroll);
+        const int start = editor.stateLogicCallbackScroll;
+        {
+        ScopedScissor callClip(callsViewport);
         for (int row = 0; row < visible; ++row) {
             const int callIndex = start + row;
             const pf::FunctionCall& call = calls[static_cast<size_t>(callIndex)];
@@ -11693,6 +11708,13 @@ static void drawEditorStateCallbacksWorkstation(
                     }
                 }
             }
+        }
+        }
+        if (maxScroll > 0) {
+            const float thumbH = std::max(18.0f, callsViewport.height * static_cast<float>(visible) / static_cast<float>(calls.size()));
+            const float thumbY = callsViewport.y + (callsViewport.height - thumbH) * static_cast<float>(editor.stateLogicCallbackScroll) / static_cast<float>(maxScroll);
+            DrawRectangleRec({callsViewport.x + callsViewport.width - 4.0f, callsViewport.y, 3.0f, callsViewport.height}, Fade(RAYWHITE, 0.14f));
+            DrawRectangleRec({callsViewport.x + callsViewport.width - 5.0f, thumbY, 5.0f, thumbH}, Fade(SKYBLUE, 0.7f));
         }
     }
 
@@ -11771,11 +11793,28 @@ static void drawEditorStateInterruptsWorkstation(
 {
     DrawText("State interrupts", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 8.0f), 13, RAYWHITE);
     const float listY = rect.y + 32.0f;
-    const int visible = std::min(7, static_cast<int>(state.interrupts.size()));
-    const int start = visibleListStart(editor.selectedInterrupt, static_cast<int>(state.interrupts.size()), std::max(1, visible));
     if (state.interrupts.empty()) {
         DrawText("No interrupt rules", static_cast<int>(rect.x + 10.0f), static_cast<int>(listY + 4.0f), 11, Fade(RAYWHITE, 0.58f));
     }
+    const float actionY = rect.y + rect.height - 32.0f;
+    const Rectangle interruptViewport{rect.x + 10.0f, listY, rect.width - 20.0f, std::max(24.0f, actionY - listY - 8.0f)};
+    const int visible = state.interrupts.empty()
+        ? 0
+        : std::max(1, std::min(static_cast<int>(state.interrupts.size()), static_cast<int>(std::floor(interruptViewport.height / 24.0f))));
+    const int maxScroll = std::max(0, static_cast<int>(state.interrupts.size()) - visible);
+    if (CheckCollisionPointRec(GetMousePosition(), interruptViewport)) {
+        const float wheel = uiMouseWheelMove();
+        if (wheel != 0.0f) {
+            editor.stateLogicInterruptScroll = std::clamp(
+                editor.stateLogicInterruptScroll - static_cast<int>(std::round(wheel)),
+                0,
+                maxScroll);
+        }
+    }
+    editor.stateLogicInterruptScroll = std::clamp(editor.stateLogicInterruptScroll, 0, maxScroll);
+    const int start = editor.stateLogicInterruptScroll;
+    {
+    ScopedScissor interruptClip(interruptViewport);
     for (int row = 0; row < visible; ++row) {
         const int interruptIndex = start + row;
         const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(interruptIndex)];
@@ -11795,8 +11834,14 @@ static void drawEditorStateInterruptsWorkstation(
             editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
         }
     }
+    }
+    if (maxScroll > 0) {
+        const float thumbH = std::max(18.0f, interruptViewport.height * static_cast<float>(visible) / static_cast<float>(state.interrupts.size()));
+        const float thumbY = interruptViewport.y + (interruptViewport.height - thumbH) * static_cast<float>(editor.stateLogicInterruptScroll) / static_cast<float>(maxScroll);
+        DrawRectangleRec({interruptViewport.x + interruptViewport.width - 4.0f, interruptViewport.y, 3.0f, interruptViewport.height}, Fade(RAYWHITE, 0.14f));
+        DrawRectangleRec({interruptViewport.x + interruptViewport.width - 5.0f, thumbY, 5.0f, thumbH}, Fade(SKYBLUE, 0.7f));
+    }
 
-    const float actionY = rect.y + rect.height - 32.0f;
     if (uiButton({rect.x + 10.0f, actionY, 72.0f, 22.0f}, "+ Rule")) {
         pf::InterruptRule rule;
         rule.targetState = def.stateIndex("Wait") >= 0 ? "Wait" : state.name;
@@ -11847,11 +11892,6 @@ static void drawEditorLogicGraphWorkstation(
     pf::FighterDefinition& def,
     Rectangle rect)
 {
-    if (editor.selectionKind == pf::FighterEditorSelectionKind::Callback) {
-        editor.stateLogicTab = 0;
-    } else if (editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt) {
-        editor.stateLogicTab = 1;
-    }
     drawPanelChrome(rect, "State Logic");
     drawEditorStateLogicTabs(editor, rect);
     const Rectangle content{rect.x + 8.0f, rect.y + 56.0f, rect.width - 16.0f, std::max(64.0f, rect.height - 64.0f)};
