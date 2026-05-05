@@ -559,7 +559,7 @@ static bool loadMeleeStageCollision(StageDefinition& stage, const std::filesyste
 }
 
 static int mainFloorSegmentIndex(const StageDefinition& stage) {
-    int best = 0;
+    int best = -1;
     Fix bestLength = -1;
     for (size_t i = 0; i < stage.segments.size(); ++i) {
         const StageSegment& segment = stage.segments[i];

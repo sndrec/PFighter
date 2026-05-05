@@ -7417,10 +7417,6 @@ static void previewEditorSelectedState(pf::World& world, pf::FighterEditor& edit
     const pf::FighterState& selectedState = def.states[static_cast<size_t>(editor.selectedState)];
     editor.previewCacheFrame = 0;
     editor.previewCacheDirty = true;
-    editor.previewCacheValid = false;
-    editor.previewCacheFrames.clear();
-    editor.previewCacheFighterDefs.clear();
-    editor.previewCacheObjectDefs.clear();
     editor.paused = true;
     editor.status = "Editor: queued savestate preview for " + selectedState.name;
 }
@@ -7760,6 +7756,56 @@ static bool editorPreviewStateStartsAirborne(const pf::FighterState& state) {
     return stateNameContainsAny(name, {"air", "fall", "jump", "cliff", "ledge"});
 }
 
+static void updateEditorSessionPackageSummary(pf::FighterEditor& editor, const pf::FighterEditorSession& session) {
+    editor.lastPackageName = session.package.name;
+    editor.lastPackageBytes = session.lastBytes.size();
+    editor.lastPackageChecksum = session.lastDescriptor.checksum;
+    editor.lastPackageFighters = static_cast<int>(session.package.fighters.size());
+    editor.lastPackageObjects = static_cast<int>(session.package.objects.size());
+    editor.lastPackageAssets = 0;
+    editor.lastPackageValid = true;
+    editor.lastPackageMessage = session.dirty ? "Dirty" : "OK";
+}
+
+static bool syncEditorSessionDefinitionsToWorld(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
+    std::string* error = nullptr)
+{
+    session.clamp();
+    if (session.package.fighters.empty()) {
+        if (error) *error = "editor session has no package fighters";
+        return false;
+    }
+
+    const int selectedPackageFighter = std::clamp(
+        session.selectedFighter,
+        0,
+        static_cast<int>(session.package.fighters.size()) - 1);
+    world.fighterDefs = session.package.fighters;
+    world.objectDefs = session.package.objects;
+    selectedFighterDef = 0;
+    editor.selectedFighter = std::clamp(editor.selectedFighter, 0, std::max(0, static_cast<int>(world.fighters.size()) - 1));
+    if (!world.fighters.empty()) {
+        pf::FighterRuntime& preview = world.fighters[static_cast<size_t>(editor.selectedFighter)];
+        const pf::Vec2 position = preview.position;
+        const int facing = preview.facing == 0 ? 1 : preview.facing;
+        pf::resetTrainingFighter(world, static_cast<size_t>(editor.selectedFighter), selectedPackageFighter, position, facing);
+    }
+    editor.selectedState = session.selectedState;
+    editor.selectedSubaction = session.selectedSubaction;
+    editor.selectedInterrupt = session.selectedInterrupt;
+    editor.selectedPackageScript = session.selectedPackageScript;
+    editor.selectedPackageInstruction = session.selectedPackageInstruction;
+    updateEditorSessionPackageSummary(editor, session);
+    if (error) {
+        error->clear();
+    }
+    return true;
+}
+
 static int editorFindRuntimeFighterDef(const pf::World& world, const std::string& name, int fallback) {
     if (!name.empty()) {
         const auto found = std::find_if(world.fighterDefs.begin(), world.fighterDefs.end(), [&](const pf::FighterDefinition& def) {
@@ -7863,16 +7909,9 @@ static bool rebuildEditorPreviewCache(
         return false;
     }
 
-    pf::World previewWorld;
-    int installedRoot = -1;
-    pf::FighterPackageDescriptor previewDescriptor;
-    if (!pf::makeFighterEditorSessionTestWorld(session, previewWorld, &installedRoot, &previewDescriptor, error)) {
-        return false;
-    }
-
     session.clamp();
     if (session.package.fighters.empty()) {
-        if (error) *error = "selected package fighter disappeared during preview export";
+        if (error) *error = "selected package fighter disappeared during preview rebuild";
         return false;
     }
     const int exportedPackageFighter = std::clamp(session.selectedFighter, 0, static_cast<int>(session.package.fighters.size()) - 1);
@@ -7883,20 +7922,16 @@ static bool rebuildEditorPreviewCache(
     }
     const int selectedState = std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
     const pf::FighterState& state = def.states[static_cast<size_t>(selectedState)];
-    const int runtimeDef = editorFindRuntimeFighterDef(previewWorld, def.name, installedRoot >= 0 ? installedRoot : selectedFighterDef);
-    if (runtimeDef < 0) {
-        if (error) *error = "selected package fighter is not installed in the preview world";
-        return false;
-    }
 
     const bool airborne = editorPreviewStateStartsAirborne(state);
+    pf::World previewWorld;
+    previewWorld.fighterDefs = session.package.fighters;
+    previewWorld.objectDefs = session.package.objects;
     previewWorld.stage = makeEditorPreviewStage(airborne);
     previewWorld.frame = 0;
     previewWorld.objects.clear();
-    pf::resetTrainingFighter(previewWorld, 0, runtimeDef, airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{}, 1);
-    if (previewWorld.fighters.size() > 1) {
-        pf::resetTrainingFighter(previewWorld, 1, std::clamp(runtimeDef, 0, static_cast<int>(previewWorld.fighterDefs.size()) - 1), {pf::fx(40), airborne ? pf::fx(8) : 0}, -1);
-    }
+    previewWorld.fighters.resize(1);
+    pf::resetTrainingFighter(previewWorld, 0, exportedPackageFighter, airborne ? pf::Vec2{0, pf::fx(8)} : pf::Vec2{}, 1);
     applyEditorPreviewFixture(previewWorld, airborne);
     pf::changeFighterState(previewWorld, previewWorld.fighters[0], state.name, 0, pf::kDisableAnimationBlendFrames);
     applyEditorPreviewFixture(previewWorld, airborne);
@@ -7931,9 +7966,8 @@ static bool rebuildEditorPreviewCache(
         return false;
     }
     editor.selectedState = selectedState;
-    selectedFighterDef = installedRoot >= 0 ? installedRoot : selectedFighterDef;
-    updateEditorPackageSummary(editor, previewDescriptor);
-    session.lastDescriptor = previewDescriptor;
+    selectedFighterDef = 0;
+    updateEditorSessionPackageSummary(editor, session);
     editor.status = "Editor: rebuilt savestate preview for " + state.name + " (" + editor.previewCacheMessage + ")";
     return true;
 }
@@ -8173,7 +8207,7 @@ static bool syncEditorSessionMutation(
     const std::string& successMessage)
 {
     std::string error;
-    if (!syncEditorSessionToWorld(world, editor, session, selectedFighterDef, &error)) {
+    if (!syncEditorSessionDefinitionsToWorld(world, editor, session, selectedFighterDef, &error)) {
         updateEditorPackageFailure(editor, error);
         editor.status = "Editor session sync failed: " + error;
         return false;
@@ -8435,17 +8469,13 @@ static void drawEditorStateBrowserWorkstation(
         session.selectedFighter = wrappedIndex(fighterIndex, static_cast<int>(session.package.fighters.size()));
         resetEditorSelectionForPackageFighter(editor, session);
         std::string error;
-        if (!syncEditorSessionToWorld(world, editor, session, selectedFighterDef, &error)) {
+        if (!syncEditorSessionDefinitionsToWorld(world, editor, session, selectedFighterDef, &error)) {
             updateEditorPackageFailure(editor, error);
             editor.status = "Editor: package fighter selection failed: " + error;
             return false;
         }
         editor.uiRefreshPending = true;
         editor.previewCacheDirty = true;
-        editor.previewCacheValid = false;
-        editor.previewCacheFrames.clear();
-        editor.previewCacheFighterDefs.clear();
-        editor.previewCacheObjectDefs.clear();
         const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
         editor.status = selected
             ? "Editor: selected package fighter " + selected->name
