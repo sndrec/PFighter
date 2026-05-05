@@ -8891,40 +8891,123 @@ static void drawEditorStateBrowserWorkstation(
 }
 
 static constexpr int kEditorTimelineHitboxLanes = 8;
-static constexpr int kEditorTimelineSubactionLane = 0;
-static constexpr int kEditorTimelineHitboxLaneFirst = 1;
-static constexpr int kEditorTimelineHurtboxLane = kEditorTimelineHitboxLaneFirst + kEditorTimelineHitboxLanes;
-static constexpr int kEditorTimelineAnimationLane = kEditorTimelineHurtboxLane + 1;
-static constexpr int kEditorTimelineLaneCount = kEditorTimelineAnimationLane + 1;
 
-static std::vector<std::string> editorTimelineLaneLabels() {
-    std::vector<std::string> lanes;
-    lanes.reserve(kEditorTimelineLaneCount);
-    lanes.push_back("Subactions");
-    for (int i = 0; i < kEditorTimelineHitboxLanes; ++i) {
-        lanes.push_back("Hitbox " + std::to_string(i));
+enum class EditorTimelineLaneKind {
+    SubactionType,
+    HitboxId,
+};
+
+struct EditorTimelineLane {
+    std::string label;
+    EditorTimelineLaneKind kind = EditorTimelineLaneKind::SubactionType;
+    pf::SubactionType subactionType = pf::SubactionType::SyncTimer;
+    int hitboxId = -1;
+};
+
+static std::string editorTimelineLaneLabelForSubaction(pf::SubactionType type) {
+    switch (type) {
+    case pf::SubactionType::SyncTimer: return "Wait / Sync";
+    case pf::SubactionType::AsyncTimer: return "Async Timer";
+    case pf::SubactionType::SetLoop:
+    case pf::SubactionType::ExecuteLoop: return "Loops";
+    case pf::SubactionType::ClearHitboxes: return "Clear Hitboxes";
+    case pf::SubactionType::RemoveHitbox: return "Remove Hitbox";
+    case pf::SubactionType::AdjustHitboxDamage: return "Hitbox Damage";
+    case pf::SubactionType::AdjustHitboxSize: return "Hitbox Size";
+    case pf::SubactionType::SetHitboxInteraction: return "Hitbox Rules";
+    case pf::SubactionType::CallScript: return "Script Calls";
+    case pf::SubactionType::SetHurtboxState: return "Hurtbox State";
+    case pf::SubactionType::SetBodyCollisionState: return "Body Collision";
+    case pf::SubactionType::SetInterruptible: return "Interruptible";
+    case pf::SubactionType::ReverseDirection: return "Facing";
+    case pf::SubactionType::SetFlag: return "Command Flags";
+    case pf::SubactionType::SetThrowFlag:
+    case pf::SubactionType::SetThrowFlagLiteral: return "Throw Flags";
+    case pf::SubactionType::CreateThrowHitbox: return "Throw Hitbox";
+    case pf::SubactionType::SpawnObject:
+    case pf::SubactionType::SpawnProjectile: return "Spawns";
+    case pf::SubactionType::SetModelVisibility:
+    case pf::SubactionType::RevertModelVisibility:
+    case pf::SubactionType::RemoveModelVisibility:
+    case pf::SubactionType::SetFighterVisibility:
+    case pf::SubactionType::SetModelPartAnimation: return "Model Visibility";
+    case pf::SubactionType::SelfDamage: return "Self Damage";
+    case pf::SubactionType::EnableJabFollowup:
+    case pf::SubactionType::SetJabRapid:
+    case pf::SubactionType::SetJumpState:
+    case pf::SubactionType::StartSmashCharge: return "Fighter Logic";
+    case pf::SubactionType::CreateHitbox: break;
     }
-    lanes.push_back("Hurtboxes");
-    lanes.push_back("Anim Keys");
+    return subactionTypeName(type);
+}
+
+static std::vector<EditorTimelineLane> buildEditorTimelineLanes(const pf::FighterState& state) {
+    std::vector<EditorTimelineLane> lanes;
+    auto addSubactionLane = [&](pf::SubactionType type) {
+        if (type == pf::SubactionType::CreateHitbox || type == pf::SubactionType::CreateThrowHitbox) {
+            return;
+        }
+        const auto found = std::find_if(lanes.begin(), lanes.end(), [&](const EditorTimelineLane& lane) {
+            return lane.kind == EditorTimelineLaneKind::SubactionType && lane.subactionType == type;
+        });
+        if (found == lanes.end()) {
+            lanes.push_back({editorTimelineLaneLabelForSubaction(type), EditorTimelineLaneKind::SubactionType, type, -1});
+        }
+    };
+    auto addHitboxLane = [&](int hitboxId) {
+        hitboxId = std::clamp(hitboxId, 0, kEditorTimelineHitboxLanes - 1);
+        const auto found = std::find_if(lanes.begin(), lanes.end(), [&](const EditorTimelineLane& lane) {
+            return lane.kind == EditorTimelineLaneKind::HitboxId && lane.hitboxId == hitboxId;
+        });
+        if (found == lanes.end()) {
+            lanes.push_back({"Hitbox " + std::to_string(hitboxId), EditorTimelineLaneKind::HitboxId, pf::SubactionType::CreateHitbox, hitboxId});
+        }
+    };
+
+    for (const pf::Subaction& subaction : state.action) {
+        if (subaction.type == pf::SubactionType::CreateHitbox ||
+            subaction.type == pf::SubactionType::CreateThrowHitbox)
+        {
+            addHitboxLane(subaction.hitbox.hitboxId);
+        } else {
+            addSubactionLane(subaction.type);
+        }
+    }
+    if (lanes.empty()) {
+        lanes.push_back({"No subactions", EditorTimelineLaneKind::SubactionType, pf::SubactionType::SyncTimer, -1});
+    }
     return lanes;
 }
 
-static int editorTimelineHitboxLane(int hitboxId) {
-    return kEditorTimelineHitboxLaneFirst + std::clamp(hitboxId, 0, kEditorTimelineHitboxLanes - 1);
+static int editorTimelineSubactionLaneIndex(const std::vector<EditorTimelineLane>& lanes, const pf::Subaction& subaction) {
+    for (int i = 0; i < static_cast<int>(lanes.size()); ++i) {
+        const EditorTimelineLane& lane = lanes[static_cast<size_t>(i)];
+        if ((subaction.type == pf::SubactionType::CreateHitbox ||
+             subaction.type == pf::SubactionType::CreateThrowHitbox) &&
+            lane.kind == EditorTimelineLaneKind::HitboxId &&
+            lane.hitboxId == std::clamp(subaction.hitbox.hitboxId, 0, kEditorTimelineHitboxLanes - 1))
+        {
+            return i;
+        }
+        if (lane.kind == EditorTimelineLaneKind::SubactionType && lane.subactionType == subaction.type) {
+            return i;
+        }
+    }
+    return -1;
 }
 
-static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marker, const pf::FighterState& state) {
+static int editorTimelineMarkerLane(const std::vector<EditorTimelineLane>& lanes, const pf::FighterEditorTimelineMarker& marker, const pf::FighterState& state) {
     switch (marker.kind) {
     case pf::FighterEditorTimelineMarkerKind::Hitbox:
     case pf::FighterEditorTimelineMarkerKind::ThrowHitbox:
         if (marker.sourceIndex >= 0 && marker.sourceIndex < static_cast<int>(state.action.size())) {
-            return editorTimelineHitboxLane(state.action[static_cast<size_t>(marker.sourceIndex)].hitbox.hitboxId);
+            return editorTimelineSubactionLaneIndex(lanes, state.action[static_cast<size_t>(marker.sourceIndex)]);
         }
-        return editorTimelineHitboxLane(0);
+        return -1;
     case pf::FighterEditorTimelineMarkerKind::Callback:
         return -1;
     case pf::FighterEditorTimelineMarkerKind::AnimationKey:
-        return kEditorTimelineAnimationLane;
+        return -1;
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
     case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
@@ -8932,35 +9015,13 @@ static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marke
     case pf::FighterEditorTimelineMarkerKind::Subaction:
         break;
     }
-    if (marker.subactionType == pf::SubactionType::SetHurtboxState ||
-        marker.subactionType == pf::SubactionType::SetBodyCollisionState)
-    {
-        return kEditorTimelineHurtboxLane;
+    for (int i = 0; i < static_cast<int>(lanes.size()); ++i) {
+        const EditorTimelineLane& lane = lanes[static_cast<size_t>(i)];
+        if (lane.kind == EditorTimelineLaneKind::SubactionType && lane.subactionType == marker.subactionType) {
+            return i;
+        }
     }
-    if (marker.subactionType == pf::SubactionType::CallScript) {
-        return kEditorTimelineSubactionLane;
-    }
-    return kEditorTimelineSubactionLane;
-}
-
-static int editorTimelineSubactionLane(const pf::Subaction& subaction) {
-    if (subaction.type == pf::SubactionType::CreateHitbox ||
-        subaction.type == pf::SubactionType::CreateThrowHitbox)
-    {
-        return editorTimelineHitboxLane(subaction.hitbox.hitboxId);
-    }
-    if (subaction.type == pf::SubactionType::SetHurtboxState ||
-        subaction.type == pf::SubactionType::SetBodyCollisionState)
-    {
-        return kEditorTimelineHurtboxLane;
-    }
-    if (subaction.type == pf::SubactionType::CallScript) {
-        return kEditorTimelineSubactionLane;
-    }
-    if (subaction.type == pf::SubactionType::SetInterruptible) {
-        return kEditorTimelineSubactionLane;
-    }
-    return kEditorTimelineSubactionLane;
+    return -1;
 }
 
 static Color editorTimelineMarkerColor(const pf::FighterEditorTimelineMarker& marker) {
@@ -9039,7 +9100,7 @@ static void drawEditorTimelineWorkstation(
     const int playheadFrame = editor.previewCacheValid && editor.previewCacheFighter == session.selectedFighter && editor.previewCacheState == session.selectedState
         ? editor.previewCacheFrame
         : liveFrame;
-    const std::vector<std::string> lanes = editorTimelineLaneLabels();
+    const std::vector<EditorTimelineLane> lanes = buildEditorTimelineLanes(state);
     const float headerY = rect.y + 32.0f;
     const float toolbarY = rect.y + 54.0f;
     const float rulerY = rect.y + 82.0f;
@@ -9209,32 +9270,6 @@ static void drawEditorTimelineWorkstation(
         }
         editor.status = "Editor: remove subaction failed: " + error;
     }
-    if (uiButton({actionX + 374.0f, actionY, 50.0f, 22.0f}, "Int+")) {
-        pf::InterruptRule interrupt;
-        interrupt.targetState = "Wait";
-        interrupt.condition = pf::InterruptCondition::WaitInput;
-        interrupt.enableFrame = std::max(0, playheadFrame);
-        interrupt.disableFrame = 0;
-        std::string error;
-        int added = -1;
-        if (pf::addEditorSessionInterrupt(session, session.selectedState, interrupt, -1, &added, &error)) {
-            editor.selectedInterrupt = added;
-            session.selectedInterrupt = added;
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: added Wait interrupt");
-            editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
-            return;
-        }
-        editor.status = "Editor: add interrupt failed: " + error;
-    }
-    if (uiButton({actionX + 430.0f, actionY, 50.0f, 22.0f}, "Int-")) {
-        std::string error;
-        if (pf::removeEditorSessionInterrupt(session, session.selectedState, editor.selectedInterrupt, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed selected interrupt");
-            editor.selectionKind = state.interrupts.empty() ? pf::FighterEditorSelectionKind::State : pf::FighterEditorSelectionKind::Interrupt;
-            return;
-        }
-        editor.status = "Editor: remove interrupt failed: " + error;
-    }
     DrawRectangleRec(ruler, {26, 31, 36, 255});
     DrawRectangleLinesEx(ruler, 1.0f, {74, 86, 98, 255});
     const int stateLengthFrame = std::clamp(state.animationLengthFrames, 0, frameCount);
@@ -9263,7 +9298,7 @@ static void drawEditorTimelineWorkstation(
     ScopedScissor timelineLaneClip(laneViewport);
     for (int lane = editor.timelineLaneScroll; lane < std::min(static_cast<int>(lanes.size()), editor.timelineLaneScroll + visibleLaneCount); ++lane) {
         const float y = laneY(lane);
-        DrawText(lanes[static_cast<size_t>(lane)].c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 5.0f), 11, Fade(RAYWHITE, 0.72f));
+        DrawText(lanes[static_cast<size_t>(lane)].label.c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 5.0f), 11, Fade(RAYWHITE, 0.72f));
         DrawRectangleRec({ruler.x, y, ruler.width, laneBarH}, lane % 2 == 0 ? Fade(RAYWHITE, 0.06f) : Fade(RAYWHITE, 0.035f));
     }
     if (maxLaneScroll > 0) {
@@ -9283,7 +9318,7 @@ static void drawEditorTimelineWorkstation(
             continue;
         }
         const pf::Subaction& subaction = state.action[static_cast<size_t>(subactionIndex)];
-        const int lane = editorTimelineSubactionLane(subaction);
+        const int lane = editorTimelineSubactionLaneIndex(lanes, subaction);
         if (lane < 0 || lane >= static_cast<int>(lanes.size()) || !laneVisible(lane)) {
             continue;
         }
@@ -9308,7 +9343,7 @@ static void drawEditorTimelineWorkstation(
 
     for (int frame = 0; frame < static_cast<int>(actionFrames.size()); ++frame) {
         for (const pf::Subaction& subaction : actionFrames[static_cast<size_t>(frame)]) {
-            const int lane = editorTimelineSubactionLane(subaction);
+            const int lane = editorTimelineSubactionLaneIndex(lanes, subaction);
             if (lane < 0 || lane >= static_cast<int>(lanes.size()) || !laneVisible(lane)) {
                 continue;
             }
@@ -9327,7 +9362,7 @@ static void drawEditorTimelineWorkstation(
     if (hasTimeline) {
         for (int markerIndex = 0; markerIndex < static_cast<int>(timeline.markers.size()); ++markerIndex) {
             const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(markerIndex)];
-            const int lane = editorTimelineMarkerLane(marker, state);
+            const int lane = editorTimelineMarkerLane(lanes, marker, state);
             if (lane < 0 || lane >= static_cast<int>(lanes.size()) || !laneVisible(lane)) {
                 continue;
             }
@@ -9428,7 +9463,7 @@ static void drawEditorTimelineWorkstation(
             int pickedMarker = -1;
             for (int markerIndex = static_cast<int>(timeline.markers.size()) - 1; markerIndex >= 0; --markerIndex) {
                 const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(markerIndex)];
-                if (editorTimelineMarkerLane(marker, state) != clickedLane) {
+                if (editorTimelineMarkerLane(lanes, marker, state) != clickedLane) {
                     continue;
                 }
                 const int markerFrame = std::clamp(marker.frame, 0, frameCount);
