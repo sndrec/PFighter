@@ -2191,7 +2191,19 @@ void changeFighterState(World& world, FighterRuntime& fighter, const std::string
         return &item == &fighter;
     });
     if (it != world.fighters.end()) {
-        runStateFunctions(world, static_cast<size_t>(std::distance(world.fighters.begin(), it)), currentState(world, fighter).onEnter);
+        const size_t fighterIndex = static_cast<size_t>(std::distance(world.fighters.begin(), it));
+        runStateFunctions(world, fighterIndex, currentState(world, fighter).onEnter);
+        if (fighterIndex < world.fighters.size()) {
+            FighterRuntime& current = world.fighters[fighterIndex];
+            if (current.fighterDef >= 0 && current.fighterDef < static_cast<int>(world.fighterDefs.size())) {
+                const FighterDefinition& currentDef = world.fighterDefs[static_cast<size_t>(current.fighterDef)];
+                if (current.state >= 0 && current.state < static_cast<int>(currentDef.states.size())) {
+                    evaluatePose(currentDef, currentDef.states[static_cast<size_t>(current.state)], current);
+                }
+            }
+        }
+    } else {
+        evaluatePose(def, targetState, fighter);
     }
 }
 
