@@ -182,6 +182,9 @@ struct FighterEditor {
     EditorWorkspace workspace = EditorWorkspace::Moveset;
     FighterEditorStateGroupFilter stateGroupFilter = FighterEditorStateGroupFilter::All;
     std::string stateSearch;
+    int stateListScroll = 0;
+    int inspectorScroll = 0;
+    bool diagnosticsCollapsed = false;
     std::string packagePath = "editor_last.pfpkg";
     std::string lastPackageName;
     size_t lastPackageBytes = 0;
