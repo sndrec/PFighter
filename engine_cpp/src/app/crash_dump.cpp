@@ -1,11 +1,14 @@
 #include "app/crash_dump.hpp"
 
 #include <chrono>
+#include <cstdlib>
 #include <ctime>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <typeinfo>
 #include <utility>
 
 #if defined(_WIN32)
@@ -29,13 +32,33 @@ static std::string crashTimestampForFile() {
     return out.str();
 }
 
+static std::filesystem::path crashDirectory() {
+    return std::filesystem::current_path() / "engine_cpp" / "crashes";
+}
+
+static std::string currentExceptionDescription() {
+    std::exception_ptr exception = std::current_exception();
+    if (!exception) {
+        return "none";
+    }
+    try {
+        std::rethrow_exception(exception);
+    } catch (const std::bad_alloc& e) {
+        return std::string{"std::bad_alloc: "} + e.what();
+    } catch (const std::exception& e) {
+        return std::string{typeid(e).name()} + ": " + e.what();
+    } catch (...) {
+        return "unknown non-std exception";
+    }
+}
+
 void setCrashContext(std::string context) {
     gCrashContext = std::move(context);
 }
 
 static LONG WINAPI pfighterUnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo) {
     try {
-        const std::filesystem::path crashDir = std::filesystem::current_path() / "engine_cpp" / "crashes";
+        const std::filesystem::path crashDir = crashDirectory();
         std::filesystem::create_directories(crashDir);
         const std::string stamp = crashTimestampForFile();
         const std::filesystem::path dumpPath = crashDir / ("pfighter_raylib_" + stamp + ".dmp");
@@ -79,8 +102,25 @@ static LONG WINAPI pfighterUnhandledExceptionFilter(EXCEPTION_POINTERS* exceptio
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
+static void pfighterTerminateHandler() {
+    try {
+        const std::filesystem::path crashDir = crashDirectory();
+        std::filesystem::create_directories(crashDir);
+        const std::string stamp = crashTimestampForFile();
+        const std::filesystem::path textPath = crashDir / ("pfighter_raylib_" + stamp + "_terminate.txt");
+
+        std::ofstream report(textPath, std::ios::binary);
+        report << "PFighter raylib terminated\n";
+        report << "exception=" << currentExceptionDescription() << "\n";
+        report << "\nlast_context:\n" << gCrashContext << "\n";
+    } catch (...) {
+    }
+    std::abort();
+}
+
 void installCrashDumpHandler() {
     SetUnhandledExceptionFilter(pfighterUnhandledExceptionFilter);
+    std::set_terminate(pfighterTerminateHandler);
 }
 #else
 void installCrashDumpHandler() {}

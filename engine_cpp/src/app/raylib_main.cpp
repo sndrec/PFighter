@@ -7841,13 +7841,10 @@ static bool rebuildEditorPreviewCache(
         return false;
     }
     const int packageFighter = std::clamp(session.selectedFighter, 0, static_cast<int>(session.package.fighters.size()) - 1);
-    const pf::FighterDefinition& def = session.package.fighters[static_cast<size_t>(packageFighter)];
-    if (def.states.empty()) {
+    if (session.package.fighters[static_cast<size_t>(packageFighter)].states.empty()) {
         if (error) *error = "selected package fighter has no states";
         return false;
     }
-    const int selectedState = std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
-    const pf::FighterState& state = def.states[static_cast<size_t>(selectedState)];
 
     pf::World previewWorld;
     int installedRoot = -1;
@@ -7856,6 +7853,19 @@ static bool rebuildEditorPreviewCache(
         return false;
     }
 
+    session.clamp();
+    if (session.package.fighters.empty()) {
+        if (error) *error = "selected package fighter disappeared during preview export";
+        return false;
+    }
+    const int exportedPackageFighter = std::clamp(session.selectedFighter, 0, static_cast<int>(session.package.fighters.size()) - 1);
+    const pf::FighterDefinition& def = session.package.fighters[static_cast<size_t>(exportedPackageFighter)];
+    if (def.states.empty()) {
+        if (error) *error = "selected package fighter lost its states during preview export";
+        return false;
+    }
+    const int selectedState = std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
+    const pf::FighterState& state = def.states[static_cast<size_t>(selectedState)];
     const int runtimeDef = editorFindRuntimeFighterDef(previewWorld, def.name, installedRoot >= 0 ? installedRoot : selectedFighterDef);
     if (runtimeDef < 0) {
         if (error) *error = "selected package fighter is not installed in the preview world";
