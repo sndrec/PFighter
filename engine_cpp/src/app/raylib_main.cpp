@@ -8747,6 +8747,29 @@ static void drawEditorTimelineWorkstation(
             10,
             Fade(ORANGE, 0.88f));
     }
+    auto scrubToFrame = [&](int frame, const std::string& label) {
+        const int targetFrame = std::clamp(frame, 0, frameCount);
+        session.selectedState = editor.selectedState;
+        session.clamp();
+        scrubEditorSelectedState(world, editor, targetFrame);
+        editor.status = "Editor: " + label + " frame " + std::to_string(targetFrame);
+    };
+    if (uiButton({rect.x + 10.0f, toolbarY, 50.0f, 22.0f}, "Start")) {
+        scrubToFrame(0, "scrubbed to start");
+        return;
+    }
+    if (uiButton({rect.x + 66.0f, toolbarY, 42.0f, 22.0f}, "F<")) {
+        scrubToFrame(playheadFrame - 1, "stepped preview to");
+        return;
+    }
+    if (uiButton({rect.x + 114.0f, toolbarY, 42.0f, 22.0f}, "F>")) {
+        scrubToFrame(playheadFrame + 1, "stepped preview to");
+        return;
+    }
+    if (uiButton({rect.x + 162.0f, toolbarY, 42.0f, 22.0f}, "End")) {
+        scrubToFrame(frameCount, "scrubbed to end");
+        return;
+    }
     auto addSubaction = [&](pf::Subaction subaction, const std::string& label) -> bool {
         std::string error;
         int added = -1;
