@@ -12897,6 +12897,251 @@ static std::string editorSelectedGraphDiagnostic(
     return "Graph: " + error + "; " + editorPackageGraphIssueHint(editor, script, error);
 }
 
+enum class EditorDiagnosticTargetKind : uint8_t {
+    None,
+    Fighter,
+    State,
+    Script,
+    Variable,
+    Object,
+    ObjectScript,
+    Subaction,
+    Interrupt,
+};
+
+struct EditorDiagnosticTarget {
+    EditorDiagnosticTargetKind kind = EditorDiagnosticTargetKind::None;
+    int fighterIndex = -1;
+    int stateIndex = -1;
+    int scriptIndex = -1;
+    int variableIndex = -1;
+    int objectIndex = -1;
+    int subactionIndex = -1;
+    int interruptIndex = -1;
+    int instructionIndex = -1;
+    std::string label;
+};
+
+static EditorDiagnosticTarget editorDiagnosticTarget(
+    const pf::FighterEditor& editor,
+    const pf::FighterEditorSession& session,
+    const pf::FighterDefinition& def,
+    const pf::FighterState& state,
+    const std::string& message)
+{
+    EditorDiagnosticTarget target;
+    if (message.empty() || message == "OK") {
+        return target;
+    }
+    for (int fighterIndex = 0; fighterIndex < static_cast<int>(session.package.fighters.size()); ++fighterIndex) {
+        const pf::FighterDefinition& fighter = session.package.fighters[static_cast<size_t>(fighterIndex)];
+        if (!fighter.name.empty() && containsCaseInsensitive(message, fighter.name)) {
+            target.kind = EditorDiagnosticTargetKind::Fighter;
+            target.fighterIndex = fighterIndex;
+            target.label = "fighter #" + std::to_string(fighterIndex) + " " + fighter.name;
+            return target;
+        }
+    }
+    for (int stateIndex = 0; stateIndex < static_cast<int>(def.states.size()); ++stateIndex) {
+        const pf::FighterState& candidate = def.states[static_cast<size_t>(stateIndex)];
+        if (!candidate.name.empty() && containsCaseInsensitive(message, candidate.name)) {
+            target.kind = EditorDiagnosticTargetKind::State;
+            target.stateIndex = stateIndex;
+            target.label = "state #" + std::to_string(stateIndex) + " " + candidate.name;
+            return target;
+        }
+    }
+    for (int scriptIndex = 0; scriptIndex < static_cast<int>(def.packageScripts.size()); ++scriptIndex) {
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(scriptIndex)];
+        if (!script.name.empty() && containsCaseInsensitive(message, script.name)) {
+            target.kind = EditorDiagnosticTargetKind::Script;
+            target.scriptIndex = scriptIndex;
+            target.label = "script #" + std::to_string(scriptIndex) + " " + script.name;
+            return target;
+        }
+    }
+    for (int variableIndex = 0; variableIndex < static_cast<int>(def.packageVariables.size()); ++variableIndex) {
+        const pf::PackageVariableDefinition& variable = def.packageVariables[static_cast<size_t>(variableIndex)];
+        if (!variable.name.empty() && containsCaseInsensitive(message, variable.name)) {
+            target.kind = EditorDiagnosticTargetKind::Variable;
+            target.variableIndex = variableIndex;
+            target.label = "variable #" + std::to_string(variableIndex) + " " + variable.name;
+            return target;
+        }
+    }
+    for (int objectIndex = 0; objectIndex < static_cast<int>(session.package.objects.size()); ++objectIndex) {
+        const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(objectIndex)];
+        if (!object.name.empty() && containsCaseInsensitive(message, object.name)) {
+            target.kind = EditorDiagnosticTargetKind::Object;
+            target.objectIndex = objectIndex;
+            target.label = "object #" + std::to_string(objectIndex) + " " + object.name;
+            return target;
+        }
+        for (int scriptIndex = 0; scriptIndex < static_cast<int>(object.packageScripts.size()); ++scriptIndex) {
+            const pf::PackageScript& script = object.packageScripts[static_cast<size_t>(scriptIndex)];
+            if (!script.name.empty() && containsCaseInsensitive(message, script.name)) {
+                target.kind = EditorDiagnosticTargetKind::ObjectScript;
+                target.objectIndex = objectIndex;
+                target.scriptIndex = scriptIndex;
+                target.label = "object #" + std::to_string(objectIndex) + " " + object.name +
+                    " script #" + std::to_string(scriptIndex) + " " + script.name;
+                return target;
+            }
+        }
+    }
+
+    const std::string lowerMessage = lowerAscii(message);
+    if ((lowerMessage.find("object script") != std::string::npos ||
+         lowerMessage.find("object graph") != std::string::npos) &&
+        editor.selectedObjectDef >= 0 &&
+        editor.selectedObjectDef < static_cast<int>(session.package.objects.size()))
+    {
+        target.kind = EditorDiagnosticTargetKind::ObjectScript;
+        target.objectIndex = editor.selectedObjectDef;
+        const pf::GameObjectDefinition& object = session.package.objects[static_cast<size_t>(editor.selectedObjectDef)];
+        if (editor.selectedPackageScript >= 0 && editor.selectedPackageScript < static_cast<int>(object.packageScripts.size())) {
+            target.scriptIndex = editor.selectedPackageScript;
+        }
+        target.instructionIndex = editor.selectedPackageInstruction;
+        target.label = "selected object #" + std::to_string(target.objectIndex) + " " + object.name;
+        if (target.scriptIndex >= 0) {
+            target.label += " script #" + std::to_string(target.scriptIndex) + " " +
+                object.packageScripts[static_cast<size_t>(target.scriptIndex)].name;
+        }
+        return target;
+    }
+    if (lowerMessage.find("script") != std::string::npos &&
+        editor.selectedPackageScript >= 0 &&
+        editor.selectedPackageScript < static_cast<int>(def.packageScripts.size()))
+    {
+        const pf::PackageScript& script = def.packageScripts[static_cast<size_t>(editor.selectedPackageScript)];
+        target.kind = EditorDiagnosticTargetKind::Script;
+        target.scriptIndex = editor.selectedPackageScript;
+        target.instructionIndex = editor.selectedPackageInstruction;
+        target.label = "selected script #" + std::to_string(target.scriptIndex) + " " + script.name;
+        return target;
+    }
+    if ((lowerMessage.find("subaction") != std::string::npos ||
+         lowerMessage.find("hitbox") != std::string::npos ||
+         lowerMessage.find("hurtbox") != std::string::npos) &&
+        editor.selectedSubaction >= 0 &&
+        editor.selectedSubaction < static_cast<int>(state.action.size()))
+    {
+        target.kind = EditorDiagnosticTargetKind::Subaction;
+        target.subactionIndex = editor.selectedSubaction;
+        target.label = "selected timeline subaction #" + std::to_string(target.subactionIndex) +
+            " " + subactionTypeName(state.action[static_cast<size_t>(target.subactionIndex)].type);
+        return target;
+    }
+    if (lowerMessage.find("interrupt") != std::string::npos &&
+        editor.selectedInterrupt >= 0 &&
+        editor.selectedInterrupt < static_cast<int>(state.interrupts.size()))
+    {
+        target.kind = EditorDiagnosticTargetKind::Interrupt;
+        target.interruptIndex = editor.selectedInterrupt;
+        const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(target.interruptIndex)];
+        target.label = "selected interrupt #" + std::to_string(target.interruptIndex) + " " +
+            interruptConditionName(interrupt.condition) + " -> " + interrupt.targetState;
+        return target;
+    }
+    if (lowerMessage.find("state") != std::string::npos) {
+        target.kind = EditorDiagnosticTargetKind::State;
+        target.stateIndex = session.selectedState;
+        target.label = "selected state #" + std::to_string(session.selectedState) + " " + state.name;
+        return target;
+    }
+    return target;
+}
+
+static bool focusEditorDiagnosticTarget(
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    const EditorDiagnosticTarget& target)
+{
+    if (target.kind == EditorDiagnosticTargetKind::None) {
+        return false;
+    }
+    switch (target.kind) {
+    case EditorDiagnosticTargetKind::Fighter:
+        session.selectedFighter = target.fighterIndex;
+        session.selectedState = 0;
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        editor.workspace = pf::EditorWorkspace::Moveset;
+        break;
+    case EditorDiagnosticTargetKind::State:
+        session.selectedState = target.stateIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        editor.workspace = pf::EditorWorkspace::Moveset;
+        break;
+    case EditorDiagnosticTargetKind::Script:
+        editor.selectedPackageScript = target.scriptIndex;
+        editor.selectedPackageInstruction = std::max(0, target.instructionIndex);
+        editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+        editor.workspace = pf::EditorWorkspace::Logic;
+        session.selectedPackageScript = editor.selectedPackageScript;
+        session.selectedPackageInstruction = editor.selectedPackageInstruction;
+        break;
+    case EditorDiagnosticTargetKind::Variable:
+        editor.selectedPackageVariable = target.variableIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+        editor.workspace = pf::EditorWorkspace::Logic;
+        break;
+    case EditorDiagnosticTargetKind::Object:
+        editor.selectedObjectDef = target.objectIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+        editor.workspace = pf::EditorWorkspace::Assets;
+        editor.objectPanel = pf::ObjectEditorPanel::Logic;
+        break;
+    case EditorDiagnosticTargetKind::ObjectScript:
+        editor.selectedObjectDef = target.objectIndex;
+        editor.selectedPackageScript = target.scriptIndex;
+        editor.selectedPackageInstruction = std::max(0, target.instructionIndex);
+        editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+        editor.workspace = pf::EditorWorkspace::Assets;
+        editor.objectPanel = pf::ObjectEditorPanel::Logic;
+        session.selectedPackageScript = editor.selectedPackageScript;
+        session.selectedPackageInstruction = editor.selectedPackageInstruction;
+        break;
+    case EditorDiagnosticTargetKind::Subaction:
+        editor.selectedSubaction = target.subactionIndex;
+        session.selectedSubaction = target.subactionIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+        editor.workspace = pf::EditorWorkspace::Moveset;
+        break;
+    case EditorDiagnosticTargetKind::Interrupt:
+        editor.selectedInterrupt = target.interruptIndex;
+        session.selectedInterrupt = target.interruptIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
+        editor.workspace = pf::EditorWorkspace::Moveset;
+        break;
+    case EditorDiagnosticTargetKind::None:
+        return false;
+    }
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+    if (target.kind == EditorDiagnosticTargetKind::ObjectScript) {
+        editor.selectedObjectDef = target.objectIndex;
+        editor.selectedPackageScript = target.scriptIndex;
+        editor.selectedPackageInstruction = std::max(0, target.instructionIndex);
+        editor.selectionKind = pf::FighterEditorSelectionKind::Script;
+        editor.workspace = pf::EditorWorkspace::Assets;
+        editor.objectPanel = pf::ObjectEditorPanel::Logic;
+    } else if (target.kind == EditorDiagnosticTargetKind::Object) {
+        editor.selectedObjectDef = target.objectIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Object;
+        editor.workspace = pf::EditorWorkspace::Assets;
+        editor.objectPanel = pf::ObjectEditorPanel::Logic;
+    } else if (target.kind == EditorDiagnosticTargetKind::Variable) {
+        editor.selectedPackageVariable = target.variableIndex;
+        editor.selectionKind = pf::FighterEditorSelectionKind::Variable;
+        editor.workspace = pf::EditorWorkspace::Logic;
+    }
+    editor.uiRefreshPending = true;
+    editor.previewCacheDirty = true;
+    editor.status = "Editor: focused diagnostic " + target.label;
+    return true;
+}
+
 static std::string editorDiagnosticContextHint(
     const pf::FighterEditor& editor,
     const pf::FighterEditorSession& session,
@@ -13086,6 +13331,7 @@ static void drawEditorDiagnosticsWorkstation(
             editor.lastPackageValid ? GREEN : RED);
     }
     const std::string diagnosticMessage = editor.lastPackageValid ? graphDiagnostic : editor.lastPackageMessage;
+    const EditorDiagnosticTarget diagnosticTarget = editorDiagnosticTarget(editor, session, def, state, diagnosticMessage);
     const std::string contextHint = editorDiagnosticContextHint(editor, session, def, state, diagnosticMessage);
     if (!contextHint.empty()) {
         DrawText(clippedText(contextHint, 11, rect.width - 20.0f).c_str(),
@@ -13093,6 +13339,13 @@ static void drawEditorDiagnosticsWorkstation(
             static_cast<int>(y + 88.0f),
             11,
             Fade(YELLOW, 0.82f));
+    }
+    if (diagnosticTarget.kind != EditorDiagnosticTargetKind::None) {
+        const Rectangle focusButton{rect.x + rect.width - 486.0f, y - 4.0f, 86.0f, 24.0f};
+        if (uiButton(focusButton, "Focus")) {
+            focusEditorDiagnosticTarget(editor, session, diagnosticTarget);
+            return;
+        }
     }
     const Rectangle validateButton{rect.x + rect.width - 390.0f, y - 4.0f, 86.0f, 24.0f};
     if (uiButton(validateButton, "Validate")) {
