@@ -7605,6 +7605,15 @@ static std::vector<pf::FunctionCall> editedStateCallbackCalls(
     return stateCallbackCalls(state, slot);
 }
 
+static pf::FighterEditorStateCallbackSlot wrappedStateCallbackSlot(
+    pf::FighterEditorStateCallbackSlot slot,
+    int delta)
+{
+    constexpr int kSlotCount = 4;
+    const int index = wrappedIndex(static_cast<int>(slot) + delta, kSlotCount);
+    return static_cast<pf::FighterEditorStateCallbackSlot>(index);
+}
+
 static std::string packageScriptNameFromCallback(const pf::FunctionCall& call) {
     constexpr const char* prefix = "script:";
     constexpr size_t prefixLength = 7;
@@ -11841,6 +11850,55 @@ static void drawEditorInspectorWorkstation(
             static_cast<int>(rect.y + 62.0f),
             12,
             RAYWHITE);
+        auto commitCallbacks = [&](std::vector<pf::FunctionCall> edited, const std::string& message) -> bool {
+            std::string error;
+            if (pf::setEditorSessionStateCallbacks(session, session.selectedState, editor.selectedStateCallbackSlot, edited, &error)) {
+                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+                return true;
+            }
+            editor.status = "Editor: callback edit failed: " + error;
+            return false;
+        };
+        auto addSelectedScriptCallback = [&]() -> bool {
+            if (def.packageScripts.empty()) {
+                editor.status = "Editor: add a package script before assigning state callbacks";
+                return false;
+            }
+            const int scriptIndex = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+            std::vector<pf::FunctionCall> edited = editedStateCallbackCalls(state, editor.selectedStateCallbackSlot);
+            edited.push_back({"script:" + def.packageScripts[static_cast<size_t>(scriptIndex)].name});
+            editor.selectedStateCallback = static_cast<int>(edited.size()) - 1;
+            return commitCallbacks(edited, "Editor: added state callback script");
+        };
+        const float callbackY = rect.y + 112.0f;
+        if (uiButton({rect.x + 10.0f, callbackY, 54.0f, 22.0f}, "Slot<")) {
+            editor.selectedStateCallbackSlot = wrappedStateCallbackSlot(editor.selectedStateCallbackSlot, -1);
+            editor.selectedStateCallback = 0;
+            return;
+        }
+        if (uiButton({rect.x + 70.0f, callbackY, 54.0f, 22.0f}, "Slot>")) {
+            editor.selectedStateCallbackSlot = wrappedStateCallbackSlot(editor.selectedStateCallbackSlot, 1);
+            editor.selectedStateCallback = 0;
+            return;
+        }
+        if (uiButton({rect.x + 130.0f, callbackY, 72.0f, 22.0f}, "+Script")) {
+            addSelectedScriptCallback();
+            return;
+        }
+        if (!def.packageScripts.empty()) {
+            const int scriptIndex = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
+            DrawText(clippedText("Selected script: " + def.packageScripts[static_cast<size_t>(scriptIndex)].name, 10, rect.width - 20.0f).c_str(),
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(callbackY + 32.0f),
+                10,
+                Fade(RAYWHITE, 0.64f));
+        } else {
+            DrawText("No package scripts available for this callback slot",
+                static_cast<int>(rect.x + 10.0f),
+                static_cast<int>(callbackY + 32.0f),
+                10,
+                Fade(ORANGE, 0.78f));
+        }
         if (calls.empty()) {
             DrawText("No callbacks in this slot", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 88.0f), 11, Fade(RAYWHITE, 0.62f));
             return;
@@ -11852,42 +11910,26 @@ static void drawEditorInspectorWorkstation(
             static_cast<int>(rect.y + 86.0f),
             12,
             Fade(RAYWHITE, 0.78f));
-        auto commitCallbacks = [&](std::vector<pf::FunctionCall> edited, const std::string& message) -> bool {
-            std::string error;
-            if (pf::setEditorSessionStateCallbacks(session, session.selectedState, editor.selectedStateCallbackSlot, edited, &error)) {
-                syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
-                return true;
-            }
-            editor.status = "Editor: callback edit failed: " + error;
-            return false;
-        };
-        const float callbackY = rect.y + 112.0f;
-        if (uiButton({rect.x + 10.0f, callbackY, 54.0f, 22.0f}, "Prev")) {
+        const float editY = callbackY + 60.0f;
+        if (uiButton({rect.x + 10.0f, editY, 54.0f, 22.0f}, "Prev")) {
             editor.selectedStateCallback = wrappedIndex(editor.selectedStateCallback - 1, static_cast<int>(calls.size()));
             return;
         }
-        if (uiButton({rect.x + 70.0f, callbackY, 54.0f, 22.0f}, "Next")) {
+        if (uiButton({rect.x + 70.0f, editY, 54.0f, 22.0f}, "Next")) {
             editor.selectedStateCallback = wrappedIndex(editor.selectedStateCallback + 1, static_cast<int>(calls.size()));
             return;
         }
-        if (uiButton({rect.x + 130.0f, callbackY, 76.0f, 22.0f}, "UseScript") && !def.packageScripts.empty()) {
+        if (uiButton({rect.x + 130.0f, editY, 76.0f, 22.0f}, "UseScript") && !def.packageScripts.empty()) {
             std::vector<pf::FunctionCall> edited = editedStateCallbackCalls(state, editor.selectedStateCallbackSlot);
             edited[static_cast<size_t>(editor.selectedStateCallback)].name =
                 "script:" + packageScriptTargetName(def.packageScripts, editor.selectedPackageScript);
             if (commitCallbacks(edited, "Editor: retargeted state callback")) return;
         }
-        if (uiButton({rect.x + 212.0f, callbackY, 70.0f, 22.0f}, "Remove")) {
+        if (uiButton({rect.x + 212.0f, editY, 70.0f, 22.0f}, "Remove")) {
             std::vector<pf::FunctionCall> edited = editedStateCallbackCalls(state, editor.selectedStateCallbackSlot);
             edited.erase(edited.begin() + editor.selectedStateCallback);
             editor.selectedStateCallback = std::clamp(editor.selectedStateCallback, 0, std::max(0, static_cast<int>(edited.size()) - 1));
             if (commitCallbacks(edited, "Editor: removed state callback")) return;
-        }
-        if (!def.packageScripts.empty()) {
-            DrawText(clippedText("Selected script: " + def.packageScripts[static_cast<size_t>(std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1))].name, 10, rect.width - 20.0f).c_str(),
-                static_cast<int>(rect.x + 10.0f),
-                static_cast<int>(callbackY + 32.0f),
-                10,
-                Fade(RAYWHITE, 0.64f));
         }
         return;
     }
