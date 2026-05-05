@@ -1052,6 +1052,11 @@ static Rectangle editorWorkspaceTabRect(int index) {
 
 static bool gEditorUiDeferredPass = false;
 static bool gEditorUiAcceptInput = true;
+static std::string gEditorTooltipCandidate;
+static std::string gEditorTooltipActive;
+static Vector2 gEditorTooltipCandidateMouse{};
+static Vector2 gEditorTooltipActiveMouse{};
+static double gEditorTooltipCandidateSince = 0.0;
 
 static bool editorUiAcceptsInput() {
     return !gEditorUiDeferredPass || gEditorUiAcceptInput;
@@ -1073,6 +1078,64 @@ static float uiMouseWheelMove() {
     return editorUiAcceptsInput() ? GetMouseWheelMove() : 0.0f;
 }
 
+static void beginEditorTooltipFrame() {
+    gEditorTooltipCandidate.clear();
+}
+
+static void registerEditorTooltip(Rectangle rect, const std::string& text) {
+    if (text.empty()) {
+        return;
+    }
+    const Vector2 mouse = GetMousePosition();
+    if (!CheckCollisionPointRec(mouse, rect)) {
+        return;
+    }
+    gEditorTooltipCandidate = text;
+    const bool sameCandidate = gEditorTooltipActive == text ||
+        (!gEditorTooltipCandidate.empty() && gEditorTooltipCandidate == text);
+    const float dx = mouse.x - gEditorTooltipCandidateMouse.x;
+    const float dy = mouse.y - gEditorTooltipCandidateMouse.y;
+    if (!sameCandidate || dx * dx + dy * dy > 9.0f) {
+        gEditorTooltipCandidateMouse = mouse;
+        gEditorTooltipCandidateSince = GetTime();
+        gEditorTooltipActive.clear();
+    }
+}
+
+static void drawEditorTooltipFrame() {
+    if (gEditorTooltipCandidate.empty()) {
+        gEditorTooltipActive.clear();
+        return;
+    }
+    const double now = GetTime();
+    if (now - gEditorTooltipCandidateSince < 0.33) {
+        return;
+    }
+    gEditorTooltipActive = gEditorTooltipCandidate;
+    gEditorTooltipActiveMouse = GetMousePosition();
+    const int textSize = 11;
+    const float padding = 7.0f;
+    const float maxW = 360.0f;
+    const float textW = std::min(maxW, static_cast<float>(MeasureText(gEditorTooltipActive.c_str(), textSize)));
+    Rectangle tip{
+        std::min(gEditorTooltipActiveMouse.x + 14.0f, static_cast<float>(GetScreenWidth()) - textW - padding * 2.0f - 8.0f),
+        std::min(gEditorTooltipActiveMouse.y + 18.0f, static_cast<float>(GetScreenHeight()) - 34.0f),
+        textW + padding * 2.0f,
+        28.0f,
+    };
+    DrawRectangleRec(tip, {14, 18, 22, 238});
+    DrawRectangleLinesEx(tip, 1.0f, Fade(SKYBLUE, 0.7f));
+    std::string shown = gEditorTooltipActive;
+    while (!shown.empty() && MeasureText(shown.c_str(), textSize) > static_cast<int>(tip.width - padding * 2.0f)) {
+        shown.pop_back();
+    }
+    DrawText(shown.c_str(),
+        static_cast<int>(tip.x + padding),
+        static_cast<int>(tip.y + 8.0f),
+        textSize,
+        RAYWHITE);
+}
+
 struct ScopedScissor {
     ScopedScissor(Rectangle rect) {
         BeginScissorMode(
@@ -1090,6 +1153,7 @@ struct ScopedScissor {
 static bool uiButton(Rectangle rect, const std::string& label, bool active = false) {
     const Vector2 mouse = GetMousePosition();
     const bool hovered = CheckCollisionPointRec(mouse, rect);
+    registerEditorTooltip(rect, label);
     DrawRectangleRec(rect, active ? GREEN : (hovered ? Fade(ORANGE, 0.85f) : Fade(RAYWHITE, 0.82f)));
     DrawRectangleLinesEx(rect, 1.0f, DARKGRAY);
     const int textWidth = MeasureText(label.c_str(), 14);
@@ -1111,6 +1175,7 @@ static bool uiTextField(
 {
     const Vector2 mouse = GetMousePosition();
     const bool hovered = CheckCollisionPointRec(mouse, rect);
+    registerEditorTooltip(rect, id);
     if (hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && editor.activeTextField != id) {
         editor.activeTextField = id;
         editor.textEditBuffer = value;
@@ -8829,10 +8894,8 @@ static constexpr int kEditorTimelineHitboxLanes = 8;
 static constexpr int kEditorTimelineSubactionLane = 0;
 static constexpr int kEditorTimelineHitboxLaneFirst = 1;
 static constexpr int kEditorTimelineHurtboxLane = kEditorTimelineHitboxLaneFirst + kEditorTimelineHitboxLanes;
-static constexpr int kEditorTimelineCallbackLane = kEditorTimelineHurtboxLane + 1;
-static constexpr int kEditorTimelineAnimationLane = kEditorTimelineCallbackLane + 1;
-static constexpr int kEditorTimelineInterruptLane = kEditorTimelineAnimationLane + 1;
-static constexpr int kEditorTimelineLaneCount = kEditorTimelineInterruptLane + 1;
+static constexpr int kEditorTimelineAnimationLane = kEditorTimelineHurtboxLane + 1;
+static constexpr int kEditorTimelineLaneCount = kEditorTimelineAnimationLane + 1;
 
 static std::vector<std::string> editorTimelineLaneLabels() {
     std::vector<std::string> lanes;
@@ -8842,9 +8905,7 @@ static std::vector<std::string> editorTimelineLaneLabels() {
         lanes.push_back("Hitbox " + std::to_string(i));
     }
     lanes.push_back("Hurtboxes");
-    lanes.push_back("Callbacks");
     lanes.push_back("Anim Keys");
-    lanes.push_back("Interrupts");
     return lanes;
 }
 
@@ -8861,13 +8922,13 @@ static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marke
         }
         return editorTimelineHitboxLane(0);
     case pf::FighterEditorTimelineMarkerKind::Callback:
-        return kEditorTimelineCallbackLane;
+        return -1;
     case pf::FighterEditorTimelineMarkerKind::AnimationKey:
         return kEditorTimelineAnimationLane;
     case pf::FighterEditorTimelineMarkerKind::Interruptible:
     case pf::FighterEditorTimelineMarkerKind::InterruptEnable:
     case pf::FighterEditorTimelineMarkerKind::InterruptDisable:
-        return kEditorTimelineInterruptLane;
+        return -1;
     case pf::FighterEditorTimelineMarkerKind::Subaction:
         break;
     }
@@ -8877,7 +8938,7 @@ static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marke
         return kEditorTimelineHurtboxLane;
     }
     if (marker.subactionType == pf::SubactionType::CallScript) {
-        return kEditorTimelineCallbackLane;
+        return kEditorTimelineSubactionLane;
     }
     return kEditorTimelineSubactionLane;
 }
@@ -8894,10 +8955,10 @@ static int editorTimelineSubactionLane(const pf::Subaction& subaction) {
         return kEditorTimelineHurtboxLane;
     }
     if (subaction.type == pf::SubactionType::CallScript) {
-        return kEditorTimelineCallbackLane;
+        return kEditorTimelineSubactionLane;
     }
     if (subaction.type == pf::SubactionType::SetInterruptible) {
-        return kEditorTimelineInterruptLane;
+        return kEditorTimelineSubactionLane;
     }
     return kEditorTimelineSubactionLane;
 }
@@ -9256,20 +9317,6 @@ static void drawEditorTimelineWorkstation(
             DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, static_cast<int>(std::max(10.0f, laneBarH - 4.0f)), subactionMarkerColor(subaction));
         }
     }
-    for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {
-        const pf::InterruptRule& rule = state.interrupts[static_cast<size_t>(interruptIndex)];
-        const int startFrame = std::clamp(rule.enableFrame, 0, frameCount);
-        const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
-        const float x = ruler.x + ruler.width * static_cast<float>(startFrame) / static_cast<float>(frameCount);
-        const float w = std::max(3.0f, ruler.width * static_cast<float>(endFrame - startFrame) / static_cast<float>(frameCount));
-        if (laneVisible(kEditorTimelineInterruptLane)) {
-            DrawRectangleRec({x, laneY(kEditorTimelineInterruptLane) + 3.0f, w, std::max(10.0f, laneBarH - 6.0f)}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
-        }
-    }
-    if (state.initialInterruptibleFrame > 0) {
-        const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(state.initialInterruptibleFrame, 0, frameCount)) / static_cast<float>(frameCount);
-        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y + 24.0f), static_cast<int>(x), static_cast<int>(footerY - 4.0f), GREEN);
-    }
     if (!state.action.empty() && editor.selectedSubaction >= 0 && editor.selectedSubaction < static_cast<int>(subactionFrames.size())) {
         const int frame = subactionFrames[static_cast<size_t>(editor.selectedSubaction)];
         if (frame >= 0) {
@@ -9456,29 +9503,6 @@ static void drawEditorTimelineWorkstation(
                 } else {
                     editor.selectionKind = pf::FighterEditorSelectionKind::State;
                 }
-                session.selectedState = editor.selectedState;
-                session.clamp();
-                scrubEditorSelectedState(world, editor, clickedFrame);
-                return;
-            }
-        }
-        if (timelinePressed && clickedLane == kEditorTimelineInterruptLane) {
-            int pickedInterrupt = -1;
-            for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {
-                const pf::InterruptRule& rule = state.interrupts[static_cast<size_t>(interruptIndex)];
-                const int startFrame = std::clamp(rule.enableFrame, 0, frameCount);
-                const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
-                const float x = ruler.x + ruler.width * static_cast<float>(startFrame) / static_cast<float>(frameCount);
-                const float w = std::max(3.0f, ruler.width * static_cast<float>(endFrame - startFrame) / static_cast<float>(frameCount));
-                const Rectangle interruptRect{x, laneY(kEditorTimelineInterruptLane) + 3.0f, w, std::max(10.0f, laneBarH - 6.0f)};
-                if (CheckCollisionPointRec(mouse, interruptRect)) {
-                    pickedInterrupt = interruptIndex;
-                }
-            }
-            if (pickedInterrupt >= 0) {
-                editor.selectedInterrupt = pickedInterrupt;
-                session.selectedInterrupt = pickedInterrupt;
-                editor.selectionKind = pf::FighterEditorSelectionKind::Interrupt;
                 session.selectedState = editor.selectedState;
                 session.clamp();
                 scrubEditorSelectedState(world, editor, clickedFrame);
@@ -12608,47 +12632,23 @@ static void drawEditorInspectorWorkstation(
     }
     drawInspectorRule(rect.y + 104.0f, "Timing");
     const std::string finishState = state.onAnimationFinishedState.empty() ? "none" : state.onAnimationFinishedState;
-    DrawText(("Length " + std::to_string(state.animationLengthFrames) +
-              "    IASA " + std::to_string(state.initialInterruptibleFrame) +
-              "    Blend " + std::to_string(state.defaultAnimationBlendFrames) +
-              "    Finish " + finishState +
-              " / " + animationBlendLabel(state.onAnimationFinishedBlendFrames)).c_str(),
-        static_cast<int>(rect.x + 10.0f),
-        static_cast<int>(rect.y + 128.0f),
-        11,
-        Fade(RAYWHITE, 0.82f));
-    if (uiButton({rect.x + 10.0f, rect.y + 148.0f, 70.0f, 22.0f}, "Length-")) {
+    auto setStateTiming = [&](int length, int iasa, int defaultBlend, const std::string& message) -> bool {
         std::string error;
-        if (pf::setEditorSessionStateTiming(session, session.selectedState, std::max(1, state.animationLengthFrames - 1), state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: shortened selected state");
-        } else {
-            editor.status = "Editor: state timing failed: " + error;
+        if (pf::setEditorSessionStateTiming(
+                session,
+                session.selectedState,
+                std::max(1, length),
+                std::max(0, iasa),
+                std::max(0, defaultBlend),
+                state.onAnimationFinishedBlendFrames,
+                &error))
+        {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+            return true;
         }
-    }
-    if (uiButton({rect.x + 86.0f, rect.y + 148.0f, 70.0f, 22.0f}, "Length+")) {
-        std::string error;
-        if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames + 1, state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lengthened selected state");
-        } else {
-            editor.status = "Editor: state timing failed: " + error;
-        }
-    }
-    if (uiButton({rect.x + 162.0f, rect.y + 148.0f, 62.0f, 22.0f}, "IASA-")) {
-        std::string error;
-        if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, std::max(0, state.initialInterruptibleFrame - 1), state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA earlier");
-        } else {
-            editor.status = "Editor: state timing failed: " + error;
-        }
-    }
-    if (uiButton({rect.x + 230.0f, rect.y + 148.0f, 62.0f, 22.0f}, "IASA+")) {
-        std::string error;
-        if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, state.initialInterruptibleFrame + 1, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA later");
-        } else {
-            editor.status = "Editor: state timing failed: " + error;
-        }
-    }
+        editor.status = "Editor: state timing failed: " + error;
+        return false;
+    };
     auto setFinishedTarget = [&](const std::string& targetState, int blendFrames, const std::string& message) -> bool {
         std::string error;
         if (pf::setEditorSessionStateAnimationFinished(session, session.selectedState, targetState, blendFrames, &error)) {
@@ -12658,36 +12658,44 @@ static void drawEditorInspectorWorkstation(
         editor.status = "Editor: animation-finished target failed: " + error;
         return false;
     };
-    const float finishButtonY = rect.y + 174.0f;
-    if (uiButton({rect.x + 10.0f, finishButtonY, 64.0f, 22.0f}, "Finish-")) {
-        const int current = def.stateIndex(state.onAnimationFinishedState);
-        const int next = wrappedIndex((current >= 0 ? current : session.selectedState) - 1, static_cast<int>(def.states.size()));
-        setFinishedTarget(def.states[static_cast<size_t>(next)].name, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target");
-        return;
+
+    const float timingY = rect.y + 128.0f;
+    DrawText("Length", static_cast<int>(rect.x + 10.0f), static_cast<int>(timingY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+    int committedLength = state.animationLengthFrames;
+    if (uiIntField({rect.x + 70.0f, timingY, 62.0f, 22.0f}, "state-length-frames", editor, state.animationLengthFrames, committedLength)) {
+        if (setStateTiming(committedLength, state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, "Editor: changed selected state length")) return;
     }
-    if (uiButton({rect.x + 80.0f, finishButtonY, 64.0f, 22.0f}, "Finish+")) {
-        const int current = def.stateIndex(state.onAnimationFinishedState);
-        const int next = wrappedIndex((current >= 0 ? current : session.selectedState) + 1, static_cast<int>(def.states.size()));
-        setFinishedTarget(def.states[static_cast<size_t>(next)].name, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target");
-        return;
+    DrawText("IASA", static_cast<int>(rect.x + 144.0f), static_cast<int>(timingY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+    int committedIasa = state.initialInterruptibleFrame;
+    if (uiIntField({rect.x + 184.0f, timingY, 70.0f, 22.0f}, "state-iasa-frame", editor, state.initialInterruptibleFrame, committedIasa)) {
+        if (setStateTiming(state.animationLengthFrames, committedIasa, state.defaultAnimationBlendFrames, "Editor: changed selected state IASA")) return;
     }
-    if (uiButton({rect.x + 150.0f, finishButtonY, 78.0f, 22.0f}, "NoFinish")) {
-        setFinishedTarget({}, state.onAnimationFinishedBlendFrames, "Editor: cleared animation-finished target");
-        return;
+    DrawText("Blend", static_cast<int>(rect.x + 10.0f), static_cast<int>(timingY + 34.0f), 10, Fade(RAYWHITE, 0.68f));
+    int committedDefaultBlend = state.defaultAnimationBlendFrames;
+    if (uiIntField({rect.x + 70.0f, timingY + 28.0f, 62.0f, 22.0f}, "state-default-blend", editor, state.defaultAnimationBlendFrames, committedDefaultBlend)) {
+        if (setStateTiming(state.animationLengthFrames, state.initialInterruptibleFrame, committedDefaultBlend, "Editor: changed selected state default blend")) return;
     }
-    if (uiButton({rect.x + 234.0f, finishButtonY, 62.0f, 22.0f}, "Blend-")) {
-        const int blend = state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames
-            ? pf::kDisableAnimationBlendFrames
-            : std::max(pf::kDisableAnimationBlendFrames, state.onAnimationFinishedBlendFrames - 1);
-        setFinishedTarget(state.onAnimationFinishedState, blend, "Editor: shortened animation-finished blend");
-        return;
+    DrawText("Finish", static_cast<int>(rect.x + 144.0f), static_cast<int>(timingY + 34.0f), 10, Fade(RAYWHITE, 0.68f));
+    std::string committedFinishState;
+    if (uiTextField({rect.x + 190.0f, timingY + 28.0f, std::max(70.0f, rect.width - 292.0f), 22.0f},
+            "state-finish-target",
+            editor,
+            finishState,
+            committedFinishState,
+            48))
+    {
+        if (committedFinishState == "none") {
+            committedFinishState.clear();
+        }
+        if (setFinishedTarget(committedFinishState, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target")) return;
     }
-    if (uiButton({rect.x + 302.0f, finishButtonY, 62.0f, 22.0f}, "Blend+")) {
-        const int blend = state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames
-            ? 0
-            : state.onAnimationFinishedBlendFrames + 1;
-        setFinishedTarget(state.onAnimationFinishedState, blend, "Editor: lengthened animation-finished blend");
-        return;
+    if (uiButton({rect.x + rect.width - 94.0f, timingY + 28.0f, 84.0f, 22.0f}, "Clear Finish")) {
+        if (setFinishedTarget({}, state.onAnimationFinishedBlendFrames, "Editor: cleared animation-finished target")) return;
+    }
+    DrawText("Finish Blend", static_cast<int>(rect.x + 10.0f), static_cast<int>(timingY + 62.0f), 10, Fade(RAYWHITE, 0.68f));
+    int committedFinishBlend = state.onAnimationFinishedBlendFrames;
+    if (uiIntField({rect.x + 94.0f, timingY + 56.0f, 62.0f, 22.0f}, "state-finish-blend", editor, state.onAnimationFinishedBlendFrames, committedFinishBlend)) {
+        if (setFinishedTarget(state.onAnimationFinishedState, committedFinishBlend, "Editor: changed animation-finished blend")) return;
     }
     drawInspectorRule(rect.y + 210.0f, "Collision Flags");
     const float y = rect.y + 234.0f;
@@ -14066,6 +14074,7 @@ static void drawEditorWorkstation(
     bool& sessionActive,
     int& selectedFighterDef)
 {
+    beginEditorTooltipFrame();
     gEditorUiDeferredPass = true;
     gEditorUiAcceptInput = false;
     drawEditorWorkstationPass(world, editor, session, sessionActive, selectedFighterDef);
@@ -14074,6 +14083,7 @@ static void drawEditorWorkstation(
     drawEditorWorkstationPass(world, editor, session, sessionActive, selectedFighterDef);
     gEditorUiDeferredPass = false;
     gEditorUiAcceptInput = true;
+    drawEditorTooltipFrame();
 }
 
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
