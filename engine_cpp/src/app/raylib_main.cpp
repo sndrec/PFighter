@@ -7670,7 +7670,7 @@ static EditorWorkstationLayout editorWorkstationLayout() {
     const float toolY = 44.0f;
     const float toolH = 38.0f;
     const float diagnosticsH = std::clamp(screenH * 0.16f, 116.0f, 168.0f);
-    const float timelineH = std::clamp(screenH * 0.22f, 150.0f, 230.0f);
+    const float timelineH = std::clamp(screenH * 0.24f, 176.0f, 244.0f);
     float leftW = std::clamp(screenW * 0.18f, 210.0f, 320.0f);
     float rightW = std::clamp(screenW * 0.28f, 320.0f, 500.0f);
     if (leftW + rightW + 280.0f > screenW) {
@@ -7684,7 +7684,9 @@ static EditorWorkstationLayout editorWorkstationLayout() {
     const float centerW = std::max(240.0f, screenW - leftW - rightW);
     const float centerH = std::max(160.0f, contentBottom - contentY - timelineH);
     const float rightH = std::max(160.0f, contentBottom - contentY);
-    const float graphH = std::max(150.0f, rightH * 0.48f);
+    const float minInspectorH = std::min(220.0f, std::max(120.0f, rightH - 150.0f));
+    const float maxGraphH = std::max(150.0f, rightH - minInspectorH);
+    const float graphH = std::clamp(rightH * 0.44f, 150.0f, maxGraphH);
 
     EditorWorkstationLayout out;
     out.toolStrip = {0.0f, toolY, screenW, toolH};
@@ -8669,17 +8671,29 @@ static void drawEditorTimelineWorkstation(
     const int playheadFrame = editor.previewCacheValid && editor.previewCacheFighter == session.selectedFighter && editor.previewCacheState == session.selectedState
         ? editor.previewCacheFrame
         : liveFrame;
-    const Rectangle ruler{rect.x + 136.0f, rect.y + 38.0f, rect.width - 156.0f, 24.0f};
-    DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 35.0f), 13, RAYWHITE);
+    const std::array<const char*, 6> lanes{"Subactions", "Hitboxes", "Hurtboxes", "Callbacks", "Anim Keys", "Interrupts"};
+    const float headerY = rect.y + 32.0f;
+    const float toolbarY = rect.y + 54.0f;
+    const float rulerY = rect.y + 82.0f;
+    const float laneTop = rect.y + 114.0f;
+    const float footerY = rect.y + rect.height - 24.0f;
+    const float availableLaneH = std::max(16.0f, footerY - laneTop - 4.0f);
+    const float laneH = std::clamp(availableLaneH / static_cast<float>(lanes.size()), 18.0f, 24.0f);
+    const float laneBarH = std::max(13.0f, laneH - 6.0f);
+    const auto laneY = [&](int lane) {
+        return laneTop + static_cast<float>(lane) * laneH;
+    };
+    const Rectangle ruler{rect.x + 136.0f, rulerY, rect.width - 156.0f, 24.0f};
+    DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(headerY), 13, RAYWHITE);
     DrawText(("Frame " + std::to_string(std::clamp(playheadFrame, 0, frameCount)) + " / " + std::to_string(frameCount)).c_str(),
         static_cast<int>(rect.x + 10.0f),
-        static_cast<int>(rect.y + 54.0f),
+        static_cast<int>(headerY + 18.0f),
         11,
         Fade(RAYWHITE, 0.68f));
     if (!hasTimeline) {
         DrawText(("Timeline model error: " + timelineError).c_str(),
             static_cast<int>(rect.x + 10.0f),
-            static_cast<int>(rect.y + 71.0f),
+            static_cast<int>(toolbarY + 4.0f),
             10,
             Fade(ORANGE, 0.88f));
     }
@@ -8695,16 +8709,16 @@ static void drawEditorTimelineWorkstation(
         return false;
     };
     const float actionX = std::max(rect.x + 236.0f, rect.x + rect.width - 450.0f);
-    const float actionY = rect.y + 34.0f;
-        if (uiButton({actionX, actionY, 48.0f, 22.0f}, "+Sync")) {
-            pf::Subaction subaction;
-            subaction.type = pf::SubactionType::SyncTimer;
-            subaction.frames = 5;
-            if (addSubaction(subaction, "sync timer")) {
-                editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
-                return;
-            }
+    const float actionY = toolbarY;
+    if (uiButton({actionX, actionY, 48.0f, 22.0f}, "+Sync")) {
+        pf::Subaction subaction;
+        subaction.type = pf::SubactionType::SyncTimer;
+        subaction.frames = 5;
+        if (addSubaction(subaction, "sync timer")) {
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+            return;
         }
+    }
     if (uiButton({actionX + 54.0f, actionY, 42.0f, 22.0f}, "+Hit")) {
         pf::Subaction subaction;
         subaction.type = pf::SubactionType::CreateHitbox;
@@ -8802,7 +8816,7 @@ static void drawEditorTimelineWorkstation(
             {stateLengthX, ruler.y + 26.0f, std::max(0.0f, ruler.x + ruler.width - stateLengthX), 6.0f},
             Fade(ORANGE, 0.28f));
     }
-    DrawLine(static_cast<int>(stateLengthX), static_cast<int>(ruler.y + 22.0f), static_cast<int>(stateLengthX), static_cast<int>(ruler.y + rect.height - 52.0f), state.loopAnimation ? SKYBLUE : Fade(RAYWHITE, 0.5f));
+    DrawLine(static_cast<int>(stateLengthX), static_cast<int>(ruler.y + 22.0f), static_cast<int>(stateLengthX), static_cast<int>(footerY - 4.0f), state.loopAnimation ? SKYBLUE : Fade(RAYWHITE, 0.5f));
     DrawText((std::string(state.loopAnimation ? "loop " : "end ") + std::to_string(state.animationLengthFrames)).c_str(),
         static_cast<int>(std::min(ruler.x + ruler.width - 54.0f, stateLengthX + 4.0f)),
         static_cast<int>(ruler.y + 28.0f),
@@ -8810,15 +8824,14 @@ static void drawEditorTimelineWorkstation(
         state.loopAnimation ? SKYBLUE : Fade(RAYWHITE, 0.62f));
     for (int tick = 0; tick <= frameCount; tick += std::max(1, frameCount / 12)) {
         const float x = ruler.x + ruler.width * static_cast<float>(tick) / static_cast<float>(frameCount);
-        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y), static_cast<int>(x), static_cast<int>(ruler.y + rect.height - 52.0f), Fade(RAYWHITE, 0.18f));
+        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y), static_cast<int>(x), static_cast<int>(footerY - 4.0f), Fade(RAYWHITE, 0.18f));
         DrawText(std::to_string(tick).c_str(), static_cast<int>(x + 3.0f), static_cast<int>(ruler.y + 6.0f), 9, Fade(RAYWHITE, 0.56f));
     }
 
-    const std::array<const char*, 6> lanes{"Subactions", "Hitboxes", "Hurtboxes", "Callbacks", "Anim Keys", "Interrupts"};
     for (int lane = 0; lane < static_cast<int>(lanes.size()); ++lane) {
-        const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
+        const float y = laneY(lane);
         DrawText(lanes[static_cast<size_t>(lane)], static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 5.0f), 11, Fade(RAYWHITE, 0.72f));
-        DrawRectangleRec({ruler.x, y, ruler.width, 18.0f}, lane % 2 == 0 ? Fade(RAYWHITE, 0.06f) : Fade(RAYWHITE, 0.035f));
+        DrawRectangleRec({ruler.x, y, ruler.width, laneBarH}, lane % 2 == 0 ? Fade(RAYWHITE, 0.06f) : Fade(RAYWHITE, 0.035f));
     }
 
     for (int frame = 0; frame < static_cast<int>(actionFrames.size()); ++frame) {
@@ -8829,8 +8842,8 @@ static void drawEditorTimelineWorkstation(
             else if (subaction.type == pf::SubactionType::CallScript) lane = 3;
             else if (subaction.type == pf::SubactionType::SetInterruptible) lane = 5;
             const float x = ruler.x + ruler.width * static_cast<float>(frame) / static_cast<float>(frameCount);
-            const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
-            DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, 14, subactionMarkerColor(subaction));
+            const float y = laneY(lane);
+            DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, static_cast<int>(std::max(10.0f, laneBarH - 4.0f)), subactionMarkerColor(subaction));
         }
     }
     int hoveredMarker = -1;
@@ -8841,17 +8854,17 @@ static void drawEditorTimelineWorkstation(
         const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
         const float x = ruler.x + ruler.width * static_cast<float>(startFrame) / static_cast<float>(frameCount);
         const float w = std::max(3.0f, ruler.width * static_cast<float>(endFrame - startFrame) / static_cast<float>(frameCount));
-        DrawRectangleRec({x, rect.y + 70.0f + 5.0f * 24.0f + 3.0f, w, 12.0f}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
+        DrawRectangleRec({x, laneY(5) + 3.0f, w, std::max(10.0f, laneBarH - 6.0f)}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
     }
     if (state.initialInterruptibleFrame > 0) {
         const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(state.initialInterruptibleFrame, 0, frameCount)) / static_cast<float>(frameCount);
-        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y + 24.0f), static_cast<int>(x), static_cast<int>(rect.y + rect.height - 12.0f), GREEN);
+        DrawLine(static_cast<int>(x), static_cast<int>(ruler.y + 24.0f), static_cast<int>(x), static_cast<int>(footerY - 4.0f), GREEN);
     }
     if (!state.action.empty() && editor.selectedSubaction >= 0 && editor.selectedSubaction < static_cast<int>(subactionFrames.size())) {
         const int frame = subactionFrames[static_cast<size_t>(editor.selectedSubaction)];
         if (frame >= 0) {
             const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(frame, 0, frameCount)) / static_cast<float>(frameCount);
-            DrawRectangle(static_cast<int>(x - 2.0f), static_cast<int>(ruler.y + 23.0f), 5, static_cast<int>(rect.height - 42.0f), SKYBLUE);
+            DrawRectangle(static_cast<int>(x - 2.0f), static_cast<int>(ruler.y + 23.0f), 5, static_cast<int>(std::max(18.0f, footerY - ruler.y - 28.0f)), SKYBLUE);
         }
     }
     if (hasTimeline) {
@@ -8864,7 +8877,7 @@ static void drawEditorTimelineWorkstation(
             }
             const int markerFrame = std::clamp(marker.frame, 0, frameCount);
             const float x = ruler.x + ruler.width * static_cast<float>(markerFrame) / static_cast<float>(frameCount);
-            const float y = rect.y + 70.0f + static_cast<float>(lane) * 24.0f;
+            const float y = laneY(lane);
             bool selectedCallbackScript = false;
             if (marker.kind == pf::FighterEditorTimelineMarkerKind::Callback &&
                 editor.selectionKind == pf::FighterEditorSelectionKind::Callback)
@@ -8892,7 +8905,7 @@ static void drawEditorTimelineWorkstation(
                      (marker.kind == pf::FighterEditorTimelineMarkerKind::Interruptible && marker.sourceIndex >= 0)) &&
                     editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
                     marker.sourceIndex == editor.selectedSubaction);
-            const Rectangle markerRect{x - 4.0f, y + 1.0f, 8.0f, 16.0f};
+            const Rectangle markerRect{x - 4.0f, y + 1.0f, 8.0f, std::max(12.0f, laneBarH - 2.0f)};
             const bool hovered = CheckCollisionPointRec(mouse, markerRect);
             if (hovered) {
                 const int distance = std::abs(markerFrame - playheadFrame);
@@ -8907,7 +8920,7 @@ static void drawEditorTimelineWorkstation(
         }
     }
     const float playheadX = ruler.x + ruler.width * static_cast<float>(std::clamp(playheadFrame, 0, frameCount)) / static_cast<float>(frameCount);
-    DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(rect.height - 32.0f), BLUE);
+    DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(std::max(24.0f, footerY - ruler.y)), BLUE);
     if (hoveredMarker >= 0 && hoveredMarker < static_cast<int>(timeline.markers.size())) {
         const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(hoveredMarker)];
         std::string markerText = editorTimelineMarkerLabel(marker) + " @ frame " + std::to_string(marker.frame);
@@ -8923,7 +8936,7 @@ static void drawEditorTimelineWorkstation(
         }
         DrawText(markerText.c_str(),
             static_cast<int>(ruler.x),
-            static_cast<int>(rect.y + rect.height - 24.0f),
+            static_cast<int>(footerY),
             11,
             Fade(RAYWHITE, 0.78f));
     } else if (editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
@@ -8935,7 +8948,7 @@ static void drawEditorTimelineWorkstation(
                   subactionTypeName(state.action[static_cast<size_t>(editor.selectedSubaction)].type) +
                   " @ frame " + std::to_string(subactionFrames[static_cast<size_t>(editor.selectedSubaction)])).c_str(),
             static_cast<int>(ruler.x),
-            static_cast<int>(rect.y + rect.height - 24.0f),
+            static_cast<int>(footerY),
             11,
             Fade(RAYWHITE, 0.72f));
     } else if (editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt &&
@@ -8946,15 +8959,15 @@ static void drawEditorTimelineWorkstation(
         DrawText(("Selected interrupt #" + std::to_string(editor.selectedInterrupt) + " " +
                   interruptConditionName(interrupt.condition) + " -> " + interrupt.targetState).c_str(),
             static_cast<int>(ruler.x),
-            static_cast<int>(rect.y + rect.height - 24.0f),
+            static_cast<int>(footerY),
             11,
             Fade(RAYWHITE, 0.72f));
     }
-    if (CheckCollisionPointRec(mouse, {ruler.x, ruler.y, ruler.width, rect.height - 38.0f}) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (CheckCollisionPointRec(mouse, {ruler.x, ruler.y, ruler.width, std::max(24.0f, footerY - ruler.y)}) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         const float t = std::clamp((mouse.x - ruler.x) / ruler.width, 0.0f, 1.0f);
         const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(frameCount)));
         const float clickedY = mouse.y;
-        const int clickedLane = static_cast<int>((clickedY - (rect.y + 70.0f)) / 24.0f);
+        const int clickedLane = static_cast<int>((clickedY - laneTop) / laneH);
         if (hasTimeline) {
             int bestMarker = -1;
             int bestDistance = 1000000;
@@ -12078,8 +12091,19 @@ static void drawEditorInspectorWorkstation(
         return;
     }
     std::string renamedState;
-    DrawText("State", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 34.0f), 12, Fade(RAYWHITE, 0.7f));
-    if (uiTextField({rect.x + 58.0f, rect.y + 29.0f, rect.width - 68.0f, 24.0f}, "workstation-state-name", editor, state.name, renamedState)) {
+    const auto drawInspectorRule = [&](float y, const char* title) {
+        DrawText(title, static_cast<int>(rect.x + 10.0f), static_cast<int>(y), 11, Fade(SKYBLUE, 0.82f));
+        DrawLine(
+            static_cast<int>(rect.x + 10.0f),
+            static_cast<int>(y + 15.0f),
+            static_cast<int>(rect.x + rect.width - 10.0f),
+            static_cast<int>(y + 15.0f),
+            Fade(SKYBLUE, 0.24f));
+    };
+
+    drawInspectorRule(rect.y + 32.0f, "State");
+    DrawText("Name", static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 57.0f), 10, Fade(RAYWHITE, 0.68f));
+    if (uiTextField({rect.x + 58.0f, rect.y + 51.0f, rect.width - 68.0f, 24.0f}, "workstation-state-name", editor, state.name, renamedState)) {
         std::string error;
         const std::string oldName = state.name;
         if (pf::renameEditorSessionState(session, session.selectedState, renamedState, &error)) {
@@ -12088,14 +12112,16 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: rename state failed: " + error;
         }
     }
-    DrawText(("Anim: " + clippedText(state.animation, 12, rect.width - 70.0f)).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 62.0f), 12, RAYWHITE);
-    DrawText(("Frames: " + std::to_string(state.animationLengthFrames) +
-              "  IASA: " + std::to_string(state.initialInterruptibleFrame)).c_str(),
+    DrawText(("Anim  " + clippedText(state.animation, 11, rect.width - 78.0f)).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(rect.y + 82.0f), 11, Fade(RAYWHITE, 0.78f));
+    drawInspectorRule(rect.y + 104.0f, "Timing");
+    DrawText(("Length " + std::to_string(state.animationLengthFrames) +
+              "    IASA " + std::to_string(state.initialInterruptibleFrame) +
+              "    Blend " + std::to_string(state.defaultAnimationBlendFrames)).c_str(),
         static_cast<int>(rect.x + 10.0f),
-        static_cast<int>(rect.y + 82.0f),
-        12,
-        RAYWHITE);
-    if (uiButton({rect.x + 10.0f, rect.y + 104.0f, 54.0f, 22.0f}, "Len-")) {
+        static_cast<int>(rect.y + 128.0f),
+        11,
+        Fade(RAYWHITE, 0.82f));
+    if (uiButton({rect.x + 10.0f, rect.y + 148.0f, 54.0f, 22.0f}, "Len-")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, std::max(1, state.animationLengthFrames - 1), state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: shortened selected state");
@@ -12103,7 +12129,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    if (uiButton({rect.x + 70.0f, rect.y + 104.0f, 54.0f, 22.0f}, "Len+")) {
+    if (uiButton({rect.x + 70.0f, rect.y + 148.0f, 54.0f, 22.0f}, "Len+")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames + 1, state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lengthened selected state");
@@ -12111,7 +12137,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    if (uiButton({rect.x + 130.0f, rect.y + 104.0f, 54.0f, 22.0f}, "IASA-")) {
+    if (uiButton({rect.x + 130.0f, rect.y + 148.0f, 54.0f, 22.0f}, "IASA-")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, std::max(0, state.initialInterruptibleFrame - 1), state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA earlier");
@@ -12119,7 +12145,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    if (uiButton({rect.x + 190.0f, rect.y + 104.0f, 54.0f, 22.0f}, "IASA+")) {
+    if (uiButton({rect.x + 190.0f, rect.y + 148.0f, 54.0f, 22.0f}, "IASA+")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, state.initialInterruptibleFrame + 1, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA later");
@@ -12127,7 +12153,8 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    const float y = rect.y + 138.0f;
+    drawInspectorRule(rect.y + 180.0f, "Collision Flags");
+    const float y = rect.y + 204.0f;
     if (uiButton({rect.x + 10.0f, y, 76.0f, 24.0f}, "Loop", state.loopAnimation)) {
         std::string error;
         if (pf::setEditorSessionStateLoop(session, session.selectedState, !state.loopAnimation, &error)) {
@@ -12160,22 +12187,23 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: collision flags failed: " + error;
         }
     }
+    drawInspectorRule(y + 36.0f, "References");
     DrawText(("Callbacks  enter=" + std::to_string(state.onEnter.size()) +
               " frame=" + std::to_string(state.onFrame.size()) +
               " land=" + std::to_string(state.onLanding.size()) +
               " air=" + std::to_string(state.onAirborne.size())).c_str(),
         static_cast<int>(rect.x + 10.0f),
-        static_cast<int>(y + 38.0f),
+        static_cast<int>(y + 60.0f),
         11,
         Fade(RAYWHITE, 0.72f));
     DrawText(("Subactions " + std::to_string(state.action.size()) +
               "  Interrupts " + std::to_string(state.interrupts.size()) +
               "  Hurtboxes " + std::to_string(def.hurtboxes.size())).c_str(),
         static_cast<int>(rect.x + 10.0f),
-        static_cast<int>(y + 58.0f),
+        static_cast<int>(y + 78.0f),
         11,
         Fade(RAYWHITE, 0.72f));
-    if (!state.action.empty()) {
+    if (editor.selectionKind == pf::FighterEditorSelectionKind::Subaction && !state.action.empty()) {
         editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
         const pf::Subaction& subaction = state.action[static_cast<size_t>(editor.selectedSubaction)];
         DrawText(("Selected subaction #" + std::to_string(editor.selectedSubaction) + "  " + subactionTypeName(subaction.type)).c_str(),
