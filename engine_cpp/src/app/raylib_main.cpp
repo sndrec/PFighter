@@ -1196,6 +1196,40 @@ static bool uiIntField(
     }
 }
 
+static bool uiAngleDial(
+    Rectangle rect,
+    pf::FighterEditor& editor,
+    float valueDegrees,
+    float& committedDegrees)
+{
+    const float radius = std::min(rect.width, rect.height) * 0.5f - 2.0f;
+    const Vector2 center{rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f};
+    const float radians = valueDegrees * DEG2RAD;
+    const Vector2 end{
+        center.x + std::cos(radians) * radius,
+        center.y - std::sin(radians) * radius,
+    };
+    const Vector2 mouse = GetMousePosition();
+    const float dx = mouse.x - center.x;
+    const float dy = mouse.y - center.y;
+    const bool hovered = dx * dx + dy * dy <= radius * radius;
+
+    DrawCircleLines(static_cast<int>(center.x), static_cast<int>(center.y), radius, hovered ? ORANGE : Fade(RAYWHITE, 0.72f));
+    DrawCircle(static_cast<int>(center.x), static_cast<int>(center.y), 3.0f, Fade(RAYWHITE, 0.78f));
+    DrawLine(static_cast<int>(center.x), static_cast<int>(center.y), static_cast<int>(end.x), static_cast<int>(end.y), SKYBLUE);
+    DrawCircle(static_cast<int>(end.x), static_cast<int>(end.y), 3.0f, SKYBLUE);
+
+    if (hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        float angle = std::atan2(center.y - mouse.y, mouse.x - center.x) * RAD2DEG;
+        if (angle < 0.0f) {
+            angle += 360.0f;
+        }
+        committedDegrees = angle;
+        return true;
+    }
+    return false;
+}
+
 static const char* workspaceName(pf::EditorWorkspace workspace) {
     switch (workspace) {
     case pf::EditorWorkspace::Moveset: return "Moveset";
@@ -12583,7 +12617,7 @@ static void drawEditorInspectorWorkstation(
         static_cast<int>(rect.y + 128.0f),
         11,
         Fade(RAYWHITE, 0.82f));
-    if (uiButton({rect.x + 10.0f, rect.y + 148.0f, 54.0f, 22.0f}, "Len-")) {
+    if (uiButton({rect.x + 10.0f, rect.y + 148.0f, 70.0f, 22.0f}, "Length-")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, std::max(1, state.animationLengthFrames - 1), state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: shortened selected state");
@@ -12591,7 +12625,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    if (uiButton({rect.x + 70.0f, rect.y + 148.0f, 54.0f, 22.0f}, "Len+")) {
+    if (uiButton({rect.x + 86.0f, rect.y + 148.0f, 70.0f, 22.0f}, "Length+")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames + 1, state.initialInterruptibleFrame, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: lengthened selected state");
@@ -12599,7 +12633,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    if (uiButton({rect.x + 130.0f, rect.y + 148.0f, 54.0f, 22.0f}, "IASA-")) {
+    if (uiButton({rect.x + 162.0f, rect.y + 148.0f, 62.0f, 22.0f}, "IASA-")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, std::max(0, state.initialInterruptibleFrame - 1), state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA earlier");
@@ -12607,7 +12641,7 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    if (uiButton({rect.x + 190.0f, rect.y + 148.0f, 54.0f, 22.0f}, "IASA+")) {
+    if (uiButton({rect.x + 230.0f, rect.y + 148.0f, 62.0f, 22.0f}, "IASA+")) {
         std::string error;
         if (pf::setEditorSessionStateTiming(session, session.selectedState, state.animationLengthFrames, state.initialInterruptibleFrame + 1, state.defaultAnimationBlendFrames, state.onAnimationFinishedBlendFrames, &error)) {
             syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: moved IASA later");
@@ -12625,30 +12659,30 @@ static void drawEditorInspectorWorkstation(
         return false;
     };
     const float finishButtonY = rect.y + 174.0f;
-    if (uiButton({rect.x + 10.0f, finishButtonY, 46.0f, 22.0f}, "Fin-")) {
+    if (uiButton({rect.x + 10.0f, finishButtonY, 64.0f, 22.0f}, "Finish-")) {
         const int current = def.stateIndex(state.onAnimationFinishedState);
         const int next = wrappedIndex((current >= 0 ? current : session.selectedState) - 1, static_cast<int>(def.states.size()));
         setFinishedTarget(def.states[static_cast<size_t>(next)].name, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target");
         return;
     }
-    if (uiButton({rect.x + 62.0f, finishButtonY, 46.0f, 22.0f}, "Fin+")) {
+    if (uiButton({rect.x + 80.0f, finishButtonY, 64.0f, 22.0f}, "Finish+")) {
         const int current = def.stateIndex(state.onAnimationFinishedState);
         const int next = wrappedIndex((current >= 0 ? current : session.selectedState) + 1, static_cast<int>(def.states.size()));
         setFinishedTarget(def.states[static_cast<size_t>(next)].name, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target");
         return;
     }
-    if (uiButton({rect.x + 114.0f, finishButtonY, 54.0f, 22.0f}, "Clear")) {
+    if (uiButton({rect.x + 150.0f, finishButtonY, 78.0f, 22.0f}, "NoFinish")) {
         setFinishedTarget({}, state.onAnimationFinishedBlendFrames, "Editor: cleared animation-finished target");
         return;
     }
-    if (uiButton({rect.x + 174.0f, finishButtonY, 46.0f, 22.0f}, "FBl-")) {
+    if (uiButton({rect.x + 234.0f, finishButtonY, 62.0f, 22.0f}, "Blend-")) {
         const int blend = state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames
             ? pf::kDisableAnimationBlendFrames
             : std::max(pf::kDisableAnimationBlendFrames, state.onAnimationFinishedBlendFrames - 1);
         setFinishedTarget(state.onAnimationFinishedState, blend, "Editor: shortened animation-finished blend");
         return;
     }
-    if (uiButton({rect.x + 226.0f, finishButtonY, 46.0f, 22.0f}, "FBl+")) {
+    if (uiButton({rect.x + 302.0f, finishButtonY, 62.0f, 22.0f}, "Blend+")) {
         const int blend = state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames
             ? 0
             : state.onAnimationFinishedBlendFrames + 1;
@@ -12705,12 +12739,13 @@ static void drawEditorInspectorWorkstation(
         static_cast<int>(y + 78.0f),
         11,
         Fade(RAYWHITE, 0.72f));
+    float followingY = y + 206.0f;
     if (editor.selectionKind == pf::FighterEditorSelectionKind::Subaction && !state.action.empty()) {
         editor.selectedSubaction = std::clamp(editor.selectedSubaction, 0, static_cast<int>(state.action.size()) - 1);
         const pf::Subaction& subaction = state.action[static_cast<size_t>(editor.selectedSubaction)];
         DrawText(("Selected subaction #" + std::to_string(editor.selectedSubaction) + "  " + subactionTypeName(subaction.type)).c_str(),
             static_cast<int>(rect.x + 10.0f),
-            static_cast<int>(y + 84.0f),
+            static_cast<int>(y + 100.0f),
             12,
             RAYWHITE);
         auto commitSubaction = [&](pf::Subaction edited, const std::string& message) -> bool {
@@ -12723,17 +12758,22 @@ static void drawEditorInspectorWorkstation(
             return false;
         };
         pf::Subaction editedSubaction = subaction;
-        const float subY = y + 106.0f;
-        DrawText(("frames=" + std::to_string(subaction.frames)).c_str(),
+        const float subY = y + 124.0f;
+        DrawText("Frames",
             static_cast<int>(rect.x + 10.0f),
             static_cast<int>(subY + 5.0f),
             10,
             Fade(RAYWHITE, 0.68f));
-        if (uiButton({rect.x + 82.0f, subY, 48.0f, 22.0f}, "Fr-")) {
+        int committedFrames = subaction.frames;
+        if (uiIntField({rect.x + 60.0f, subY, 54.0f, 22.0f}, "selected-subaction-frames", editor, subaction.frames, committedFrames)) {
+            editedSubaction.frames = std::max(0, committedFrames);
+            if (commitSubaction(editedSubaction, "Editor: changed selected subaction duration")) return;
+        }
+        if (uiButton({rect.x + 122.0f, subY, 48.0f, 22.0f}, "Fr-")) {
             editedSubaction.frames = std::max(0, editedSubaction.frames - 1);
             if (commitSubaction(editedSubaction, "Editor: shortened selected subaction")) return;
         }
-        if (uiButton({rect.x + 136.0f, subY, 48.0f, 22.0f}, "Fr+")) {
+        if (uiButton({rect.x + 176.0f, subY, 48.0f, 22.0f}, "Fr+")) {
             ++editedSubaction.frames;
             if (commitSubaction(editedSubaction, "Editor: lengthened selected subaction")) return;
         }
@@ -12749,55 +12789,65 @@ static void drawEditorInspectorWorkstation(
                 Fade(RAYWHITE, 0.68f));
         }
         if (subaction.type == pf::SubactionType::CreateHitbox || subaction.type == pf::SubactionType::CreateThrowHitbox) {
-            DrawText(("Hitbox id=" + std::to_string(subaction.hitbox.hitboxId) +
-                      "  damage=" + fixedText(pf::fxToFloat(subaction.hitbox.damage), 1) +
-                      "  radius=" + fixedText(pf::fxToFloat(subaction.hitbox.radius), 2) +
-                      "  angle=" + fixedText(pf::fxToFloat(subaction.hitbox.knockbackAngleDegrees), 1)).c_str(),
+            followingY = y + 438.0f;
+            DrawText("Hitbox",
                 static_cast<int>(rect.x + 10.0f),
-                static_cast<int>(y + 132.0f),
+                static_cast<int>(y + 158.0f),
                 11,
-                Fade(RAYWHITE, 0.72f));
-            const float hitY = y + 154.0f;
+                Fade(SKYBLUE, 0.82f));
+            const float hitY = y + 180.0f;
             DrawText("ID", static_cast<int>(rect.x + 10.0f), static_cast<int>(hitY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
             int committedHitboxId = subaction.hitbox.hitboxId;
-            if (uiIntField({rect.x + 30.0f, hitY, 38.0f, 22.0f}, "selected-hitbox-id", editor, subaction.hitbox.hitboxId, committedHitboxId)) {
+            if (uiIntField({rect.x + 88.0f, hitY, 70.0f, 22.0f}, "selected-hitbox-id", editor, subaction.hitbox.hitboxId, committedHitboxId)) {
                 editedSubaction.hitbox.hitboxId = std::clamp(committedHitboxId, 0, kEditorTimelineHitboxLanes - 1);
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox id")) return;
             }
-            DrawText("Damage", static_cast<int>(rect.x + 76.0f), static_cast<int>(hitY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+            DrawText("Damage", static_cast<int>(rect.x + 10.0f), static_cast<int>(hitY + 34.0f), 10, Fade(RAYWHITE, 0.68f));
             float committedDamage = pf::fxToFloat(subaction.hitbox.damage);
-            if (uiFloatField({rect.x + 124.0f, hitY, 54.0f, 22.0f}, "selected-hitbox-damage", editor, committedDamage, committedDamage, 1)) {
+            if (uiFloatField({rect.x + 88.0f, hitY + 28.0f, 70.0f, 22.0f}, "selected-hitbox-damage", editor, committedDamage, committedDamage, 1)) {
                 editedSubaction.hitbox.damage = std::max(pf::Fix{0}, pf::fxFromFloat(committedDamage));
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox damage")) return;
             }
-            DrawText("Radius", static_cast<int>(rect.x + 186.0f), static_cast<int>(hitY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+            DrawText("Radius", static_cast<int>(rect.x + 10.0f), static_cast<int>(hitY + 62.0f), 10, Fade(RAYWHITE, 0.68f));
             float committedRadius = pf::fxToFloat(subaction.hitbox.radius);
-            if (uiFloatField({rect.x + 230.0f, hitY, 54.0f, 22.0f}, "selected-hitbox-radius", editor, committedRadius, committedRadius, 2)) {
+            if (uiFloatField({rect.x + 88.0f, hitY + 56.0f, 70.0f, 22.0f}, "selected-hitbox-radius", editor, committedRadius, committedRadius, 2)) {
                 editedSubaction.hitbox.radius = std::max(pf::fxFromFloat(0.05f), pf::fxFromFloat(committedRadius));
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox radius")) return;
             }
-            DrawText("Angle", static_cast<int>(rect.x + 10.0f), static_cast<int>(hitY + 32.0f), 10, Fade(RAYWHITE, 0.68f));
-            float committedAngle = pf::fxToFloat(subaction.hitbox.knockbackAngleDegrees);
-            if (uiFloatField({rect.x + 54.0f, hitY + 26.0f, 58.0f, 22.0f}, "selected-hitbox-angle", editor, committedAngle, committedAngle, 1)) {
+            const float angleY = hitY + 90.0f;
+            DrawText("Angle", static_cast<int>(rect.x + 10.0f), static_cast<int>(angleY), 10, Fade(RAYWHITE, 0.68f));
+            const float currentAngle = pf::fxToFloat(subaction.hitbox.knockbackAngleDegrees);
+            float committedAngle = currentAngle;
+            if (uiAngleDial({rect.x + 10.0f, angleY + 18.0f, 70.0f, 70.0f}, editor, currentAngle, committedAngle)) {
                 editedSubaction.hitbox.knockbackAngleDegrees = pf::fxFromFloat(committedAngle);
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox angle")) return;
             }
-            const float offY = hitY + 26.0f;
-            DrawText("X", static_cast<int>(rect.x + 126.0f), static_cast<int>(offY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+            if (uiButton({rect.x + 92.0f, angleY + 30.0f, 28.0f, 22.0f}, "<")) {
+                editedSubaction.hitbox.knockbackAngleDegrees -= pf::fx(1);
+                if (commitSubaction(editedSubaction, "Editor: decreased selected hitbox angle")) return;
+            }
+            committedAngle = currentAngle;
+            if (uiFloatField({rect.x + 126.0f, angleY + 30.0f, 70.0f, 22.0f}, "selected-hitbox-angle", editor, committedAngle, committedAngle, 1)) {
+                editedSubaction.hitbox.knockbackAngleDegrees = pf::fxFromFloat(committedAngle);
+                if (commitSubaction(editedSubaction, "Editor: changed selected hitbox angle")) return;
+            }
+            if (uiButton({rect.x + 202.0f, angleY + 30.0f, 28.0f, 22.0f}, ">")) {
+                editedSubaction.hitbox.knockbackAngleDegrees += pf::fx(1);
+                if (commitSubaction(editedSubaction, "Editor: increased selected hitbox angle")) return;
+            }
+            DrawText("Position", static_cast<int>(rect.x + 10.0f), static_cast<int>(angleY + 102.0f), 10, Fade(RAYWHITE, 0.68f));
             float committedOffsetX = pf::fxToFloat(subaction.hitbox.offset.x);
-            if (uiFloatField({rect.x + 144.0f, offY, 58.0f, 22.0f}, "selected-hitbox-offset-x", editor, committedOffsetX, committedOffsetX, 2)) {
+            if (uiFloatField({rect.x + 70.0f, angleY + 96.0f, 62.0f, 22.0f}, "selected-hitbox-offset-x", editor, committedOffsetX, committedOffsetX, 2)) {
                 editedSubaction.hitbox.offset.x = pf::fxFromFloat(committedOffsetX);
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox X offset")) return;
             }
-            DrawText("Y", static_cast<int>(rect.x + 210.0f), static_cast<int>(offY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
             float committedOffsetY = pf::fxToFloat(subaction.hitbox.offset.y);
-            if (uiFloatField({rect.x + 228.0f, offY, 58.0f, 22.0f}, "selected-hitbox-offset-y", editor, committedOffsetY, committedOffsetY, 2)) {
+            if (uiFloatField({rect.x + 138.0f, angleY + 96.0f, 62.0f, 22.0f}, "selected-hitbox-offset-y", editor, committedOffsetY, committedOffsetY, 2)) {
                 editedSubaction.hitbox.offset.y = pf::fxFromFloat(committedOffsetY);
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox Y offset")) return;
             }
-            DrawText("Z", static_cast<int>(rect.x + 10.0f), static_cast<int>(offY + 32.0f), 10, Fade(RAYWHITE, 0.68f));
             float committedOffsetZ = pf::fxToFloat(subaction.hitbox.offset.z);
-            if (uiFloatField({rect.x + 28.0f, offY + 26.0f, 58.0f, 22.0f}, "selected-hitbox-offset-z", editor, committedOffsetZ, committedOffsetZ, 2)) {
+            if (uiFloatField({rect.x + 206.0f, angleY + 96.0f, 62.0f, 22.0f}, "selected-hitbox-offset-z", editor, committedOffsetZ, committedOffsetZ, 2)) {
                 editedSubaction.hitbox.offset.z = pf::fxFromFloat(committedOffsetZ);
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox Z offset")) return;
             }
@@ -12864,7 +12914,7 @@ static void drawEditorInspectorWorkstation(
     if (!state.interrupts.empty()) {
         editor.selectedInterrupt = std::clamp(editor.selectedInterrupt, 0, static_cast<int>(state.interrupts.size()) - 1);
         const pf::InterruptRule& interrupt = state.interrupts[static_cast<size_t>(editor.selectedInterrupt)];
-        const float intY = y + 206.0f;
+        const float intY = followingY;
         DrawText(("Interrupt #" + std::to_string(editor.selectedInterrupt) +
                   " -> " + interrupt.targetState +
                   "  " + interruptConditionName(interrupt.condition) +
@@ -12884,27 +12934,27 @@ static void drawEditorInspectorWorkstation(
         };
         pf::InterruptRule editedInterrupt = interrupt;
         const float intButtonsY = intY + 22.0f;
-        if (uiButton({rect.x + 10.0f, intButtonsY, 50.0f, 22.0f}, "Cond")) {
+        if (uiButton({rect.x + 10.0f, intButtonsY, 76.0f, 22.0f}, "Condition")) {
             editedInterrupt.condition = nextCommonInterruptCondition(editedInterrupt.condition);
             if (commitInterrupt(editedInterrupt, "Editor: changed interrupt condition")) return;
         }
-        if (uiButton({rect.x + 66.0f, intButtonsY, 50.0f, 22.0f}, "Ground")) {
+        if (uiButton({rect.x + 92.0f, intButtonsY, 76.0f, 22.0f}, "Grounding")) {
             editedInterrupt.ground = nextGroundRequirement(editedInterrupt.ground);
             if (commitInterrupt(editedInterrupt, "Editor: changed interrupt ground requirement")) return;
         }
-        if (uiButton({rect.x + 122.0f, intButtonsY, 42.0f, 22.0f}, "En-")) {
+        if (uiButton({rect.x + 174.0f, intButtonsY, 54.0f, 22.0f}, "Start-")) {
             editedInterrupt.enableFrame = std::max(0, editedInterrupt.enableFrame - 1);
             if (commitInterrupt(editedInterrupt, "Editor: moved interrupt start earlier")) return;
         }
-        if (uiButton({rect.x + 170.0f, intButtonsY, 42.0f, 22.0f}, "En+")) {
+        if (uiButton({rect.x + 234.0f, intButtonsY, 54.0f, 22.0f}, "Start+")) {
             ++editedInterrupt.enableFrame;
             if (commitInterrupt(editedInterrupt, "Editor: moved interrupt start later")) return;
         }
-        if (uiButton({rect.x + 218.0f, intButtonsY, 44.0f, 22.0f}, "Dis-")) {
+        if (uiButton({rect.x + 10.0f, intButtonsY + 28.0f, 54.0f, 22.0f}, "End-")) {
             editedInterrupt.disableFrame = std::max(0, editedInterrupt.disableFrame - 1);
             if (commitInterrupt(editedInterrupt, "Editor: moved interrupt end earlier")) return;
         }
-        if (uiButton({rect.x + 268.0f, intButtonsY, 44.0f, 22.0f}, "Dis+")) {
+        if (uiButton({rect.x + 70.0f, intButtonsY + 28.0f, 54.0f, 22.0f}, "End+")) {
             ++editedInterrupt.disableFrame;
             if (commitInterrupt(editedInterrupt, "Editor: moved interrupt end later")) return;
         }
@@ -12912,11 +12962,11 @@ static void drawEditorInspectorWorkstation(
                   " disable=" + std::to_string(interrupt.disableFrame) +
                   " lag=" + std::to_string(interrupt.lagFrames)).c_str(),
             static_cast<int>(rect.x + 10.0f),
-            static_cast<int>(intButtonsY + 28.0f),
+            static_cast<int>(intButtonsY + 56.0f),
             10,
             Fade(RAYWHITE, 0.64f));
         std::string committedTarget;
-        if (uiTextField({rect.x + 10.0f, intButtonsY + 48.0f, rect.width - 20.0f, 22.0f},
+        if (uiTextField({rect.x + 10.0f, intButtonsY + 76.0f, rect.width - 20.0f, 22.0f},
                 "workstation-interrupt-target",
                 editor,
                 interrupt.targetState,
@@ -12927,7 +12977,7 @@ static void drawEditorInspectorWorkstation(
             if (commitInterrupt(editedInterrupt, "Editor: changed interrupt target state")) return;
         }
     }
-    const float scriptY = y + 304.0f;
+    const float scriptY = followingY + 126.0f;
     if (!def.packageScripts.empty() && scriptY + 112.0f < rect.y + rect.height) {
         editor.selectedPackageScript = std::clamp(editor.selectedPackageScript, 0, static_cast<int>(def.packageScripts.size()) - 1);
         session.selectedPackageScript = editor.selectedPackageScript;
