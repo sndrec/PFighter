@@ -317,24 +317,125 @@ static Vector2 projectToViewport(Vector3 position, const Camera3D& camera, Recta
     return {viewport.x + projected.x, viewport.y + projected.y};
 }
 
-static float capsuleScreenRadiusAt(Vector3 center, float worldRadius, const Camera3D& camera, Rectangle viewport) {
+static bool projectCapsulePoint(
+    Vector3 position,
+    const Camera3D& camera,
+    Rectangle viewport,
+    std::vector<Vector2>& projectedPoints)
+{
     Vector3 forward = Vector3Subtract(camera.target, camera.position);
     if (Vector3LengthSqr(forward) <= 0.000001f) {
         forward = {0.0f, 0.0f, -1.0f};
     }
     forward = Vector3Normalize(forward);
-    Vector3 right = Vector3CrossProduct(forward, camera.up);
-    if (Vector3LengthSqr(right) <= 0.000001f) {
-        right = {1.0f, 0.0f, 0.0f};
-    } else {
-        right = Vector3Normalize(right);
+
+    const Vector3 cameraToPoint = Vector3Subtract(position, camera.position);
+    if (Vector3DotProduct(cameraToPoint, forward) <= static_cast<float>(RL_CULL_DISTANCE_NEAR)) {
+        return false;
     }
 
-    const Vector2 centerScreen = projectToViewport(center, camera, viewport);
-    const Vector2 radiusScreen = projectToViewport(Vector3Add(center, Vector3Scale(right, worldRadius)), camera, viewport);
-    const float dx = radiusScreen.x - centerScreen.x;
-    const float dy = radiusScreen.y - centerScreen.y;
-    return std::max(1.0f, std::sqrt(dx * dx + dy * dy));
+    projectedPoints.push_back(projectToViewport(position, camera, viewport));
+    return true;
+}
+
+static float screenCross(Vector2 origin, Vector2 a, Vector2 b) {
+    return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x);
+}
+
+static std::vector<Vector2> convexHull(std::vector<Vector2> points) {
+    std::sort(points.begin(), points.end(), [](Vector2 a, Vector2 b) {
+        if (std::fabs(a.x - b.x) > 0.001f) {
+            return a.x < b.x;
+        }
+        return a.y < b.y;
+    });
+    points.erase(
+        std::unique(points.begin(), points.end(), [](Vector2 a, Vector2 b) {
+            return std::fabs(a.x - b.x) < 0.001f && std::fabs(a.y - b.y) < 0.001f;
+        }),
+        points.end());
+
+    if (points.size() <= 2) {
+        return points;
+    }
+
+    std::vector<Vector2> hull;
+    hull.reserve(points.size() * 2);
+    for (Vector2 point : points) {
+        while (hull.size() >= 2 &&
+               screenCross(hull[hull.size() - 2], hull[hull.size() - 1], point) <= 0.0f)
+        {
+            hull.pop_back();
+        }
+        hull.push_back(point);
+    }
+
+    const size_t lowerSize = hull.size();
+    for (int i = static_cast<int>(points.size()) - 2; i >= 0; --i) {
+        const Vector2 point = points[static_cast<size_t>(i)];
+        while (hull.size() > lowerSize &&
+               screenCross(hull[hull.size() - 2], hull[hull.size() - 1], point) <= 0.0f)
+        {
+            hull.pop_back();
+        }
+        hull.push_back(point);
+    }
+    if (!hull.empty()) {
+        hull.pop_back();
+    }
+    return hull;
+}
+
+static std::vector<Vector2> projectedCapsuleHull(
+    const DebugCapsuleOutline& capsule,
+    const Camera3D& camera,
+    Rectangle viewport)
+{
+    std::vector<Vector2> projectedPoints;
+    projectedPoints.reserve(160);
+
+    Vector3 axis = Vector3Subtract(capsule.end, capsule.start);
+    if (Vector3LengthSqr(axis) <= 0.000001f) {
+        axis = {0.0f, 1.0f, 0.0f};
+    } else {
+        axis = Vector3Normalize(axis);
+    }
+    Vector3 basisSeed = Vector3CrossProduct(axis, {0.0f, 1.0f, 0.0f});
+    if (Vector3LengthSqr(basisSeed) <= 0.000001f) {
+        basisSeed = Vector3CrossProduct(axis, {1.0f, 0.0f, 0.0f});
+    }
+    const Vector3 basisU = Vector3Normalize(basisSeed);
+    const Vector3 basisV = Vector3Normalize(Vector3CrossProduct(axis, basisU));
+
+    constexpr int kCircleSamples = 36;
+    constexpr int kHemisphereSteps = 6;
+    for (int i = 0; i < kCircleSamples; ++i) {
+        const float angle = (2.0f * PI * static_cast<float>(i)) / static_cast<float>(kCircleSamples);
+        const Vector3 radial = Vector3Add(
+            Vector3Scale(basisU, std::cos(angle)),
+            Vector3Scale(basisV, std::sin(angle)));
+        projectCapsulePoint(Vector3Add(capsule.start, Vector3Scale(radial, capsule.radius)), camera, viewport, projectedPoints);
+        projectCapsulePoint(Vector3Add(capsule.end, Vector3Scale(radial, capsule.radius)), camera, viewport, projectedPoints);
+
+        for (int step = 1; step <= kHemisphereSteps; ++step) {
+            const float t = static_cast<float>(step) / static_cast<float>(kHemisphereSteps);
+            const float capAngle = t * PI * 0.5f;
+            const float radialScale = std::cos(capAngle) * capsule.radius;
+            const float axisOffset = std::sin(capAngle) * capsule.radius;
+            projectCapsulePoint(
+                Vector3Add(capsule.start, Vector3Add(Vector3Scale(radial, radialScale), Vector3Scale(axis, -axisOffset))),
+                camera,
+                viewport,
+                projectedPoints);
+            projectCapsulePoint(
+                Vector3Add(capsule.end, Vector3Add(Vector3Scale(radial, radialScale), Vector3Scale(axis, axisOffset))),
+                camera,
+                viewport,
+                projectedPoints);
+        }
+    }
+
+    return convexHull(std::move(projectedPoints));
 }
 
 static void drawAaLine(Vector2 a, Vector2 b, Color color) {
@@ -342,24 +443,45 @@ static void drawAaLine(Vector2 a, Vector2 b, Color color) {
     DrawLineEx(a, b, 1.0f, color);
 }
 
-static void drawAaArc(Vector2 center, float radius, float startDegrees, float endDegrees, Color color) {
-    if (endDegrees < startDegrees) {
-        endDegrees += 360.0f;
+static std::vector<Vector2> expandHull(const std::vector<Vector2>& hull, float amount) {
+    if (hull.size() < 3) {
+        return hull;
     }
-    constexpr int kArcSegments = 24;
-    Vector2 previous{
-        center.x + std::cos(startDegrees * DEG2RAD) * radius,
-        center.y + std::sin(startDegrees * DEG2RAD) * radius,
-    };
-    for (int i = 1; i <= kArcSegments; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(kArcSegments);
-        const float angle = (startDegrees + (endDegrees - startDegrees) * t) * DEG2RAD;
-        const Vector2 next{
-            center.x + std::cos(angle) * radius,
-            center.y + std::sin(angle) * radius,
-        };
-        drawAaLine(previous, next, color);
-        previous = next;
+
+    Vector2 center{};
+    for (Vector2 point : hull) {
+        center.x += point.x;
+        center.y += point.y;
+    }
+    center.x /= static_cast<float>(hull.size());
+    center.y /= static_cast<float>(hull.size());
+
+    std::vector<Vector2> expanded;
+    expanded.reserve(hull.size());
+    for (Vector2 point : hull) {
+        Vector2 outward{point.x - center.x, point.y - center.y};
+        const float length = std::sqrt(outward.x * outward.x + outward.y * outward.y);
+        if (length > 0.001f) {
+            outward.x /= length;
+            outward.y /= length;
+            point.x += outward.x * amount;
+            point.y += outward.y * amount;
+        }
+        expanded.push_back(point);
+    }
+    return expanded;
+}
+
+static void drawClosedAaPolyline(const std::vector<Vector2>& points, Color color) {
+    if (points.empty()) {
+        return;
+    }
+    if (points.size() == 1) {
+        DrawPixelV(points.front(), color);
+        return;
+    }
+    for (size_t i = 0; i < points.size(); ++i) {
+        drawAaLine(points[i], points[(i + 1) % points.size()], color);
     }
 }
 
@@ -369,43 +491,8 @@ static void drawDebugCapsuleOutlines2D(
     Rectangle viewport)
 {
     for (const DebugCapsuleOutline& capsule : outlines) {
-        const Vector2 start = projectToViewport(capsule.start, camera, viewport);
-        const Vector2 end = projectToViewport(capsule.end, camera, viewport);
-        const float startRadius = capsuleScreenRadiusAt(capsule.start, capsule.radius, camera, viewport);
-        const float endRadius = capsuleScreenRadiusAt(capsule.end, capsule.radius, camera, viewport);
-        const float dx = end.x - start.x;
-        const float dy = end.y - start.y;
-        const float length = std::sqrt(dx * dx + dy * dy);
-        if (length <= 0.5f) {
-            drawAaArc(start, std::max(startRadius, endRadius), 0.0f, 360.0f, capsule.color);
-            continue;
-        }
-
-        const Vector2 dir{dx / length, dy / length};
-        const Vector2 perpendicular{-dir.y, dir.x};
-        const float radiusDelta = std::clamp((startRadius - endRadius) / length, -0.95f, 0.95f);
-        const float tangentScale = std::sqrt(std::max(0.0f, 1.0f - radiusDelta * radiusDelta));
-        const Vector2 normalA{
-            dir.x * radiusDelta + perpendicular.x * tangentScale,
-            dir.y * radiusDelta + perpendicular.y * tangentScale,
-        };
-        const Vector2 normalB{
-            dir.x * radiusDelta - perpendicular.x * tangentScale,
-            dir.y * radiusDelta - perpendicular.y * tangentScale,
-        };
-        drawAaLine(
-            {start.x + normalA.x * startRadius, start.y + normalA.y * startRadius},
-            {end.x + normalA.x * endRadius, end.y + normalA.y * endRadius},
-            capsule.color);
-        drawAaLine(
-            {start.x + normalB.x * startRadius, start.y + normalB.y * startRadius},
-            {end.x + normalB.x * endRadius, end.y + normalB.y * endRadius},
-            capsule.color);
-
-        const float startAngleA = std::atan2(normalA.y, normalA.x) * RAD2DEG;
-        const float startAngleB = std::atan2(normalB.y, normalB.x) * RAD2DEG;
-        drawAaArc(end, endRadius, startAngleB, startAngleA, capsule.color);
-        drawAaArc(start, startRadius, startAngleA, startAngleB, capsule.color);
+        const std::vector<Vector2> hull = projectedCapsuleHull(capsule, camera, viewport);
+        drawClosedAaPolyline(expandHull(hull, 0.65f), capsule.color);
     }
 }
 
@@ -16124,7 +16211,7 @@ int main() {
             if (editorCameraOrbitDragging) {
                 const Vector2 delta = GetMouseDelta();
                 editorCameraYaw -= delta.x * 0.008f;
-                editorCameraPitch = std::clamp(editorCameraPitch - delta.y * 0.008f, -1.10f, 1.10f);
+                editorCameraPitch = std::clamp(editorCameraPitch + delta.y * 0.008f, -1.10f, 1.10f);
             }
         } else {
             editorCameraOrbitDragging = false;
