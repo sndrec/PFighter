@@ -8625,6 +8625,26 @@ static int editorTimelineMarkerLane(const pf::FighterEditorTimelineMarker& marke
     return 0;
 }
 
+static int editorTimelineSubactionLane(const pf::Subaction& subaction) {
+    if (subaction.type == pf::SubactionType::CreateHitbox ||
+        subaction.type == pf::SubactionType::CreateThrowHitbox)
+    {
+        return 1;
+    }
+    if (subaction.type == pf::SubactionType::SetHurtboxState ||
+        subaction.type == pf::SubactionType::SetBodyCollisionState)
+    {
+        return 2;
+    }
+    if (subaction.type == pf::SubactionType::CallScript) {
+        return 3;
+    }
+    if (subaction.type == pf::SubactionType::SetInterruptible) {
+        return 5;
+    }
+    return 0;
+}
+
 static Color editorTimelineMarkerColor(const pf::FighterEditorTimelineMarker& marker) {
     switch (marker.kind) {
     case pf::FighterEditorTimelineMarkerKind::Hitbox:
@@ -8864,13 +8884,42 @@ static void drawEditorTimelineWorkstation(
         DrawRectangleRec({ruler.x, y, ruler.width, laneBarH}, lane % 2 == 0 ? Fade(RAYWHITE, 0.06f) : Fade(RAYWHITE, 0.035f));
     }
 
+    for (int subactionIndex = 0;
+         subactionIndex < static_cast<int>(state.action.size()) &&
+         subactionIndex < static_cast<int>(subactionFrames.size());
+         ++subactionIndex)
+    {
+        const int startFrame = subactionFrames[static_cast<size_t>(subactionIndex)];
+        if (startFrame < 0) {
+            continue;
+        }
+        const pf::Subaction& subaction = state.action[static_cast<size_t>(subactionIndex)];
+        const int lane = editorTimelineSubactionLane(subaction);
+        if (lane < 0 || lane >= static_cast<int>(lanes.size())) {
+            continue;
+        }
+        const int endFrame = std::clamp(startFrame + std::max(1, subaction.frames), startFrame + 1, frameCount);
+        const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(startFrame, 0, frameCount)) / static_cast<float>(frameCount);
+        const float endX = ruler.x + ruler.width * static_cast<float>(endFrame) / static_cast<float>(frameCount);
+        const float y = laneY(lane);
+        const bool selected =
+            editor.selectionKind == pf::FighterEditorSelectionKind::Subaction &&
+            editor.selectedSubaction == subactionIndex;
+        const Color color = subactionMarkerColor(subaction);
+        DrawRectangleRec(
+            {x, y + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)},
+            Fade(color, selected ? 0.54f : 0.28f));
+        if (selected) {
+            DrawRectangleLinesEx(
+                {x, y + 3.0f, std::max(4.0f, endX - x), std::max(9.0f, laneBarH - 6.0f)},
+                1.0f,
+                RAYWHITE);
+        }
+    }
+
     for (int frame = 0; frame < static_cast<int>(actionFrames.size()); ++frame) {
         for (const pf::Subaction& subaction : actionFrames[static_cast<size_t>(frame)]) {
-            int lane = 0;
-            if (subaction.type == pf::SubactionType::CreateHitbox || subaction.type == pf::SubactionType::CreateThrowHitbox) lane = 1;
-            else if (subaction.type == pf::SubactionType::SetHurtboxState || subaction.type == pf::SubactionType::SetBodyCollisionState) lane = 2;
-            else if (subaction.type == pf::SubactionType::CallScript) lane = 3;
-            else if (subaction.type == pf::SubactionType::SetInterruptible) lane = 5;
+            const int lane = editorTimelineSubactionLane(subaction);
             const float x = ruler.x + ruler.width * static_cast<float>(frame) / static_cast<float>(frameCount);
             const float y = laneY(lane);
             DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, static_cast<int>(std::max(10.0f, laneBarH - 4.0f)), subactionMarkerColor(subaction));
