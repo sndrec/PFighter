@@ -203,6 +203,8 @@ struct FighterEditor {
     int timelineStackPickerLane = -1;
     float timelineStackPickerX = 0.0f;
     float timelineStackPickerY = 0.0f;
+    bool confirmStateDelete = false;
+    std::string confirmStateDeleteName;
     std::string packagePath = "editor_last.pfpkg";
     std::string lastPackageName;
     size_t lastPackageBytes = 0;
@@ -225,6 +227,16 @@ struct FighterEditorPackageSnapshot {
     FighterPackageDescriptor descriptor;
 };
 
+struct FighterEditorUndoSnapshot {
+    FighterPackage package;
+    int selectedFighter = 0;
+    int selectedState = 0;
+    int selectedSubaction = 0;
+    int selectedInterrupt = 0;
+    int selectedPackageScript = 0;
+    int selectedPackageInstruction = 0;
+};
+
 struct FighterEditorSession {
     FighterPackage package;
     int selectedFighter = 0;
@@ -237,11 +249,17 @@ struct FighterEditorSession {
     FighterPackageDescriptor lastDescriptor;
     std::vector<uint8_t> lastBytes;
     std::string lastMessage;
+    std::vector<FighterEditorUndoSnapshot> undoStack;
+    std::vector<FighterEditorUndoSnapshot> redoStack;
 
     void clamp();
     FighterDefinition* rootFighter();
     const FighterDefinition* rootFighter() const;
 };
+
+bool undoFighterEditorSession(FighterEditorSession& session, std::string* error = nullptr);
+bool redoFighterEditorSession(FighterEditorSession& session, std::string* error = nullptr);
+void clearFighterEditorUndoHistory(FighterEditorSession& session);
 
 std::string uniqueEditorFighterName(const World& world, const std::string& prefix);
 std::string uniqueEditorStateName(const FighterDefinition& def, const std::string& prefix);

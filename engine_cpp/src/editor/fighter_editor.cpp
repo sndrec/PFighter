@@ -11,9 +11,43 @@ namespace pf {
 
 namespace {
 
+constexpr size_t kEditorUndoLimit = 12;
+
 void setEditorError(std::string* error, const std::string& message) {
     if (error) {
         *error = message;
+    }
+}
+
+FighterEditorUndoSnapshot makeUndoSnapshot(FighterEditorSession& session) {
+    FighterEditorUndoSnapshot snapshot;
+    snapshot.package = session.package;
+    snapshot.selectedFighter = session.selectedFighter;
+    snapshot.selectedState = session.selectedState;
+    snapshot.selectedSubaction = session.selectedSubaction;
+    snapshot.selectedInterrupt = session.selectedInterrupt;
+    snapshot.selectedPackageScript = session.selectedPackageScript;
+    snapshot.selectedPackageInstruction = session.selectedPackageInstruction;
+    return snapshot;
+}
+
+void restoreUndoSnapshot(FighterEditorSession& session, FighterEditorUndoSnapshot&& snapshot) {
+    session.package = std::move(snapshot.package);
+    session.selectedFighter = snapshot.selectedFighter;
+    session.selectedState = snapshot.selectedState;
+    session.selectedSubaction = snapshot.selectedSubaction;
+    session.selectedInterrupt = snapshot.selectedInterrupt;
+    session.selectedPackageScript = snapshot.selectedPackageScript;
+    session.selectedPackageInstruction = snapshot.selectedPackageInstruction;
+    session.dirty = true;
+    session.lastMessage = "OK";
+    session.clamp();
+}
+
+void pushEditorUndoSnapshot(std::vector<FighterEditorUndoSnapshot>& stack, FighterEditorUndoSnapshot&& snapshot) {
+    stack.push_back(std::move(snapshot));
+    if (stack.size() > kEditorUndoLimit) {
+        stack.erase(stack.begin(), stack.begin() + static_cast<std::ptrdiff_t>(stack.size() - kEditorUndoLimit));
     }
 }
 
@@ -245,14 +279,18 @@ bool validateEditorSessionAfterMutation(
     FighterPackage&& previous,
     std::string* error)
 {
+    FighterEditorUndoSnapshot undoSnapshot = makeUndoSnapshot(session);
+    undoSnapshot.package = std::move(previous);
     std::string validationError;
     if (!validateFighterPackage(session.package, &validationError)) {
-        session.package = std::move(previous);
+        session.package = std::move(undoSnapshot.package);
         session.clamp();
         setEditorError(error, validationError);
         session.lastMessage = validationError;
         return false;
     }
+    pushEditorUndoSnapshot(session.undoStack, std::move(undoSnapshot));
+    session.redoStack.clear();
     session.dirty = true;
     session.lastMessage = "OK";
     session.clamp();
@@ -1612,6 +1650,35 @@ FighterDefinition* FighterEditorSession::rootFighter() {
 
 const FighterDefinition* FighterEditorSession::rootFighter() const {
     return package.fighters.empty() ? nullptr : &package.fighters.front();
+}
+
+bool undoFighterEditorSession(FighterEditorSession& session, std::string* error) {
+    if (session.undoStack.empty()) {
+        setEditorError(error, "editor undo stack is empty");
+        return false;
+    }
+    pushEditorUndoSnapshot(session.redoStack, makeUndoSnapshot(session));
+    FighterEditorUndoSnapshot snapshot = std::move(session.undoStack.back());
+    session.undoStack.pop_back();
+    restoreUndoSnapshot(session, std::move(snapshot));
+    return true;
+}
+
+bool redoFighterEditorSession(FighterEditorSession& session, std::string* error) {
+    if (session.redoStack.empty()) {
+        setEditorError(error, "editor redo stack is empty");
+        return false;
+    }
+    pushEditorUndoSnapshot(session.undoStack, makeUndoSnapshot(session));
+    FighterEditorUndoSnapshot snapshot = std::move(session.redoStack.back());
+    session.redoStack.pop_back();
+    restoreUndoSnapshot(session, std::move(snapshot));
+    return true;
+}
+
+void clearFighterEditorUndoHistory(FighterEditorSession& session) {
+    session.undoStack.clear();
+    session.redoStack.clear();
 }
 
 std::string uniqueEditorFighterName(const World& world, const std::string& prefix) {

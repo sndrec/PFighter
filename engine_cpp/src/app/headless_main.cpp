@@ -6672,6 +6672,21 @@ int main(int argc, char** argv) {
         std::any_of(editorTimeline.markers.begin(), editorTimeline.markers.end(), [](const pf::FighterEditorTimelineMarker& marker) {
             return marker.kind == pf::FighterEditorTimelineMarkerKind::InterruptDisable && marker.frame == 14;
         });
+    pf::FighterEditorSession editorUndoSession = editorSession;
+    const size_t editorUndoActionCountBefore = editorUndoSession.rootFighter()
+        ? editorUndoSession.rootFighter()->states[0].action.size()
+        : 0;
+    const bool editorSessionUndoRedoOk = editorSessionTimelineOk &&
+        editorUndoActionCountBefore > 0 &&
+        pf::removeEditorSessionSubaction(editorUndoSession, 0, 0, &packageError) &&
+        editorUndoSession.rootFighter() &&
+        editorUndoSession.rootFighter()->states[0].action.size() + 1 == editorUndoActionCountBefore &&
+        pf::undoFighterEditorSession(editorUndoSession, &packageError) &&
+        editorUndoSession.rootFighter() &&
+        editorUndoSession.rootFighter()->states[0].action.size() == editorUndoActionCountBefore &&
+        pf::redoFighterEditorSession(editorUndoSession, &packageError) &&
+        editorUndoSession.rootFighter() &&
+        editorUndoSession.rootFighter()->states[0].action.size() + 1 == editorUndoActionCountBefore;
     const bool editorSessionRemoveInterruptOk = editorSessionTimelineOk &&
         pf::removeEditorSessionInterrupt(editorSession, 0, editorInterruptIndex, &packageError);
     int editorAddedVariable = -1;
@@ -9160,6 +9175,7 @@ int main(int argc, char** argv) {
               << " fighter_editor_session_add_interrupt_ok=" << editorSessionAddInterruptOk
               << " fighter_editor_session_set_interrupt_ok=" << editorSessionSetInterruptOk
               << " fighter_editor_session_timeline_ok=" << editorSessionTimelineOk
+              << " fighter_editor_session_undo_redo_ok=" << editorSessionUndoRedoOk
               << " fighter_editor_session_remove_interrupt_ok=" << editorSessionRemoveInterruptOk
               << " fighter_editor_session_add_variable_ok=" << editorSessionAddVariableOk
               << " fighter_editor_session_rename_variable_ok=" << editorSessionRenameVariableOk

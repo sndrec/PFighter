@@ -8358,6 +8358,17 @@ static const pf::FighterDefinition* selectedEditorSessionFighter(const pf::Fight
     return &session.package.fighters[static_cast<size_t>(fighterIndex)];
 }
 
+static void requestEditorStateDeleteConfirmation(pf::FighterEditor& editor, const pf::FighterEditorSession& session) {
+    const pf::FighterDefinition* def = selectedEditorSessionFighter(session);
+    editor.confirmStateDeleteName = def &&
+            session.selectedState >= 0 &&
+            session.selectedState < static_cast<int>(def->states.size())
+        ? def->states[static_cast<size_t>(session.selectedState)].name
+        : std::string{"state"};
+    editor.confirmStateDelete = true;
+    editor.status = "Editor: confirm deleting state " + editor.confirmStateDeleteName;
+}
+
 static bool ensureEditorSessionFromWorld(
     const pf::World& world,
     pf::FighterEditor& editor,
@@ -8591,16 +8602,7 @@ static void drawEditorToolStrip(
         }
     }
     if (uiButton(actions.deleteState, "Delete")) {
-        std::string error;
-        const pf::FighterDefinition* edited = selectedEditorSessionFighter(session);
-        const std::string removed = edited && session.selectedState >= 0 && session.selectedState < static_cast<int>(edited->states.size())
-            ? edited->states[static_cast<size_t>(session.selectedState)].name
-            : std::string{"state"};
-        if (pf::removeEditorSessionState(session, session.selectedState, {}, &error)) {
-            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed session state " + removed);
-        } else {
-            editor.status = "Editor: remove state failed: " + error;
-        }
+        requestEditorStateDeleteConfirmation(editor, session);
     }
 
     uiButton(actions.test, editor.testMode ? "Return" : "Test", editor.testMode);
@@ -14422,6 +14424,58 @@ static void drawEditorDiagnosticsWorkstation(
     }
 }
 
+static void drawEditorStateDeleteConfirmation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef)
+{
+    if (!editor.confirmStateDelete) {
+        return;
+    }
+    const float w = 420.0f;
+    const float h = 150.0f;
+    const Rectangle modal{
+        (static_cast<float>(GetScreenWidth()) - w) * 0.5f,
+        (static_cast<float>(GetScreenHeight()) - h) * 0.5f,
+        w,
+        h,
+    };
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.48f));
+    DrawRectangleRec(modal, {21, 27, 33, 255});
+    DrawRectangleLinesEx(modal, 1.0f, Fade(RED, 0.86f));
+    DrawText("Delete State?", static_cast<int>(modal.x + 18.0f), static_cast<int>(modal.y + 16.0f), 17, RAYWHITE);
+    DrawText(("This will remove " + editor.confirmStateDeleteName + " from the current fighter.").c_str(),
+        static_cast<int>(modal.x + 18.0f),
+        static_cast<int>(modal.y + 50.0f),
+        12,
+        Fade(RAYWHITE, 0.78f));
+    DrawText("Undo can restore it during this editor session.",
+        static_cast<int>(modal.x + 18.0f),
+        static_cast<int>(modal.y + 70.0f),
+        11,
+        Fade(RAYWHITE, 0.62f));
+    const Rectangle cancel{modal.x + modal.width - 188.0f, modal.y + modal.height - 42.0f, 78.0f, 26.0f};
+    const Rectangle confirm{modal.x + modal.width - 102.0f, modal.y + modal.height - 42.0f, 84.0f, 26.0f};
+    if (uiButton(cancel, "Cancel") || (editorUiAcceptsInput() && IsKeyPressed(KEY_ESCAPE))) {
+        editor.confirmStateDelete = false;
+        editor.status = "Editor: canceled state delete";
+        return;
+    }
+    if (uiButton(confirm, "Delete")) {
+        std::string error;
+        const std::string removed = editor.confirmStateDeleteName.empty()
+            ? std::string{"state"}
+            : editor.confirmStateDeleteName;
+        if (pf::removeEditorSessionState(session, session.selectedState, {}, &error)) {
+            editor.confirmStateDelete = false;
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, "Editor: removed session state " + removed);
+            return;
+        }
+        editor.status = "Editor: remove state failed: " + error;
+    }
+}
+
 static void drawEditorWorkstationPass(
     pf::World& world,
     pf::FighterEditor& editor,
@@ -14501,6 +14555,7 @@ static void drawEditorWorkstationPass(
     syncEditorSelectionFromSession(editor, session);
     state = &def.states[static_cast<size_t>(session.selectedState)];
     drawEditorDiagnosticsWorkstation(world, editor, session, selectedFighterDef, fighter, def, *state, layout.diagnostics);
+    drawEditorStateDeleteConfirmation(world, editor, session, selectedFighterDef);
 }
 
 static void drawEditorWorkstation(
@@ -15317,16 +15372,138 @@ int main() {
         if (!ensureMainEditorSession()) {
             return;
         }
-        std::string error;
-        const pf::FighterDefinition* edited = selectedEditorSessionFighter(editorSession);
-        const std::string removed = edited && editorSession.selectedState >= 0 && editorSession.selectedState < static_cast<int>(edited->states.size())
-            ? edited->states[static_cast<size_t>(editorSession.selectedState)].name
-            : std::string{"state"};
-        if (pf::removeEditorSessionState(editorSession, editorSession.selectedState, {}, &error)) {
-            syncMainEditorSession("Editor: removed session state " + removed);
-        } else {
-            editor.status = "Editor: remove state failed: " + error;
+        requestEditorStateDeleteConfirmation(editor, editorSession);
+    };
+    auto undoEditorSessionFromUi = [&]() {
+        if (!ensureMainEditorSession()) {
+            return;
         }
+        std::string error;
+        if (pf::undoFighterEditorSession(editorSession, &error)) {
+            syncMainEditorSession("Editor: undo");
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        } else {
+            editor.status = "Editor: undo failed: " + error;
+        }
+    };
+    auto redoEditorSessionFromUi = [&]() {
+        if (!ensureMainEditorSession()) {
+            return;
+        }
+        std::string error;
+        if (pf::redoFighterEditorSession(editorSession, &error)) {
+            syncMainEditorSession("Editor: redo");
+            editor.selectionKind = pf::FighterEditorSelectionKind::State;
+        } else {
+            editor.status = "Editor: redo failed: " + error;
+        }
+    };
+    auto deleteEditorSelectionFromUi = [&]() {
+        if (!ensureMainEditorSession()) {
+            return;
+        }
+        std::string error;
+        if (editor.selectionKind == pf::FighterEditorSelectionKind::Subaction) {
+            pf::FighterDefinition* def = selectedEditorSessionFighter(editorSession);
+            if (!def || editorSession.selectedState < 0 || editorSession.selectedState >= static_cast<int>(def->states.size())) {
+                editor.status = "Editor: no state selected for subaction delete";
+                return;
+            }
+            const int actionCount = static_cast<int>(def->states[static_cast<size_t>(editorSession.selectedState)].action.size());
+            std::vector<int> toRemove = editor.selectedSubactions.empty()
+                ? std::vector<int>{editor.selectedSubaction}
+                : editor.selectedSubactions;
+            toRemove.erase(
+                std::remove_if(toRemove.begin(), toRemove.end(), [&](int index) {
+                    return index < 0 || index >= actionCount;
+                }),
+                toRemove.end());
+            std::sort(toRemove.begin(), toRemove.end(), [](int a, int b) { return a > b; });
+            if (toRemove.empty()) {
+                editor.status = "Editor: no subaction selected to delete";
+                return;
+            }
+            for (int index : toRemove) {
+                if (!pf::removeEditorSessionSubaction(editorSession, editorSession.selectedState, index, &error)) {
+                    editor.status = "Editor: remove subaction failed: " + error;
+                    return;
+                }
+            }
+            editor.selectedSubactions.clear();
+            syncMainEditorSession("Editor: removed selected subactions");
+            editor.selectionKind = pf::FighterEditorSelectionKind::Subaction;
+            return;
+        }
+        if (editor.selectionKind == pf::FighterEditorSelectionKind::Interrupt) {
+            if (pf::removeEditorSessionInterrupt(editorSession, editorSession.selectedState, editor.selectedInterrupt, &error)) {
+                syncMainEditorSession("Editor: removed selected interrupt");
+            } else {
+                editor.status = "Editor: remove interrupt failed: " + error;
+            }
+            return;
+        }
+        if (editor.selectionKind == pf::FighterEditorSelectionKind::Instruction) {
+            if (editor.workspace == pf::EditorWorkspace::Assets) {
+                if (pf::removeEditorSessionObjectPackageInstruction(
+                        editorSession,
+                        editor.selectedObjectDef,
+                        editor.selectedPackageScript,
+                        editor.selectedPackageInstruction,
+                        &error))
+                {
+                    syncMainEditorSession("Editor: removed selected object instruction");
+                } else {
+                    editor.status = "Editor: remove object instruction failed: " + error;
+                }
+            } else if (pf::removeEditorSessionPackageInstruction(
+                    editorSession,
+                    editor.selectedPackageScript,
+                    editor.selectedPackageInstruction,
+                    &error))
+            {
+                syncMainEditorSession("Editor: removed selected instruction");
+            } else {
+                editor.status = "Editor: remove instruction failed: " + error;
+            }
+            return;
+        }
+        if (editor.selectionKind == pf::FighterEditorSelectionKind::Variable) {
+            if (editor.workspace == pf::EditorWorkspace::Assets) {
+                if (pf::removeEditorSessionObjectPackageVariable(editorSession, editor.selectedObjectDef, editor.selectedPackageVariable, &error)) {
+                    syncMainEditorSession("Editor: removed selected object variable");
+                } else {
+                    editor.status = "Editor: remove object variable failed: " + error;
+                }
+            } else if (pf::removeEditorSessionPackageVariable(editorSession, editor.selectedPackageVariable, &error)) {
+                syncMainEditorSession("Editor: removed selected variable");
+            } else {
+                editor.status = "Editor: remove variable failed: " + error;
+            }
+            return;
+        }
+        if (editor.selectionKind == pf::FighterEditorSelectionKind::Script) {
+            if (editor.workspace == pf::EditorWorkspace::Assets) {
+                if (pf::removeEditorSessionObjectPackageScript(editorSession, editor.selectedObjectDef, editor.selectedPackageScript, &error)) {
+                    syncMainEditorSession("Editor: removed selected object script");
+                } else {
+                    editor.status = "Editor: remove object script failed: " + error;
+                }
+            } else if (pf::removeEditorSessionPackageScript(editorSession, editor.selectedPackageScript, &error)) {
+                syncMainEditorSession("Editor: removed selected script");
+            } else {
+                editor.status = "Editor: remove script failed: " + error;
+            }
+            return;
+        }
+        if (editor.selectionKind == pf::FighterEditorSelectionKind::Object) {
+            if (pf::removeEditorSessionObject(editorSession, editor.selectedObjectDef, {}, &error)) {
+                syncMainEditorSession("Editor: removed selected object/article");
+            } else {
+                editor.status = "Editor: remove object failed: " + error;
+            }
+            return;
+        }
+        requestEditorStateDeleteConfirmation(editor, editorSession);
     };
     auto launchEditorSessionTestWorld = [&]() {
         if (!ensureMainEditorSession()) {
@@ -15425,7 +15602,10 @@ int main() {
             editorCameraOrbitDragging = false;
         }
         if (IsKeyPressed(KEY_ESCAPE)) {
-            if (editorTextEditing) {
+            if (editor.confirmStateDelete) {
+                editor.confirmStateDelete = false;
+                editor.status = "Editor: canceled state delete";
+            } else if (editorTextEditing) {
                 editor.activeTextField.clear();
                 editor.textEditBuffer.clear();
             } else {
@@ -15443,8 +15623,21 @@ int main() {
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && (IsKeyPressed(KEY_N) || newStateClicked)) {
             createEditorSessionStateFromUi();
         }
-        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && (IsKeyPressed(KEY_DELETE) || deleteStateClicked)) {
+        const bool ctrlHeld = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+        const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && ctrlHeld && !shiftHeld && IsKeyPressed(KEY_Z)) {
+            undoEditorSessionFromUi();
+        }
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive &&
+            ((ctrlHeld && IsKeyPressed(KEY_Y)) || (ctrlHeld && shiftHeld && IsKeyPressed(KEY_Z))))
+        {
+            redoEditorSessionFromUi();
+        }
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && !editor.confirmStateDelete && deleteStateClicked) {
             removeEditorSessionStateFromUi();
+        }
+        if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && !editor.confirmStateDelete && IsKeyPressed(KEY_DELETE)) {
+            deleteEditorSelectionFromUi();
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && (IsKeyPressed(KEY_T) || testClicked)) {
             if (editor.testMode) {
@@ -15503,7 +15696,6 @@ int main() {
                 }
             }
         }
-        const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
         if (globalShortcutsEnabled && appMode == AppMode::Editor && editorSessionActive && IsKeyPressed(KEY_COMMA)) {
             if (shiftHeld && editor.workspace == pf::EditorWorkspace::Moveset) {
                 if (ensureMainEditorSession()) {
