@@ -120,6 +120,13 @@ struct FighterEditorStateTimeline {
     std::vector<FighterEditorTimelineMarker> markers;
 };
 
+struct FighterEditorPreviewFrame {
+    int frame = 0;
+    uint32_t rngState = 0x4D454C45;
+    std::vector<FighterRuntime> fighters;
+    std::vector<GameObjectRuntime> objects;
+};
+
 struct FighterEditor {
     int selectedFighter = 0;
     int selectedState = 0;
@@ -168,7 +175,9 @@ struct FighterEditor {
     int previewCacheFrame = 0;
     int previewCacheFrameCount = 0;
     StageDefinition previewCacheStage;
-    std::vector<WorldSnapshot> previewCacheFrames;
+    std::vector<FighterDefinition> previewCacheFighterDefs;
+    std::vector<GameObjectDefinition> previewCacheObjectDefs;
+    std::vector<FighterEditorPreviewFrame> previewCacheFrames;
     std::string previewCacheMessage;
     EditorWorkspace workspace = EditorWorkspace::Moveset;
     FighterEditorStateGroupFilter stateGroupFilter = FighterEditorStateGroupFilter::All;

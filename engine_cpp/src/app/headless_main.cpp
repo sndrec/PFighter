@@ -4325,7 +4325,7 @@ int main(int argc, char** argv) {
         pf::tickWorld(objectWorld, {pf::InputFrame{}, pf::InputFrame{}});
     }
     std::cout << "object_spawn_index=" << objectIndex
-              << " object_snapshot_defs=" << objectSnapshot.objectDefs.size()
+              << " object_world_defs=" << objectWorld.objectDefs.size()
               << " object_snapshot_count=" << objectSnapshot.objects.size()
               << " object_after_count=" << objectWorld.objects.size()
               << " object_hit_percent=" << pf::fxToFloat(objectWorld.fighters[1].percent)

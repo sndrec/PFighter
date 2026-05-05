@@ -464,7 +464,6 @@ struct FighterSnapshot {
 struct WorldSnapshot {
     int frame = 0;
     uint32_t rngState = 0x4D454C45;
-    std::vector<GameObjectDefinition> objectDefs;
     std::vector<FighterSnapshot> fighters;
     std::vector<GameObjectRuntime> objects;
 };

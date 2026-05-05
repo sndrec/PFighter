@@ -7419,6 +7419,8 @@ static void previewEditorSelectedState(pf::World& world, pf::FighterEditor& edit
     editor.previewCacheDirty = true;
     editor.previewCacheValid = false;
     editor.previewCacheFrames.clear();
+    editor.previewCacheFighterDefs.clear();
+    editor.previewCacheObjectDefs.clear();
     editor.paused = true;
     editor.status = "Editor: queued savestate preview for " + selectedState.name;
 }
@@ -7807,6 +7809,15 @@ static void applyEditorPreviewFixture(pf::World& world, bool airborne) {
     fighter.previousEcb = fighter.ecb;
 }
 
+static pf::FighterEditorPreviewFrame saveEditorPreviewFrame(const pf::World& world) {
+    pf::FighterEditorPreviewFrame frame;
+    frame.frame = world.frame;
+    frame.rngState = world.rngState;
+    frame.fighters = world.fighters;
+    frame.objects = world.objects;
+    return frame;
+}
+
 static bool restoreEditorPreviewFrame(pf::World& world, pf::FighterEditor& editor, int frame, std::string* error = nullptr) {
     if (!editor.previewCacheValid || editor.previewCacheFrames.empty()) {
         if (error) *error = "preview cache is empty";
@@ -7814,8 +7825,14 @@ static bool restoreEditorPreviewFrame(pf::World& world, pf::FighterEditor& edito
     }
     const int maxFrame = static_cast<int>(editor.previewCacheFrames.size()) - 1;
     editor.previewCacheFrame = std::clamp(frame, 0, maxFrame);
+    const pf::FighterEditorPreviewFrame& cached = editor.previewCacheFrames[static_cast<size_t>(editor.previewCacheFrame)];
     world.stage = editor.previewCacheStage;
-    pf::loadWorld(world, editor.previewCacheFrames[static_cast<size_t>(editor.previewCacheFrame)]);
+    world.fighterDefs = editor.previewCacheFighterDefs;
+    world.objectDefs = editor.previewCacheObjectDefs;
+    world.frame = cached.frame;
+    world.rngState = cached.rngState;
+    world.fighters = cached.fighters;
+    world.objects = cached.objects;
     editor.selectedFighter = 0;
     editor.animationPreviewActive = true;
     return true;
@@ -7887,17 +7904,19 @@ static bool rebuildEditorPreviewCache(
     const int authoredFrameCount = editorPreviewFrameCount(session, state);
     constexpr int kMaxPreviewFrameCount = 600;
     const int frameCount = std::clamp(authoredFrameCount, 1, kMaxPreviewFrameCount);
-    std::vector<pf::WorldSnapshot> frames;
+    std::vector<pf::FighterEditorPreviewFrame> frames;
     frames.reserve(static_cast<size_t>(frameCount + 1));
     std::vector<pf::InputFrame> inputs(previewWorld.fighters.size());
     for (int frame = 0; frame <= frameCount; ++frame) {
-        frames.push_back(pf::saveWorld(previewWorld));
+        frames.push_back(saveEditorPreviewFrame(previewWorld));
         if (frame < frameCount) {
             pf::tickWorld(previewWorld, inputs);
         }
     }
 
     editor.previewCacheStage = previewWorld.stage;
+    editor.previewCacheFighterDefs = previewWorld.fighterDefs;
+    editor.previewCacheObjectDefs = previewWorld.objectDefs;
     editor.previewCacheFrames = std::move(frames);
     editor.previewCacheFighter = packageFighter;
     editor.previewCacheState = selectedState;
@@ -8425,6 +8444,8 @@ static void drawEditorStateBrowserWorkstation(
         editor.previewCacheDirty = true;
         editor.previewCacheValid = false;
         editor.previewCacheFrames.clear();
+        editor.previewCacheFighterDefs.clear();
+        editor.previewCacheObjectDefs.clear();
         const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
         editor.status = selected
             ? "Editor: selected package fighter " + selected->name
@@ -14465,6 +14486,9 @@ int main() {
         editor.animationPreviewActive = false;
         editor.previewCacheValid = false;
         editor.previewCacheDirty = true;
+        editor.previewCacheFrames.clear();
+        editor.previewCacheFighterDefs.clear();
+        editor.previewCacheObjectDefs.clear();
         editor.paused = false;
         replay.playbackLoaded = false;
         replay.realtimePlayback = false;
@@ -14489,6 +14513,9 @@ int main() {
         editor.animationPreviewActive = true;
         editor.previewCacheValid = false;
         editor.previewCacheDirty = true;
+        editor.previewCacheFrames.clear();
+        editor.previewCacheFighterDefs.clear();
+        editor.previewCacheObjectDefs.clear();
         editor.paused = true;
         replay.playbackLoaded = false;
         replay.realtimePlayback = false;
@@ -14581,6 +14608,8 @@ int main() {
             editor.previewCacheValid = false;
             editor.previewCacheDirty = true;
             editor.previewCacheFrames.clear();
+            editor.previewCacheFighterDefs.clear();
+            editor.previewCacheObjectDefs.clear();
             editor.status = "Editor: reset Battlefield from saved/base fighter data";
         }
         if (globalShortcutsEnabled && appMode == AppMode::Editor && IsKeyPressed(KEY_LEFT_BRACKET)) {

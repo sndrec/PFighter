@@ -9059,7 +9059,6 @@ WorldSnapshot saveWorld(const World& world) {
     WorldSnapshot snapshot;
     snapshot.frame = world.frame;
     snapshot.rngState = world.rngState;
-    snapshot.objectDefs = world.objectDefs;
     for (const FighterRuntime& fighter : world.fighters) {
         FighterSnapshot item;
         item.fighterDef = fighter.fighterDef;
@@ -9219,7 +9218,6 @@ WorldSnapshot saveWorld(const World& world) {
 void loadWorld(World& world, const WorldSnapshot& snapshot) {
     world.frame = snapshot.frame;
     world.rngState = snapshot.rngState;
-    world.objectDefs = snapshot.objectDefs;
     world.fighters.clear();
     for (const FighterSnapshot& item : snapshot.fighters) {
         FighterRuntime fighter;
