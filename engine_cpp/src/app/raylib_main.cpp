@@ -34,6 +34,19 @@ enum class AppMode {
     Editor,
 };
 
+static Font gUiFont{};
+static bool gUiFontLoaded = false;
+
+static void drawAppText(const char* text, int posX, int posY, int fontSize, Color color) {
+    if (gUiFontLoaded) {
+        DrawTextEx(gUiFont, text, {static_cast<float>(posX), static_cast<float>(posY)}, static_cast<float>(fontSize), 0.0f, color);
+        return;
+    }
+    DrawText(text, posX, posY, fontSize, color);
+}
+
+#define DrawText(text, posX, posY, fontSize, color) drawAppText(text, posX, posY, fontSize, color)
+
 static Vector3 toRay(pf::Vec3 v) {
     return {pf::fxToFloat(v.x), pf::fxToFloat(v.y), pf::fxToFloat(v.z)};
 }
@@ -8015,10 +8028,8 @@ static bool rebuildEditorPreviewCache(
     previewTickOptions.processFighterFrameCallbacks = false;
     previewTickOptions.processAnimationFinishedTransitions = false;
     for (int frame = 0; frame <= frameCount; ++frame) {
+        pf::tickWorld(previewWorld, inputs, previewTickOptions);
         frames.push_back(saveEditorPreviewFrame(previewWorld));
-        if (frame < frameCount) {
-            pf::tickWorld(previewWorld, inputs, previewTickOptions);
-        }
     }
 
     editor.previewCacheStage = previewWorld.stage;
@@ -8717,13 +8728,6 @@ static void drawEditorStateBrowserWorkstation(
     }
     const float filteredOffsetY = (!visibleStates.empty() && !selectedStateVisible) ? 24.0f : 0.0f;
     const int maxScroll = std::max(0, static_cast<int>(visibleStates.size()) - rowCount);
-    if (selectedStateVisible) {
-        if (selectedVisible < editor.stateListScroll) {
-            editor.stateListScroll = selectedVisible;
-        } else if (selectedVisible >= editor.stateListScroll + rowCount) {
-            editor.stateListScroll = selectedVisible - rowCount + 1;
-        }
-    }
     editor.stateListScroll = std::clamp(editor.stateListScroll, 0, maxScroll);
     const Rectangle stateListViewport{
         rect.x + 8.0f,
@@ -8947,10 +8951,30 @@ static void drawEditorTimelineWorkstation(
     const float laneTop = rect.y + 114.0f;
     const float footerY = rect.y + rect.height - 24.0f;
     const float availableLaneH = std::max(16.0f, footerY - laneTop - 4.0f);
-    const float laneH = std::clamp(availableLaneH / static_cast<float>(lanes.size()), 18.0f, 24.0f);
+    const int visibleLaneCount = std::max(
+        1,
+        std::min(static_cast<int>(lanes.size()), static_cast<int>(std::floor(availableLaneH / 18.0f))));
+    const int maxLaneScroll = std::max(0, static_cast<int>(lanes.size()) - visibleLaneCount);
+    const Rectangle laneViewport{rect.x, laneTop, rect.width, std::max(18.0f, footerY - laneTop)};
+    int hoveredMarker = -1;
+    const Vector2 mouse = GetMousePosition();
+    if (CheckCollisionPointRec(GetMousePosition(), laneViewport)) {
+        const float wheel = uiMouseWheelMove();
+        if (wheel != 0.0f) {
+            editor.timelineLaneScroll = std::clamp(
+                editor.timelineLaneScroll - static_cast<int>(std::round(wheel)),
+                0,
+                maxLaneScroll);
+        }
+    }
+    editor.timelineLaneScroll = std::clamp(editor.timelineLaneScroll, 0, maxLaneScroll);
+    const float laneH = std::clamp(availableLaneH / static_cast<float>(visibleLaneCount), 18.0f, 24.0f);
     const float laneBarH = std::max(13.0f, laneH - 6.0f);
     const auto laneY = [&](int lane) {
-        return laneTop + static_cast<float>(lane) * laneH;
+        return laneTop + static_cast<float>(lane - editor.timelineLaneScroll) * laneH;
+    };
+    const auto laneVisible = [&](int lane) {
+        return lane >= editor.timelineLaneScroll && lane < editor.timelineLaneScroll + visibleLaneCount;
     };
     const Rectangle ruler{rect.x + 136.0f, rulerY, rect.width - 156.0f, 24.0f};
     DrawText(("State: " + state.name).c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(headerY), 13, RAYWHITE);
@@ -9140,10 +9164,18 @@ static void drawEditorTimelineWorkstation(
         DrawText(std::to_string(tick).c_str(), static_cast<int>(x + 3.0f), static_cast<int>(ruler.y + 6.0f), 9, Fade(RAYWHITE, 0.56f));
     }
 
-    for (int lane = 0; lane < static_cast<int>(lanes.size()); ++lane) {
+    {
+    ScopedScissor timelineLaneClip(laneViewport);
+    for (int lane = editor.timelineLaneScroll; lane < std::min(static_cast<int>(lanes.size()), editor.timelineLaneScroll + visibleLaneCount); ++lane) {
         const float y = laneY(lane);
         DrawText(lanes[static_cast<size_t>(lane)].c_str(), static_cast<int>(rect.x + 10.0f), static_cast<int>(y + 5.0f), 11, Fade(RAYWHITE, 0.72f));
         DrawRectangleRec({ruler.x, y, ruler.width, laneBarH}, lane % 2 == 0 ? Fade(RAYWHITE, 0.06f) : Fade(RAYWHITE, 0.035f));
+    }
+    if (maxLaneScroll > 0) {
+        const float thumbH = std::max(18.0f, laneViewport.height * static_cast<float>(visibleLaneCount) / static_cast<float>(lanes.size()));
+        const float thumbY = laneViewport.y + (laneViewport.height - thumbH) * static_cast<float>(editor.timelineLaneScroll) / static_cast<float>(maxLaneScroll);
+        DrawRectangleRec({laneViewport.x + laneViewport.width - 5.0f, laneViewport.y, 3.0f, laneViewport.height}, Fade(RAYWHITE, 0.14f));
+        DrawRectangleRec({laneViewport.x + laneViewport.width - 6.0f, thumbY, 5.0f, thumbH}, Fade(SKYBLUE, 0.7f));
     }
 
     for (int subactionIndex = 0;
@@ -9157,7 +9189,7 @@ static void drawEditorTimelineWorkstation(
         }
         const pf::Subaction& subaction = state.action[static_cast<size_t>(subactionIndex)];
         const int lane = editorTimelineSubactionLane(subaction);
-        if (lane < 0 || lane >= static_cast<int>(lanes.size())) {
+        if (lane < 0 || lane >= static_cast<int>(lanes.size()) || !laneVisible(lane)) {
             continue;
         }
         const int endFrame = std::clamp(startFrame + std::max(1, subaction.frames), startFrame + 1, frameCount);
@@ -9182,20 +9214,23 @@ static void drawEditorTimelineWorkstation(
     for (int frame = 0; frame < static_cast<int>(actionFrames.size()); ++frame) {
         for (const pf::Subaction& subaction : actionFrames[static_cast<size_t>(frame)]) {
             const int lane = editorTimelineSubactionLane(subaction);
+            if (lane < 0 || lane >= static_cast<int>(lanes.size()) || !laneVisible(lane)) {
+                continue;
+            }
             const float x = ruler.x + ruler.width * static_cast<float>(frame) / static_cast<float>(frameCount);
             const float y = laneY(lane);
             DrawRectangle(static_cast<int>(x), static_cast<int>(y + 2.0f), 3, static_cast<int>(std::max(10.0f, laneBarH - 4.0f)), subactionMarkerColor(subaction));
         }
     }
-    int hoveredMarker = -1;
-    const Vector2 mouse = GetMousePosition();
     for (int interruptIndex = 0; interruptIndex < static_cast<int>(state.interrupts.size()); ++interruptIndex) {
         const pf::InterruptRule& rule = state.interrupts[static_cast<size_t>(interruptIndex)];
         const int startFrame = std::clamp(rule.enableFrame, 0, frameCount);
         const int endFrame = rule.disableFrame > 0 ? std::clamp(rule.disableFrame, startFrame, frameCount) : frameCount;
         const float x = ruler.x + ruler.width * static_cast<float>(startFrame) / static_cast<float>(frameCount);
         const float w = std::max(3.0f, ruler.width * static_cast<float>(endFrame - startFrame) / static_cast<float>(frameCount));
-        DrawRectangleRec({x, laneY(kEditorTimelineInterruptLane) + 3.0f, w, std::max(10.0f, laneBarH - 6.0f)}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
+        if (laneVisible(kEditorTimelineInterruptLane)) {
+            DrawRectangleRec({x, laneY(kEditorTimelineInterruptLane) + 3.0f, w, std::max(10.0f, laneBarH - 6.0f)}, Fade(GREEN, interruptIndex == editor.selectedInterrupt ? 0.72f : 0.42f));
+        }
     }
     if (state.initialInterruptibleFrame > 0) {
         const float x = ruler.x + ruler.width * static_cast<float>(std::clamp(state.initialInterruptibleFrame, 0, frameCount)) / static_cast<float>(frameCount);
@@ -9212,7 +9247,7 @@ static void drawEditorTimelineWorkstation(
         for (int markerIndex = 0; markerIndex < static_cast<int>(timeline.markers.size()); ++markerIndex) {
             const pf::FighterEditorTimelineMarker& marker = timeline.markers[static_cast<size_t>(markerIndex)];
             const int lane = editorTimelineMarkerLane(marker, state);
-            if (lane < 0 || lane >= static_cast<int>(lanes.size())) {
+            if (lane < 0 || lane >= static_cast<int>(lanes.size()) || !laneVisible(lane)) {
                 continue;
             }
             const int markerFrame = std::clamp(marker.frame, 0, frameCount);
@@ -9254,6 +9289,7 @@ static void drawEditorTimelineWorkstation(
             DrawRectangleRec(markerRect, Fade(color, selected ? 0.95f : 0.72f));
             DrawRectangleLinesEx(markerRect, selected ? 2.0f : 1.0f, selected ? RAYWHITE : Fade(RAYWHITE, 0.38f));
         }
+    }
     }
     const float playheadX = ruler.x + ruler.width * static_cast<float>(std::clamp(playheadFrame, 0, frameCount)) / static_cast<float>(frameCount);
     DrawRectangle(static_cast<int>(playheadX - 1.0f), static_cast<int>(ruler.y), 3, static_cast<int>(std::max(24.0f, footerY - ruler.y)), BLUE);
@@ -9306,7 +9342,7 @@ static void drawEditorTimelineWorkstation(
         const float t = std::clamp((mouse.x - ruler.x) / ruler.width, 0.0f, 1.0f);
         const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(frameCount)));
         const float clickedY = mouse.y;
-        const int clickedLane = static_cast<int>((clickedY - laneTop) / laneH);
+        const int clickedLane = editor.timelineLaneScroll + static_cast<int>((clickedY - laneTop) / laneH);
         if (hasTimeline && timelinePressed) {
             int pickedMarker = -1;
             for (int markerIndex = static_cast<int>(timeline.markers.size()) - 1; markerIndex >= 0; --markerIndex) {
@@ -12747,21 +12783,23 @@ static void drawEditorInspectorWorkstation(
                 if (commitSubaction(editedSubaction, "Editor: changed selected hitbox angle")) return;
             }
             const float offY = hitY + 26.0f;
-            if (uiButton({rect.x + 126.0f, offY, 42.0f, 22.0f}, "X-")) {
-                editedSubaction.hitbox.offset.x -= pf::fxFromFloat(0.1f);
-                if (commitSubaction(editedSubaction, "Editor: moved selected hitbox backward")) return;
+            DrawText("X", static_cast<int>(rect.x + 126.0f), static_cast<int>(offY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+            float committedOffsetX = pf::fxToFloat(subaction.hitbox.offset.x);
+            if (uiFloatField({rect.x + 144.0f, offY, 58.0f, 22.0f}, "selected-hitbox-offset-x", editor, committedOffsetX, committedOffsetX, 2)) {
+                editedSubaction.hitbox.offset.x = pf::fxFromFloat(committedOffsetX);
+                if (commitSubaction(editedSubaction, "Editor: changed selected hitbox X offset")) return;
             }
-            if (uiButton({rect.x + 174.0f, offY, 42.0f, 22.0f}, "X+")) {
-                editedSubaction.hitbox.offset.x += pf::fxFromFloat(0.1f);
-                if (commitSubaction(editedSubaction, "Editor: moved selected hitbox forward")) return;
+            DrawText("Y", static_cast<int>(rect.x + 210.0f), static_cast<int>(offY + 6.0f), 10, Fade(RAYWHITE, 0.68f));
+            float committedOffsetY = pf::fxToFloat(subaction.hitbox.offset.y);
+            if (uiFloatField({rect.x + 228.0f, offY, 58.0f, 22.0f}, "selected-hitbox-offset-y", editor, committedOffsetY, committedOffsetY, 2)) {
+                editedSubaction.hitbox.offset.y = pf::fxFromFloat(committedOffsetY);
+                if (commitSubaction(editedSubaction, "Editor: changed selected hitbox Y offset")) return;
             }
-            if (uiButton({rect.x + 222.0f, offY, 42.0f, 22.0f}, "Y-")) {
-                editedSubaction.hitbox.offset.y -= pf::fxFromFloat(0.1f);
-                if (commitSubaction(editedSubaction, "Editor: lowered selected hitbox")) return;
-            }
-            if (uiButton({rect.x + 270.0f, offY, 42.0f, 22.0f}, "Y+")) {
-                editedSubaction.hitbox.offset.y += pf::fxFromFloat(0.1f);
-                if (commitSubaction(editedSubaction, "Editor: raised selected hitbox")) return;
+            DrawText("Z", static_cast<int>(rect.x + 10.0f), static_cast<int>(offY + 32.0f), 10, Fade(RAYWHITE, 0.68f));
+            float committedOffsetZ = pf::fxToFloat(subaction.hitbox.offset.z);
+            if (uiFloatField({rect.x + 28.0f, offY + 26.0f, 58.0f, 22.0f}, "selected-hitbox-offset-z", editor, committedOffsetZ, committedOffsetZ, 2)) {
+                editedSubaction.hitbox.offset.z = pf::fxFromFloat(committedOffsetZ);
+                if (commitSubaction(editedSubaction, "Editor: changed selected hitbox Z offset")) return;
             }
         }
         if (subaction.type == pf::SubactionType::SetHurtboxState) {
@@ -14549,6 +14587,13 @@ int main() {
     if (!IsWindowReady()) {
         return 1;
     }
+    if (FileExists("C:/Windows/Fonts/arial.ttf")) {
+        gUiFont = LoadFontEx("C:/Windows/Fonts/arial.ttf", 32, nullptr, 0);
+        gUiFontLoaded = gUiFont.texture.id != 0;
+        if (gUiFontLoaded) {
+            SetTextureFilter(gUiFont.texture, TEXTURE_FILTER_BILINEAR);
+        }
+    }
     SetWindowMinSize(960, 640);
     SetTargetFPS(60);
 
@@ -15074,6 +15119,10 @@ int main() {
         EndDrawing();
     }
 
+    if (gUiFontLoaded) {
+        UnloadFont(gUiFont);
+        gUiFontLoaded = false;
+    }
     CloseWindow();
     return 0;
 }

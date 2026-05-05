@@ -183,6 +183,7 @@ struct FighterEditor {
     FighterEditorStateGroupFilter stateGroupFilter = FighterEditorStateGroupFilter::All;
     std::string stateSearch;
     int stateListScroll = 0;
+    int timelineLaneScroll = 0;
     int inspectorScroll = 0;
     bool diagnosticsCollapsed = false;
     std::string packagePath = "editor_last.pfpkg";
