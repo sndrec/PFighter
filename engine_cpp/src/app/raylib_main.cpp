@@ -201,6 +201,40 @@ static pf::InputFrame readPlayerInput(int player, bool arrows) {
     return mergeInput(readKeyboardInput(arrows), readGamepadInput(player));
 }
 
+static void beginViewportMode3D(Camera3D camera, Rectangle viewport) {
+    rlDrawRenderBatchActive();
+
+    const double aspect = static_cast<double>(std::max(1.0f, viewport.width)) /
+                          static_cast<double>(std::max(1.0f, viewport.height));
+    rlMatrixMode(RL_PROJECTION);
+    rlPushMatrix();
+    rlLoadIdentity();
+    if (camera.projection == CAMERA_ORTHOGRAPHIC) {
+        const double top = camera.fovy * 0.5;
+        const double right = top * aspect;
+        rlOrtho(-right, right, -top, top, RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+    } else {
+        const Matrix projection = MatrixPerspective(camera.fovy * DEG2RAD, aspect, RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+        rlMultMatrixf(MatrixToFloat(projection));
+    }
+
+    rlMatrixMode(RL_MODELVIEW);
+    rlLoadIdentity();
+    const Matrix view = MatrixLookAt(camera.position, camera.target, camera.up);
+    rlMultMatrixf(MatrixToFloat(view));
+    rlEnableDepthTest();
+}
+
+static void endViewportMode3D() {
+    rlDrawRenderBatchActive();
+
+    rlMatrixMode(RL_PROJECTION);
+    rlPopMatrix();
+    rlMatrixMode(RL_MODELVIEW);
+    rlLoadIdentity();
+    rlDisableDepthTest();
+}
+
 static Color colorWithAlpha(Color color, unsigned char alpha) {
     color.a = alpha;
     return color;
@@ -283,8 +317,7 @@ static Vector2 projectToViewport(Vector3 position, const Camera3D& camera, Recta
     return {viewport.x + projected.x, viewport.y + projected.y};
 }
 
-static float capsuleScreenRadius(const DebugCapsuleOutline& capsule, const Camera3D& camera, Rectangle viewport) {
-    const Vector3 center = Vector3Scale(Vector3Add(capsule.start, capsule.end), 0.5f);
+static float capsuleScreenRadiusAt(Vector3 center, float worldRadius, const Camera3D& camera, Rectangle viewport) {
     Vector3 forward = Vector3Subtract(camera.target, camera.position);
     if (Vector3LengthSqr(forward) <= 0.000001f) {
         forward = {0.0f, 0.0f, -1.0f};
@@ -298,7 +331,7 @@ static float capsuleScreenRadius(const DebugCapsuleOutline& capsule, const Camer
     }
 
     const Vector2 centerScreen = projectToViewport(center, camera, viewport);
-    const Vector2 radiusScreen = projectToViewport(Vector3Add(center, Vector3Scale(right, capsule.radius)), camera, viewport);
+    const Vector2 radiusScreen = projectToViewport(Vector3Add(center, Vector3Scale(right, worldRadius)), camera, viewport);
     const float dx = radiusScreen.x - centerScreen.x;
     const float dy = radiusScreen.y - centerScreen.y;
     return std::max(1.0f, std::sqrt(dx * dx + dy * dy));
@@ -338,29 +371,41 @@ static void drawDebugCapsuleOutlines2D(
     for (const DebugCapsuleOutline& capsule : outlines) {
         const Vector2 start = projectToViewport(capsule.start, camera, viewport);
         const Vector2 end = projectToViewport(capsule.end, camera, viewport);
-        const float radius = capsuleScreenRadius(capsule, camera, viewport);
+        const float startRadius = capsuleScreenRadiusAt(capsule.start, capsule.radius, camera, viewport);
+        const float endRadius = capsuleScreenRadiusAt(capsule.end, capsule.radius, camera, viewport);
         const float dx = end.x - start.x;
         const float dy = end.y - start.y;
         const float length = std::sqrt(dx * dx + dy * dy);
         if (length <= 0.5f) {
-            drawAaArc(start, radius, 0.0f, 360.0f, capsule.color);
+            drawAaArc(start, std::max(startRadius, endRadius), 0.0f, 360.0f, capsule.color);
             continue;
         }
 
         const Vector2 dir{dx / length, dy / length};
-        const Vector2 normal{-dir.y, dir.x};
+        const Vector2 perpendicular{-dir.y, dir.x};
+        const float radiusDelta = std::clamp((startRadius - endRadius) / length, -0.95f, 0.95f);
+        const float tangentScale = std::sqrt(std::max(0.0f, 1.0f - radiusDelta * radiusDelta));
+        const Vector2 normalA{
+            dir.x * radiusDelta + perpendicular.x * tangentScale,
+            dir.y * radiusDelta + perpendicular.y * tangentScale,
+        };
+        const Vector2 normalB{
+            dir.x * radiusDelta - perpendicular.x * tangentScale,
+            dir.y * radiusDelta - perpendicular.y * tangentScale,
+        };
         drawAaLine(
-            {start.x + normal.x * radius, start.y + normal.y * radius},
-            {end.x + normal.x * radius, end.y + normal.y * radius},
+            {start.x + normalA.x * startRadius, start.y + normalA.y * startRadius},
+            {end.x + normalA.x * endRadius, end.y + normalA.y * endRadius},
             capsule.color);
         drawAaLine(
-            {start.x - normal.x * radius, start.y - normal.y * radius},
-            {end.x - normal.x * radius, end.y - normal.y * radius},
+            {start.x + normalB.x * startRadius, start.y + normalB.y * startRadius},
+            {end.x + normalB.x * endRadius, end.y + normalB.y * endRadius},
             capsule.color);
 
-        const float directionAngle = std::atan2(dir.y, dir.x) * RAD2DEG;
-        drawAaArc(end, radius, directionAngle - 90.0f, directionAngle + 90.0f, capsule.color);
-        drawAaArc(start, radius, directionAngle + 90.0f, directionAngle + 270.0f, capsule.color);
+        const float startAngleA = std::atan2(normalA.y, normalA.x) * RAD2DEG;
+        const float startAngleB = std::atan2(normalB.y, normalB.x) * RAD2DEG;
+        drawAaArc(end, endRadius, startAngleB, startAngleA, capsule.color);
+        drawAaArc(start, startRadius, startAngleA, startAngleB, capsule.color);
     }
 }
 
@@ -16376,25 +16421,23 @@ int main() {
                     static_cast<int>(viewport.width),
                     static_cast<int>(viewport.height));
                 std::vector<DebugCapsuleOutline> capsuleOutlines;
-                BeginMode3D(camera);
+                beginViewportMode3D(camera, viewport);
                 drawWorldScene3D(world, editor, true, &capsuleOutlines);
-                EndMode3D();
+                endViewportMode3D();
                 rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
                 drawDebugCapsuleOutlines2D(capsuleOutlines, camera, viewport);
                 EndScissorMode();
             } else {
                 std::vector<DebugCapsuleOutline> capsuleOutlines;
-                BeginMode3D(camera);
+                const Rectangle viewport{0.0f, 0.0f, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
+                beginViewportMode3D(camera, viewport);
                 drawWorldScene3D(world, editor, false, &capsuleOutlines);
                 if (editorMode) {
                     drawEditorSelectedAuthoredMeshVertex(world, editor);
                     drawEditorSelectedAuthoredJoint(world, editor);
                 }
-                EndMode3D();
-                drawDebugCapsuleOutlines2D(
-                    capsuleOutlines,
-                    camera,
-                    {0.0f, 0.0f, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())});
+                endViewportMode3D();
+                drawDebugCapsuleOutlines2D(capsuleOutlines, camera, viewport);
             }
             if (editorMode) {
                 drawEditorWorkstation(world, editor, editorSession, editorSessionActive, testFighterDef);
