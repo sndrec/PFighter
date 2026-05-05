@@ -7417,6 +7417,8 @@ static void previewEditorSelectedState(pf::World& world, pf::FighterEditor& edit
     const pf::FighterState& selectedState = def.states[static_cast<size_t>(editor.selectedState)];
     editor.previewCacheFrame = 0;
     editor.previewCacheDirty = true;
+    editor.previewCacheValid = false;
+    editor.previewCacheFrames.clear();
     editor.paused = true;
     editor.status = "Editor: queued savestate preview for " + selectedState.name;
 }
@@ -8401,6 +8403,8 @@ static void drawEditorStateBrowserWorkstation(
         }
         editor.uiRefreshPending = true;
         editor.previewCacheDirty = true;
+        editor.previewCacheValid = false;
+        editor.previewCacheFrames.clear();
         const pf::FighterDefinition* selected = selectedEditorSessionFighter(session);
         editor.status = selected
             ? "Editor: selected package fighter " + selected->name
@@ -8564,6 +8568,7 @@ static void drawEditorStateBrowserWorkstation(
             session.selectedInterrupt = 0;
             session.clamp();
             previewEditorSelectedState(world, editor, def);
+            editor.uiRefreshPending = true;
             editor.status = "Editor: selected filtered state " + firstState.name;
             return;
         }
@@ -8592,7 +8597,9 @@ static void drawEditorStateBrowserWorkstation(
             session.selectedInterrupt = 0;
             session.clamp();
             previewEditorSelectedState(world, editor, def);
+            editor.uiRefreshPending = true;
             editor.status = "Editor: selected state " + state.name + " from browser";
+            return;
         }
     }
     if (visibleStates.empty()) {
@@ -13672,6 +13679,7 @@ static void drawEditorWorkstation(
     }
     session.clamp();
     syncEditorSelectionFromSession(editor, session);
+    const int frameStateIndex = session.selectedState;
     pf::FighterState& state = def.states[static_cast<size_t>(session.selectedState)];
     const EditorWorkstationLayout layout = editorWorkstationLayout();
     editor.uiRefreshPending = false;
@@ -13694,6 +13702,7 @@ static void drawEditorWorkstation(
     drawEditorToolStrip(world, editor, session, selectedFighterDef, layout.toolStrip);
     if (editor.uiRefreshPending) return;
     drawEditorStateBrowserWorkstation(world, editor, session, selectedFighterDef, def, layout.leftBrowser);
+    if (session.selectedState != frameStateIndex) return;
     if (editor.uiRefreshPending) return;
     drawEditorTimelineWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.timeline);
     if (editor.uiRefreshPending) return;
