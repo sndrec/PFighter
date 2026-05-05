@@ -7824,8 +7824,8 @@ static bool restoreEditorPreviewFrame(pf::World& world, pf::FighterEditor& edito
 static bool rebuildEditorPreviewCache(
     pf::World& world,
     pf::FighterEditor& editor,
-    const pf::FighterEditorSession& session,
-    int selectedFighterDef,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
     std::string* error = nullptr)
 {
     if (editor.testMode) {
@@ -7848,14 +7848,21 @@ static bool rebuildEditorPreviewCache(
     }
     const int selectedState = std::clamp(session.selectedState, 0, static_cast<int>(def.states.size()) - 1);
     const pf::FighterState& state = def.states[static_cast<size_t>(selectedState)];
-    const int runtimeDef = editorFindRuntimeFighterDef(world, def.name, selectedFighterDef);
+
+    pf::World previewWorld;
+    int installedRoot = -1;
+    pf::FighterPackageDescriptor previewDescriptor;
+    if (!pf::makeFighterEditorSessionTestWorld(session, previewWorld, &installedRoot, &previewDescriptor, error)) {
+        return false;
+    }
+
+    const int runtimeDef = editorFindRuntimeFighterDef(previewWorld, def.name, installedRoot >= 0 ? installedRoot : selectedFighterDef);
     if (runtimeDef < 0) {
         if (error) *error = "selected package fighter is not installed in the preview world";
         return false;
     }
 
     const bool airborne = editorPreviewStateStartsAirborne(state);
-    pf::World previewWorld = world;
     previewWorld.stage = makeEditorPreviewStage(airborne);
     previewWorld.frame = 0;
     previewWorld.objects.clear();
@@ -7895,6 +7902,9 @@ static bool rebuildEditorPreviewCache(
         return false;
     }
     editor.selectedState = selectedState;
+    selectedFighterDef = installedRoot >= 0 ? installedRoot : selectedFighterDef;
+    updateEditorPackageSummary(editor, previewDescriptor);
+    session.lastDescriptor = previewDescriptor;
     editor.status = "Editor: rebuilt savestate preview for " + state.name + " (" + editor.previewCacheMessage + ")";
     return true;
 }
@@ -7914,8 +7924,8 @@ static void scrubEditorSelectedState(pf::World& world, pf::FighterEditor& editor
 static void prepareEditorEditPreview(
     pf::World& world,
     pf::FighterEditor& editor,
-    const pf::FighterEditorSession& session,
-    int selectedFighterDef,
+    pf::FighterEditorSession& session,
+    int& selectedFighterDef,
     bool advanceFrame)
 {
     if (editor.testMode || world.fighters.empty()) {
