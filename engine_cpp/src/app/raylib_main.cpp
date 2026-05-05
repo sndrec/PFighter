@@ -7865,8 +7865,10 @@ static bool rebuildEditorPreviewCache(
     frames.reserve(static_cast<size_t>(frameCount + 1));
     std::vector<pf::InputFrame> inputs(previewWorld.fighters.size());
     for (int frame = 0; frame <= frameCount; ++frame) {
-        pf::tickWorld(previewWorld, inputs);
         frames.push_back(pf::saveWorld(previewWorld));
+        if (frame < frameCount) {
+            pf::tickWorld(previewWorld, inputs);
+        }
     }
 
     editor.previewCacheStage = previewWorld.stage;
