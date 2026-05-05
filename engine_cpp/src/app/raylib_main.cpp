@@ -7942,10 +7942,14 @@ static bool rebuildEditorPreviewCache(
     std::vector<pf::FighterEditorPreviewFrame> frames;
     frames.reserve(static_cast<size_t>(frameCount + 1));
     std::vector<pf::InputFrame> inputs(previewWorld.fighters.size());
+    pf::WorldTickOptions previewTickOptions;
+    previewTickOptions.processFighterInterrupts = false;
+    previewTickOptions.processFighterFrameCallbacks = false;
+    previewTickOptions.processAnimationFinishedTransitions = false;
     for (int frame = 0; frame <= frameCount; ++frame) {
         frames.push_back(saveEditorPreviewFrame(previewWorld));
         if (frame < frameCount) {
-            pf::tickWorld(previewWorld, inputs);
+            pf::tickWorld(previewWorld, inputs, previewTickOptions);
         }
     }
 

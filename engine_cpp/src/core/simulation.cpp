@@ -8980,7 +8980,7 @@ static void compactGameObjects(World& world) {
     world.objects = std::move(kept);
 }
 
-void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
+void tickWorld(World& world, const std::vector<InputFrame>& inputs, const WorldTickOptions& options) {
     for (size_t i = 0; i < world.fighters.size(); ++i) {
         world.fighters[i].input.push(i < inputs.size() ? inputs[i] : InputFrame{});
         updateStickTiltTimers(world, world.fighters[i]);
@@ -9009,8 +9009,12 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         }
         FighterRuntime& fighterAfterActions = world.fighters[fighterIndex];
         processSmashCharge(fighterAfterActions);
-        processInterrupts(world, fighterAfterActions);
-        runStateFunctions(world, fighterIndex, currentState(world, fighterAfterActions).onFrame);
+        if (options.processFighterInterrupts) {
+            processInterrupts(world, fighterAfterActions);
+        }
+        if (options.processFighterFrameCallbacks) {
+            runStateFunctions(world, fighterIndex, currentState(world, fighterAfterActions).onFrame);
+        }
         if (fighterIndex >= world.fighters.size()) {
             continue;
         }
@@ -9031,7 +9035,10 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
         const int animationLengthFrames = fighterAfterFunctions.stateAnimationLengthOverride > 0
             ? fighterAfterFunctions.stateAnimationLengthOverride
             : stateAfterPhysics.animationLengthFrames;
-        if (frameInState(fighterAfterFunctions) > animationLengthFrames && !stateAfterPhysics.onAnimationFinishedState.empty()) {
+        if (options.processAnimationFinishedTransitions &&
+            frameInState(fighterAfterFunctions) > animationLengthFrames &&
+            !stateAfterPhysics.onAnimationFinishedState.empty())
+        {
             changeFighterState(world, fighterAfterFunctions, stateAfterPhysics.onAnimationFinishedState, 0, stateAfterPhysics.onAnimationFinishedBlendFrames);
         }
         advanceAnimationFrame(defAfterFunctions, currentState(world, fighterAfterFunctions), fighterAfterFunctions);
@@ -9065,6 +9072,10 @@ void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
     compactGameObjects(world);
 
     ++world.frame;
+}
+
+void tickWorld(World& world, const std::vector<InputFrame>& inputs) {
+    tickWorld(world, inputs, WorldTickOptions{});
 }
 
 WorldSnapshot saveWorld(const World& world) {

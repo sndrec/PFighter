@@ -478,6 +478,12 @@ struct World {
     std::vector<GameObjectRuntime> objects;
 };
 
+struct WorldTickOptions {
+    bool processFighterInterrupts = true;
+    bool processFighterFrameCallbacks = true;
+    bool processAnimationFinishedTransitions = true;
+};
+
 struct FighterPackage;
 class FighterPackageCache;
 struct FighterPackageDescriptor;
@@ -487,6 +493,7 @@ MeleeCommonData loadMeleeCommonData();
 World makeTrainingWorld();
 World makeTrainingWorld(int p1FighterDef, int p2FighterDef);
 void tickWorld(World& world, const std::vector<InputFrame>& inputs);
+void tickWorld(World& world, const std::vector<InputFrame>& inputs, const WorldTickOptions& options);
 uint32_t nextWorldRandom(World& world);
 int32_t nextWorldRandomBounded(World& world, int32_t upperExclusive);
 void resetTrainingFighter(World& world, size_t fighterIndex, int fighterDefIndex, Vec2 position, int facing);
