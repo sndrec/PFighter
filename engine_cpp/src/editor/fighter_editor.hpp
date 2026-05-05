@@ -360,6 +360,12 @@ bool setEditorSessionStateAnimation(
     int animationActionIndex,
     int animationLengthFrames,
     std::string* error = nullptr);
+bool setEditorSessionStateAnimationFinished(
+    FighterEditorSession& session,
+    int stateIndex,
+    const std::string& targetState,
+    int blendFrames,
+    std::string* error = nullptr);
 bool setEditorSessionStateCollisionFlags(
     FighterEditorSession& session,
     int stateIndex,

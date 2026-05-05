@@ -12181,9 +12181,12 @@ static void drawEditorInspectorWorkstation(
         return;
     }
     drawInspectorRule(rect.y + 104.0f, "Timing");
+    const std::string finishState = state.onAnimationFinishedState.empty() ? "none" : state.onAnimationFinishedState;
     DrawText(("Length " + std::to_string(state.animationLengthFrames) +
               "    IASA " + std::to_string(state.initialInterruptibleFrame) +
-              "    Blend " + std::to_string(state.defaultAnimationBlendFrames)).c_str(),
+              "    Blend " + std::to_string(state.defaultAnimationBlendFrames) +
+              "    Finish " + finishState +
+              " / " + animationBlendLabel(state.onAnimationFinishedBlendFrames)).c_str(),
         static_cast<int>(rect.x + 10.0f),
         static_cast<int>(rect.y + 128.0f),
         11,
@@ -12220,8 +12223,48 @@ static void drawEditorInspectorWorkstation(
             editor.status = "Editor: state timing failed: " + error;
         }
     }
-    drawInspectorRule(rect.y + 180.0f, "Collision Flags");
-    const float y = rect.y + 204.0f;
+    auto setFinishedTarget = [&](const std::string& targetState, int blendFrames, const std::string& message) -> bool {
+        std::string error;
+        if (pf::setEditorSessionStateAnimationFinished(session, session.selectedState, targetState, blendFrames, &error)) {
+            syncEditorSessionMutation(world, editor, session, selectedFighterDef, message);
+            return true;
+        }
+        editor.status = "Editor: animation-finished target failed: " + error;
+        return false;
+    };
+    const float finishButtonY = rect.y + 174.0f;
+    if (uiButton({rect.x + 10.0f, finishButtonY, 46.0f, 22.0f}, "Fin-")) {
+        const int current = def.stateIndex(state.onAnimationFinishedState);
+        const int next = wrappedIndex((current >= 0 ? current : session.selectedState) - 1, static_cast<int>(def.states.size()));
+        setFinishedTarget(def.states[static_cast<size_t>(next)].name, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target");
+        return;
+    }
+    if (uiButton({rect.x + 62.0f, finishButtonY, 46.0f, 22.0f}, "Fin+")) {
+        const int current = def.stateIndex(state.onAnimationFinishedState);
+        const int next = wrappedIndex((current >= 0 ? current : session.selectedState) + 1, static_cast<int>(def.states.size()));
+        setFinishedTarget(def.states[static_cast<size_t>(next)].name, state.onAnimationFinishedBlendFrames, "Editor: changed animation-finished target");
+        return;
+    }
+    if (uiButton({rect.x + 114.0f, finishButtonY, 54.0f, 22.0f}, "Clear")) {
+        setFinishedTarget({}, state.onAnimationFinishedBlendFrames, "Editor: cleared animation-finished target");
+        return;
+    }
+    if (uiButton({rect.x + 174.0f, finishButtonY, 46.0f, 22.0f}, "FBl-")) {
+        const int blend = state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames
+            ? pf::kDisableAnimationBlendFrames
+            : std::max(pf::kDisableAnimationBlendFrames, state.onAnimationFinishedBlendFrames - 1);
+        setFinishedTarget(state.onAnimationFinishedState, blend, "Editor: shortened animation-finished blend");
+        return;
+    }
+    if (uiButton({rect.x + 226.0f, finishButtonY, 46.0f, 22.0f}, "FBl+")) {
+        const int blend = state.onAnimationFinishedBlendFrames == pf::kDisableAnimationBlendFrames
+            ? 0
+            : state.onAnimationFinishedBlendFrames + 1;
+        setFinishedTarget(state.onAnimationFinishedState, blend, "Editor: lengthened animation-finished blend");
+        return;
+    }
+    drawInspectorRule(rect.y + 210.0f, "Collision Flags");
+    const float y = rect.y + 234.0f;
     if (uiButton({rect.x + 10.0f, y, 76.0f, 24.0f}, "Loop", state.loopAnimation)) {
         std::string error;
         if (pf::setEditorSessionStateLoop(session, session.selectedState, !state.loopAnimation, &error)) {

@@ -2763,6 +2763,24 @@ bool setEditorSessionStateAnimation(
     return validateEditorSessionAfterMutation(session, std::move(previous), error);
 }
 
+bool setEditorSessionStateAnimationFinished(
+    FighterEditorSession& session,
+    int stateIndex,
+    const std::string& targetState,
+    int blendFrames,
+    std::string* error)
+{
+    FighterState* state = nullptr;
+    if (!validSessionState(session, stateIndex, nullptr, &state, error)) {
+        return false;
+    }
+    FighterPackage previous = session.package;
+    state->onAnimationFinishedState = targetState;
+    state->onAnimationFinishedBlendFrames = blendFrames;
+    session.selectedState = stateIndex;
+    return validateEditorSessionAfterMutation(session, std::move(previous), error);
+}
+
 bool setEditorSessionStateCollisionFlags(
     FighterEditorSession& session,
     int stateIndex,
