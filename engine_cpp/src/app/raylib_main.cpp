@@ -8627,7 +8627,6 @@ static void drawEditorStateBrowserWorkstation(
             session.selectedInterrupt = 0;
             session.clamp();
             previewEditorSelectedState(world, editor, def);
-            editor.uiRefreshPending = true;
             editor.status = "Editor: selected filtered state " + firstState.name;
             return;
         }
@@ -8656,7 +8655,6 @@ static void drawEditorStateBrowserWorkstation(
             session.selectedInterrupt = 0;
             session.clamp();
             previewEditorSelectedState(world, editor, def);
-            editor.uiRefreshPending = true;
             editor.status = "Editor: selected state " + state.name + " from browser";
             return;
         }
@@ -13738,14 +13736,13 @@ static void drawEditorWorkstation(
     }
     session.clamp();
     syncEditorSelectionFromSession(editor, session);
-    const int frameStateIndex = session.selectedState;
-    pf::FighterState& state = def.states[static_cast<size_t>(session.selectedState)];
+    pf::FighterState* state = &def.states[static_cast<size_t>(session.selectedState)];
     const EditorWorkstationLayout layout = editorWorkstationLayout();
     editor.uiRefreshPending = false;
 
     DrawRectangleRec(layout.viewport, Fade(BLACK, 0.08f));
     DrawRectangleLinesEx(layout.viewport, 1.0f, Fade(SKYBLUE, 0.45f));
-    DrawText(("Viewport: " + def.name + " / " + state.name).c_str(),
+    DrawText(("Viewport: " + def.name + " / " + state->name).c_str(),
         static_cast<int>(layout.viewport.x + 12.0f),
         static_cast<int>(layout.viewport.y + 10.0f),
         13,
@@ -13761,9 +13758,14 @@ static void drawEditorWorkstation(
     drawEditorToolStrip(world, editor, session, selectedFighterDef, layout.toolStrip);
     if (editor.uiRefreshPending) return;
     drawEditorStateBrowserWorkstation(world, editor, session, selectedFighterDef, def, layout.leftBrowser);
-    if (session.selectedState != frameStateIndex) return;
     if (editor.uiRefreshPending) return;
-    drawEditorTimelineWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.timeline);
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+    if (def.states.empty()) {
+        return;
+    }
+    state = &def.states[static_cast<size_t>(session.selectedState)];
+    drawEditorTimelineWorkstation(world, editor, session, selectedFighterDef, fighter, def, *state, layout.timeline);
     if (editor.uiRefreshPending) return;
     if (editor.workspace == pf::EditorWorkspace::Assets) {
         drawEditorObjectWorkstation(world, editor, session, selectedFighterDef, layout.rightGraph);
@@ -13773,9 +13775,15 @@ static void drawEditorWorkstation(
         drawEditorLogicGraphWorkstation(world, editor, session, selectedFighterDef, def, layout.rightGraph);
     }
     if (editor.uiRefreshPending) return;
-    drawEditorInspectorWorkstation(world, editor, session, selectedFighterDef, def, state, layout.rightInspector);
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+    state = &def.states[static_cast<size_t>(session.selectedState)];
+    drawEditorInspectorWorkstation(world, editor, session, selectedFighterDef, def, *state, layout.rightInspector);
     if (editor.uiRefreshPending) return;
-    drawEditorDiagnosticsWorkstation(world, editor, session, selectedFighterDef, fighter, def, state, layout.diagnostics);
+    session.clamp();
+    syncEditorSelectionFromSession(editor, session);
+    state = &def.states[static_cast<size_t>(session.selectedState)];
+    drawEditorDiagnosticsWorkstation(world, editor, session, selectedFighterDef, fighter, def, *state, layout.diagnostics);
 }
 
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
