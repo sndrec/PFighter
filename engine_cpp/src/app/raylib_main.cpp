@@ -244,7 +244,7 @@ static Color hitboxOverlayColor(const pf::HitboxDefinition& hitbox) {
     if (hitbox.isGrab) {
         return {255, 64, 220, 255};
     }
-    return {255, 48, 36, 255};
+    return {190, 0, 0, 255};
 }
 
 static Color hurtboxOverlayColor(pf::HurtboxState state) {
@@ -443,6 +443,23 @@ static void drawAaLine(Vector2 a, Vector2 b, Color color) {
     DrawLineEx(a, b, 1.0f, color);
 }
 
+static float distancePointToSegment(Vector2 point, Vector2 a, Vector2 b) {
+    const float abX = b.x - a.x;
+    const float abY = b.y - a.y;
+    const float abLenSq = abX * abX + abY * abY;
+    if (abLenSq <= 0.000001f) {
+        const float dx = point.x - a.x;
+        const float dy = point.y - a.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+
+    const float t = std::clamp(((point.x - a.x) * abX + (point.y - a.y) * abY) / abLenSq, 0.0f, 1.0f);
+    const Vector2 closest{a.x + abX * t, a.y + abY * t};
+    const float dx = point.x - closest.x;
+    const float dy = point.y - closest.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
 static std::vector<Vector2> expandHull(const std::vector<Vector2>& hull, float amount) {
     if (hull.size() < 3) {
         return hull;
@@ -480,8 +497,36 @@ static void drawClosedAaPolyline(const std::vector<Vector2>& points, Color color
         DrawPixelV(points.front(), color);
         return;
     }
+
+    Vector2 center{};
+    float minX = points.front().x;
+    float minY = points.front().y;
+    float maxX = points.front().x;
+    float maxY = points.front().y;
+    for (Vector2 point : points) {
+        center.x += point.x;
+        center.y += point.y;
+        minX = std::min(minX, point.x);
+        minY = std::min(minY, point.y);
+        maxX = std::max(maxX, point.x);
+        maxY = std::max(maxY, point.y);
+    }
+    center.x /= static_cast<float>(points.size());
+    center.y /= static_cast<float>(points.size());
+    const float shortExtent = std::max(1.0f, std::min(maxX - minX, maxY - minY));
+
     for (size_t i = 0; i < points.size(); ++i) {
-        drawAaLine(points[i], points[(i + 1) % points.size()], color);
+        const Vector2 a = points[i];
+        const Vector2 b = points[(i + 1) % points.size()];
+        const float dx = b.x - a.x;
+        const float dy = b.y - a.y;
+        const float length = std::sqrt(dx * dx + dy * dy);
+        const bool likelyInteriorChord =
+            length > shortExtent * 0.75f &&
+            distancePointToSegment(center, a, b) < shortExtent * 0.20f;
+        if (!likelyInteriorChord) {
+            drawAaLine(a, b, color);
+        }
     }
 }
 
@@ -15773,7 +15818,9 @@ int main() {
     float editorCameraPitch = 0.30f;
     float editorCameraDistance = 152.0f;
     float editorCameraOrthoSize = 120.0f;
+    Vector3 editorCameraTarget = {0.0f, 10.0f, 0.0f};
     bool editorCameraOrbitDragging = false;
+    bool editorCameraPanDragging = false;
 
     AppMode appMode = AppMode::MainMenu;
     int testFighterDef = 0;
@@ -16196,25 +16243,58 @@ int main() {
             const float wheel = GetMouseWheelMove();
             if (mouseInViewport && wheel != 0.0f) {
                 if (editor.sideView) {
-                    editorCameraOrthoSize = std::clamp(editorCameraOrthoSize - wheel * 8.0f, 28.0f, 220.0f);
+                    editorCameraOrthoSize = std::clamp(editorCameraOrthoSize - wheel * 8.0f, 10.0f, 220.0f);
                 } else {
-                    editorCameraDistance = std::clamp(editorCameraDistance - wheel * 9.0f, 28.0f, 260.0f);
+                    editorCameraDistance = std::clamp(editorCameraDistance - wheel * 9.0f, 8.0f, 260.0f);
                 }
             }
             if (uiMouseButtonPressed(MOUSE_BUTTON_MIDDLE) && mouseInViewport) {
-                editorCameraOrbitDragging = true;
-                editor.sideView = false;
+                const bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+                editorCameraPanDragging = shiftHeld;
+                editorCameraOrbitDragging = !shiftHeld;
+                if (!shiftHeld) {
+                    editor.sideView = false;
+                }
             }
             if (uiMouseButtonReleased(MOUSE_BUTTON_MIDDLE)) {
                 editorCameraOrbitDragging = false;
+                editorCameraPanDragging = false;
             }
-            if (editorCameraOrbitDragging) {
+            if (editorCameraPanDragging) {
+                const Vector2 delta = GetMouseDelta();
+                Vector3 forward = Vector3Subtract(camera.target, camera.position);
+                if (Vector3LengthSqr(forward) <= 0.000001f) {
+                    forward = {0.0f, 0.0f, -1.0f};
+                }
+                forward = Vector3Normalize(forward);
+                Vector3 right = Vector3CrossProduct(forward, camera.up);
+                if (Vector3LengthSqr(right) <= 0.000001f) {
+                    right = {1.0f, 0.0f, 0.0f};
+                } else {
+                    right = Vector3Normalize(right);
+                }
+                Vector3 up = Vector3CrossProduct(right, forward);
+                if (Vector3LengthSqr(up) <= 0.000001f) {
+                    up = {0.0f, 1.0f, 0.0f};
+                } else {
+                    up = Vector3Normalize(up);
+                }
+                const float unitsPerPixel = editor.sideView
+                    ? editorCameraOrthoSize / std::max(1.0f, viewport.height)
+                    : (2.0f * editorCameraDistance * std::tan(45.0f * DEG2RAD * 0.5f)) / std::max(1.0f, viewport.height);
+                editorCameraTarget = Vector3Add(
+                    editorCameraTarget,
+                    Vector3Add(
+                        Vector3Scale(right, -delta.x * unitsPerPixel),
+                        Vector3Scale(up, delta.y * unitsPerPixel)));
+            } else if (editorCameraOrbitDragging) {
                 const Vector2 delta = GetMouseDelta();
                 editorCameraYaw -= delta.x * 0.008f;
                 editorCameraPitch = std::clamp(editorCameraPitch + delta.y * 0.008f, -1.10f, 1.10f);
             }
         } else {
             editorCameraOrbitDragging = false;
+            editorCameraPanDragging = false;
         }
         if (IsKeyPressed(KEY_ESCAPE)) {
             if (editor.confirmStateDelete) {
@@ -16456,18 +16536,17 @@ int main() {
         }
 
         if (editor.sideView) {
-            camera.position = {0.0f, 12.0f, 145.0f};
-            camera.target = {0.0f, 12.0f, 0.0f};
+            camera.position = {editorCameraTarget.x, editorCameraTarget.y, editorCameraTarget.z + 145.0f};
+            camera.target = editorCameraTarget;
             camera.fovy = editorCameraOrthoSize;
             camera.projection = CAMERA_ORTHOGRAPHIC;
         } else {
-            const Vector3 target{0.0f, 10.0f, 0.0f};
             const float cosPitch = std::cos(editorCameraPitch);
-            camera.target = target;
+            camera.target = editorCameraTarget;
             camera.position = {
-                target.x + std::sin(editorCameraYaw) * cosPitch * editorCameraDistance,
-                target.y + std::sin(editorCameraPitch) * editorCameraDistance,
-                target.z + std::cos(editorCameraYaw) * cosPitch * editorCameraDistance,
+                editorCameraTarget.x + std::sin(editorCameraYaw) * cosPitch * editorCameraDistance,
+                editorCameraTarget.y + std::sin(editorCameraPitch) * editorCameraDistance,
+                editorCameraTarget.z + std::cos(editorCameraYaw) * cosPitch * editorCameraDistance,
             };
             camera.fovy = 45.0f;
             camera.projection = CAMERA_PERSPECTIVE;
