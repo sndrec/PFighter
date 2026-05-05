@@ -1037,6 +1037,21 @@ static Rectangle editorWorkspaceTabRect(int index) {
     };
 }
 
+static bool gEditorUiDeferredPass = false;
+static bool gEditorUiAcceptInput = true;
+
+static bool editorUiAcceptsInput() {
+    return !gEditorUiDeferredPass || gEditorUiAcceptInput;
+}
+
+static bool uiMouseButtonPressed(MouseButton button) {
+    return editorUiAcceptsInput() && IsMouseButtonPressed(button);
+}
+
+static bool uiMouseButtonReleased(MouseButton button) {
+    return editorUiAcceptsInput() && IsMouseButtonReleased(button);
+}
+
 static bool uiButton(Rectangle rect, const std::string& label, bool active = false) {
     const Vector2 mouse = GetMousePosition();
     const bool hovered = CheckCollisionPointRec(mouse, rect);
@@ -1044,7 +1059,7 @@ static bool uiButton(Rectangle rect, const std::string& label, bool active = fal
     DrawRectangleLinesEx(rect, 1.0f, DARKGRAY);
     const int textWidth = MeasureText(label.c_str(), 14);
     DrawText(label.c_str(), static_cast<int>(rect.x + (rect.width - static_cast<float>(textWidth)) * 0.5f), static_cast<int>(rect.y + 7.0f), 14, BLACK);
-    return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    return hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
 static bool packageNameCharAllowed(int codepoint) {
@@ -1061,14 +1076,14 @@ static bool uiTextField(
 {
     const Vector2 mouse = GetMousePosition();
     const bool hovered = CheckCollisionPointRec(mouse, rect);
-    if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && editor.activeTextField != id) {
+    if (hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && editor.activeTextField != id) {
         editor.activeTextField = id;
         editor.textEditBuffer = value;
     }
 
     const bool active = editor.activeTextField == id;
     bool commit = false;
-    if (active) {
+    if (active && editorUiAcceptsInput()) {
         for (int codepoint = GetCharPressed(); codepoint > 0; codepoint = GetCharPressed()) {
             if (packageNameCharAllowed(codepoint) && editor.textEditBuffer.size() < maxLength) {
                 editor.textEditBuffer.push_back(static_cast<char>(codepoint));
@@ -1078,7 +1093,7 @@ static bool uiTextField(
             editor.textEditBuffer.pop_back();
         }
         commit = IsKeyPressed(KEY_ENTER) ||
-            (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !hovered);
+            (uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && !hovered);
     }
 
     const std::string& shown = active ? editor.textEditBuffer : value;
@@ -2814,7 +2829,7 @@ static void drawPackageScriptBlockGraph(
         if (i + 1 < visible) {
             DrawLine(static_cast<int>(node.x + node.width), static_cast<int>(node.y + 19.0f), static_cast<int>(node.x + node.width + 8.0f), static_cast<int>(node.y + 19.0f), DARKGRAY);
         }
-        if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             editor.selectedPackageInstruction = instructionIndex;
             editor.selectionKind = pf::FighterEditorSelectionKind::Instruction;
             if (session) {
@@ -3291,7 +3306,7 @@ static bool uiListRow(Rectangle rect, const std::string& label, bool active) {
     DrawRectangleRec(rect, active ? Fade(GREEN, 0.72f) : (hovered ? Fade(ORANGE, 0.5f) : Fade(RAYWHITE, 0.62f)));
     DrawRectangleLinesEx(rect, 1.0f, Fade(DARKGRAY, 0.75f));
     DrawText(fittedLabel.c_str(), static_cast<int>(rect.x + 7.0f), static_cast<int>(rect.y + 5.0f), fontSize, BLACK);
-    return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    return hovered && uiMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
 static std::string uniquePackageVariableName(const pf::FighterDefinition& def) {
@@ -6424,7 +6439,7 @@ static void drawEditorAnimationWorkspace(pf::World& world, pf::FighterEditor& ed
                 static_cast<float>(clipFrameCount);
             const float scrubX = keyTimeline.x + 5.0f + (keyTimeline.width - 10.0f) * scrubT;
             DrawRectangle(static_cast<int>(scrubX), static_cast<int>(keyTimeline.y - 3.0f), 2, static_cast<int>(keyTimeline.height + 6.0f), BLACK);
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), keyTimeline)) {
+            if (uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), keyTimeline)) {
                 const float clickT = std::clamp((GetMousePosition().x - keyTimeline.x - 5.0f) / (keyTimeline.width - 10.0f), 0.0f, 1.0f);
                 const int clickedFrame = static_cast<int>(std::round(clickT * static_cast<float>(clipFrameCount)));
                 int bestKey = 0;
@@ -8546,7 +8561,7 @@ static void drawEditorStateBrowserWorkstation(
         const std::string label = std::to_string(fighterIndex) + "  " + packageFighter.name + "  [" +
             editorPackageFighterRoleName(session.package, fighterIndex) + "]";
         drawWorkstationRow(rowRect, clippedText(label, 10, rowRect.width - 8.0f), active, SKYBLUE);
-        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             selectPackageFighter(fighterIndex);
             return;
         }
@@ -8645,7 +8660,7 @@ static void drawEditorStateBrowserWorkstation(
             static_cast<int>(rowRect.y + 21.0f),
             10,
             Fade(RAYWHITE, 0.68f));
-        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (CheckCollisionPointRec(GetMousePosition(), rowRect) && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             editor.selectedState = stateIndex;
             editor.selectedSubaction = 0;
             editor.selectedInterrupt = 0;
@@ -9140,7 +9155,7 @@ static void drawEditorTimelineWorkstation(
             11,
             Fade(RAYWHITE, 0.72f));
     }
-    if (CheckCollisionPointRec(mouse, {ruler.x, ruler.y, ruler.width, std::max(24.0f, footerY - ruler.y)}) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (CheckCollisionPointRec(mouse, {ruler.x, ruler.y, ruler.width, std::max(24.0f, footerY - ruler.y)}) && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         const float t = std::clamp((mouse.x - ruler.x) / ruler.width, 0.0f, 1.0f);
         const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(frameCount)));
         const float clickedY = mouse.y;
@@ -10397,7 +10412,7 @@ static void drawEditorAnimationWorkstation(
         static_cast<int>(scrub.y + 10.0f),
         11,
         RAYWHITE);
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), scrub)) {
+    if (uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), scrub)) {
         const float t = std::clamp((GetMousePosition().x - scrub.x - 6.0f) / (scrub.width - 12.0f), 0.0f, 1.0f);
         editor.animationScrubFrame = static_cast<int>(std::round(t * static_cast<float>(std::max(0, clipFrameCount - 1))));
         editor.animationPreviewActive = true;
@@ -10504,7 +10519,7 @@ static void drawEditorAnimationWorkstation(
             const float x = keyLane.x + 6.0f + (keyLane.width - 12.0f) * t;
             DrawCircle(static_cast<int>(x), static_cast<int>(keyLane.y + keyLane.height * 0.5f), static_cast<int>(i) == editor.selectedAnimationKey ? 5.0f : 3.0f, static_cast<int>(i) == editor.selectedAnimationKey ? ORANGE : SKYBLUE);
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), keyLane) && !track.keys.empty()) {
+        if (uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), keyLane) && !track.keys.empty()) {
             const float t = std::clamp((GetMousePosition().x - keyLane.x - 6.0f) / (keyLane.width - 12.0f), 0.0f, 1.0f);
             const int clickedFrame = static_cast<int>(std::round(t * static_cast<float>(std::max(0, clipFrameCount - 1))));
             int bestKey = 0;
@@ -10922,7 +10937,7 @@ static void drawEditorLogicGraphWorkstation(
                 : "Node");
         DrawText(clippedText(label, 11, nodeRect.width - 12.0f).c_str(), static_cast<int>(nodeRect.x + 7.0f), static_cast<int>(nodeRect.y + 9.0f), 11, RAYWHITE);
         DrawText(("#" + std::to_string(node.id)).c_str(), static_cast<int>(nodeRect.x + 7.0f), static_cast<int>(nodeRect.y + 25.0f), 10, Fade(RAYWHITE, 0.68f));
-        if (CheckCollisionPointRec(GetMousePosition(), nodeRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (CheckCollisionPointRec(GetMousePosition(), nodeRect) && uiMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             editor.selectedPackageGraphNode = node.id;
             if (node.kind == pf::PackageScriptGraphNodeKind::Instruction && node.instructionIndex >= 0) {
                 editor.selectedPackageInstruction = node.instructionIndex;
@@ -13705,7 +13720,7 @@ static void drawEditorDiagnosticsWorkstation(
     }
 }
 
-static void drawEditorWorkstation(
+static void drawEditorWorkstationPass(
     pf::World& world,
     pf::FighterEditor& editor,
     pf::FighterEditorSession& session,
@@ -13784,6 +13799,23 @@ static void drawEditorWorkstation(
     syncEditorSelectionFromSession(editor, session);
     state = &def.states[static_cast<size_t>(session.selectedState)];
     drawEditorDiagnosticsWorkstation(world, editor, session, selectedFighterDef, fighter, def, *state, layout.diagnostics);
+}
+
+static void drawEditorWorkstation(
+    pf::World& world,
+    pf::FighterEditor& editor,
+    pf::FighterEditorSession& session,
+    bool& sessionActive,
+    int& selectedFighterDef)
+{
+    gEditorUiDeferredPass = true;
+    gEditorUiAcceptInput = false;
+    drawEditorWorkstationPass(world, editor, session, sessionActive, selectedFighterDef);
+
+    gEditorUiAcceptInput = true;
+    drawEditorWorkstationPass(world, editor, session, sessionActive, selectedFighterDef);
+    gEditorUiDeferredPass = false;
+    gEditorUiAcceptInput = true;
 }
 
 static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selectedFighterDef) {
@@ -13900,7 +13932,7 @@ static void drawEditor(pf::World& world, pf::FighterEditor& editor, int& selecte
     }
     const float liveX = timelineX + timelineWidth * static_cast<float>(std::clamp(liveFrame, 0, timelineFrameCount)) / static_cast<float>(timelineFrameCount);
     DrawRectangle(static_cast<int>(liveX), static_cast<int>(timelineY - 3.0f), 3, static_cast<int>(timelineHeight + 6.0f), BLACK);
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+    if (uiMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
         CheckCollisionPointRec(GetMousePosition(), {timelineX, timelineY, timelineWidth, timelineHeight}) &&
         !state.action.empty())
     {
@@ -14052,10 +14084,10 @@ static void updateTickrateControl(TickrateControl& tickrate) {
     const Rectangle track{panelX + 96.0f, 132.0f, 260.0f, 8.0f};
     const Vector2 mouse = GetMousePosition();
 
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mouse, panel)) {
+    if (uiMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mouse, panel)) {
         tickrate.dragging = true;
     }
-    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+    if (uiMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         tickrate.dragging = false;
     }
     if (tickrate.dragging) {
@@ -14570,11 +14602,11 @@ int main() {
                     editorCameraDistance = std::clamp(editorCameraDistance - wheel * 9.0f, 28.0f, 260.0f);
                 }
             }
-            if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE) && mouseInViewport) {
+            if (uiMouseButtonPressed(MOUSE_BUTTON_MIDDLE) && mouseInViewport) {
                 editorCameraOrbitDragging = true;
                 editor.sideView = false;
             }
-            if (IsMouseButtonReleased(MOUSE_BUTTON_MIDDLE)) {
+            if (uiMouseButtonReleased(MOUSE_BUTTON_MIDDLE)) {
                 editorCameraOrbitDragging = false;
             }
             if (editorCameraOrbitDragging) {
@@ -14595,11 +14627,11 @@ int main() {
                 editor.paused = true;
             }
         }
-        const bool testClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        const bool testClicked = uiMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorTestButtonRect());
-        const bool newStateClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        const bool newStateClicked = uiMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorNewStateButtonRect());
-        const bool deleteStateClicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        const bool deleteStateClicked = uiMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             CheckCollisionPointRec(GetMousePosition(), editorDeleteStateButtonRect());
         if (globalShortcutsEnabled && appMode == AppMode::Editor && (IsKeyPressed(KEY_N) || newStateClicked)) {
             createEditorSessionStateFromUi();
